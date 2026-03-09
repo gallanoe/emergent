@@ -6,6 +6,7 @@ import {
 import type {
   AgentInspection,
   AgentSession,
+  CoordinatorState,
   CostBreakdown,
   LiveTokenUsage,
   MailMessage,
@@ -40,6 +41,7 @@ export const queryKeys = {
   currentRun: (wId: string) => ["currentRun", wId] as const,
   config: (wId: string) => ["config", wId] as const,
   statusOverview: (wId: string) => ["statusOverview", wId] as const,
+  coordinatorState: (wId: string) => ["coordinatorState", wId] as const,
 };
 
 // ---------------------------------------------------------------------------
@@ -307,6 +309,57 @@ export function useSetActiveWorkspace() {
       rpc("workspace.setActive", params),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.workspaces });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Coordinator
+// ---------------------------------------------------------------------------
+
+interface CoordinatorInfo {
+  state: CoordinatorState;
+  startedByUs: boolean;
+  error?: string;
+}
+
+export function useCoordinatorState(workspaceId: string | null) {
+  return useQuery<CoordinatorInfo>({
+    queryKey: queryKeys.coordinatorState(workspaceId!),
+    queryFn: () => rpc<CoordinatorInfo>("coordinator.status"),
+    enabled: !!workspaceId,
+    refetchInterval: 10_000,
+  });
+}
+
+export function useStartCoordinator() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (params: { workspaceId: string }) =>
+      rpc<CoordinatorInfo>("coordinator.start"),
+    onSuccess: (_data, vars) => {
+      void qc.invalidateQueries({
+        queryKey: queryKeys.coordinatorState(vars.workspaceId),
+      });
+      void qc.invalidateQueries({
+        queryKey: queryKeys.statusOverview(vars.workspaceId),
+      });
+    },
+  });
+}
+
+export function useStopCoordinator() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (params: { workspaceId: string }) =>
+      rpc<CoordinatorInfo>("coordinator.stop"),
+    onSuccess: (_data, vars) => {
+      void qc.invalidateQueries({
+        queryKey: queryKeys.coordinatorState(vars.workspaceId),
+      });
+      void qc.invalidateQueries({
+        queryKey: queryKeys.statusOverview(vars.workspaceId),
+      });
     },
   });
 }

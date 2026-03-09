@@ -11,6 +11,8 @@ import {
   Settings,
 } from "lucide-react";
 import { useWs } from "../hooks/use-ws";
+import { useCoordinatorState } from "../hooks/use-overstory";
+import { useWorkspaceStore } from "../stores/workspace-store";
 import { Badge } from "./ui/badge";
 import { isElectron } from "../env";
 import type { StatusOverview } from "@emergent/contracts";
@@ -29,6 +31,80 @@ const navItems: {
   { to: "/runs", label: "Runs", icon: Play },
   { to: "/settings", label: "Settings", icon: Settings },
 ];
+
+function CoordinatorIndicator() {
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
+  const { data: coordState } = useCoordinatorState(activeWorkspaceId);
+
+  if (!coordState || coordState.state === "disabled" || coordState.state === "idle") {
+    return null;
+  }
+
+  let dotColor: string;
+  let label: string;
+
+  switch (coordState.state) {
+    case "running":
+      dotColor = "bg-green-500";
+      label = "Coordinator running";
+      break;
+    case "checking":
+    case "starting":
+      dotColor = "bg-amber-500";
+      label = "Starting coordinator...";
+      break;
+    case "stopping":
+      dotColor = "bg-amber-500";
+      label = "Stopping coordinator...";
+      break;
+    case "stopped":
+      dotColor = "bg-neutral-500";
+      label = "Coordinator stopped";
+      break;
+    case "error":
+      dotColor = "bg-red-500";
+      label = "Coordinator error";
+      break;
+    default:
+      return null;
+  }
+
+  return (
+    <div className="flex items-center gap-2 pb-1">
+      <span className={`inline-block h-2 w-2 rounded-full ${dotColor}`} />
+      <span>{label}</span>
+    </div>
+  );
+}
+
+function ConnectionStatus() {
+  const { status } = useWs();
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
+
+  let dotColor: string;
+  let label: string;
+
+  if (!activeWorkspaceId) {
+    dotColor = "bg-neutral-600";
+    label = "No workspace selected";
+  } else if (status === "connected") {
+    dotColor = "bg-green-500";
+    label = "Connected";
+  } else if (status === "connecting") {
+    dotColor = "bg-amber-500";
+    label = "Connecting...";
+  } else {
+    dotColor = "bg-red-500";
+    label = "Disconnected";
+  }
+
+  return (
+    <div className="flex items-center gap-2 text-xs text-neutral-500">
+      <span className={`inline-block h-1.5 w-1.5 rounded-full ${dotColor}`} />
+      <span>{label}</span>
+    </div>
+  );
+}
 
 function QuickStatus() {
   const { sendRpc, onPush } = useWs();
@@ -54,6 +130,7 @@ function QuickStatus() {
 
   return (
     <div className="space-y-1.5 text-xs text-neutral-400">
+      <CoordinatorIndicator />
       <div className="flex items-center justify-between">
         <span>Active agents</span>
         <span className="font-mono text-neutral-200">
@@ -120,8 +197,9 @@ export function Sidebar() {
       </nav>
 
       {/* Quick Status */}
-      <div className="shrink-0 border-t border-neutral-800 p-3">
+      <div className="shrink-0 border-t border-neutral-800 p-3 space-y-2">
         <QuickStatus />
+        <ConnectionStatus />
       </div>
     </aside>
   );

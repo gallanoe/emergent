@@ -62,6 +62,7 @@ export function WorkspaceSwitcher() {
         path: folderPath,
       })) as Workspace;
       setActiveWorkspaceId(result.id);
+      await sendRpc("workspace.setActive", { id: result.id }).catch(() => {});
       refreshWorkspaces();
     } catch {
       // workspace.add failed (e.g. no .overstory/ directory)

@@ -60,6 +60,9 @@ export const RpcMethods = [
   "runs.current",
   "config.get",
   "status.overview",
+  "coordinator.status",
+  "coordinator.start",
+  "coordinator.stop",
 ] as const;
 
 export type RpcMethod = (typeof RpcMethods)[number];
@@ -71,6 +74,7 @@ export const PushChannels = [
   "mail.new",
   "merge.changed",
   "metrics.snapshot",
+  "coordinator.stateChanged",
 ] as const;
 
 export type PushChannel = (typeof PushChannels)[number];

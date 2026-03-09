@@ -33,7 +33,8 @@ const wsChannels = new Map<WebSocket, Set<string>>();
 // Poll intervals per channel (ms)
 // ---------------------------------------------------------------------------
 
-const POLL_INTERVALS: Record<PushChannel, number> = {
+/** Poll intervals for DB-backed channels. coordinator.stateChanged is push-only. */
+const POLL_INTERVALS: Partial<Record<PushChannel, number>> = {
   "agents.changed": 2_000,
   "events.new": 1_000,
   "mail.new": 2_000,
@@ -202,4 +203,40 @@ export function stopPolling(workspaceId: string): void {
 
 export function removeClient(ws: WebSocket): void {
   unsubscribe(ws);
+}
+
+/**
+ * Broadcast a message to ALL connected sockets (not workspace-scoped).
+ * Used for coordinator state changes which apply to the active workspace globally.
+ */
+export function broadcastToAll(channel: string, data: unknown): void {
+  const msg = JSON.stringify({ channel, data });
+  // Collect all unique WebSockets across all subscription keys
+  const seen = new Set<WebSocket>();
+  for (const subs of subscriptions.values()) {
+    for (const ws of subs) {
+      if (!seen.has(ws)) {
+        seen.add(ws);
+        try {
+          if (ws.readyState === ws.OPEN) {
+            ws.send(msg);
+          }
+        } catch {
+          // ignore send errors
+        }
+      }
+    }
+  }
+  // Also notify any tracked ws that may not be in subscriptions
+  for (const ws of wsChannels.keys()) {
+    if (!seen.has(ws)) {
+      try {
+        if (ws.readyState === ws.OPEN) {
+          ws.send(msg);
+        }
+      } catch {
+        // ignore send errors
+      }
+    }
+  }
 }

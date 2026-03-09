@@ -71,13 +71,14 @@ export function addWorkspace(workspacePath: string): StoredWorkspace {
     return existing;
   }
 
+  const isFirst = workspaces.length === 0;
   const workspace: StoredWorkspace = {
     id: crypto.randomUUID(),
     name: path.basename(absPath),
     path: absPath,
     overstoryPath,
-    active: workspaces.length === 0, // first added workspace becomes active
-    status: "disconnected",
+    active: isFirst,
+    status: isFirst ? "connected" : "disconnected",
   };
 
   workspaces.push(workspace);
@@ -105,6 +106,7 @@ export function setActiveWorkspace(id: string): StoredWorkspace {
       found = w;
     } else {
       w.active = false;
+      w.status = "disconnected";
     }
   }
 

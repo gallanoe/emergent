@@ -1,4 +1,4 @@
-import { Effect, Layer } from "effect";
+import { Effect, Fiber, Layer } from "effect";
 import { WebSocketServer } from "ws";
 import type { WebSocket } from "ws";
 import type { RpcMethod } from "@emergent/contracts";
@@ -19,6 +19,10 @@ import {
   nudgeAgent,
   sendMail,
   triggerMerge,
+  coordinatorStatus,
+  coordinatorStart,
+  coordinatorStop,
+  hasOverstoryConfig,
 } from "./overstory/cli-bridge.js";
 import {
   subscribe,
@@ -26,13 +30,35 @@ import {
   startPolling,
   stopPolling,
   removeClient,
+  broadcastToAll,
 } from "./overstory/subscriptions.js";
+import { createCoordinatorLifecycle } from "./overstory/coordinator-lifecycle.js";
+import type { CoordinatorLifecycle } from "./overstory/coordinator-lifecycle.js";
 
 // ---------------------------------------------------------------------------
 // Configuration
 // ---------------------------------------------------------------------------
 
 const PORT = Number(process.env["EMERGENT_PORT"] ?? process.env["PORT"] ?? 3773);
+
+// ---------------------------------------------------------------------------
+// Coordinator lifecycle
+// ---------------------------------------------------------------------------
+
+const coordinatorLifecycle: CoordinatorLifecycle = createCoordinatorLifecycle(
+  {
+    status: coordinatorStatus,
+    start: coordinatorStart,
+    stop: coordinatorStop,
+    hasConfig: hasOverstoryConfig,
+  },
+  (workspaceId, info) => {
+    broadcastToAll("coordinator.stateChanged", { workspaceId, ...info });
+  },
+);
+
+/** Track which workspace has an active coordinator so we can deactivate on switch */
+let currentCoordinatorWorkspaceId: string | null = null;
 
 // ---------------------------------------------------------------------------
 // DB readers cache (workspace id → DbReaders)
@@ -94,7 +120,21 @@ async function handleRpc(method: RpcMethod, params: Params): Promise<unknown> {
     case "workspace.setActive": {
       const p = params as { id?: string };
       if (!p.id) throw new Error("Missing required param: id");
-      return setActiveWorkspace(p.id);
+      const result = setActiveWorkspace(p.id);
+
+      // Deactivate previous coordinator tracking
+      if (currentCoordinatorWorkspaceId && currentCoordinatorWorkspaceId !== p.id) {
+        coordinatorLifecycle.deactivateCoordinator(currentCoordinatorWorkspaceId);
+      }
+
+      // Activate coordinator for new workspace (fire-and-forget)
+      const ws = getActiveWorkspace();
+      if (ws) {
+        currentCoordinatorWorkspaceId = ws.id;
+        coordinatorLifecycle.activateCoordinator(ws.id, ws.path).catch(() => {});
+      }
+
+      return result;
     }
 
     // ----- Agents -----
@@ -295,6 +335,10 @@ async function handleRpc(method: RpcMethod, params: Params): Promise<unknown> {
     // ----- Status -----
     case "status.overview": {
       const ctx = getActiveReaders();
+      const coordInfo = currentCoordinatorWorkspaceId
+        ? coordinatorLifecycle.getCoordinatorState(currentCoordinatorWorkspaceId)
+        : null;
+
       if (!ctx) {
         return {
           activeAgents: 0,
@@ -305,6 +349,8 @@ async function handleRpc(method: RpcMethod, params: Params): Promise<unknown> {
           currentRun: null,
           burnRate: 0,
           totalCost: 0,
+          coordinatorState: coordInfo?.state,
+          coordinatorError: coordInfo?.error,
         };
       }
 
@@ -328,7 +374,28 @@ async function handleRpc(method: RpcMethod, params: Params): Promise<unknown> {
         currentRun: null, // Would need runs.current from CLI
         burnRate: metrics?.burnRate ?? 0,
         totalCost: metrics?.totalCost ?? 0,
+        coordinatorState: coordInfo?.state,
+        coordinatorError: coordInfo?.error,
       };
+    }
+
+    // ----- Coordinator -----
+    case "coordinator.status": {
+      const ws = getActiveWorkspace();
+      if (!ws) return { state: "idle", startedByUs: false };
+      return coordinatorLifecycle.getCoordinatorState(ws.id);
+    }
+
+    case "coordinator.start": {
+      const ws = getActiveWorkspace();
+      if (!ws) throw new Error("No active workspace");
+      return coordinatorLifecycle.manualStart(ws.id, ws.path);
+    }
+
+    case "coordinator.stop": {
+      const ws = getActiveWorkspace();
+      if (!ws) throw new Error("No active workspace");
+      return coordinatorLifecycle.manualStop(ws.id, ws.path);
     }
 
     default:
@@ -431,6 +498,8 @@ const program = Effect.gen(function* () {
 
   yield* Effect.addFinalizer(() =>
     Effect.sync(() => {
+      // Clean up coordinator lifecycle
+      coordinatorLifecycle.shutdownAll();
       // Clean up all polling and DB readers
       for (const [id] of readerCache) {
         stopPolling(id);
@@ -457,12 +526,26 @@ const program = Effect.gen(function* () {
   });
 
   yield* Effect.log(`Emergent server listening on port ${PORT}`);
+
+  // If there's an active workspace at startup, activate its coordinator
+  const activeWs = getActiveWorkspace();
+  if (activeWs) {
+    currentCoordinatorWorkspaceId = activeWs.id;
+    coordinatorLifecycle.activateCoordinator(activeWs.id, activeWs.path).catch(() => {});
+  }
+
   yield* Effect.never;
 });
 
 const main = program.pipe(Effect.scoped, Effect.provide(Layer.empty));
 
-Effect.runFork(main);
+const fiber = Effect.runFork(main);
 
-process.on("SIGINT", () => process.exit(0));
-process.on("SIGTERM", () => process.exit(0));
+function shutdown() {
+  Effect.runFork(Fiber.interrupt(fiber));
+  // Give finalizers a moment to run, then force exit
+  setTimeout(() => process.exit(0), 2_000).unref();
+}
+
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);

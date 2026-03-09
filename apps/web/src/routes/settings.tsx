@@ -56,7 +56,11 @@ function SettingsPage() {
               <span className="text-neutral-400">Status</span>
               <Badge
                 variant={
-                  activeWs.status === "connected" ? "success" : "danger"
+                  activeWs.status === "connected"
+                    ? "success"
+                    : activeWs.status === "error"
+                      ? "danger"
+                      : "warning"
                 }
               >
                 {activeWs.status}

@@ -44,7 +44,11 @@ export {
 
 export { OvConfig } from "./config.js";
 
-export { StatusOverview } from "./status.js";
+export {
+  StatusOverview,
+  CoordinatorStates,
+  type CoordinatorState,
+} from "./status.js";
 
 export {
   WsRequest,

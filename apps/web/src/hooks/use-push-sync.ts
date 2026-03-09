@@ -77,6 +77,18 @@ export function usePushSync(workspaceId: string | null) {
             () => data as MetricsSummary,
           );
           break;
+
+        case "coordinator.stateChanged": {
+          const payload = data as { workspaceId?: string; state?: string; error?: string };
+          const targetWId = payload.workspaceId ?? workspaceId;
+          void qc.invalidateQueries({
+            queryKey: queryKeys.coordinatorState(targetWId),
+          });
+          void qc.invalidateQueries({
+            queryKey: queryKeys.statusOverview(targetWId),
+          });
+          break;
+        }
       }
     });
 
