@@ -6,7 +6,7 @@ export default mergeConfig(
   viteConfig,
   defineConfig({
     test: {
-      include: ["__tests__/browser/**/*.test.ts"],
+      include: ["__tests__/browser/**/*.test.{ts,tsx}"],
       browser: {
         enabled: true,
         provider: playwright(),
