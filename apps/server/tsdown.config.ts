@@ -7,5 +7,6 @@ export default defineConfig({
   sourcemap: true,
   clean: true,
   noExternal: (id) => id.startsWith("@emergent/"),
+  external: ["bun:sqlite"],
   banner: { js: "#!/usr/bin/env node\n" },
 });
