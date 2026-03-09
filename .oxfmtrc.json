@@ -1,0 +1,13 @@
+{
+  "formatter": {
+    "experimentalSortPackageJson": true
+  },
+  "ignorePatterns": [
+    "dist/",
+    "dist-electron/",
+    "node_modules/",
+    "bun.lock",
+    "*.gen.ts",
+    "**/routeTree.gen.ts"
+  ]
+}

@@ -1,0 +1,13 @@
+node_modules/
+.bun/
+.turbo/
+dist/
+dist-electron/
+.env*
+*.tsbuildinfo
+.DS_Store
+*.log
+.playwright/
+playwright-report/
+release/
+**/routeTree.gen.ts

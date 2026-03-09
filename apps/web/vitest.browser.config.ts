@@ -1,0 +1,16 @@
+import { defineConfig, mergeConfig } from "vitest/config";
+import viteConfig from "./vite.config.ts";
+
+export default mergeConfig(
+  viteConfig,
+  defineConfig({
+    test: {
+      include: ["__tests__/browser/**/*.test.ts"],
+      browser: {
+        enabled: true,
+        provider: "playwright",
+        instances: [{ browser: "chromium", launch: { headless: true } }],
+      },
+    },
+  }),
+);

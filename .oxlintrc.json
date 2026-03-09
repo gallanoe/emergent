@@ -1,0 +1,20 @@
+{
+  "plugins": ["eslint", "oxc", "react", "unicorn", "typescript"],
+  "categories": {
+    "correctness": "warn",
+    "suspicious": "warn",
+    "perf": "warn"
+  },
+  "rules": {
+    "react/react-in-jsx-scope": "off",
+    "no-shadow": "off",
+    "no-await-in-loop": "off"
+  },
+  "ignorePatterns": [
+    "dist/",
+    "dist-electron/",
+    "node_modules/",
+    "bun.lock",
+    "*.gen.ts"
+  ]
+}
