@@ -2,10 +2,5 @@
   "formatter": {
     "experimentalSortPackageJson": true
   },
-  "ignorePatterns": [
-    "dist/",
-    "src-tauri/",
-    "node_modules/",
-    "bun.lock"
-  ]
+  "ignorePatterns": ["dist/", "src-tauri/", "node_modules/", "bun.lock"]
 }

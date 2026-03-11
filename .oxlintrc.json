@@ -10,10 +10,5 @@
     "no-shadow": "off",
     "no-await-in-loop": "off"
   },
-  "ignorePatterns": [
-    "dist/",
-    "src-tauri/",
-    "node_modules/",
-    "bun.lock"
-  ]
+  "ignorePatterns": ["dist/", "src-tauri/", "node_modules/", "bun.lock"]
 }
