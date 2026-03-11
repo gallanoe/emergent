@@ -4,10 +4,8 @@
   },
   "ignorePatterns": [
     "dist/",
-    "dist-electron/",
+    "src-tauri/",
     "node_modules/",
-    "bun.lock",
-    "*.gen.ts",
-    "**/routeTree.gen.ts"
+    "bun.lock"
   ]
 }
