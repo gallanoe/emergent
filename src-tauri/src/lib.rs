@@ -10,3 +10,18 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn greet_returns_greeting() {
+        assert_eq!(greet("world"), "Hello, world! You've been greeted from Rust!");
+    }
+
+    #[test]
+    fn greet_handles_empty_name() {
+        assert_eq!(greet(""), "Hello, ! You've been greeted from Rust!");
+    }
+}

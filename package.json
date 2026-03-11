@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tauri dev",
     "build": "tauri build",
-    "prebuild": "bun run lint && bun run lint:rust && bun run fmt:check && bun run typecheck && bun run test",
+    "prebuild": "bun run lint && bun run lint:rust && bun run fmt:check && bun run typecheck && bun run test && bun run test:rust",
     "preview": "vite preview",
     "tauri": "tauri",
     "lint": "oxlint --report-unused-disable-directives",
@@ -14,7 +14,8 @@
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.10.1",

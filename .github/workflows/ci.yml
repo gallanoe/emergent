@@ -69,3 +69,7 @@ jobs:
       - name: Rust lint
         working-directory: src-tauri
         run: cargo clippy -- -D warnings
+
+      - name: Rust test
+        working-directory: src-tauri
+        run: cargo test

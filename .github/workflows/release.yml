@@ -54,6 +54,10 @@ jobs:
         working-directory: src-tauri
         run: cargo clippy -- -D warnings
 
+      - name: Rust test
+        working-directory: src-tauri
+        run: cargo test
+
   build:
     needs: preflight
     permissions:
