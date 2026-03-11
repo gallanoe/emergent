@@ -6,9 +6,11 @@
   "scripts": {
     "dev": "tauri dev",
     "build": "tauri build",
+    "prebuild": "bun run lint && bun run lint:rust && bun run fmt:check && bun run typecheck && bun run test",
     "preview": "vite preview",
     "tauri": "tauri",
     "lint": "oxlint --report-unused-disable-directives",
+    "lint:rust": "cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings",
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check",
     "typecheck": "tsc --noEmit",

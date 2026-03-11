@@ -65,3 +65,7 @@ jobs:
       - name: Rust check
         working-directory: src-tauri
         run: cargo check
+
+      - name: Rust lint
+        working-directory: src-tauri
+        run: cargo clippy -- -D warnings
