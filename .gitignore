@@ -1,13 +1,8 @@
 node_modules/
 .bun/
-.turbo/
 dist/
-dist-electron/
+src-tauri/target/
 .env*
 *.tsbuildinfo
 .DS_Store
 *.log
-.playwright/
-playwright-report/
-release/
-**/routeTree.gen.ts
