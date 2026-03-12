@@ -96,9 +96,7 @@ describe("Editor", () => {
 
   describe("cursor preservation", () => {
     it("does not recreate the view when content prop changes", () => {
-      const { rerender } = render(
-        <Editor content="hello" path="test.md" onSave={vi.fn()} />,
-      );
+      const { rerender } = render(<Editor content="hello" path="test.md" onSave={vi.fn()} />);
       expect(createdViews).toHaveLength(1);
       const firstView = createdViews[0]!;
 
@@ -114,9 +112,7 @@ describe("Editor", () => {
     });
 
     it("recreates the view when path changes", () => {
-      const { rerender } = render(
-        <Editor content="hello" path="a.md" onSave={vi.fn()} />,
-      );
+      const { rerender } = render(<Editor content="hello" path="a.md" onSave={vi.fn()} />);
       expect(createdViews).toHaveLength(1);
       const firstView = createdViews[0]!;
 
@@ -127,9 +123,7 @@ describe("Editor", () => {
     });
 
     it("skips dispatch when content matches current doc", () => {
-      const { rerender } = render(
-        <Editor content="same" path="test.md" onSave={vi.fn()} />,
-      );
+      const { rerender } = render(<Editor content="same" path="test.md" onSave={vi.fn()} />);
       const view = createdViews[0]!;
 
       // Rerender with identical content
