@@ -1,16 +1,20 @@
 use serde_json::Value;
+#[cfg(test)]
 use std::sync::{Arc, Mutex};
 
 pub trait EventEmitter: Send + Sync {
     fn emit(&self, event: &str, payload: Value);
+    #[allow(dead_code)]
     fn as_any(&self) -> &dyn std::any::Any;
 }
 
+#[cfg(test)]
 #[derive(Clone, Default)]
 pub struct TestEmitter {
     events: Arc<Mutex<Vec<(String, Value)>>>,
 }
 
+#[cfg(test)]
 impl TestEmitter {
     pub fn new() -> Self {
         Self::default()
@@ -29,6 +33,7 @@ impl TestEmitter {
     }
 }
 
+#[cfg(test)]
 impl EventEmitter for TestEmitter {
     fn emit(&self, event: &str, payload: Value) {
         self.events

@@ -10,6 +10,7 @@ pub enum AppError {
     BranchAlreadyExists { name: String },
 
     #[error("merge conflict in {paths:?}")]
+    #[allow(dead_code)]
     MergeConflict { paths: Vec<String> },
 
     #[error("no workspace is open")]
