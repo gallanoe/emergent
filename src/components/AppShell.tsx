@@ -18,6 +18,7 @@ import { useUIStore } from "../stores/ui";
 import { useCommandStore } from "../stores/commands";
 import { sortTree } from "../lib/sort-tree";
 import { useToastStore } from "./Toast";
+import { CommandPalette } from "./CommandPalette";
 
 export function AppShell() {
   const [sidebarWidth, setSidebarWidth] = useState(220);
@@ -133,6 +134,13 @@ export function AppShell() {
           useFileTreeStore.getState().setPendingCreation({ type: "folder", parentPath: "" });
         },
       },
+      {
+        id: "palette.open",
+        label: "Command Palette",
+        shortcut: "Mod+K",
+        context: "global" as const,
+        execute: () => useCommandStore.getState().openPalette(),
+      },
     ];
 
     for (const cmd of commands) {
@@ -188,6 +196,7 @@ export function AppShell() {
         </div>
         <StatusBar />
         <ToastContainer />
+        <CommandPalette />
       </div>
     </KeybindingProvider>
   );
