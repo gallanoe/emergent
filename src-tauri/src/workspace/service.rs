@@ -13,6 +13,15 @@ pub struct WorkspaceMeta {
     pub last_opened: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TreeNode {
+    pub name: String,
+    pub path: String,
+    pub kind: String, // "file" or "folder"
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub children: Option<Vec<TreeNode>>,
+}
+
 pub struct WorkspaceService {
     base_dir: PathBuf,
     pub(crate) emitter: Arc<dyn EventEmitter>,
@@ -239,8 +248,115 @@ impl WorkspaceService {
         Ok(())
     }
 
-    pub fn list_tree(&self) -> Result<Vec<serde_json::Value>, AppError> {
-        Ok(vec![])
+    pub fn create_folder(&mut self, path: &str) -> Result<(), AppError> {
+        let full_path = self.worktree_dir()?.join(path);
+        std::fs::create_dir_all(&full_path).map_err(|e| AppError::Internal {
+            message: format!("failed to create folder: {e}"),
+        })?;
+        // Write .gitkeep so git tracks the empty dir
+        std::fs::write(full_path.join(".gitkeep"), "").map_err(|e| AppError::Internal {
+            message: format!("failed to write .gitkeep: {e}"),
+        })?;
+        self.emitter.emit("tree:changed", serde_json::json!({}));
+        Ok(())
+    }
+
+    pub fn delete_folder(&mut self, path: &str) -> Result<(), AppError> {
+        let full_path = self.worktree_dir()?.join(path);
+        if !full_path.exists() {
+            return Err(AppError::FolderNotFound {
+                path: path.to_string(),
+            });
+        }
+        std::fs::remove_dir_all(&full_path).map_err(|e| AppError::Internal {
+            message: format!("failed to delete folder: {e}"),
+        })?;
+        self.emitter.emit("tree:changed", serde_json::json!({}));
+        Ok(())
+    }
+
+    pub fn move_folder(&mut self, old_path: &str, new_path: &str) -> Result<(), AppError> {
+        let old_full = self.worktree_dir()?.join(old_path);
+        let new_full = self.worktree_dir()?.join(new_path);
+        if !old_full.exists() {
+            return Err(AppError::FolderNotFound {
+                path: old_path.to_string(),
+            });
+        }
+        std::fs::rename(&old_full, &new_full).map_err(|e| AppError::Internal {
+            message: format!("failed to move folder: {e}"),
+        })?;
+        self.emitter.emit("tree:changed", serde_json::json!({}));
+        Ok(())
+    }
+
+    pub fn list_tree(&self) -> Result<Vec<TreeNode>, AppError> {
+        let worktree = self.worktree_dir()?;
+        Self::build_tree(worktree, "")
+    }
+
+    fn build_tree(base: &Path, prefix: &str) -> Result<Vec<TreeNode>, AppError> {
+        let dir = if prefix.is_empty() {
+            base.to_path_buf()
+        } else {
+            base.join(prefix)
+        };
+
+        if !dir.exists() {
+            return Ok(Vec::new());
+        }
+
+        let mut nodes = Vec::new();
+        let mut entries: Vec<_> = std::fs::read_dir(&dir)
+            .map_err(|e| AppError::Internal {
+                message: format!("failed to read dir: {e}"),
+            })?
+            .filter_map(|e| e.ok())
+            .collect();
+
+        // Sort: folders first, then alphabetical
+        entries.sort_by(|a, b| {
+            let a_is_dir = a.file_type().map(|t| t.is_dir()).unwrap_or(false);
+            let b_is_dir = b.file_type().map(|t| t.is_dir()).unwrap_or(false);
+            match (a_is_dir, b_is_dir) {
+                (true, false) => std::cmp::Ordering::Less,
+                (false, true) => std::cmp::Ordering::Greater,
+                _ => a.file_name().cmp(&b.file_name()),
+            }
+        });
+
+        for entry in entries {
+            let name = entry.file_name().to_string_lossy().to_string();
+            // Skip hidden files
+            if name.starts_with('.') {
+                continue;
+            }
+            let path = if prefix.is_empty() {
+                name.clone()
+            } else {
+                format!("{prefix}/{name}")
+            };
+            let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+
+            if is_dir {
+                let children = Self::build_tree(base, &path)?;
+                nodes.push(TreeNode {
+                    name,
+                    path,
+                    kind: "folder".to_string(),
+                    children: Some(children),
+                });
+            } else {
+                nodes.push(TreeNode {
+                    name,
+                    path,
+                    kind: "file".to_string(),
+                    children: None,
+                });
+            }
+        }
+
+        Ok(nodes)
     }
 
     pub fn list_workspaces(&self) -> Result<Vec<WorkspaceMeta>, AppError> {
@@ -452,5 +568,68 @@ mod tests {
         svc.create_document("test.md").unwrap();
         svc.write_document("test.md", "content").unwrap();
         assert!(test_emitter.has_event("document:changed"));
+    }
+
+    #[test]
+    fn test_create_folder_with_gitkeep() {
+        let (_tmp, mut svc) = setup_with_workspace();
+        svc.create_folder("projects/ideas").unwrap();
+        let worktree = svc.worktree_dir().unwrap();
+        assert!(worktree.join("projects/ideas/.gitkeep").exists());
+    }
+
+    #[test]
+    fn test_delete_folder_recursive() {
+        let (_tmp, mut svc) = setup_with_workspace();
+        svc.create_folder("projects").unwrap();
+        svc.create_document("projects/note.md").unwrap();
+        svc.delete_folder("projects").unwrap();
+        let result = svc.read_document("projects/note.md");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_move_folder() {
+        let (_tmp, mut svc) = setup_with_workspace();
+        svc.create_folder("old-name").unwrap();
+        svc.create_document("old-name/note.md").unwrap();
+        svc.write_document("old-name/note.md", "data").unwrap();
+        svc.move_folder("old-name", "new-name").unwrap();
+        let content = svc.read_document("new-name/note.md").unwrap();
+        assert_eq!(content, "data");
+    }
+
+    #[test]
+    fn test_list_tree_empty() {
+        let (_tmp, svc) = setup_with_workspace();
+        let tree = svc.list_tree().unwrap();
+        // build_tree filters dotfiles, so tree should be empty for a fresh workspace
+        assert!(tree.is_empty());
+    }
+
+    #[test]
+    fn test_list_tree_structure() {
+        let (_tmp, mut svc) = setup_with_workspace();
+        svc.create_folder("projects").unwrap();
+        svc.create_document("projects/arch.md").unwrap();
+        svc.create_document("inbox.md").unwrap();
+        let tree = svc.list_tree().unwrap();
+
+        // Should have at least "projects" folder and "inbox.md" file
+        let names: Vec<&str> = tree.iter().map(|n| n.name.as_str()).collect();
+        assert!(names.contains(&"projects"));
+        assert!(names.contains(&"inbox.md"));
+
+        // projects should have arch.md as child
+        let projects = tree.iter().find(|n| n.name == "projects").unwrap();
+        assert_eq!(projects.kind, "folder");
+        let child_names: Vec<&str> = projects
+            .children
+            .as_ref()
+            .unwrap()
+            .iter()
+            .map(|n| n.name.as_str())
+            .collect();
+        assert!(child_names.contains(&"arch.md"));
     }
 }
