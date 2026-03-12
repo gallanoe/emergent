@@ -75,9 +75,8 @@ describe("CommandPalette", () => {
 
   it("closes on backdrop click", () => {
     useCommandStore.setState({ paletteOpen: true });
-    const { container } = render(<CommandPalette />);
-    const backdrop = container.querySelector("[data-testid='palette-backdrop']");
-    if (backdrop) fireEvent.click(backdrop);
+    render(<CommandPalette />);
+    fireEvent.click(screen.getByTestId("palette-backdrop"));
     expect(useCommandStore.getState().paletteOpen).toBe(false);
   });
 
@@ -107,19 +106,27 @@ describe("CommandPalette", () => {
   });
 
   it("shows shortcut hints", () => {
+    const originalPlatform = navigator.platform;
     Object.defineProperty(navigator, "platform", {
       value: "MacIntel",
       configurable: true,
     });
-    useCommandStore.getState().registerCommand({
-      id: "sidebar.toggle",
-      label: "Toggle Sidebar",
-      shortcut: "Mod+B",
-      execute: vi.fn(),
-    });
-    useCommandStore.setState({ paletteOpen: true });
-    render(<CommandPalette />);
-    expect(screen.getByText("⌘B")).toBeDefined();
+    try {
+      useCommandStore.getState().registerCommand({
+        id: "sidebar.toggle",
+        label: "Toggle Sidebar",
+        shortcut: "Mod+B",
+        execute: vi.fn(),
+      });
+      useCommandStore.setState({ paletteOpen: true });
+      render(<CommandPalette />);
+      expect(screen.getByText("⌘B")).toBeDefined();
+    } finally {
+      Object.defineProperty(navigator, "platform", {
+        value: originalPlatform,
+        configurable: true,
+      });
+    }
   });
 
   it("executes command on row click", () => {

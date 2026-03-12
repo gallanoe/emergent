@@ -48,10 +48,10 @@ export function CommandPalette() {
       useCommandStore.getState().closePalette();
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
-      setSelectedIndex((i) => Math.min(i + 1, filtered.length - 1));
+      if (filtered.length > 0) setSelectedIndex((i) => Math.min(i + 1, filtered.length - 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setSelectedIndex((i) => Math.max(i - 1, 0));
+      if (filtered.length > 0) setSelectedIndex((i) => Math.max(i - 1, 0));
     } else if (e.key === "Enter") {
       e.preventDefault();
       const cmd = filtered[selectedIndex];
@@ -75,6 +75,9 @@ export function CommandPalette() {
         }}
       />
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Command Palette"
         style={{
           position: "fixed",
           top: "20%",
@@ -108,6 +111,12 @@ export function CommandPalette() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
+            role="combobox"
+            aria-expanded="true"
+            aria-controls="palette-results"
+            aria-activedescendant={
+              filtered[selectedIndex] ? `palette-item-${filtered[selectedIndex].id}` : ""
+            }
             style={{
               flex: 1,
               background: "transparent",
@@ -119,10 +128,17 @@ export function CommandPalette() {
             }}
           />
         </div>
-        <div style={{ padding: "4px 0", maxHeight: 320, overflowY: "auto" }}>
+        <div
+          id="palette-results"
+          role="listbox"
+          style={{ padding: "4px 0", maxHeight: 320, overflowY: "auto" }}
+        >
           {filtered.map((cmd, i) => (
             <div
               key={cmd.id}
+              id={`palette-item-${cmd.id}`}
+              role="option"
+              aria-selected={i === selectedIndex}
               data-selected={i === selectedIndex}
               onClick={() => {
                 useCommandStore.getState().closePalette();
