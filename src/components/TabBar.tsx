@@ -44,12 +44,6 @@ export function TabBar() {
             <span
               onClick={(e) => {
                 e.stopPropagation();
-                if (isDirty) {
-                  const confirmed = window.confirm(
-                    "This document has unsaved changes. Close anyway?",
-                  );
-                  if (!confirmed) return;
-                }
                 closeTab(tab.path);
               }}
               className="opacity-0 group-hover:opacity-100"
