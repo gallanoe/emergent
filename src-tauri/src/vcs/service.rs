@@ -24,6 +24,12 @@ pub struct FileStatus {
     pub status: String, // "new", "modified", "deleted"
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub enum MergeResult {
+    Clean,
+    Conflict { paths: Vec<String> },
+}
+
 pub struct VcsService {
     emitter: Arc<dyn EventEmitter>,
 }
@@ -140,6 +146,107 @@ impl VcsService {
         branch.delete()?;
         Ok(())
     }
+
+    /// Merges `source_branch` into the currently checked-out branch.
+    pub fn merge_branch(
+        &self,
+        repo: &Repository,
+        _worktree_path: &Path,
+        source_branch: &str,
+    ) -> Result<MergeResult, AppError> {
+        let source = repo
+            .find_branch(source_branch, git2::BranchType::Local)?
+            .get()
+            .peel_to_commit()?
+            .id();
+        let annotated = repo.find_annotated_commit(source)?;
+        let (analysis, _) = repo.merge_analysis(&[&annotated])?;
+
+        if analysis.is_up_to_date() {
+            return Ok(MergeResult::Clean);
+        }
+
+        if analysis.is_fast_forward() {
+            // Fast-forward
+            let mut reference = repo.head()?;
+            reference
+                .set_target(source, &format!("fast-forward merge {source_branch}"))?;
+            repo.checkout_head(Some(
+                git2::build::CheckoutBuilder::new().force(),
+            ))?;
+            self.emitter.emit("tree:changed", serde_json::json!({}));
+            return Ok(MergeResult::Clean);
+        }
+
+        // Normal merge
+        repo.merge(&[&annotated], None, None)?;
+        let index = repo.index()?;
+
+        if index.has_conflicts() {
+            let mut conflicts = Vec::new();
+            for conflict in index.conflicts()? {
+                let conflict = conflict?;
+                let path = conflict
+                    .our
+                    .as_ref()
+                    .or(conflict.ancestor.as_ref())
+                    .map(|e| String::from_utf8_lossy(&e.path).to_string())
+                    .unwrap_or_default();
+
+                // Read ours/theirs content from the blobs
+                let ours_content = conflict
+                    .our
+                    .as_ref()
+                    .and_then(|e| repo.find_blob(e.id).ok())
+                    .map(|b| String::from_utf8_lossy(b.content()).to_string())
+                    .unwrap_or_default();
+                let theirs_content = conflict
+                    .their
+                    .as_ref()
+                    .and_then(|e| repo.find_blob(e.id).ok())
+                    .map(|b| String::from_utf8_lossy(b.content()).to_string())
+                    .unwrap_or_default();
+
+                conflicts.push(serde_json::json!({
+                    "path": path,
+                    "ours": ours_content,
+                    "theirs": theirs_content,
+                }));
+            }
+            let conflict_paths: Vec<String> = conflicts
+                .iter()
+                .map(|c| c["path"].as_str().unwrap_or("").to_string())
+                .collect();
+            self.emitter.emit(
+                "merge:conflict",
+                serde_json::json!({"conflicts": conflicts}),
+            );
+            return Ok(MergeResult::Conflict {
+                paths: conflict_paths,
+            });
+        }
+
+        // No conflicts — commit the merge
+        let mut index = repo.index()?;
+        let tree_oid = index.write_tree()?;
+        let tree = repo.find_tree(tree_oid)?;
+        let sig = repo
+            .signature()
+            .or_else(|_| Signature::now("Emergent", "emergent@local"))?;
+        let head_commit = repo.head()?.peel_to_commit()?;
+        let source_commit = repo.find_commit(source)?;
+        repo.commit(
+            Some("HEAD"),
+            &sig,
+            &sig,
+            &format!("Merge branch '{source_branch}'"),
+            &tree,
+            &[&head_commit, &source_commit],
+        )?;
+        repo.cleanup_state()?;
+        self.emitter.emit("tree:changed", serde_json::json!({}));
+        Ok(MergeResult::Clean)
+    }
 }
 
 // Note on API design: VcsService methods take &Repository and &Path as parameters
@@ -246,6 +353,76 @@ mod tests {
         svc.create_branch(&repo, "feature").unwrap();
         let result = svc.create_branch(&repo, "feature");
         assert!(matches!(result, Err(AppError::BranchAlreadyExists { .. })));
+    }
+
+    /// Returns the name of the current HEAD branch (e.g., "main" or "master").
+    fn head_branch_name(repo: &Repository) -> String {
+        let head = repo.head().unwrap();
+        head.shorthand().unwrap().to_string()
+    }
+
+    #[test]
+    fn test_merge_clean() {
+        let (tmp, svc, repo) = setup();
+        // Create initial commit on default branch
+        create_file(tmp.path(), "note.md", "original");
+        svc.commit(&repo, tmp.path(), "initial").unwrap();
+
+        let default_branch = head_branch_name(&repo);
+
+        // Create feature branch and add a file
+        svc.create_branch(&repo, "feature").unwrap();
+        repo.set_head("refs/heads/feature").unwrap();
+        repo.checkout_head(Some(git2::build::CheckoutBuilder::new().force()))
+            .unwrap();
+        create_file(tmp.path(), "new.md", "new content");
+        svc.commit(&repo, tmp.path(), "add new file").unwrap();
+
+        // Switch back to default branch
+        repo.set_head(&format!("refs/heads/{default_branch}"))
+            .unwrap();
+        repo.checkout_head(Some(git2::build::CheckoutBuilder::new().force()))
+            .unwrap();
+
+        // Merge feature into current branch
+        let result = svc
+            .merge_branch(&repo, tmp.path(), "feature")
+            .unwrap();
+        assert!(matches!(result, MergeResult::Clean));
+    }
+
+    #[test]
+    fn test_merge_conflict() {
+        let (tmp, svc, repo) = setup();
+        // Create initial commit on default branch
+        create_file(tmp.path(), "note.md", "original content");
+        svc.commit(&repo, tmp.path(), "initial").unwrap();
+
+        let default_branch = head_branch_name(&repo);
+
+        // Create feature branch and modify the same file
+        svc.create_branch(&repo, "feature").unwrap();
+        repo.set_head("refs/heads/feature").unwrap();
+        repo.checkout_head(Some(git2::build::CheckoutBuilder::new().force()))
+            .unwrap();
+        create_file(tmp.path(), "note.md", "feature changes");
+        svc.commit(&repo, tmp.path(), "feature change").unwrap();
+
+        // Switch back to default branch and make a conflicting change
+        repo.set_head(&format!("refs/heads/{default_branch}"))
+            .unwrap();
+        repo.checkout_head(Some(git2::build::CheckoutBuilder::new().force()))
+            .unwrap();
+        create_file(tmp.path(), "note.md", "main changes");
+        svc.commit(&repo, tmp.path(), "main change").unwrap();
+
+        // Merge feature into default branch — should conflict
+        let result = svc
+            .merge_branch(&repo, tmp.path(), "feature")
+            .unwrap();
+        assert!(
+            matches!(result, MergeResult::Conflict { paths } if !paths.is_empty())
+        );
     }
 
     #[test]
