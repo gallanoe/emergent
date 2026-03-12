@@ -5,7 +5,18 @@ import { StatusBar } from "./StatusBar";
 import { ToastContainer } from "./Toast";
 import { Editor } from "./Editor";
 import { useEditorStore } from "../stores/editor";
-import { readDocument, writeDocument, createDocument, createFolder } from "../lib/tauri";
+import {
+  listTree,
+  readDocument,
+  writeDocument,
+  createDocument,
+  createFolder,
+  onTreeChanged,
+  onDocumentChanged,
+} from "../lib/tauri";
+import { useFileTreeStore } from "../stores/file-tree";
+import { sortTree } from "../lib/sort-tree";
+import { useToastStore } from "./Toast";
 
 export function AppShell() {
   const [sidebarWidth, setSidebarWidth] = useState(220);
@@ -33,6 +44,56 @@ export function AppShell() {
     },
     [activeTab],
   );
+
+  // Load tree on mount, subscribe to events
+  useEffect(() => {
+    let unmountedTreeFn: (() => void) | null = null;
+    let unmountedDocFn: (() => void) | null = null;
+
+    const loadTree = () => {
+      listTree()
+        .then((tree) => {
+          useFileTreeStore.getState().setTree(sortTree(tree));
+          useFileTreeStore.getState().setLoading(false);
+        })
+        .catch((err) => {
+          useFileTreeStore.getState().setLoading(false);
+          useToastStore
+            .getState()
+            .addToast(
+              `Failed to load files: ${err instanceof Error ? err.message : String(err)}`,
+              "error",
+            );
+        });
+    };
+
+    useFileTreeStore.getState().setLoading(true);
+    loadTree();
+
+    onTreeChanged(() => {
+      loadTree();
+    }).then((fn) => {
+      unmountedTreeFn = fn;
+    });
+
+    onDocumentChanged(({ path }) => {
+      const activeTab = useEditorStore.getState().activeTab;
+      if (activeTab === path) {
+        readDocument(path)
+          .then((content) => {
+            setEditorContent(content);
+          })
+          .catch(() => {});
+      }
+    }).then((fn) => {
+      unmountedDocFn = fn;
+    });
+
+    return () => {
+      unmountedTreeFn?.();
+      unmountedDocFn?.();
+    };
+  }, []);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {

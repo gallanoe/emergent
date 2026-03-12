@@ -19,6 +19,8 @@ vi.mock("../lib/tauri", () => ({
   createDocument: vi.fn().mockResolvedValue(undefined),
   createFolder: vi.fn().mockResolvedValue(undefined),
   listTree: vi.fn().mockResolvedValue([]),
+  onTreeChanged: vi.fn().mockResolvedValue(() => {}),
+  onDocumentChanged: vi.fn().mockResolvedValue(() => {}),
 }));
 
 describe("App", () => {
