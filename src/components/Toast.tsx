@@ -11,18 +11,18 @@ type Toast = {
 
 type ToastState = {
   toasts: Toast[];
-  addToast: (message: string, type: ToastType, action?: Toast["action"]) => void;
+  addToast: (message: string, type: ToastType, action?: Toast["action"], duration?: number) => void;
   removeToast: (id: string) => void;
 };
 
 export const useToastStore = create<ToastState>((set, get) => ({
   toasts: [],
-  addToast: (message, type, action) => {
+  addToast: (message, type, action, duration) => {
     const id = crypto.randomUUID();
     const toast: Toast = { id, message, type };
     if (action) toast.action = action;
     set({ toasts: [...get().toasts, toast] });
-    setTimeout(() => get().removeToast(id), 4000);
+    setTimeout(() => get().removeToast(id), duration ?? 4000);
   },
   removeToast: (id) => set({ toasts: get().toasts.filter((t) => t.id !== id) }),
 }));
@@ -71,7 +71,10 @@ export function ToastContainer() {
           <span style={{ flex: 1 }}>{toast.message}</span>
           {toast.action && (
             <button
-              onClick={toast.action.onClick}
+              onClick={() => {
+                toast.action!.onClick();
+                removeToast(toast.id);
+              }}
               style={{
                 background: "none",
                 border: "none",
