@@ -1,2 +1,2 @@
 mod service;
-pub use service::WorkspaceService;
+pub use service::{TreeNode, WorkspaceMeta, WorkspaceService};

@@ -1,3 +1,2 @@
 mod service;
-
-pub use service::VcsService;
+pub use service::{BranchInfo, CommitInfo, FileStatus, MergeResult, VcsService};

@@ -41,6 +41,14 @@ impl WorkspaceService {
         }
     }
 
+    pub fn repo(&self) -> Option<&Repository> {
+        self.repo.as_ref()
+    }
+
+    pub fn worktree_path(&self) -> Option<&Path> {
+        self.worktree_path.as_deref()
+    }
+
     pub fn create_workspace(&mut self, name: &str) -> Result<String, AppError> {
         let id = nanoid::nanoid!(12);
         let workspace_dir = self.base_dir.join(&id);
