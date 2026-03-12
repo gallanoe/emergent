@@ -1,12 +1,21 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useFileTreeStore } from "../stores/file-tree";
 import { useEditorStore } from "../stores/editor";
 import type { TreeNode } from "../lib/tauri";
+import { ContextMenu, type MenuItem } from "./ContextMenu";
 
 const INDENT = 16;
 const ITEM_HEIGHT = 28;
 
-function FileTreeNode({ node, depth }: { node: TreeNode; depth: number }) {
+function FileTreeNode({
+  node,
+  depth,
+  onContextMenu,
+}: {
+  node: TreeNode;
+  depth: number;
+  onContextMenu: (e: React.MouseEvent, node: TreeNode) => void;
+}) {
   const { expandedPaths, selectedPath, toggleExpanded, setSelected } = useFileTreeStore();
   const openTab = useEditorStore((s) => s.openTab);
   const isExpanded = expandedPaths.has(node.path);
@@ -26,6 +35,7 @@ function FileTreeNode({ node, depth }: { node: TreeNode; depth: number }) {
     <>
       <div
         onClick={handleClick}
+        onContextMenu={(e) => onContextMenu(e, node)}
         className="flex cursor-default items-center px-2"
         style={{
           height: ITEM_HEIGHT,
@@ -66,7 +76,12 @@ function FileTreeNode({ node, depth }: { node: TreeNode; depth: number }) {
       {isFolder && isExpanded && node.children && (
         <>
           {node.children.map((child) => (
-            <FileTreeNode key={child.path} node={child} depth={depth + 1} />
+            <FileTreeNode
+              key={child.path}
+              node={child}
+              depth={depth + 1}
+              onContextMenu={onContextMenu}
+            />
           ))}
         </>
       )}
@@ -79,6 +94,43 @@ export function FileTree() {
   const { selectedPath, expandedPaths, toggleExpanded, setSelected } = useFileTreeStore();
   const openTab = useEditorStore((s) => s.openTab);
   const treeRef = useRef<HTMLDivElement>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    target: TreeNode | null;
+  } | null>(null);
+
+  const getMenuItems = useCallback((target: TreeNode | null): MenuItem[] => {
+    if (target === null) {
+      return [
+        { label: "New File", action: "new-file" },
+        { label: "New Folder", action: "new-folder" },
+      ];
+    }
+    if (target.kind === "folder") {
+      return [
+        { label: "New File", action: "new-file" },
+        { label: "New Folder", action: "new-folder" },
+        { type: "separator" },
+        { label: "Rename", action: "rename" },
+        { label: "Delete", action: "delete" },
+      ];
+    }
+    return [
+      { label: "Rename", action: "rename" },
+      { label: "Delete", action: "delete" },
+    ];
+  }, []);
+
+  const handleContextMenu = useCallback((e: React.MouseEvent, target: TreeNode | null) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({ x: e.clientX, y: e.clientY, target });
+  }, []);
+
+  const handleContextAction = useCallback((_action: string) => {
+    setContextMenu(null);
+  }, []);
 
   const flattenVisible = useCallback(
     (nodes: TreeNode[]): TreeNode[] => {
@@ -180,11 +232,21 @@ export function FileTree() {
       role="tree"
       tabIndex={0}
       onKeyDown={handleKeyDown}
+      onContextMenu={(e) => handleContextMenu(e, null)}
       style={{ outline: "none" }}
     >
       {tree.map((node) => (
-        <FileTreeNode key={node.path} node={node} depth={0} />
+        <FileTreeNode key={node.path} node={node} depth={0} onContextMenu={handleContextMenu} />
       ))}
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={getMenuItems(contextMenu.target)}
+          onAction={handleContextAction}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
     </div>
   );
 }
