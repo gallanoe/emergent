@@ -1,5 +1,6 @@
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { moveDocument, moveFolder } from "../../lib/tauri";
 import { useFileTreeStore } from "../../stores/file-tree";
 import { useEditorStore } from "../../stores/editor";
 import { FileTree } from "../../components/FileTree";
@@ -76,5 +77,137 @@ describe("FileTree — context menu", () => {
     expect(screen.getByText("Rename")).toBeDefined();
     fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
     expect(screen.queryByText("Rename")).toBeNull();
+  });
+});
+
+describe("FileTree — inline rename", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useFileTreeStore.setState({
+      tree: sampleTree,
+      expandedPaths: new Set(["docs"]),
+      selectedPath: "notes.md",
+      loading: false,
+    });
+    useEditorStore.setState({
+      openTabs: [],
+      activeTab: null,
+      dirtyTabs: new Set(),
+    });
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("F2 on selected node shows rename input", () => {
+    render(<FileTree />);
+    const tree = screen.getByRole("tree");
+    fireEvent.keyDown(tree, { key: "F2" });
+    expect(screen.getByDisplayValue("notes.md")).toBeDefined();
+  });
+
+  it("Enter confirms rename and calls moveDocument", async () => {
+    vi.mocked(moveDocument).mockResolvedValue(undefined);
+    render(<FileTree />);
+    const tree = screen.getByRole("tree");
+    fireEvent.keyDown(tree, { key: "F2" });
+    const input = screen.getByDisplayValue("notes.md");
+    fireEvent.change(input, { target: { value: "renamed.md" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() => {
+      expect(moveDocument).toHaveBeenCalledWith("notes.md", "renamed.md");
+    });
+  });
+
+  it("Escape cancels rename", () => {
+    render(<FileTree />);
+    const tree = screen.getByRole("tree");
+    fireEvent.keyDown(tree, { key: "F2" });
+    const input = screen.getByDisplayValue("notes.md");
+    fireEvent.keyDown(input, { key: "Escape" });
+    expect(screen.queryByDisplayValue("notes.md")).toBeNull();
+    expect(screen.getByText("notes.md")).toBeDefined();
+  });
+
+  it("empty name cancels rename", () => {
+    render(<FileTree />);
+    const tree = screen.getByRole("tree");
+    fireEvent.keyDown(tree, { key: "F2" });
+    const input = screen.getByDisplayValue("notes.md");
+    fireEvent.change(input, { target: { value: "" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(moveDocument).not.toHaveBeenCalled();
+  });
+
+  it("unchanged name cancels rename", () => {
+    render(<FileTree />);
+    const tree = screen.getByRole("tree");
+    fireEvent.keyDown(tree, { key: "F2" });
+    const input = screen.getByDisplayValue("notes.md");
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(moveDocument).not.toHaveBeenCalled();
+  });
+
+  it("rename failure shows error toast", async () => {
+    vi.mocked(moveDocument).mockRejectedValue(new Error("conflict"));
+    render(<FileTree />);
+    const tree = screen.getByRole("tree");
+    fireEvent.keyDown(tree, { key: "F2" });
+    const input = screen.getByDisplayValue("notes.md");
+    fireEvent.change(input, { target: { value: "conflict.md" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() => {
+      expect(moveDocument).toHaveBeenCalled();
+    });
+    // Original name should be restored (rollback)
+    await waitFor(() => {
+      expect(screen.getByText("notes.md")).toBeDefined();
+    });
+  });
+
+  it("double-click on already-selected node enters rename mode", async () => {
+    render(<FileTree />);
+    const node = screen.getByText("notes.md");
+    // First click selects (already selected in beforeEach), second click (double-click) renames
+    fireEvent.doubleClick(node);
+    await waitFor(() => {
+      expect(screen.getByDisplayValue("notes.md")).toBeDefined();
+    });
+  });
+
+  it("single-click on already-selected node does NOT immediately rename (250ms delay)", () => {
+    vi.useFakeTimers();
+    render(<FileTree />);
+    const node = screen.getByText("notes.md");
+    fireEvent.click(node);
+    // No rename input should appear yet (within the 250ms delay window)
+    expect(screen.queryByDisplayValue("notes.md")).toBeNull();
+    vi.useRealTimers();
+  });
+
+  it("single-click on unselected node selects immediately with no delay", () => {
+    vi.useFakeTimers();
+    useFileTreeStore.setState({ ...useFileTreeStore.getState(), selectedPath: null });
+    render(<FileTree />);
+    fireEvent.click(screen.getByText("notes.md"));
+    expect(useFileTreeStore.getState().selectedPath).toBe("notes.md");
+    vi.useRealTimers();
+  });
+
+  it("blur confirms rename (same as Enter)", async () => {
+    vi.mocked(moveDocument).mockResolvedValue(undefined);
+    render(<FileTree />);
+    const tree = screen.getByRole("tree");
+    fireEvent.keyDown(tree, { key: "F2" });
+    const input = screen.getByDisplayValue("notes.md");
+    fireEvent.change(input, { target: { value: "blurred.md" } });
+    fireEvent.blur(input);
+
+    await waitFor(() => {
+      expect(moveDocument).toHaveBeenCalledWith("notes.md", "blurred.md");
+    });
   });
 });
