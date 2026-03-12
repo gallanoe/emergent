@@ -12,6 +12,7 @@ import {
   deleteFolder,
   writeDocument,
 } from "../lib/tauri";
+import { sortTree } from "../lib/sort-tree";
 import { ContextMenu, type MenuItem } from "./ContextMenu";
 import { useToastStore } from "./Toast";
 
@@ -73,6 +74,25 @@ function removeNodeFromTree(tree: TreeNode[], path: string): TreeNode[] {
       copy.children = removeNodeFromTree(node.children, path);
       return copy;
     });
+}
+
+function insertNodeInTree(tree: TreeNode[], parentPath: string, node: TreeNode): TreeNode[] {
+  if (!parentPath) {
+    return [...tree, node];
+  }
+  return tree.map((n) => {
+    if (n.path === parentPath && n.kind === "folder") {
+      const copy: TreeNode = { name: n.name, path: n.path, kind: n.kind };
+      copy.children = [...(n.children ?? []), node];
+      return copy;
+    }
+    if (n.children) {
+      const copy: TreeNode = { name: n.name, path: n.path, kind: n.kind };
+      copy.children = insertNodeInTree(n.children, parentPath, node);
+      return copy;
+    }
+    return n;
+  });
 }
 
 function countFilesInSubtree(node: TreeNode): number {
@@ -257,6 +277,12 @@ function FileTreeNode({
   creating,
   onCreateConfirm,
   onCreateCancel,
+  dragging,
+  dropTarget,
+  onDragStart,
+  onDragOver,
+  onDragLeave,
+  onDrop,
 }: {
   node: TreeNode;
   depth: number;
@@ -269,6 +295,12 @@ function FileTreeNode({
   creating: { parentPath: string; kind: "file" | "folder" } | null;
   onCreateConfirm: (name: string) => void;
   onCreateCancel: () => void;
+  dragging: string | null;
+  dropTarget: string | null;
+  onDragStart: (node: TreeNode) => void;
+  onDragOver: (node: TreeNode) => void;
+  onDragLeave: () => void;
+  onDrop: (sourcePath: string, targetNode: TreeNode) => void;
 }) {
   const { expandedPaths, selectedPath, toggleExpanded } = useFileTreeStore();
   const openTab = useEditorStore((s) => s.openTab);
@@ -312,6 +344,33 @@ function FileTreeNode({
   return (
     <>
       <div
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.setData("text/plain", node.path);
+          e.dataTransfer.effectAllowed = "move";
+          onDragStart(node);
+        }}
+        onDragEnd={() => {
+          onDragLeave();
+        }}
+        onDragOver={(e) => {
+          if (node.kind === "folder") {
+            e.preventDefault();
+            e.stopPropagation();
+            e.dataTransfer.dropEffect = "move";
+            onDragOver(node);
+          }
+        }}
+        onDragLeave={(e) => {
+          e.stopPropagation();
+          onDragLeave();
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const sourcePath = e.dataTransfer.getData("text/plain");
+          onDrop(sourcePath, node);
+        }}
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
         onContextMenu={(e) => onContextMenu(e, node)}
@@ -320,18 +379,24 @@ function FileTreeNode({
           height: ITEM_HEIGHT,
           paddingLeft: depth * INDENT + 8,
           fontSize: 13,
+          opacity: dragging === node.path ? 0.5 : 1,
           color: isSelected ? "var(--color-fg-heading)" : "var(--color-fg-default)",
-          background: isSelected ? "var(--color-bg-hover)" : "transparent",
+          background:
+            dropTarget === node.path && node.kind === "folder"
+              ? "var(--color-bg-selected)"
+              : isSelected
+                ? "var(--color-bg-hover)"
+                : "transparent",
           borderLeft: isSelected ? "2px solid var(--color-accent)" : "2px solid transparent",
           transition: "background 100ms ease-out",
         }}
         onMouseEnter={(e) => {
-          if (!isSelected) {
+          if (!isSelected && dropTarget !== node.path) {
             e.currentTarget.style.background = "var(--color-bg-hover)";
           }
         }}
         onMouseLeave={(e) => {
-          if (!isSelected) {
+          if (!isSelected && dropTarget !== node.path) {
             e.currentTarget.style.background = "transparent";
           }
         }}
@@ -385,6 +450,12 @@ function FileTreeNode({
               creating={creating}
               onCreateConfirm={onCreateConfirm}
               onCreateCancel={onCreateCancel}
+              dragging={dragging}
+              dropTarget={dropTarget}
+              onDragStart={onDragStart}
+              onDragOver={onDragOver}
+              onDragLeave={onDragLeave}
+              onDrop={onDrop}
             />
           ))}
         </>
@@ -403,6 +474,8 @@ export function FileTree() {
     parentPath: string;
     kind: "file" | "folder";
   } | null>(null);
+  const [dragging, setDragging] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -435,6 +508,51 @@ export function FileTree() {
     e.preventDefault();
     e.stopPropagation();
     setContextMenu({ x: e.clientX, y: e.clientY, target });
+  }, []);
+
+  const handleDrop = useCallback(async (sourcePath: string, targetNode: TreeNode | null) => {
+    setDragging(null);
+    setDropTarget(null);
+
+    const currentTree = useFileTreeStore.getState().tree;
+    const sourceNode = findNode(currentTree, sourcePath);
+    if (!sourceNode) return;
+
+    const targetPath = targetNode?.path ?? "";
+    if (sourcePath === targetPath) return;
+
+    const sourceParent = sourcePath.includes("/")
+      ? sourcePath.substring(0, sourcePath.lastIndexOf("/"))
+      : "";
+    if (sourceParent === targetPath) return;
+
+    if (targetPath.startsWith(sourcePath + "/")) return;
+
+    const newPath = targetPath ? `${targetPath}/${sourceNode.name}` : sourceNode.name;
+
+    const snapshot = useFileTreeStore.getState().snapshotTree();
+
+    // Optimistic move
+    const treeWithout = removeNodeFromTree(currentTree, sourcePath);
+    const movedNode: TreeNode = {
+      name: sourceNode.name,
+      path: newPath,
+      kind: sourceNode.kind,
+    };
+    if (sourceNode.children) movedNode.children = sourceNode.children;
+    const treeWith = insertNodeInTree(treeWithout, targetPath, movedNode);
+    useFileTreeStore.getState().setTree(sortTree(treeWith));
+    useEditorStore.getState().updateTabPath(sourcePath, newPath);
+
+    try {
+      const moveFn = sourceNode.kind === "folder" ? moveFolder : moveDocument;
+      await moveFn(sourcePath, newPath);
+    } catch (err) {
+      useFileTreeStore.getState().rollbackTree(snapshot);
+      useToastStore
+        .getState()
+        .addToast(`Move failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+    }
   }, []);
 
   const handleDelete = useCallback(
@@ -785,7 +903,21 @@ export function FileTree() {
       tabIndex={0}
       onKeyDown={handleKeyDown}
       onContextMenu={(e) => handleContextMenu(e, null)}
-      style={{ outline: "none" }}
+      onDragOver={(e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        setDropTarget("__root__");
+      }}
+      onDragLeave={() => setDropTarget(null)}
+      onDrop={(e) => {
+        e.preventDefault();
+        const sourcePath = e.dataTransfer.getData("text/plain");
+        handleDrop(sourcePath, null);
+      }}
+      style={{
+        outline: "none",
+        background: dropTarget === "__root__" ? "var(--color-bg-selected)" : undefined,
+      }}
     >
       {creating && creating.parentPath === "" && (
         <CreationInput
@@ -809,6 +941,12 @@ export function FileTree() {
           creating={creating}
           onCreateConfirm={handleCreateConfirm}
           onCreateCancel={() => setCreating(null)}
+          dragging={dragging}
+          dropTarget={dropTarget}
+          onDragStart={(n) => setDragging(n.path)}
+          onDragOver={(n) => setDropTarget(n.path)}
+          onDragLeave={() => setDropTarget(null)}
+          onDrop={(sourcePath, targetNode) => handleDrop(sourcePath, targetNode)}
         />
       ))}
       {contextMenu && (

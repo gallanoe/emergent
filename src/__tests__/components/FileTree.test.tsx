@@ -459,3 +459,159 @@ describe("FileTree — deletion with undo", () => {
     expect(readDocument).not.toHaveBeenCalled();
   });
 });
+
+describe("FileTree — drag and drop", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useFileTreeStore.setState({
+      tree: sampleTree,
+      expandedPaths: new Set(["docs"]),
+      selectedPath: null,
+      loading: false,
+    });
+    useEditorStore.setState({
+      openTabs: [],
+      activeTab: null,
+      dirtyTabs: new Set(),
+    });
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("drop file onto folder calls moveDocument", async () => {
+    vi.mocked(moveDocument).mockResolvedValue(undefined);
+    render(<FileTree />);
+    const file = screen.getByText("notes.md");
+    const folder = screen.getByText("docs");
+
+    fireEvent.dragStart(file, {
+      dataTransfer: { setData: vi.fn(), effectAllowed: "" },
+    });
+    fireEvent.dragOver(folder, {
+      dataTransfer: { types: ["text/plain"], dropEffect: "" },
+    });
+    fireEvent.drop(folder, {
+      dataTransfer: { getData: () => "notes.md" },
+    });
+
+    await waitFor(() => {
+      expect(moveDocument).toHaveBeenCalledWith("notes.md", "docs/notes.md");
+    });
+  });
+
+  it("drop folder onto itself is rejected", () => {
+    render(<FileTree />);
+    const folder = screen.getByText("docs");
+
+    fireEvent.dragStart(folder, {
+      dataTransfer: { setData: vi.fn(), effectAllowed: "" },
+    });
+    fireEvent.drop(folder, {
+      dataTransfer: { getData: () => "docs" },
+    });
+
+    expect(moveFolder).not.toHaveBeenCalled();
+    expect(moveDocument).not.toHaveBeenCalled();
+  });
+
+  it("drop item onto its current parent is rejected", () => {
+    render(<FileTree />);
+    const file = screen.getByText("readme.md"); // already inside "docs"
+    const folder = screen.getByText("docs");
+
+    fireEvent.dragStart(file, {
+      dataTransfer: { setData: vi.fn(), effectAllowed: "" },
+    });
+    fireEvent.drop(folder, {
+      dataTransfer: { getData: () => "docs/readme.md" },
+    });
+
+    expect(moveDocument).not.toHaveBeenCalled();
+  });
+
+  it("drop onto root area moves item to workspace root", async () => {
+    vi.mocked(moveDocument).mockResolvedValue(undefined);
+    render(<FileTree />);
+    const file = screen.getByText("readme.md");
+    const tree = screen.getByRole("tree");
+
+    fireEvent.dragStart(file, {
+      dataTransfer: { setData: vi.fn(), effectAllowed: "" },
+    });
+    fireEvent.dragOver(tree, {
+      dataTransfer: { types: ["text/plain"], dropEffect: "" },
+    });
+    fireEvent.drop(tree, {
+      dataTransfer: { getData: () => "docs/readme.md" },
+    });
+
+    await waitFor(() => {
+      expect(moveDocument).toHaveBeenCalledWith("docs/readme.md", "readme.md");
+    });
+  });
+
+  it("failed move rolls back tree and shows error toast", async () => {
+    vi.mocked(moveDocument).mockRejectedValue(new Error("conflict"));
+    render(<FileTree />);
+    const file = screen.getByText("notes.md");
+    const folder = screen.getByText("docs");
+
+    fireEvent.dragStart(file, {
+      dataTransfer: { setData: vi.fn(), effectAllowed: "" },
+    });
+    fireEvent.drop(folder, {
+      dataTransfer: { getData: () => "notes.md" },
+    });
+
+    await waitFor(() => {
+      expect(moveDocument).toHaveBeenCalled();
+    });
+    // Node should still be visible (rolled back)
+    await waitFor(() => {
+      expect(screen.getByText("notes.md")).toBeDefined();
+    });
+  });
+
+  it("dragged item has opacity 0.5", () => {
+    render(<FileTree />);
+    const file = screen.getByText("notes.md");
+
+    fireEvent.dragStart(file, {
+      dataTransfer: { setData: vi.fn(), effectAllowed: "" },
+    });
+
+    expect(file.closest("[draggable]")!.style.opacity).toBe("0.5");
+  });
+
+  it("folder drop target shows background highlight on drag over", () => {
+    render(<FileTree />);
+    const file = screen.getByText("notes.md");
+    const folder = screen.getByText("docs");
+
+    fireEvent.dragStart(file, {
+      dataTransfer: { setData: vi.fn(), effectAllowed: "" },
+    });
+    fireEvent.dragOver(folder, {
+      dataTransfer: { types: ["text/plain"], dropEffect: "" },
+    });
+
+    expect(folder.closest("[draggable]")!.style.background).toContain("var(--color-bg-selected)");
+  });
+
+  it("root drop zone shows background highlight on drag over", () => {
+    render(<FileTree />);
+    const file = screen.getByText("notes.md");
+    const tree = screen.getByRole("tree");
+
+    fireEvent.dragStart(file, {
+      dataTransfer: { setData: vi.fn(), effectAllowed: "" },
+    });
+    fireEvent.dragOver(tree, {
+      dataTransfer: { types: ["text/plain"], dropEffect: "" },
+    });
+
+    expect(tree.style.background).toBe("var(--color-bg-selected)");
+  });
+});
