@@ -169,12 +169,12 @@ export function Editor({ content, path, onSave }: EditorProps) {
       execute: () => {
         if (viewRef.current) {
           const content = viewRef.current.state.doc.toString();
-          onSave(content);
+          handleSave(content);
         }
       },
     });
     return () => useCommandStore.getState().unregisterCommand("document.save");
-  }, [onSave]);
+  }, [handleSave]);
 
   useEffect(() => {
     if (!containerRef.current) return;

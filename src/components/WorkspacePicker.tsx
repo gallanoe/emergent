@@ -104,7 +104,7 @@ export function WorkspacePicker() {
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [creatingNew, sorted, selectedIndex, handleOpen, workspaces]);
+  }, [creatingNew, sorted, selectedIndex, handleOpen]);
 
   useEffect(() => {
     if (creatingNew) inputRef.current?.focus();
