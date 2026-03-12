@@ -1,5 +1,6 @@
 mod agent;
 mod error;
+mod events;
 
 #[tauri::command]
 fn greet(name: &str) -> String {
