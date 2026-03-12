@@ -1,4 +1,4 @@
-import { render, cleanup, waitFor } from "@testing-library/react";
+import { render, cleanup, waitFor, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { useWorkspaceStore } from "../../stores/workspace";
 import { useEditorStore } from "../../stores/editor";
@@ -126,5 +126,60 @@ describe("AppShell — event wiring", () => {
     await waitFor(() => {
       expect(readDocument).toHaveBeenCalledWith("hello.md");
     });
+  });
+});
+
+describe("AppShell — empty workspace state", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useWorkspaceStore.setState({
+      activeWorkspace: {
+        id: "ws-1",
+        name: "Test",
+        created_at: "",
+        last_opened: "",
+      },
+      workspaces: [],
+      currentBranch: "main",
+      mergeState: null,
+    });
+    useEditorStore.setState({
+      openTabs: [],
+      activeTab: null,
+      dirtyTabs: new Set(),
+    });
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("shows 'Create your first document' when tree is empty and not loading", async () => {
+    useFileTreeStore.setState({ tree: [], loading: false });
+    vi.mocked(listTree).mockResolvedValue([]);
+    render(<AppShell />);
+    await waitFor(() => {
+      expect(screen.getByText("Create your first document")).toBeDefined();
+    });
+  });
+
+  it("shows keyboard hint below empty state title", async () => {
+    useFileTreeStore.setState({ tree: [], loading: false });
+    vi.mocked(listTree).mockResolvedValue([]);
+    render(<AppShell />);
+    await waitFor(() => {
+      expect(screen.getByText(/⌘N/)).toBeDefined();
+    });
+  });
+
+  it("shows normal 'No document open' when tree has files but no tab is active", async () => {
+    const tree = [{ name: "a.md", path: "a.md", kind: "file" as const }];
+    useFileTreeStore.setState({ tree, loading: false });
+    vi.mocked(listTree).mockResolvedValue(tree);
+    render(<AppShell />);
+    await waitFor(() => {
+      expect(screen.getByText("No document open")).toBeDefined();
+    });
+    expect(screen.queryByText("Create your first document")).toBeNull();
   });
 });

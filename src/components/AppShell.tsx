@@ -22,6 +22,8 @@ export function AppShell() {
   const [sidebarWidth, setSidebarWidth] = useState(220);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const activeTab = useEditorStore((s) => s.activeTab);
+  const tree = useFileTreeStore((s) => s.tree);
+  const loading = useFileTreeStore((s) => s.loading);
   const [editorContent, setEditorContent] = useState("");
 
   const handleToggleSidebar = useCallback(() => {
@@ -149,6 +151,30 @@ export function AppShell() {
           <div className="flex-1 overflow-auto p-6">
             {activeTab ? (
               <Editor content={editorContent} path={activeTab} onSave={handleSave} />
+            ) : tree.length === 0 && !loading ? (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  height: "100%",
+                  gap: 4,
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: 16,
+                    fontWeight: 600,
+                    color: "var(--color-fg-heading)",
+                  }}
+                >
+                  Create your first document
+                </span>
+                <span style={{ fontSize: 12, color: "var(--color-fg-muted)" }}>
+                  {"Press ⌘N to get started"}
+                </span>
+              </div>
             ) : (
               <p style={{ color: "var(--color-fg-muted)" }}>No document open</p>
             )}
