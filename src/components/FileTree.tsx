@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useFileTreeStore } from "../stores/file-tree";
 import { useEditorStore } from "../stores/editor";
+import { useCommandStore } from "../stores/commands";
+import { useFocusContextStore } from "../stores/focus-context";
 import type { TreeNode } from "../lib/tauri";
 import {
   moveDocument,
@@ -292,7 +294,7 @@ function FileTreeNode({
   onRenameCancel: () => void;
   onRenameStart: (path: string) => void;
   onSelect: (path: string) => void;
-  creating: { parentPath: string; kind: "file" | "folder" } | null;
+  creating: { parentPath: string; type: "file" | "folder" } | null;
   onCreateConfirm: (name: string) => void;
   onCreateCancel: () => void;
   dragging: string | null;
@@ -430,7 +432,7 @@ function FileTreeNode({
         <>
           {creating?.parentPath === node.path && (
             <CreationInput
-              kind={creating.kind}
+              kind={creating.type}
               depth={depth + 1}
               onConfirm={onCreateConfirm}
               onCancel={onCreateCancel}
@@ -469,11 +471,8 @@ export function FileTree() {
   const { selectedPath, expandedPaths, toggleExpanded, setSelected } = useFileTreeStore();
   const openTab = useEditorStore((s) => s.openTab);
   const treeRef = useRef<HTMLDivElement>(null);
-  const [renamingPath, setRenamingPath] = useState<string | null>(null);
-  const [creating, setCreating] = useState<{
-    parentPath: string;
-    kind: "file" | "folder";
-  } | null>(null);
+  const renamingPath = useFileTreeStore((s) => s.pendingRename);
+  const creating = useFileTreeStore((s) => s.pendingCreation);
   const [dragging, setDragging] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{
@@ -685,7 +684,7 @@ export function FileTree() {
       setContextMenu(null);
       switch (action) {
         case "rename": {
-          if (target) setRenamingPath(target.path);
+          if (target) useFileTreeStore.getState().setPendingRename(target.path);
           break;
         }
         case "new-file": {
@@ -693,7 +692,7 @@ export function FileTree() {
           if (target?.kind === "folder" && !expandedPaths.has(target.path)) {
             toggleExpanded(target.path);
           }
-          setCreating({ parentPath, kind: "file" });
+          useFileTreeStore.getState().setPendingCreation({ type: "file", parentPath });
           break;
         }
         case "new-folder": {
@@ -701,7 +700,7 @@ export function FileTree() {
           if (target?.kind === "folder" && !expandedPaths.has(target.path)) {
             toggleExpanded(target.path);
           }
-          setCreating({ parentPath, kind: "folder" });
+          useFileTreeStore.getState().setPendingCreation({ type: "folder", parentPath });
           break;
         }
         case "delete": {
@@ -718,7 +717,7 @@ export function FileTree() {
       if (!renamingPath) return;
       const node = findNode(tree, renamingPath);
       if (!node || !newName.trim() || newName === node.name) {
-        setRenamingPath(null);
+        useFileTreeStore.getState().clearPendingRename();
         return;
       }
       const parentPath = renamingPath.includes("/")
@@ -730,7 +729,7 @@ export function FileTree() {
       // Optimistic update
       useFileTreeStore.getState().setTree(renameNodeInTree(tree, renamingPath, newName, newPath));
       useEditorStore.getState().updateTabPath(renamingPath, newPath);
-      setRenamingPath(null);
+      useFileTreeStore.getState().clearPendingRename();
 
       try {
         const moveFn = node.kind === "folder" ? moveFolder : moveDocument;
@@ -746,17 +745,17 @@ export function FileTree() {
   );
 
   const handleRenameCancel = useCallback(() => {
-    setRenamingPath(null);
+    useFileTreeStore.getState().clearPendingRename();
   }, []);
 
   const handleCreateConfirm = useCallback(
     async (name: string) => {
       if (!creating) return;
       const fullPath = creating.parentPath ? `${creating.parentPath}/${name}` : name;
-      setCreating(null);
+      useFileTreeStore.getState().clearPendingCreation();
 
       try {
-        if (creating.kind === "file") {
+        if (creating.type === "file") {
           await createDocument(fullPath);
           openTab(fullPath);
         } else {
@@ -801,10 +800,6 @@ export function FileTree() {
       const idx = flat.findIndex((n) => n.path === selectedPath);
 
       switch (e.key) {
-        case "F2":
-          e.preventDefault();
-          if (selectedPath) setRenamingPath(selectedPath);
-          break;
         case "ArrowDown":
           e.preventDefault();
           if (idx < flat.length - 1) setSelected(flat[idx + 1]!.path);
@@ -856,14 +851,6 @@ export function FileTree() {
             }
           }
           break;
-        case "Delete":
-        case "Backspace":
-          e.preventDefault();
-          if (selectedPath) {
-            const node = findNode(tree, selectedPath);
-            if (node) handleDelete(node);
-          }
-          break;
         default:
           if (e.key.length === 1 && !e.metaKey && !e.ctrlKey) {
             const char = e.key.toLowerCase();
@@ -876,19 +863,63 @@ export function FileTree() {
           break;
       }
     },
-    [
-      tree,
-      selectedPath,
-      expandedPaths,
-      flattenVisible,
-      setSelected,
-      toggleExpanded,
-      openTab,
-      handleDelete,
-    ],
+    [tree, selectedPath, expandedPaths, flattenVisible, setSelected, toggleExpanded, openTab],
   );
 
-  if (tree.length === 0) {
+  useEffect(() => {
+    const commands = [
+      {
+        id: "file.rename",
+        label: "Rename",
+        shortcut: "F2",
+        context: "sidebar" as const,
+        execute: () => {
+          const selected = useFileTreeStore.getState().selectedPath;
+          if (selected) {
+            useFileTreeStore.getState().setPendingRename(selected);
+          }
+        },
+      },
+      {
+        id: "file.delete",
+        label: "Delete",
+        shortcut: "Delete",
+        context: "sidebar" as const,
+        execute: () => {
+          const selected = useFileTreeStore.getState().selectedPath;
+          if (selected) {
+            const node = findNode(useFileTreeStore.getState().tree, selected);
+            if (node) handleDelete(node);
+          }
+        },
+      },
+      {
+        id: "file.delete-backspace",
+        label: "Delete",
+        shortcut: "Backspace",
+        context: "sidebar" as const,
+        execute: () => {
+          const selected = useFileTreeStore.getState().selectedPath;
+          if (selected) {
+            const node = findNode(useFileTreeStore.getState().tree, selected);
+            if (node) handleDelete(node);
+          }
+        },
+      },
+    ];
+
+    for (const cmd of commands) {
+      useCommandStore.getState().registerCommand(cmd);
+    }
+
+    return () => {
+      for (const cmd of commands) {
+        useCommandStore.getState().unregisterCommand(cmd.id);
+      }
+    };
+  }, []);
+
+  if (tree.length === 0 && !creating) {
     return (
       <div className="px-3 py-4" style={{ fontSize: 11, color: "var(--color-fg-disabled)" }}>
         No files yet
@@ -903,6 +934,7 @@ export function FileTree() {
       tabIndex={0}
       onKeyDown={handleKeyDown}
       onContextMenu={(e) => handleContextMenu(e, null)}
+      onFocus={() => useFocusContextStore.getState().setActiveRegion("sidebar")}
       onDragOver={(e) => {
         e.preventDefault();
         e.dataTransfer.dropEffect = "move";
@@ -921,10 +953,10 @@ export function FileTree() {
     >
       {creating && creating.parentPath === "" && (
         <CreationInput
-          kind={creating.kind}
+          kind={creating.type}
           depth={0}
           onConfirm={handleCreateConfirm}
-          onCancel={() => setCreating(null)}
+          onCancel={() => useFileTreeStore.getState().clearPendingCreation()}
         />
       )}
       {tree.map((node) => (
@@ -936,11 +968,11 @@ export function FileTree() {
           renamingPath={renamingPath}
           onRenameConfirm={handleRenameConfirm}
           onRenameCancel={handleRenameCancel}
-          onRenameStart={setRenamingPath}
+          onRenameStart={(path) => useFileTreeStore.getState().setPendingRename(path)}
           onSelect={handleSelect}
           creating={creating}
           onCreateConfirm={handleCreateConfirm}
-          onCreateCancel={() => setCreating(null)}
+          onCreateCancel={() => useFileTreeStore.getState().clearPendingCreation()}
           dragging={dragging}
           dropTarget={dropTarget}
           onDragStart={(n) => setDragging(n.path)}

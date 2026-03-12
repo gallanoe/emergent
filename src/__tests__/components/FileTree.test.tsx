@@ -13,6 +13,7 @@ import { useFileTreeStore } from "../../stores/file-tree";
 import { useEditorStore } from "../../stores/editor";
 import { FileTree } from "../../components/FileTree";
 import { useToastStore } from "../../components/Toast";
+import { useCommandStore } from "../../stores/commands";
 
 vi.mock("../../lib/tauri", () => ({
   listTree: vi.fn().mockResolvedValue([]),
@@ -39,11 +40,14 @@ const sampleTree = [
 describe("FileTree — context menu", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useCommandStore.setState({ commands: new Map(), paletteOpen: false });
     useFileTreeStore.setState({
       tree: sampleTree,
       expandedPaths: new Set(["docs"]),
       selectedPath: null,
       loading: false,
+      pendingCreation: null,
+      pendingRename: null,
     });
     useEditorStore.setState({
       openTabs: [],
@@ -92,11 +96,14 @@ describe("FileTree — context menu", () => {
 describe("FileTree — inline rename", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useCommandStore.setState({ commands: new Map(), paletteOpen: false });
     useFileTreeStore.setState({
       tree: sampleTree,
       expandedPaths: new Set(["docs"]),
       selectedPath: "notes.md",
       loading: false,
+      pendingCreation: null,
+      pendingRename: null,
     });
     useEditorStore.setState({
       openTabs: [],
@@ -109,19 +116,19 @@ describe("FileTree — inline rename", () => {
     cleanup();
   });
 
-  it("F2 on selected node shows rename input", () => {
+  it("F2 on selected node shows rename input", async () => {
     render(<FileTree />);
-    const tree = screen.getByRole("tree");
-    fireEvent.keyDown(tree, { key: "F2" });
-    expect(screen.getByDisplayValue("notes.md")).toBeDefined();
+    useCommandStore.getState().executeCommand("file.rename");
+    await waitFor(() => {
+      expect(screen.getByDisplayValue("notes.md")).toBeDefined();
+    });
   });
 
   it("Enter confirms rename and calls moveDocument", async () => {
     vi.mocked(moveDocument).mockResolvedValue(undefined);
     render(<FileTree />);
-    const tree = screen.getByRole("tree");
-    fireEvent.keyDown(tree, { key: "F2" });
-    const input = screen.getByDisplayValue("notes.md");
+    useCommandStore.getState().executeCommand("file.rename");
+    const input = await waitFor(() => screen.getByDisplayValue("notes.md"));
     fireEvent.change(input, { target: { value: "renamed.md" } });
     fireEvent.keyDown(input, { key: "Enter" });
 
@@ -130,31 +137,28 @@ describe("FileTree — inline rename", () => {
     });
   });
 
-  it("Escape cancels rename", () => {
+  it("Escape cancels rename", async () => {
     render(<FileTree />);
-    const tree = screen.getByRole("tree");
-    fireEvent.keyDown(tree, { key: "F2" });
-    const input = screen.getByDisplayValue("notes.md");
+    useCommandStore.getState().executeCommand("file.rename");
+    const input = await waitFor(() => screen.getByDisplayValue("notes.md"));
     fireEvent.keyDown(input, { key: "Escape" });
     expect(screen.queryByDisplayValue("notes.md")).toBeNull();
     expect(screen.getByText("notes.md")).toBeDefined();
   });
 
-  it("empty name cancels rename", () => {
+  it("empty name cancels rename", async () => {
     render(<FileTree />);
-    const tree = screen.getByRole("tree");
-    fireEvent.keyDown(tree, { key: "F2" });
-    const input = screen.getByDisplayValue("notes.md");
+    useCommandStore.getState().executeCommand("file.rename");
+    const input = await waitFor(() => screen.getByDisplayValue("notes.md"));
     fireEvent.change(input, { target: { value: "" } });
     fireEvent.keyDown(input, { key: "Enter" });
     expect(moveDocument).not.toHaveBeenCalled();
   });
 
-  it("unchanged name cancels rename", () => {
+  it("unchanged name cancels rename", async () => {
     render(<FileTree />);
-    const tree = screen.getByRole("tree");
-    fireEvent.keyDown(tree, { key: "F2" });
-    const input = screen.getByDisplayValue("notes.md");
+    useCommandStore.getState().executeCommand("file.rename");
+    const input = await waitFor(() => screen.getByDisplayValue("notes.md"));
     fireEvent.keyDown(input, { key: "Enter" });
     expect(moveDocument).not.toHaveBeenCalled();
   });
@@ -162,9 +166,8 @@ describe("FileTree — inline rename", () => {
   it("rename failure shows error toast", async () => {
     vi.mocked(moveDocument).mockRejectedValue(new Error("conflict"));
     render(<FileTree />);
-    const tree = screen.getByRole("tree");
-    fireEvent.keyDown(tree, { key: "F2" });
-    const input = screen.getByDisplayValue("notes.md");
+    useCommandStore.getState().executeCommand("file.rename");
+    const input = await waitFor(() => screen.getByDisplayValue("notes.md"));
     fireEvent.change(input, { target: { value: "conflict.md" } });
     fireEvent.keyDown(input, { key: "Enter" });
 
@@ -209,9 +212,8 @@ describe("FileTree — inline rename", () => {
   it("blur confirms rename (same as Enter)", async () => {
     vi.mocked(moveDocument).mockResolvedValue(undefined);
     render(<FileTree />);
-    const tree = screen.getByRole("tree");
-    fireEvent.keyDown(tree, { key: "F2" });
-    const input = screen.getByDisplayValue("notes.md");
+    useCommandStore.getState().executeCommand("file.rename");
+    const input = await waitFor(() => screen.getByDisplayValue("notes.md"));
     fireEvent.change(input, { target: { value: "blurred.md" } });
     fireEvent.blur(input);
 
@@ -224,11 +226,14 @@ describe("FileTree — inline rename", () => {
 describe("FileTree — inline creation", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useCommandStore.setState({ commands: new Map(), paletteOpen: false });
     useFileTreeStore.setState({
       tree: sampleTree,
       expandedPaths: new Set(["docs"]),
       selectedPath: null,
       loading: false,
+      pendingCreation: null,
+      pendingRename: null,
     });
     useEditorStore.setState({
       openTabs: [],
@@ -318,11 +323,14 @@ describe("FileTree — deletion with undo", () => {
   beforeEach(() => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     vi.clearAllMocks();
+    useCommandStore.setState({ commands: new Map(), paletteOpen: false });
     useFileTreeStore.setState({
       tree: sampleTree,
       expandedPaths: new Set(["docs"]),
       selectedPath: "notes.md",
       loading: false,
+      pendingCreation: null,
+      pendingRename: null,
     });
     useEditorStore.setState({
       openTabs: [],
@@ -341,8 +349,7 @@ describe("FileTree — deletion with undo", () => {
     vi.mocked(readDocument).mockResolvedValue("file content");
     vi.mocked(deleteDocument).mockResolvedValue(undefined);
     render(<FileTree />);
-    const tree = screen.getByRole("tree");
-    fireEvent.keyDown(tree, { key: "Delete" });
+    useCommandStore.getState().executeCommand("file.delete");
 
     await waitFor(() => {
       expect(readDocument).toHaveBeenCalledWith("notes.md");
@@ -357,8 +364,7 @@ describe("FileTree — deletion with undo", () => {
     vi.mocked(readDocument).mockResolvedValue("content");
     vi.mocked(deleteDocument).mockResolvedValue(undefined);
     render(<FileTree />);
-    const tree = screen.getByRole("tree");
-    fireEvent.keyDown(tree, { key: "Delete" });
+    useCommandStore.getState().executeCommand("file.delete");
 
     await waitFor(() => {
       const toasts = useToastStore.getState().toasts;
@@ -375,8 +381,7 @@ describe("FileTree — deletion with undo", () => {
     vi.mocked(createDocument).mockResolvedValue(undefined);
     vi.mocked(writeDocument).mockResolvedValue(undefined);
     render(<FileTree />);
-    const tree = screen.getByRole("tree");
-    fireEvent.keyDown(tree, { key: "Delete" });
+    useCommandStore.getState().executeCommand("file.delete");
 
     await waitFor(() => {
       expect(useToastStore.getState().toasts).toHaveLength(1);
@@ -399,8 +404,7 @@ describe("FileTree — deletion with undo", () => {
     vi.mocked(readDocument).mockResolvedValue("content");
     vi.mocked(deleteDocument).mockResolvedValue(undefined);
     render(<FileTree />);
-    const tree = screen.getByRole("tree");
-    fireEvent.keyDown(tree, { key: "Delete" });
+    useCommandStore.getState().executeCommand("file.delete");
 
     await waitFor(() => {
       expect(useEditorStore.getState().openTabs).toHaveLength(0);
@@ -411,8 +415,7 @@ describe("FileTree — deletion with undo", () => {
     vi.mocked(readDocument).mockResolvedValue("content");
     vi.mocked(deleteDocument).mockRejectedValue(new Error("permission denied"));
     render(<FileTree />);
-    const tree = screen.getByRole("tree");
-    fireEvent.keyDown(tree, { key: "Delete" });
+    useCommandStore.getState().executeCommand("file.delete");
 
     await waitFor(() => {
       expect(deleteDocument).toHaveBeenCalled();
@@ -443,11 +446,12 @@ describe("FileTree — deletion with undo", () => {
       expandedPaths: new Set(),
       selectedPath: "big-folder",
       loading: false,
+      pendingCreation: null,
+      pendingRename: null,
     });
 
     render(<FileTree />);
-    const tree = screen.getByRole("tree");
-    fireEvent.keyDown(tree, { key: "Delete" });
+    useCommandStore.getState().executeCommand("file.delete");
 
     await waitFor(() => {
       const toasts = useToastStore.getState().toasts;
@@ -463,11 +467,14 @@ describe("FileTree — deletion with undo", () => {
 describe("FileTree — drag and drop", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useCommandStore.setState({ commands: new Map(), paletteOpen: false });
     useFileTreeStore.setState({
       tree: sampleTree,
       expandedPaths: new Set(["docs"]),
       selectedPath: null,
       loading: false,
+      pendingCreation: null,
+      pendingRename: null,
     });
     useEditorStore.setState({
       openTabs: [],
@@ -597,7 +604,9 @@ describe("FileTree — drag and drop", () => {
       dataTransfer: { types: ["text/plain"], dropEffect: "" },
     });
 
-    expect((folder.closest("[draggable]") as HTMLElement)!.style.background).toContain("var(--color-bg-selected)");
+    expect((folder.closest("[draggable]") as HTMLElement)!.style.background).toContain(
+      "var(--color-bg-selected)",
+    );
   });
 
   it("root drop zone shows background highlight on drag over", () => {
@@ -613,5 +622,162 @@ describe("FileTree — drag and drop", () => {
     });
 
     expect(tree.style.background).toBe("var(--color-bg-selected)");
+  });
+});
+
+describe("command registration", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useCommandStore.setState({ commands: new Map(), paletteOpen: false });
+    useFileTreeStore.setState({
+      tree: sampleTree,
+      expandedPaths: new Set(["docs"]),
+      selectedPath: null,
+      loading: false,
+      pendingCreation: null,
+      pendingRename: null,
+    });
+    useEditorStore.setState({
+      openTabs: [],
+      activeTab: null,
+      dirtyTabs: new Set(),
+    });
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("registers file.rename command on mount", () => {
+    render(<FileTree />);
+    const cmd = useCommandStore.getState().commands.get("file.rename");
+    expect(cmd).toBeDefined();
+    expect(cmd!.shortcut).toBe("F2");
+    expect(cmd!.context).toBe("sidebar");
+  });
+
+  it("registers file.delete command with Delete shortcut", () => {
+    render(<FileTree />);
+    const cmd = useCommandStore.getState().commands.get("file.delete");
+    expect(cmd).toBeDefined();
+    expect(cmd!.shortcut).toBe("Delete");
+    expect(cmd!.context).toBe("sidebar");
+  });
+
+  it("registers file.delete-backspace command with Backspace shortcut", () => {
+    render(<FileTree />);
+    const cmd = useCommandStore.getState().commands.get("file.delete-backspace");
+    expect(cmd).toBeDefined();
+    expect(cmd!.shortcut).toBe("Backspace");
+    expect(cmd!.context).toBe("sidebar");
+  });
+
+  it("unregisters commands on unmount", () => {
+    const { unmount } = render(<FileTree />);
+    expect(useCommandStore.getState().commands.has("file.rename")).toBe(true);
+    unmount();
+    expect(useCommandStore.getState().commands.has("file.rename")).toBe(false);
+    expect(useCommandStore.getState().commands.has("file.delete")).toBe(false);
+    expect(useCommandStore.getState().commands.has("file.delete-backspace")).toBe(false);
+  });
+});
+
+describe("store-driven creation", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useCommandStore.setState({ commands: new Map(), paletteOpen: false });
+    useFileTreeStore.setState({
+      tree: [],
+      expandedPaths: new Set(),
+      selectedPath: null,
+      loading: false,
+      pendingCreation: null,
+      pendingRename: null,
+    });
+    useEditorStore.setState({
+      openTabs: [],
+      activeTab: null,
+      dirtyTabs: new Set(),
+    });
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("shows inline creation input when pendingCreation is set", () => {
+    useFileTreeStore.setState({
+      tree: [],
+      pendingCreation: { type: "file", parentPath: "" },
+    });
+    render(<FileTree />);
+    expect(screen.getByPlaceholderText("untitled.md")).toBeDefined();
+  });
+
+  it("shows folder creation input when pendingCreation type is folder", () => {
+    useFileTreeStore.setState({
+      tree: [],
+      pendingCreation: { type: "folder", parentPath: "" },
+    });
+    render(<FileTree />);
+    expect(screen.getByPlaceholderText("New folder")).toBeDefined();
+  });
+
+  it("clears pendingCreation after creation completes", async () => {
+    useFileTreeStore.setState({
+      tree: [],
+      pendingCreation: { type: "file", parentPath: "" },
+    });
+    render(<FileTree />);
+    const input = screen.getByPlaceholderText("untitled.md");
+    fireEvent.change(input, { target: { value: "test.md" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(useFileTreeStore.getState().pendingCreation).toBeNull();
+  });
+});
+
+describe("store-driven rename", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useCommandStore.setState({ commands: new Map(), paletteOpen: false });
+    useFileTreeStore.setState({
+      tree: [{ name: "test.md", path: "test.md", kind: "file" }],
+      expandedPaths: new Set(),
+      selectedPath: null,
+      loading: false,
+      pendingCreation: null,
+      pendingRename: null,
+    });
+    useEditorStore.setState({
+      openTabs: [],
+      activeTab: null,
+      dirtyTabs: new Set(),
+    });
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("shows rename input when pendingRename matches a node", () => {
+    useFileTreeStore.setState({
+      tree: [{ name: "test.md", path: "test.md", kind: "file" }],
+      pendingRename: "test.md",
+    });
+    render(<FileTree />);
+    const input = screen.getByDisplayValue("test.md");
+    expect(input).toBeDefined();
+  });
+
+  it("clears pendingRename after rename completes", async () => {
+    useFileTreeStore.setState({
+      tree: [{ name: "test.md", path: "test.md", kind: "file" }],
+      pendingRename: "test.md",
+    });
+    render(<FileTree />);
+    const input = screen.getByDisplayValue("test.md");
+    fireEvent.change(input, { target: { value: "renamed.md" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(useFileTreeStore.getState().pendingRename).toBeNull();
   });
 });
