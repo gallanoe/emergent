@@ -1,0 +1,134 @@
+import { invoke } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+
+// Types matching Rust structs
+export type TreeNode = {
+  name: string;
+  path: string;
+  kind: "file" | "folder";
+  children?: TreeNode[];
+};
+
+export type WorkspaceMeta = {
+  id: string;
+  name: string;
+  created_at: string;
+  last_opened: string;
+};
+
+// Workspace commands
+export const createWorkspace = (name: string) =>
+  invoke<string>("create_workspace", { name });
+
+export const openWorkspace = (id: string) =>
+  invoke<WorkspaceMeta>("open_workspace", { id });
+
+export const listWorkspaces = () =>
+  invoke<WorkspaceMeta[]>("list_workspaces");
+
+export const deleteWorkspace = (id: string) =>
+  invoke<void>("delete_workspace", { id });
+
+export const createDocument = (path: string) =>
+  invoke<void>("create_document", { path });
+
+export const readDocument = (path: string) =>
+  invoke<string>("read_document", { path });
+
+export const writeDocument = (path: string, content: string) =>
+  invoke<void>("write_document", { path, content });
+
+export const deleteDocument = (path: string) =>
+  invoke<void>("delete_document", { path });
+
+export const moveDocument = (oldPath: string, newPath: string) =>
+  invoke<void>("move_document", { oldPath, newPath });
+
+export const createFolder = (path: string) =>
+  invoke<void>("create_folder", { path });
+
+export const deleteFolder = (path: string) =>
+  invoke<void>("delete_folder", { path });
+
+export const moveFolder = (oldPath: string, newPath: string) =>
+  invoke<void>("move_folder", { oldPath, newPath });
+
+export const listTree = () => invoke<TreeNode[]>("list_tree");
+
+// Event listeners
+export type EventCallback<T> = (payload: T) => void;
+
+export const onDocumentChanged = (
+  cb: EventCallback<{ path: string }>,
+): Promise<UnlistenFn> => listen("document:changed", (e) => cb(e.payload as { path: string }));
+
+export const onTreeChanged = (
+  cb: EventCallback<Record<string, never>>,
+): Promise<UnlistenFn> => listen("tree:changed", (e) => cb(e.payload as Record<string, never>));
+
+export const onBranchSwitched = (
+  cb: EventCallback<{ name: string; head_oid: string }>,
+): Promise<UnlistenFn> =>
+  listen("branch:switched", (e) => cb(e.payload as { name: string; head_oid: string }));
+
+export const onWorkspaceOpened = (
+  cb: EventCallback<{ id: string; name: string; branch: string }>,
+): Promise<UnlistenFn> =>
+  listen("workspace:opened", (e) =>
+    cb(e.payload as { id: string; name: string; branch: string }),
+  );
+
+export const onMergeConflict = (
+  cb: EventCallback<{ conflicts: string[] }>,
+): Promise<UnlistenFn> =>
+  listen("merge:conflict", (e) => cb(e.payload as { conflicts: string[] }));
+
+export const onCommitCreated = (
+  cb: EventCallback<{ oid: string; message: string }>,
+): Promise<UnlistenFn> =>
+  listen("commit:created", (e) =>
+    cb(e.payload as { oid: string; message: string }),
+  );
+
+// VCS types
+export type CommitInfo = {
+  oid: string;
+  message: string;
+  time: number;
+};
+
+export type FileStatus = {
+  path: string;
+  status: "new" | "modified" | "deleted" | "unknown";
+};
+
+export type BranchInfo = {
+  name: string;
+  head_oid: string;
+};
+
+export type MergeResult =
+  | { type: "Clean" }
+  | { type: "Conflict"; paths: string[] };
+
+// VCS commands
+export const vcsCommit = (message: string) =>
+  invoke<string>("vcs_commit", { message });
+
+export const vcsGetLog = (limit: number) =>
+  invoke<CommitInfo[]>("vcs_get_log", { limit });
+
+export const vcsGetStatus = () =>
+  invoke<FileStatus[]>("vcs_get_status");
+
+export const vcsCreateBranch = (name: string) =>
+  invoke<void>("vcs_create_branch", { name });
+
+export const vcsListBranches = () =>
+  invoke<BranchInfo[]>("vcs_list_branches");
+
+export const vcsDeleteBranch = (name: string) =>
+  invoke<void>("vcs_delete_branch", { name });
+
+export const vcsMergeBranch = (sourceBranch: string) =>
+  invoke<MergeResult>("vcs_merge_branch", { sourceBranch });
