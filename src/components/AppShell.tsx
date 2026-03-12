@@ -16,6 +16,7 @@ import {
 import { useFileTreeStore } from "../stores/file-tree";
 import { useUIStore } from "../stores/ui";
 import { useCommandStore } from "../stores/commands";
+import { useFocusContextStore } from "../stores/focus-context";
 import { sortTree } from "../lib/sort-tree";
 import { useToastStore } from "./Toast";
 import { CommandPalette } from "./CommandPalette";
@@ -140,6 +141,26 @@ export function AppShell() {
         shortcut: "Mod+K",
         context: "global" as const,
         execute: () => useCommandStore.getState().openPalette(),
+      },
+      {
+        id: "focus.sidebar",
+        label: "Focus Sidebar",
+        shortcut: "Mod+1",
+        context: "global" as const,
+        execute: () => {
+          useFocusContextStore.getState().setActiveRegion("sidebar");
+          document.querySelector<HTMLElement>("[role='tree']")?.focus();
+        },
+      },
+      {
+        id: "focus.editor",
+        label: "Focus Editor",
+        shortcut: "Mod+2",
+        context: "global" as const,
+        execute: () => {
+          useFocusContextStore.getState().setActiveRegion("editor");
+          document.querySelector<HTMLElement>(".cm-editor .cm-content")?.focus();
+        },
       },
     ];
 

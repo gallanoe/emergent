@@ -5,6 +5,7 @@ import { useEditorStore } from "../../stores/editor";
 import { useFileTreeStore } from "../../stores/file-tree";
 import { useCommandStore } from "../../stores/commands";
 import { useUIStore } from "../../stores/ui";
+import { useFocusContextStore } from "../../stores/focus-context";
 import { AppShell } from "../../components/AppShell";
 import { listTree, readDocument, onTreeChanged, onDocumentChanged } from "../../lib/tauri";
 
@@ -280,5 +281,59 @@ describe("command registration", () => {
     expect(useCommandStore.getState().commands.has("tab.close")).toBe(false);
     expect(useCommandStore.getState().commands.has("file.create")).toBe(false);
     expect(useCommandStore.getState().commands.has("folder.create")).toBe(false);
+  });
+});
+
+describe("focus commands", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useWorkspaceStore.setState({
+      activeWorkspace: { id: "ws-1", name: "Test", created_at: "", last_opened: "" },
+      workspaces: [],
+      currentBranch: "main",
+      mergeState: null,
+    });
+    useFileTreeStore.setState({
+      tree: [],
+      expandedPaths: new Set(),
+      selectedPath: null,
+      loading: false,
+      pendingCreation: null,
+      pendingRename: null,
+    });
+    useEditorStore.setState({ openTabs: [], activeTab: null, dirtyTabs: new Set() });
+    useCommandStore.setState({ commands: new Map(), paletteOpen: false });
+    useUIStore.setState({ sidebarCollapsed: false });
+    useFocusContextStore.setState({ activeRegion: "global" });
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("registers focus.sidebar command", () => {
+    render(<AppShell />);
+    const cmd = useCommandStore.getState().commands.get("focus.sidebar");
+    expect(cmd).toBeDefined();
+    expect(cmd!.shortcut).toBe("Mod+1");
+  });
+
+  it("registers focus.editor command", () => {
+    render(<AppShell />);
+    const cmd = useCommandStore.getState().commands.get("focus.editor");
+    expect(cmd).toBeDefined();
+    expect(cmd!.shortcut).toBe("Mod+2");
+  });
+
+  it("focus.sidebar sets active region to sidebar", () => {
+    render(<AppShell />);
+    useCommandStore.getState().executeCommand("focus.sidebar");
+    expect(useFocusContextStore.getState().activeRegion).toBe("sidebar");
+  });
+
+  it("focus.editor sets active region to editor", () => {
+    render(<AppShell />);
+    useCommandStore.getState().executeCommand("focus.editor");
+    expect(useFocusContextStore.getState().activeRegion).toBe("editor");
   });
 });
