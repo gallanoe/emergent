@@ -1,1 +1,79 @@
 @import "tailwindcss";
+
+:root {
+  --color-bg-base: #111113;
+  --color-bg-hover: #212225;
+  --color-bg-active: #272a2d;
+  --color-bg-selected: rgba(0, 133, 235, 0.08);
+  --color-fg-default: #b0b4ba;
+  --color-fg-heading: #edeef0;
+  --color-fg-muted: #7b8088;
+  --color-fg-disabled: #5a6169;
+  --color-border-default: rgba(255, 255, 255, 0.06);
+  --color-border-strong: rgba(255, 255, 255, 0.12);
+  --color-border-focus: #0085eb;
+  --color-accent: #0085eb;
+  --color-accent-hover: #0090ff;
+  --color-accent-text: #70b8ff;
+  --color-success: #30a46c;
+  --color-warning: #f5a623;
+  --color-error: #e5484d;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", monospace;
+}
+
+@theme {
+  --color-bg-base: var(--color-bg-base);
+  --color-bg-hover: var(--color-bg-hover);
+  --color-bg-active: var(--color-bg-active);
+  --color-bg-selected: var(--color-bg-selected);
+  --color-fg-default: var(--color-fg-default);
+  --color-fg-heading: var(--color-fg-heading);
+  --color-fg-muted: var(--color-fg-muted);
+  --color-fg-disabled: var(--color-fg-disabled);
+  --color-border-default: var(--color-border-default);
+  --color-border-strong: var(--color-border-strong);
+  --color-border-focus: var(--color-border-focus);
+  --color-accent: var(--color-accent);
+  --color-success: var(--color-success);
+  --color-warning: var(--color-warning);
+  --color-error: var(--color-error);
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", monospace;
+}
+
+body {
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  font-size: 13px;
+  line-height: 1.3;
+  cursor: default;
+  user-select: none;
+  -webkit-app-region: no-drag;
+  overflow: hidden;
+  background: var(--color-bg-base);
+  color: var(--color-fg-default);
+}
+
+a[href^="http"] {
+  cursor: pointer;
+}
+
+.editor-content,
+textarea,
+input,
+[contenteditable] {
+  user-select: text;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
