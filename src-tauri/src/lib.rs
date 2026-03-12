@@ -1,6 +1,7 @@
 mod agent;
 mod error;
 mod events;
+mod workspace;
 
 #[tauri::command]
 fn greet(name: &str) -> String {
