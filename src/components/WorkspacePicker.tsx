@@ -74,7 +74,9 @@ export function WorkspacePicker() {
                 .getState()
                 .workspaces.filter((w) => w.id !== ws.id);
               useWorkspaceStore.getState().setWorkspaces(remaining);
-              setSelectedIndex((i) => Math.min(i, remaining.length - 1));
+              setSelectedIndex((i) =>
+                remaining.length === 0 ? 0 : Math.min(i, remaining.length - 1),
+              );
             })
             .catch((err) => {
               useToastStore

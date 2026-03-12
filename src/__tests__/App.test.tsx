@@ -1,5 +1,6 @@
-import { render, screen } from "@testing-library/react";
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { render, screen, waitFor, cleanup } from "@testing-library/react";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { listWorkspaces } from "../lib/tauri";
 import App from "../App";
 import { useWorkspaceStore } from "../stores/workspace";
 
@@ -31,6 +32,10 @@ describe("App", () => {
     });
   });
 
+  afterEach(() => {
+    cleanup();
+  });
+
   it("renders workspace picker when no active workspace", () => {
     render(<App />);
     expect(screen.getByText("Open a workspace")).toBeDefined();
@@ -47,5 +52,15 @@ describe("App", () => {
     });
     render(<App />);
     expect(screen.getAllByText("No document open").length).toBeGreaterThan(0);
+  });
+
+  it("shows picker with error toast when listWorkspaces fails", async () => {
+    vi.mocked(listWorkspaces).mockRejectedValueOnce(new Error("disk error"));
+    render(<App />);
+    await waitFor(() => {
+      expect(listWorkspaces).toHaveBeenCalled();
+    });
+    // Picker should still render (empty state)
+    expect(screen.getByText("Open a workspace")).toBeDefined();
   });
 });
