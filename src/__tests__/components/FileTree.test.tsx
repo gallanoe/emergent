@@ -582,7 +582,7 @@ describe("FileTree — drag and drop", () => {
       dataTransfer: { setData: vi.fn(), effectAllowed: "" },
     });
 
-    expect(file.closest("[draggable]")!.style.opacity).toBe("0.5");
+    expect((file.closest("[draggable]") as HTMLElement)!.style.opacity).toBe("0.5");
   });
 
   it("folder drop target shows background highlight on drag over", () => {
@@ -597,7 +597,7 @@ describe("FileTree — drag and drop", () => {
       dataTransfer: { types: ["text/plain"], dropEffect: "" },
     });
 
-    expect(folder.closest("[draggable]")!.style.background).toContain("var(--color-bg-selected)");
+    expect((folder.closest("[draggable]") as HTMLElement)!.style.background).toContain("var(--color-bg-selected)");
   });
 
   it("root drop zone shows background highlight on drag over", () => {
