@@ -1,7 +1,7 @@
 import { render, screen, cleanup } from "@testing-library/react";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { useWorkspaceStore } from "../../stores/workspace";
-import WorkspacePicker from "../../components/WorkspacePicker";
+import { WorkspacePicker } from "../../components/WorkspacePicker";
 
 vi.mock("../../lib/tauri", () => ({
   listWorkspaces: vi.fn(),

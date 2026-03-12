@@ -15,7 +15,7 @@ function relativeTime(iso: string): string {
   return `${diffMonths}mo ago`;
 }
 
-export default function WorkspacePicker() {
+export function WorkspacePicker() {
   const workspaces = useWorkspaceStore((s) => s.workspaces);
   const sorted = workspaces.toSorted(
     (a, b) => new Date(b.last_opened).getTime() - new Date(a.last_opened).getTime(),
@@ -108,16 +108,14 @@ export default function WorkspacePicker() {
         </div>
 
         <div>
-          <a
-            href="#"
+          <span
             style={{
-              fontSize: 13,
+              fontSize: 12,
               color: "var(--color-accent-text)",
-              textDecoration: "none",
             }}
           >
             New workspace
-          </a>
+          </span>
         </div>
       </div>
     </div>
