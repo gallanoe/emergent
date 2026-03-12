@@ -160,6 +160,12 @@ export function Editor({ content, path, onSave }: EditorProps) {
     [onSave, markClean, path],
   );
 
+  const handleSaveRef = useRef(handleSave);
+  handleSaveRef.current = handleSave;
+
+  const markDirtyRef = useRef(markDirty);
+  markDirtyRef.current = markDirty;
+
   useEffect(() => {
     useCommandStore.getState().registerCommand({
       id: "document.save",
@@ -169,13 +175,14 @@ export function Editor({ content, path, onSave }: EditorProps) {
       execute: () => {
         if (viewRef.current) {
           const content = viewRef.current.state.doc.toString();
-          handleSave(content);
+          handleSaveRef.current(content);
         }
       },
     });
     return () => useCommandStore.getState().unregisterCommand("document.save");
-  }, [handleSave]);
+  }, []);
 
+  // Effect 1 — View lifecycle (keyed on path)
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -189,18 +196,18 @@ export function Editor({ content, path, onSave }: EditorProps) {
           {
             key: "Mod-s",
             run: (view) => {
-              handleSave(view.state.doc.toString());
+              handleSaveRef.current(view.state.doc.toString());
               return true;
             },
           },
         ]),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
-            markDirty(path);
+            markDirtyRef.current(path);
             if (debounceRef.current) clearTimeout(debounceRef.current);
             debounceRef.current = setTimeout(() => {
               const doc = update.state.doc.toString();
-              handleSave(doc);
+              handleSaveRef.current(doc);
             }, 1000);
           }
         }),
@@ -246,8 +253,24 @@ export function Editor({ content, path, onSave }: EditorProps) {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
       view.destroy();
+      viewRef.current = null;
     };
-  }, [path, content, markDirty, handleSave]);
+    // content intentionally excluded — only used for initial doc
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [path]);
+
+  // Effect 2 — External content sync (soft update via transaction)
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+
+    const currentDoc = view.state.doc.toString();
+    if (content === currentDoc) return;
+
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: content },
+    });
+  }, [content]);
 
   return (
     <div
