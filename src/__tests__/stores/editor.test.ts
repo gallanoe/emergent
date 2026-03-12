@@ -14,7 +14,7 @@ describe("editorStore", () => {
     useEditorStore.getState().openTab("notes/hello.md");
     const state = useEditorStore.getState();
     expect(state.openTabs).toHaveLength(1);
-    expect(state.openTabs[0].path).toBe("notes/hello.md");
+    expect(state.openTabs[0]!.path).toBe("notes/hello.md");
     expect(state.activeTab).toBe("notes/hello.md");
   });
 
