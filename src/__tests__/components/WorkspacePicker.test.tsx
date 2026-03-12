@@ -2,7 +2,7 @@ import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/re
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { useWorkspaceStore } from "../../stores/workspace";
 import { WorkspacePicker } from "../../components/WorkspacePicker";
-import { openWorkspace, createWorkspace } from "../../lib/tauri";
+import { openWorkspace, createWorkspace, deleteWorkspace } from "../../lib/tauri";
 
 vi.mock("../../lib/tauri", () => ({
   listWorkspaces: vi.fn(),
@@ -234,6 +234,59 @@ describe("WorkspacePicker", () => {
       await waitFor(() => {
         expect(openWorkspace).toHaveBeenCalledWith("new-id");
       });
+    });
+  });
+
+  describe("Task 5: workspace deletion", () => {
+    const twoWorkspaces = [
+      {
+        id: "a",
+        name: "Alpha",
+        created_at: "2024-01-01T00:00:00Z",
+        last_opened: "2024-01-01T00:00:00Z",
+      },
+      {
+        id: "b",
+        name: "Beta",
+        created_at: "2024-01-01T00:00:00Z",
+        last_opened: "2024-06-01T00:00:00Z",
+      },
+    ];
+
+    it("deletes workspace on Delete key after confirm", async () => {
+      useWorkspaceStore.setState({
+        workspaces: twoWorkspaces,
+        activeWorkspace: null,
+        currentBranch: "main",
+        mergeState: null,
+      });
+      vi.spyOn(window, "confirm").mockReturnValue(true);
+      vi.mocked(deleteWorkspace).mockResolvedValue(undefined);
+
+      render(<WorkspacePicker />);
+
+      // First selected item is Beta (sorted by last_opened desc)
+      fireEvent.keyDown(window, { key: "Delete" });
+
+      await waitFor(() => {
+        expect(deleteWorkspace).toHaveBeenCalledWith("b");
+      });
+    });
+
+    it("does not delete when confirm is cancelled", () => {
+      useWorkspaceStore.setState({
+        workspaces: twoWorkspaces,
+        activeWorkspace: null,
+        currentBranch: "main",
+        mergeState: null,
+      });
+      vi.spyOn(window, "confirm").mockReturnValue(false);
+
+      render(<WorkspacePicker />);
+
+      fireEvent.keyDown(window, { key: "Delete" });
+
+      expect(deleteWorkspace).not.toHaveBeenCalled();
     });
   });
 });

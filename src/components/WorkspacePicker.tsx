@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useWorkspaceStore } from "../stores/workspace";
-import { openWorkspace, createWorkspace } from "../lib/tauri";
+import { openWorkspace, createWorkspace, deleteWorkspace } from "../lib/tauri";
 import { useToastStore } from "./Toast";
 import type { WorkspaceMeta } from "../lib/tauri";
 
@@ -59,12 +59,28 @@ export function WorkspacePicker() {
         setSelectedIndex((i) => (i - 1 + sorted.length) % sorted.length);
       } else if (e.key === "Enter") {
         if (sorted[selectedIndex]) handleOpen(sorted[selectedIndex]);
+      } else if ((e.key === "Delete" || e.key === "Backspace") && sorted.length > 0) {
+        const ws = sorted[selectedIndex];
+        if (ws && window.confirm(`Delete workspace '${ws.name}'? This cannot be undone.`)) {
+          deleteWorkspace(ws.id)
+            .then(() => {
+              const remaining = workspaces.filter((w) => w.id !== ws.id);
+              useWorkspaceStore.getState().setWorkspaces(remaining);
+              setSelectedIndex((i) => Math.min(i, remaining.length - 1));
+            })
+            .catch((err) => {
+              useToastStore.getState().addToast(
+                `Failed to delete workspace: ${err instanceof Error ? err.message : String(err)}`,
+                "error",
+              );
+            });
+        }
       }
     };
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [creatingNew, sorted, selectedIndex, handleOpen]);
+  }, [creatingNew, sorted, selectedIndex, handleOpen, workspaces]);
 
   useEffect(() => {
     if (creatingNew) inputRef.current?.focus();
