@@ -108,12 +108,8 @@ export function AppShell() {
       // Cmd+W: close active tab
       if (mod && e.key === "w") {
         e.preventDefault();
-        const { activeTab: tab, dirtyTabs, closeTab } = useEditorStore.getState();
+        const { activeTab: tab, closeTab } = useEditorStore.getState();
         if (tab) {
-          if (dirtyTabs.has(tab)) {
-            const confirmed = window.confirm("This document has unsaved changes. Close anyway?");
-            if (!confirmed) return;
-          }
           closeTab(tab);
         }
       }
