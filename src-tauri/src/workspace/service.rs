@@ -15,7 +15,7 @@ pub struct WorkspaceMeta {
 
 pub struct WorkspaceService {
     base_dir: PathBuf,
-    emitter: Arc<dyn EventEmitter>,
+    pub(crate) emitter: Arc<dyn EventEmitter>,
     pub repo: Option<Repository>,
     pub meta: Option<WorkspaceMeta>,
     pub worktree_path: Option<PathBuf>,
@@ -153,6 +153,92 @@ impl WorkspaceService {
         Ok(())
     }
 
+    pub(crate) fn worktree_dir(&self) -> Result<&Path, AppError> {
+        self.worktree_path
+            .as_deref()
+            .ok_or(AppError::WorkspaceNotOpen)
+    }
+
+    pub fn create_document(&mut self, path: &str) -> Result<(), AppError> {
+        let full_path = self.worktree_dir()?.join(path);
+        if full_path.exists() {
+            return Err(AppError::DocumentAlreadyExists {
+                path: path.to_string(),
+            });
+        }
+        if let Some(parent) = full_path.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| AppError::Internal {
+                message: format!("failed to create parent dirs: {e}"),
+            })?;
+        }
+        std::fs::write(&full_path, "").map_err(|e| AppError::Internal {
+            message: format!("failed to create document: {e}"),
+        })?;
+        self.emitter.emit("tree:changed", serde_json::json!({}));
+        Ok(())
+    }
+
+    pub fn read_document(&self, path: &str) -> Result<String, AppError> {
+        let full_path = self.worktree_dir()?.join(path);
+        if !full_path.exists() {
+            return Err(AppError::DocumentNotFound {
+                path: path.to_string(),
+            });
+        }
+        std::fs::read_to_string(&full_path).map_err(|e| AppError::Internal {
+            message: format!("failed to read document: {e}"),
+        })
+    }
+
+    pub fn write_document(&mut self, path: &str, content: &str) -> Result<(), AppError> {
+        let full_path = self.worktree_dir()?.join(path);
+        if !full_path.exists() {
+            return Err(AppError::DocumentNotFound {
+                path: path.to_string(),
+            });
+        }
+        std::fs::write(&full_path, content).map_err(|e| AppError::Internal {
+            message: format!("failed to write document: {e}"),
+        })?;
+        self.emitter
+            .emit("document:changed", serde_json::json!({"path": path}));
+        Ok(())
+    }
+
+    pub fn delete_document(&mut self, path: &str) -> Result<(), AppError> {
+        let full_path = self.worktree_dir()?.join(path);
+        if !full_path.exists() {
+            return Err(AppError::DocumentNotFound {
+                path: path.to_string(),
+            });
+        }
+        std::fs::remove_file(&full_path).map_err(|e| AppError::Internal {
+            message: format!("failed to delete document: {e}"),
+        })?;
+        self.emitter.emit("tree:changed", serde_json::json!({}));
+        Ok(())
+    }
+
+    pub fn move_document(&mut self, old_path: &str, new_path: &str) -> Result<(), AppError> {
+        let old_full = self.worktree_dir()?.join(old_path);
+        let new_full = self.worktree_dir()?.join(new_path);
+        if !old_full.exists() {
+            return Err(AppError::DocumentNotFound {
+                path: old_path.to_string(),
+            });
+        }
+        if let Some(parent) = new_full.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| AppError::Internal {
+                message: format!("failed to create parent dirs: {e}"),
+            })?;
+        }
+        std::fs::rename(&old_full, &new_full).map_err(|e| AppError::Internal {
+            message: format!("failed to move document: {e}"),
+        })?;
+        self.emitter.emit("tree:changed", serde_json::json!({}));
+        Ok(())
+    }
+
     pub fn list_tree(&self) -> Result<Vec<serde_json::Value>, AppError> {
         Ok(vec![])
     }
@@ -215,6 +301,15 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let emitter = Arc::new(TestEmitter::new());
         let svc = WorkspaceService::new(tmp.path().to_path_buf(), emitter);
+        (tmp, svc)
+    }
+
+    fn setup_with_workspace() -> (TempDir, WorkspaceService) {
+        let tmp = TempDir::new().unwrap();
+        let emitter = Arc::new(TestEmitter::new());
+        let mut svc = WorkspaceService::new(tmp.path().to_path_buf(), emitter);
+        let id = svc.create_workspace("Test").unwrap();
+        svc.open_workspace(&id).unwrap();
         (tmp, svc)
     }
 
@@ -299,5 +394,63 @@ mod tests {
         svc.delete_workspace(&id).unwrap();
         let list = svc.list_workspaces().unwrap();
         assert!(list.is_empty());
+    }
+
+    #[test]
+    fn test_create_and_read_document() {
+        let (_tmp, mut svc) = setup_with_workspace();
+        svc.create_document("hello.md").unwrap();
+        svc.write_document("hello.md", "# Hello World").unwrap();
+        let content = svc.read_document("hello.md").unwrap();
+        assert_eq!(content, "# Hello World");
+    }
+
+    #[test]
+    fn test_read_nonexistent_document_errors() {
+        let (_tmp, svc) = setup_with_workspace();
+        let result = svc.read_document("nope.md");
+        assert!(matches!(result, Err(AppError::DocumentNotFound { .. })));
+    }
+
+    #[test]
+    fn test_create_document_in_subfolder() {
+        let (_tmp, mut svc) = setup_with_workspace();
+        svc.create_document("projects/notes/idea.md").unwrap();
+        svc.write_document("projects/notes/idea.md", "content")
+            .unwrap();
+        let content = svc.read_document("projects/notes/idea.md").unwrap();
+        assert_eq!(content, "content");
+    }
+
+    #[test]
+    fn test_delete_document() {
+        let (_tmp, mut svc) = setup_with_workspace();
+        svc.create_document("temp.md").unwrap();
+        svc.write_document("temp.md", "data").unwrap();
+        svc.delete_document("temp.md").unwrap();
+        let result = svc.read_document("temp.md");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_move_document() {
+        let (_tmp, mut svc) = setup_with_workspace();
+        svc.create_document("old.md").unwrap();
+        svc.write_document("old.md", "content").unwrap();
+        svc.move_document("old.md", "new.md").unwrap();
+        let result = svc.read_document("old.md");
+        assert!(result.is_err());
+        let content = svc.read_document("new.md").unwrap();
+        assert_eq!(content, "content");
+    }
+
+    #[test]
+    fn test_write_document_emits_event() {
+        let (_tmp, mut svc) = setup_with_workspace();
+        let emitter = svc.emitter.clone();
+        let test_emitter = emitter.as_any().downcast_ref::<TestEmitter>().unwrap();
+        svc.create_document("test.md").unwrap();
+        svc.write_document("test.md", "content").unwrap();
+        assert!(test_emitter.has_event("document:changed"));
     }
 }
