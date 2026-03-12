@@ -156,6 +156,53 @@ impl WorkspaceService {
     pub fn list_tree(&self) -> Result<Vec<serde_json::Value>, AppError> {
         Ok(vec![])
     }
+
+    pub fn list_workspaces(&self) -> Result<Vec<WorkspaceMeta>, AppError> {
+        let mut workspaces = Vec::new();
+        if !self.base_dir.exists() {
+            return Ok(workspaces);
+        }
+        for entry in std::fs::read_dir(&self.base_dir).map_err(|e| AppError::Internal {
+            message: format!("failed to read base dir: {e}"),
+        })? {
+            let entry = entry.map_err(|e| AppError::Internal {
+                message: format!("failed to read dir entry: {e}"),
+            })?;
+            let meta_path = entry.path().join("workspace.json");
+            if meta_path.exists() {
+                let meta_str = std::fs::read_to_string(&meta_path).map_err(|e| {
+                    AppError::Internal {
+                        message: format!("failed to read metadata: {e}"),
+                    }
+                })?;
+                if let Ok(meta) = serde_json::from_str::<WorkspaceMeta>(&meta_str) {
+                    workspaces.push(meta);
+                }
+            }
+        }
+        Ok(workspaces)
+    }
+
+    pub fn delete_workspace(&mut self, id: &str) -> Result<(), AppError> {
+        let workspace_dir = self.base_dir.join(id);
+        if !workspace_dir.exists() {
+            return Err(AppError::Internal {
+                message: format!("workspace not found: {id}"),
+            });
+        }
+        // Close if this is the active workspace
+        if let Some(meta) = &self.meta {
+            if meta.id == id {
+                self.repo = None;
+                self.meta = None;
+                self.worktree_path = None;
+            }
+        }
+        std::fs::remove_dir_all(&workspace_dir).map_err(|e| AppError::Internal {
+            message: format!("failed to delete workspace: {e}"),
+        })?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -215,5 +262,42 @@ mod tests {
         let (_tmp, mut svc) = setup();
         let result = svc.open_workspace("nonexistent");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_list_workspaces_empty() {
+        let (_tmp, svc) = setup();
+        let list = svc.list_workspaces().unwrap();
+        assert!(list.is_empty());
+    }
+
+    #[test]
+    fn test_list_workspaces_returns_created() {
+        let (_tmp, mut svc) = setup();
+        svc.create_workspace("Notes A").unwrap();
+        svc.create_workspace("Notes B").unwrap();
+        let list = svc.list_workspaces().unwrap();
+        assert_eq!(list.len(), 2);
+        let names: Vec<&str> = list.iter().map(|m| m.name.as_str()).collect();
+        assert!(names.contains(&"Notes A"));
+        assert!(names.contains(&"Notes B"));
+    }
+
+    #[test]
+    fn test_delete_workspace_removes_dir() {
+        let (tmp, mut svc) = setup();
+        let id = svc.create_workspace("Temp").unwrap();
+        assert!(tmp.path().join(&id).exists());
+        svc.delete_workspace(&id).unwrap();
+        assert!(!tmp.path().join(&id).exists());
+    }
+
+    #[test]
+    fn test_delete_workspace_not_in_list() {
+        let (_tmp, mut svc) = setup();
+        let id = svc.create_workspace("Temp").unwrap();
+        svc.delete_workspace(&id).unwrap();
+        let list = svc.list_workspaces().unwrap();
+        assert!(list.is_empty());
     }
 }
