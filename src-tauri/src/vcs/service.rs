@@ -1,0 +1,191 @@
+use crate::error::AppError;
+use crate::events::EventEmitter;
+use git2::{Repository, Signature};
+use serde::Serialize;
+use std::path::Path;
+use std::sync::Arc;
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CommitInfo {
+    pub oid: String,
+    pub message: String,
+    pub time: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct FileStatus {
+    pub path: String,
+    pub status: String, // "new", "modified", "deleted"
+}
+
+pub struct VcsService {
+    emitter: Arc<dyn EventEmitter>,
+}
+
+impl VcsService {
+    pub fn new(emitter: Arc<dyn EventEmitter>) -> Self {
+        Self { emitter }
+    }
+
+    pub fn commit(
+        &self,
+        repo: &Repository,
+        _worktree_path: &Path,
+        message: &str,
+    ) -> Result<String, AppError> {
+        let mut index = repo.index()?;
+        index.add_all(["*"].iter(), git2::IndexAddOption::DEFAULT, None)?;
+        index.write()?;
+
+        let tree_oid = index.write_tree()?;
+        let tree = repo.find_tree(tree_oid)?;
+        let sig = repo
+            .signature()
+            .or_else(|_| Signature::now("Emergent", "emergent@local"))?;
+
+        let parent = repo.head().ok().and_then(|h| h.peel_to_commit().ok());
+        let parents: Vec<&git2::Commit> = parent.iter().collect();
+
+        let oid = repo.commit(Some("HEAD"), &sig, &sig, message, &tree, &parents)?;
+        let oid_str = oid.to_string();
+
+        self.emitter.emit(
+            "commit:created",
+            serde_json::json!({"oid": oid_str, "message": message}),
+        );
+
+        Ok(oid_str)
+    }
+
+    pub fn get_log(&self, repo: &Repository, limit: usize) -> Result<Vec<CommitInfo>, AppError> {
+        let mut revwalk = repo.revwalk()?;
+        revwalk.push_head()?;
+        revwalk.set_sorting(git2::Sort::TIME)?;
+
+        let mut commits = Vec::new();
+        for oid in revwalk.take(limit) {
+            let oid = oid?;
+            let commit = repo.find_commit(oid)?;
+            commits.push(CommitInfo {
+                oid: oid.to_string(),
+                message: commit.message().unwrap_or("").to_string(),
+                time: commit.time().seconds(),
+            });
+        }
+        Ok(commits)
+    }
+
+    pub fn get_status(&self, repo: &Repository) -> Result<Vec<FileStatus>, AppError> {
+        let statuses = repo.statuses(None)?;
+        let mut result = Vec::new();
+        for entry in statuses.iter() {
+            let path = entry.path().unwrap_or("").to_string();
+            let status = entry.status();
+            let kind = if status.contains(git2::Status::WT_NEW)
+                || status.contains(git2::Status::INDEX_NEW)
+            {
+                "new"
+            } else if status.contains(git2::Status::WT_MODIFIED)
+                || status.contains(git2::Status::INDEX_MODIFIED)
+            {
+                "modified"
+            } else if status.contains(git2::Status::WT_DELETED)
+                || status.contains(git2::Status::INDEX_DELETED)
+            {
+                "deleted"
+            } else {
+                "unknown"
+            };
+            result.push(FileStatus {
+                path,
+                status: kind.to_string(),
+            });
+        }
+        Ok(result)
+    }
+}
+
+// Note on API design: VcsService methods take &Repository and &Path as parameters
+// rather than holding state internally. This is because the active repo lives in
+// WorkspaceService. The Tauri command layer extracts the repo/worktree from
+// WorkspaceService and passes them to VcsService. This keeps VcsService stateless
+// and testable without needing a WorkspaceService.
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::events::TestEmitter;
+    use tempfile::TempDir;
+
+    fn setup() -> (TempDir, VcsService, Repository) {
+        let tmp = TempDir::new().unwrap();
+        let emitter = Arc::new(TestEmitter::new());
+        let svc = VcsService::new(emitter);
+        let repo = Repository::init(tmp.path()).unwrap();
+
+        // Configure git user for commits
+        let mut config = repo.config().unwrap();
+        config.set_str("user.name", "Test").unwrap();
+        config.set_str("user.email", "test@test.com").unwrap();
+
+        (tmp, svc, repo)
+    }
+
+    fn create_file(dir: &Path, name: &str, content: &str) {
+        std::fs::write(dir.join(name), content).unwrap();
+    }
+
+    #[test]
+    fn test_commit_stages_and_commits() {
+        let (tmp, svc, repo) = setup();
+        create_file(tmp.path(), "note.md", "# Hello");
+        let oid = svc.commit(&repo, tmp.path(), "initial commit").unwrap();
+        assert!(!oid.is_empty());
+    }
+
+    #[test]
+    fn test_get_log_returns_commits() {
+        let (tmp, svc, repo) = setup();
+        create_file(tmp.path(), "note.md", "# Hello");
+        svc.commit(&repo, tmp.path(), "first").unwrap();
+        create_file(tmp.path(), "note.md", "# Updated");
+        svc.commit(&repo, tmp.path(), "second").unwrap();
+        let log = svc.get_log(&repo, 10).unwrap();
+        assert_eq!(log.len(), 2);
+        assert_eq!(log[0].message, "second");
+        assert_eq!(log[1].message, "first");
+    }
+
+    #[test]
+    fn test_get_log_respects_limit() {
+        let (tmp, svc, repo) = setup();
+        for i in 0..5 {
+            create_file(tmp.path(), "note.md", &format!("v{i}"));
+            svc.commit(&repo, tmp.path(), &format!("commit {i}"))
+                .unwrap();
+        }
+        let log = svc.get_log(&repo, 3).unwrap();
+        assert_eq!(log.len(), 3);
+    }
+
+    #[test]
+    fn test_commit_emits_event() {
+        let (tmp, svc, repo) = setup();
+        let emitter = svc.emitter.clone();
+        let test_emitter = emitter.as_any().downcast_ref::<TestEmitter>().unwrap();
+        create_file(tmp.path(), "note.md", "content");
+        svc.commit(&repo, tmp.path(), "msg").unwrap();
+        assert!(test_emitter.has_event("commit:created"));
+    }
+
+    #[test]
+    fn test_get_status_shows_changes() {
+        let (tmp, svc, repo) = setup();
+        create_file(tmp.path(), "note.md", "content");
+        svc.commit(&repo, tmp.path(), "initial").unwrap();
+        create_file(tmp.path(), "note.md", "changed");
+        create_file(tmp.path(), "new.md", "new file");
+        let status = svc.get_status(&repo).unwrap();
+        assert!(status.len() >= 2);
+    }
+}

@@ -1,6 +1,7 @@
 mod agent;
 mod error;
 mod events;
+mod vcs;
 mod workspace;
 
 #[tauri::command]
