@@ -1,9 +1,18 @@
 import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { moveDocument, moveFolder, createDocument, createFolder } from "../../lib/tauri";
+import {
+  moveDocument,
+  moveFolder,
+  createDocument,
+  createFolder,
+  readDocument,
+  deleteDocument,
+  writeDocument,
+} from "../../lib/tauri";
 import { useFileTreeStore } from "../../stores/file-tree";
 import { useEditorStore } from "../../stores/editor";
 import { FileTree } from "../../components/FileTree";
+import { useToastStore } from "../../components/Toast";
 
 vi.mock("../../lib/tauri", () => ({
   listTree: vi.fn().mockResolvedValue([]),
@@ -302,5 +311,151 @@ describe("FileTree — inline creation", () => {
     await waitFor(() => {
       expect(createFolder).toHaveBeenCalledWith("docs/subfolder");
     });
+  });
+});
+
+describe("FileTree — deletion with undo", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.clearAllMocks();
+    useFileTreeStore.setState({
+      tree: sampleTree,
+      expandedPaths: new Set(["docs"]),
+      selectedPath: "notes.md",
+      loading: false,
+    });
+    useEditorStore.setState({
+      openTabs: [],
+      activeTab: null,
+      dirtyTabs: new Set(),
+    });
+    useToastStore.setState({ toasts: [] });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    cleanup();
+  });
+
+  it("Delete key reads content then deletes and removes from tree", async () => {
+    vi.mocked(readDocument).mockResolvedValue("file content");
+    vi.mocked(deleteDocument).mockResolvedValue(undefined);
+    render(<FileTree />);
+    const tree = screen.getByRole("tree");
+    fireEvent.keyDown(tree, { key: "Delete" });
+
+    await waitFor(() => {
+      expect(readDocument).toHaveBeenCalledWith("notes.md");
+    });
+    await waitFor(() => {
+      expect(deleteDocument).toHaveBeenCalledWith("notes.md");
+    });
+    expect(screen.queryByText("notes.md")).toBeNull();
+  });
+
+  it("shows toast with Undo action after delete", async () => {
+    vi.mocked(readDocument).mockResolvedValue("content");
+    vi.mocked(deleteDocument).mockResolvedValue(undefined);
+    render(<FileTree />);
+    const tree = screen.getByRole("tree");
+    fireEvent.keyDown(tree, { key: "Delete" });
+
+    await waitFor(() => {
+      const toasts = useToastStore.getState().toasts;
+      expect(toasts).toHaveLength(1);
+      expect(toasts[0]!.message).toContain("notes.md");
+      expect(toasts[0]!.action).toBeDefined();
+      expect(toasts[0]!.action!.label).toBe("Undo");
+    });
+  });
+
+  it("clicking Undo re-creates the file", async () => {
+    vi.mocked(readDocument).mockResolvedValue("saved content");
+    vi.mocked(deleteDocument).mockResolvedValue(undefined);
+    vi.mocked(createDocument).mockResolvedValue(undefined);
+    vi.mocked(writeDocument).mockResolvedValue(undefined);
+    render(<FileTree />);
+    const tree = screen.getByRole("tree");
+    fireEvent.keyDown(tree, { key: "Delete" });
+
+    await waitFor(() => {
+      expect(useToastStore.getState().toasts).toHaveLength(1);
+    });
+
+    // Trigger undo
+    const toast = useToastStore.getState().toasts[0]!;
+    toast.action!.onClick();
+
+    await waitFor(() => {
+      expect(createDocument).toHaveBeenCalledWith("notes.md");
+    });
+    await waitFor(() => {
+      expect(writeDocument).toHaveBeenCalledWith("notes.md", "saved content");
+    });
+  });
+
+  it("closes tab when deleted file is open", async () => {
+    useEditorStore.getState().openTab("notes.md");
+    vi.mocked(readDocument).mockResolvedValue("content");
+    vi.mocked(deleteDocument).mockResolvedValue(undefined);
+    render(<FileTree />);
+    const tree = screen.getByRole("tree");
+    fireEvent.keyDown(tree, { key: "Delete" });
+
+    await waitFor(() => {
+      expect(useEditorStore.getState().openTabs).toHaveLength(0);
+    });
+  });
+
+  it("deletion failure rolls back tree and shows error toast", async () => {
+    vi.mocked(readDocument).mockResolvedValue("content");
+    vi.mocked(deleteDocument).mockRejectedValue(new Error("permission denied"));
+    render(<FileTree />);
+    const tree = screen.getByRole("tree");
+    fireEvent.keyDown(tree, { key: "Delete" });
+
+    await waitFor(() => {
+      expect(deleteDocument).toHaveBeenCalled();
+    });
+    // Node should still be in tree (rolled back)
+    await waitFor(() => {
+      expect(screen.getByText("notes.md")).toBeDefined();
+    });
+  });
+
+  it("folder with >50 files shows confirmation toast instead of undo", async () => {
+    // Build a folder with 51 files
+    const manyChildren = Array.from({ length: 51 }, (_, i) => ({
+      name: `file-${i}.md`,
+      path: `big-folder/file-${i}.md`,
+      kind: "file" as const,
+    }));
+    const bigTree = [
+      {
+        name: "big-folder",
+        path: "big-folder",
+        kind: "folder" as const,
+        children: manyChildren,
+      },
+    ];
+    useFileTreeStore.setState({
+      tree: bigTree,
+      expandedPaths: new Set(),
+      selectedPath: "big-folder",
+      loading: false,
+    });
+
+    render(<FileTree />);
+    const tree = screen.getByRole("tree");
+    fireEvent.keyDown(tree, { key: "Delete" });
+
+    await waitFor(() => {
+      const toasts = useToastStore.getState().toasts;
+      expect(toasts).toHaveLength(1);
+      expect(toasts[0]!.message).toContain("51 files");
+      expect(toasts[0]!.action!.label).toBe("Confirm");
+    });
+    // readDocument should NOT have been called (no content stashing)
+    expect(readDocument).not.toHaveBeenCalled();
   });
 });

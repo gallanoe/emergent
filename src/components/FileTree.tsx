@@ -2,7 +2,16 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useFileTreeStore } from "../stores/file-tree";
 import { useEditorStore } from "../stores/editor";
 import type { TreeNode } from "../lib/tauri";
-import { moveDocument, moveFolder, createDocument, createFolder } from "../lib/tauri";
+import {
+  moveDocument,
+  moveFolder,
+  createDocument,
+  createFolder,
+  readDocument,
+  deleteDocument,
+  deleteFolder,
+  writeDocument,
+} from "../lib/tauri";
 import { ContextMenu, type MenuItem } from "./ContextMenu";
 import { useToastStore } from "./Toast";
 
@@ -53,6 +62,43 @@ function renameNodeInTree(
     }
     return node;
   });
+}
+
+function removeNodeFromTree(tree: TreeNode[], path: string): TreeNode[] {
+  return tree
+    .filter((node) => node.path !== path)
+    .map((node) => {
+      if (!node.children) return node;
+      const copy: TreeNode = { name: node.name, path: node.path, kind: node.kind };
+      copy.children = removeNodeFromTree(node.children, path);
+      return copy;
+    });
+}
+
+function countFilesInSubtree(node: TreeNode): number {
+  if (node.kind === "file") return 1;
+  if (!node.children) return 0;
+  return node.children.reduce((sum, child) => sum + countFilesInSubtree(child), 0);
+}
+
+async function stashFolderContents(node: TreeNode): Promise<Map<string, string>> {
+  const stash = new Map<string, string>();
+  const collect = async (n: TreeNode) => {
+    if (n.kind === "file") {
+      const content = await readDocument(n.path);
+      stash.set(n.path, content);
+    } else if (n.children) {
+      for (const child of n.children) {
+        await collect(child);
+      }
+    }
+  };
+  if (node.children) {
+    for (const child of node.children) {
+      await collect(child);
+    }
+  }
+  return stash;
 }
 
 function RenameInput({
@@ -391,6 +437,130 @@ export function FileTree() {
     setContextMenu({ x: e.clientX, y: e.clientY, target });
   }, []);
 
+  const handleDelete = useCallback(
+    async (node: TreeNode) => {
+      // Size guard: folders with >50 files get a confirmation toast
+      if (node.kind === "folder") {
+        const fileCount = countFilesInSubtree(node);
+        if (fileCount > 50) {
+          useToastStore.getState().addToast(
+            `Delete ${node.name} (${fileCount} files)?`,
+            "info",
+            {
+              label: "Confirm",
+              onClick: async () => {
+                const snapshot = useFileTreeStore.getState().snapshotTree();
+                useFileTreeStore
+                  .getState()
+                  .setTree(removeNodeFromTree(useFileTreeStore.getState().tree, node.path));
+                const { openTabs, closeTab } = useEditorStore.getState();
+                for (const tab of openTabs) {
+                  if (tab.path === node.path || tab.path.startsWith(node.path + "/")) {
+                    closeTab(tab.path);
+                  }
+                }
+                try {
+                  await deleteFolder(node.path);
+                } catch (err) {
+                  useFileTreeStore.getState().rollbackTree(snapshot);
+                  useToastStore
+                    .getState()
+                    .addToast(
+                      `Delete failed: ${err instanceof Error ? err.message : String(err)}`,
+                      "error",
+                    );
+                }
+              },
+            },
+            5000,
+          );
+          return;
+        }
+      }
+
+      // Stash content for undo
+      try {
+        let stash: Map<string, string>;
+        if (node.kind === "file") {
+          const content = await readDocument(node.path);
+          stash = new Map([[node.path, content]]);
+        } else {
+          stash = await stashFolderContents(node);
+        }
+
+        const snapshot = useFileTreeStore.getState().snapshotTree();
+
+        // Optimistic removal
+        useFileTreeStore
+          .getState()
+          .setTree(removeNodeFromTree(useFileTreeStore.getState().tree, node.path));
+
+        // Close affected tabs
+        const { openTabs, closeTab } = useEditorStore.getState();
+        for (const tab of openTabs) {
+          if (tab.path === node.path || tab.path.startsWith(node.path + "/")) {
+            closeTab(tab.path);
+          }
+        }
+
+        // Call backend
+        try {
+          if (node.kind === "file") {
+            await deleteDocument(node.path);
+          } else {
+            await deleteFolder(node.path);
+          }
+        } catch (err) {
+          useFileTreeStore.getState().rollbackTree(snapshot);
+          useToastStore
+            .getState()
+            .addToast(
+              `Delete failed: ${err instanceof Error ? err.message : String(err)}`,
+              "error",
+            );
+          return;
+        }
+
+        // Show undo toast
+        useToastStore.getState().addToast(
+          `Deleted ${node.name}`,
+          "info",
+          {
+            label: "Undo",
+            onClick: async () => {
+              try {
+                if (node.kind === "file") {
+                  await createDocument(node.path);
+                  const content = stash.get(node.path) ?? "";
+                  await writeDocument(node.path, content);
+                } else {
+                  await createFolder(node.path);
+                  for (const [path, content] of stash) {
+                    await createDocument(path);
+                    await writeDocument(path, content);
+                  }
+                }
+              } catch (err) {
+                useToastStore
+                  .getState()
+                  .addToast(
+                    `Undo failed: ${err instanceof Error ? err.message : String(err)}`,
+                    "error",
+                  );
+              }
+            },
+          },
+          5000,
+        );
+      } catch (err) {
+        useToastStore
+          .getState()
+          .addToast(`Delete failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+      }
+    },
+    [tree],
+  );
+
   const handleContextAction = useCallback(
     (action: string) => {
       const target = contextMenu?.target;
@@ -416,9 +586,13 @@ export function FileTree() {
           setCreating({ parentPath, kind: "folder" });
           break;
         }
+        case "delete": {
+          if (target) handleDelete(target);
+          break;
+        }
       }
     },
-    [contextMenu, expandedPaths, toggleExpanded],
+    [contextMenu, expandedPaths, toggleExpanded, handleDelete],
   );
 
   const handleRenameConfirm = useCallback(
@@ -564,6 +738,14 @@ export function FileTree() {
             }
           }
           break;
+        case "Delete":
+        case "Backspace":
+          e.preventDefault();
+          if (selectedPath) {
+            const node = findNode(tree, selectedPath);
+            if (node) handleDelete(node);
+          }
+          break;
         default:
           if (e.key.length === 1 && !e.metaKey && !e.ctrlKey) {
             const char = e.key.toLowerCase();
@@ -576,7 +758,16 @@ export function FileTree() {
           break;
       }
     },
-    [tree, selectedPath, expandedPaths, flattenVisible, setSelected, toggleExpanded, openTab],
+    [
+      tree,
+      selectedPath,
+      expandedPaths,
+      flattenVisible,
+      setSelected,
+      toggleExpanded,
+      openTab,
+      handleDelete,
+    ],
   );
 
   if (tree.length === 0) {
