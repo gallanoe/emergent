@@ -5,7 +5,7 @@ import { StatusBar } from "./StatusBar";
 import { ToastContainer } from "./Toast";
 import { Editor } from "./Editor";
 import { useEditorStore } from "../stores/editor";
-import { readDocument, writeDocument } from "../lib/tauri";
+import { readDocument, writeDocument, createDocument, createFolder } from "../lib/tauri";
 
 export function AppShell() {
   const [sidebarWidth, setSidebarWidth] = useState(220);
@@ -40,6 +40,41 @@ export function AppShell() {
       if (mod && e.key === "b") {
         e.preventDefault();
         handleToggleSidebar();
+      }
+
+      // Cmd+W: close active tab
+      if (mod && e.key === "w") {
+        e.preventDefault();
+        const { activeTab: tab, dirtyTabs, closeTab } = useEditorStore.getState();
+        if (tab) {
+          if (dirtyTabs.has(tab)) {
+            const confirmed = window.confirm(
+              "This document has unsaved changes. Close anyway?",
+            );
+            if (!confirmed) return;
+          }
+          closeTab(tab);
+        }
+      }
+
+      // Cmd+N: create new document
+      if (mod && !e.shiftKey && e.key === "n") {
+        e.preventDefault();
+        const name = window.prompt("New document name:", "untitled.md");
+        if (name) {
+          createDocument(name).then(() => {
+            useEditorStore.getState().openTab(name);
+          });
+        }
+      }
+
+      // Cmd+Shift+N: create new folder
+      if (mod && e.shiftKey && e.key === "N") {
+        e.preventDefault();
+        const name = window.prompt("New folder name:");
+        if (name) {
+          createFolder(name);
+        }
       }
     };
     window.addEventListener("keydown", handler);
