@@ -14,12 +14,18 @@ type FileTreeState = {
   expandedPaths: Set<string>;
   selectedPath: string | null;
   loading: boolean;
+  pendingCreation: { type: "file" | "folder"; parentPath: string } | null;
+  pendingRename: string | null;
   setTree: (tree: TreeNode[]) => void;
   toggleExpanded: (path: string) => void;
   setSelected: (path: string | null) => void;
   setLoading: (loading: boolean) => void;
   snapshotTree: () => TreeNode[];
   rollbackTree: (snapshot: TreeNode[]) => void;
+  setPendingCreation: (pending: { type: "file" | "folder"; parentPath: string }) => void;
+  clearPendingCreation: () => void;
+  setPendingRename: (path: string) => void;
+  clearPendingRename: () => void;
 };
 
 export const useFileTreeStore = create<FileTreeState>((set, get) => ({
@@ -27,6 +33,8 @@ export const useFileTreeStore = create<FileTreeState>((set, get) => ({
   expandedPaths: new Set(),
   selectedPath: null,
   loading: false,
+  pendingCreation: null,
+  pendingRename: null,
   setTree: (tree) => set({ tree }),
   toggleExpanded: (path) => {
     const expanded = new Set(get().expandedPaths);
@@ -41,4 +49,8 @@ export const useFileTreeStore = create<FileTreeState>((set, get) => ({
   setLoading: (loading) => set({ loading }),
   snapshotTree: () => deepCopyTree(get().tree),
   rollbackTree: (snapshot) => set({ tree: snapshot }),
+  setPendingCreation: (pending) => set({ pendingCreation: pending }),
+  clearPendingCreation: () => set({ pendingCreation: null }),
+  setPendingRename: (path) => set({ pendingRename: path }),
+  clearPendingRename: () => set({ pendingRename: null }),
 }));

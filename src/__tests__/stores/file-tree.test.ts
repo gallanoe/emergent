@@ -8,6 +8,8 @@ describe("fileTreeStore", () => {
       expandedPaths: new Set(),
       selectedPath: null,
       loading: false,
+      pendingCreation: null,
+      pendingRename: null,
     });
   });
 
@@ -71,5 +73,42 @@ describe("fileTreeStore", () => {
     useFileTreeStore.getState().setTree([]);
     useFileTreeStore.getState().rollbackTree(snapshot);
     expect(useFileTreeStore.getState().tree).toEqual(tree);
+  });
+
+  describe("pendingCreation", () => {
+    it("defaults to null", () => {
+      expect(useFileTreeStore.getState().pendingCreation).toBeNull();
+    });
+
+    it("sets pending creation", () => {
+      useFileTreeStore.getState().setPendingCreation({ type: "file", parentPath: "" });
+      expect(useFileTreeStore.getState().pendingCreation).toEqual({
+        type: "file",
+        parentPath: "",
+      });
+    });
+
+    it("clears pending creation", () => {
+      useFileTreeStore.getState().setPendingCreation({ type: "file", parentPath: "" });
+      useFileTreeStore.getState().clearPendingCreation();
+      expect(useFileTreeStore.getState().pendingCreation).toBeNull();
+    });
+  });
+
+  describe("pendingRename", () => {
+    it("defaults to null", () => {
+      expect(useFileTreeStore.getState().pendingRename).toBeNull();
+    });
+
+    it("sets pending rename path", () => {
+      useFileTreeStore.getState().setPendingRename("docs/readme.md");
+      expect(useFileTreeStore.getState().pendingRename).toBe("docs/readme.md");
+    });
+
+    it("clears pending rename", () => {
+      useFileTreeStore.getState().setPendingRename("docs/readme.md");
+      useFileTreeStore.getState().clearPendingRename();
+      expect(useFileTreeStore.getState().pendingRename).toBeNull();
+    });
   });
 });
