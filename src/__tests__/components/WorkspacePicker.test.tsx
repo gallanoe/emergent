@@ -42,4 +42,58 @@ describe("WorkspacePicker", () => {
       expect(screen.getByText("New workspace")).toBeDefined();
     });
   });
+
+  describe("Task 2: workspace list with selection and timestamps", () => {
+    it("renders workspace names sorted by last_opened descending", () => {
+      useWorkspaceStore.setState({
+        workspaces: [
+          {
+            id: "a",
+            name: "Alpha",
+            created_at: "2024-01-01T00:00:00Z",
+            last_opened: "2024-01-01T00:00:00Z",
+          },
+          {
+            id: "b",
+            name: "Beta",
+            created_at: "2024-01-01T00:00:00Z",
+            last_opened: "2024-06-01T00:00:00Z",
+          },
+        ],
+        activeWorkspace: null,
+        currentBranch: "main",
+        mergeState: null,
+      });
+      render(<WorkspacePicker />);
+      const options = screen.getAllByRole("option");
+      expect(options[0]!.textContent).toContain("Beta");
+      expect(options[1]!.textContent).toContain("Alpha");
+    });
+
+    it("pre-selects the first workspace", () => {
+      useWorkspaceStore.setState({
+        workspaces: [
+          {
+            id: "a",
+            name: "Alpha",
+            created_at: "2024-01-01T00:00:00Z",
+            last_opened: "2024-01-01T00:00:00Z",
+          },
+          {
+            id: "b",
+            name: "Beta",
+            created_at: "2024-01-01T00:00:00Z",
+            last_opened: "2024-06-01T00:00:00Z",
+          },
+        ],
+        activeWorkspace: null,
+        currentBranch: "main",
+        mergeState: null,
+      });
+      render(<WorkspacePicker />);
+      const options = screen.getAllByRole("option");
+      expect(options[0]!.getAttribute("aria-selected")).toBe("true");
+      expect(options[1]!.getAttribute("aria-selected")).toBe("false");
+    });
+  });
 });

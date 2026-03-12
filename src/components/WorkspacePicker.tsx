@@ -1,7 +1,26 @@
+import { useState } from "react";
 import { useWorkspaceStore } from "../stores/workspace";
+
+function relativeTime(iso: string): string {
+  const now = Date.now();
+  const then = new Date(iso).getTime();
+  const diffMs = now - then;
+  const diffMin = Math.floor(diffMs / 60_000);
+  if (diffMin < 60) return diffMin <= 1 ? "just now" : `${diffMin}m ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  const diffDays = Math.floor(diffHr / 24);
+  if (diffDays < 30) return `${diffDays}d ago`;
+  const diffMonths = Math.floor(diffDays / 30);
+  return `${diffMonths}mo ago`;
+}
 
 export default function WorkspacePicker() {
   const workspaces = useWorkspaceStore((s) => s.workspaces);
+  const sorted = workspaces.toSorted(
+    (a, b) => new Date(b.last_opened).getTime() - new Date(a.last_opened).getTime(),
+  );
+  const [selectedIndex, setSelectedIndex] = useState(0);
 
   return (
     <div
@@ -36,13 +55,14 @@ export default function WorkspacePicker() {
         </div>
 
         <div
+          role="listbox"
           style={{
             border: "1px solid var(--color-border-default)",
             borderRadius: 4,
             overflow: "hidden",
           }}
         >
-          {workspaces.length === 0 ? (
+          {sorted.length === 0 ? (
             <div
               style={{
                 padding: "8px 12px",
@@ -53,16 +73,35 @@ export default function WorkspacePicker() {
               No workspaces yet
             </div>
           ) : (
-            workspaces.map((ws) => (
+            sorted.map((ws, i) => (
               <div
                 key={ws.id}
+                role="option"
+                aria-selected={i === selectedIndex}
+                onClick={() => setSelectedIndex(i)}
                 style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
                   padding: "8px 12px",
-                  fontSize: 13,
-                  color: "var(--color-fg-default)",
+                  cursor: "default",
+                  borderBottom:
+                    i < sorted.length - 1 ? "1px solid var(--color-border-default)" : "none",
+                  background: i === selectedIndex ? "var(--color-bg-selected)" : undefined,
+                  color:
+                    i === selectedIndex ? "var(--color-fg-heading)" : "var(--color-fg-default)",
+                  minHeight: 34,
                 }}
               >
-                {ws.name}
+                <span style={{ fontSize: 13 }}>{ws.name}</span>
+                <span
+                  style={{
+                    fontSize: 11,
+                    color: "var(--color-fg-disabled)",
+                  }}
+                >
+                  {relativeTime(ws.last_opened)}
+                </span>
               </div>
             ))
           )}
