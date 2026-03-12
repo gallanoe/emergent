@@ -11,9 +11,7 @@ describe("fileTreeStore", () => {
   });
 
   it("sets tree data", () => {
-    const mockTree = [
-      { name: "notes", path: "notes", kind: "folder" as const, children: [] },
-    ];
+    const mockTree = [{ name: "notes", path: "notes", kind: "folder" as const, children: [] }];
     useFileTreeStore.getState().setTree(mockTree);
     expect(useFileTreeStore.getState().tree).toEqual(mockTree);
   });

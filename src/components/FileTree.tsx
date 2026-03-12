@@ -6,15 +6,8 @@ import type { TreeNode } from "../lib/tauri";
 const INDENT = 16;
 const ITEM_HEIGHT = 28;
 
-function FileTreeNode({
-  node,
-  depth,
-}: {
-  node: TreeNode;
-  depth: number;
-}) {
-  const { expandedPaths, selectedPath, toggleExpanded, setSelected } =
-    useFileTreeStore();
+function FileTreeNode({ node, depth }: { node: TreeNode; depth: number }) {
+  const { expandedPaths, selectedPath, toggleExpanded, setSelected } = useFileTreeStore();
   const openTab = useEditorStore((s) => s.openTab);
   const isExpanded = expandedPaths.has(node.path);
   const isSelected = selectedPath === node.path;
@@ -38,13 +31,9 @@ function FileTreeNode({
           height: ITEM_HEIGHT,
           paddingLeft: depth * INDENT + 8,
           fontSize: 13,
-          color: isSelected
-            ? "var(--color-fg-heading)"
-            : "var(--color-fg-default)",
+          color: isSelected ? "var(--color-fg-heading)" : "var(--color-fg-default)",
           background: isSelected ? "var(--color-bg-hover)" : "transparent",
-          borderLeft: isSelected
-            ? "2px solid var(--color-accent)"
-            : "2px solid transparent",
+          borderLeft: isSelected ? "2px solid var(--color-accent)" : "2px solid transparent",
           transition: "background 100ms ease-out",
         }}
         onMouseEnter={(e) => {
@@ -77,11 +66,7 @@ function FileTreeNode({
       {isFolder && isExpanded && node.children && (
         <>
           {node.children.map((child) => (
-            <FileTreeNode
-              key={child.path}
-              node={child}
-              depth={depth + 1}
-            />
+            <FileTreeNode key={child.path} node={child} depth={depth + 1} />
           ))}
         </>
       )}
@@ -91,8 +76,7 @@ function FileTreeNode({
 
 export function FileTree() {
   const tree = useFileTreeStore((s) => s.tree);
-  const { selectedPath, expandedPaths, toggleExpanded, setSelected } =
-    useFileTreeStore();
+  const { selectedPath, expandedPaths, toggleExpanded, setSelected } = useFileTreeStore();
   const openTab = useEditorStore((s) => s.openTab);
   const treeRef = useRef<HTMLDivElement>(null);
 
@@ -184,10 +168,7 @@ export function FileTree() {
 
   if (tree.length === 0) {
     return (
-      <div
-        className="px-3 py-4"
-        style={{ fontSize: 11, color: "var(--color-fg-disabled)" }}
-      >
+      <div className="px-3 py-4" style={{ fontSize: 11, color: "var(--color-fg-disabled)" }}>
         No files yet
       </div>
     );

@@ -1,8 +1,7 @@
 import { useEditorStore } from "../stores/editor";
 
 export function TabBar() {
-  const { openTabs, activeTab, dirtyTabs, setActiveTab, closeTab } =
-    useEditorStore();
+  const { openTabs, activeTab, dirtyTabs, setActiveTab, closeTab } = useEditorStore();
 
   if (openTabs.length === 0) return null;
 
@@ -25,12 +24,8 @@ export function TabBar() {
             className="group flex cursor-default items-center gap-2 px-3"
             style={{
               fontSize: 13,
-              color: isActive
-                ? "var(--color-fg-heading)"
-                : "var(--color-fg-muted)",
-              borderBottom: isActive
-                ? "1px solid var(--color-accent)"
-                : "1px solid transparent",
+              color: isActive ? "var(--color-fg-heading)" : "var(--color-fg-muted)",
+              borderBottom: isActive ? "1px solid var(--color-accent)" : "1px solid transparent",
               whiteSpace: "nowrap",
             }}
           >

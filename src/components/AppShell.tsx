@@ -48,9 +48,7 @@ export function AppShell() {
         const { activeTab: tab, dirtyTabs, closeTab } = useEditorStore.getState();
         if (tab) {
           if (dirtyTabs.has(tab)) {
-            const confirmed = window.confirm(
-              "This document has unsaved changes. Close anyway?",
-            );
+            const confirmed = window.confirm("This document has unsaved changes. Close anyway?");
             if (!confirmed) return;
           }
           closeTab(tab);

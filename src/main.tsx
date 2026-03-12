@@ -50,9 +50,7 @@ onMergeConflict(({ conflicts }) => {
   useWorkspaceStore.getState().setMergeState({
     conflicts: conflicts.map((p) => ({ path: p, ours: "", theirs: "" })),
   });
-  useToastStore
-    .getState()
-    .addToast(`Merge conflict in ${conflicts.length} file(s)`, "error");
+  useToastStore.getState().addToast(`Merge conflict in ${conflicts.length} file(s)`, "error");
 });
 
 onCommitCreated(({ message }) => {

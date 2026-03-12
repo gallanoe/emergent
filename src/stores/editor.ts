@@ -41,9 +41,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     if (activeTab === path) {
       const idx = openTabs.findIndex((t) => t.path === path);
       newActive =
-        filtered.length === 0
-          ? null
-          : filtered[Math.min(idx, filtered.length - 1)]?.path ?? null;
+        filtered.length === 0 ? null : (filtered[Math.min(idx, filtered.length - 1)]?.path ?? null);
     }
 
     set({ openTabs: filtered, activeTab: newActive, dirtyTabs: newDirty });
