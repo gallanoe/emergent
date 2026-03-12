@@ -554,114 +554,35 @@ export function FileTree() {
     }
   }, []);
 
-  const handleDelete = useCallback(
-    async (node: TreeNode) => {
-      // Size guard: folders with >50 files get a confirmation toast
-      if (node.kind === "folder") {
-        const fileCount = countFilesInSubtree(node);
-        if (fileCount > 50) {
-          useToastStore.getState().addToast(
-            `Delete ${node.name} (${fileCount} files)?`,
-            "info",
-            {
-              label: "Confirm",
-              onClick: async () => {
-                const snapshot = useFileTreeStore.getState().snapshotTree();
-                useFileTreeStore
-                  .getState()
-                  .setTree(removeNodeFromTree(useFileTreeStore.getState().tree, node.path));
-                const { openTabs, closeTab } = useEditorStore.getState();
-                for (const tab of openTabs) {
-                  if (tab.path === node.path || tab.path.startsWith(node.path + "/")) {
-                    closeTab(tab.path);
-                  }
-                }
-                try {
-                  await deleteFolder(node.path);
-                } catch (err) {
-                  useFileTreeStore.getState().rollbackTree(snapshot);
-                  useToastStore
-                    .getState()
-                    .addToast(
-                      `Delete failed: ${err instanceof Error ? err.message : String(err)}`,
-                      "error",
-                    );
-                }
-              },
-            },
-            5000,
-          );
-          return;
-        }
-      }
-
-      // Stash content for undo
-      try {
-        let stash: Map<string, string>;
-        if (node.kind === "file") {
-          const content = await readDocument(node.path);
-          stash = new Map([[node.path, content]]);
-        } else {
-          stash = await stashFolderContents(node);
-        }
-
-        const snapshot = useFileTreeStore.getState().snapshotTree();
-
-        // Optimistic removal
-        useFileTreeStore
-          .getState()
-          .setTree(removeNodeFromTree(useFileTreeStore.getState().tree, node.path));
-
-        // Close affected tabs
-        const { openTabs, closeTab } = useEditorStore.getState();
-        for (const tab of openTabs) {
-          if (tab.path === node.path || tab.path.startsWith(node.path + "/")) {
-            closeTab(tab.path);
-          }
-        }
-
-        // Call backend
-        try {
-          if (node.kind === "file") {
-            await deleteDocument(node.path);
-          } else {
-            await deleteFolder(node.path);
-          }
-        } catch (err) {
-          useFileTreeStore.getState().rollbackTree(snapshot);
-          useToastStore
-            .getState()
-            .addToast(
-              `Delete failed: ${err instanceof Error ? err.message : String(err)}`,
-              "error",
-            );
-          return;
-        }
-
-        // Show undo toast
+  const handleDelete = useCallback(async (node: TreeNode) => {
+    // Size guard: folders with >50 files get a confirmation toast
+    if (node.kind === "folder") {
+      const fileCount = countFilesInSubtree(node);
+      if (fileCount > 50) {
         useToastStore.getState().addToast(
-          `Deleted ${node.name}`,
+          `Delete ${node.name} (${fileCount} files)?`,
           "info",
           {
-            label: "Undo",
+            label: "Confirm",
             onClick: async () => {
-              try {
-                if (node.kind === "file") {
-                  await createDocument(node.path);
-                  const content = stash.get(node.path) ?? "";
-                  await writeDocument(node.path, content);
-                } else {
-                  await createFolder(node.path);
-                  for (const [path, content] of stash) {
-                    await createDocument(path);
-                    await writeDocument(path, content);
-                  }
+              const snapshot = useFileTreeStore.getState().snapshotTree();
+              useFileTreeStore
+                .getState()
+                .setTree(removeNodeFromTree(useFileTreeStore.getState().tree, node.path));
+              const { openTabs, closeTab } = useEditorStore.getState();
+              for (const tab of openTabs) {
+                if (tab.path === node.path || tab.path.startsWith(node.path + "/")) {
+                  closeTab(tab.path);
                 }
+              }
+              try {
+                await deleteFolder(node.path);
               } catch (err) {
+                useFileTreeStore.getState().rollbackTree(snapshot);
                 useToastStore
                   .getState()
                   .addToast(
-                    `Undo failed: ${err instanceof Error ? err.message : String(err)}`,
+                    `Delete failed: ${err instanceof Error ? err.message : String(err)}`,
                     "error",
                   );
               }
@@ -669,14 +590,87 @@ export function FileTree() {
           },
           5000,
         );
+        return;
+      }
+    }
+
+    // Stash content for undo
+    try {
+      let stash: Map<string, string>;
+      if (node.kind === "file") {
+        const content = await readDocument(node.path);
+        stash = new Map([[node.path, content]]);
+      } else {
+        stash = await stashFolderContents(node);
+      }
+
+      const snapshot = useFileTreeStore.getState().snapshotTree();
+
+      // Optimistic removal
+      useFileTreeStore
+        .getState()
+        .setTree(removeNodeFromTree(useFileTreeStore.getState().tree, node.path));
+
+      // Close affected tabs
+      const { openTabs, closeTab } = useEditorStore.getState();
+      for (const tab of openTabs) {
+        if (tab.path === node.path || tab.path.startsWith(node.path + "/")) {
+          closeTab(tab.path);
+        }
+      }
+
+      // Call backend
+      try {
+        if (node.kind === "file") {
+          await deleteDocument(node.path);
+        } else {
+          await deleteFolder(node.path);
+        }
       } catch (err) {
+        useFileTreeStore.getState().rollbackTree(snapshot);
         useToastStore
           .getState()
           .addToast(`Delete failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+        return;
       }
-    },
-    [tree],
-  );
+
+      // Show undo toast
+      useToastStore.getState().addToast(
+        `Deleted ${node.name}`,
+        "info",
+        {
+          label: "Undo",
+          onClick: async () => {
+            try {
+              if (node.kind === "file") {
+                await createDocument(node.path);
+                const content = stash.get(node.path) ?? "";
+                await writeDocument(node.path, content);
+              } else {
+                await createFolder(node.path);
+                for (const [path, content] of stash) {
+                  await createDocument(path);
+                  await writeDocument(path, content);
+                }
+              }
+            } catch (err) {
+              useToastStore
+                .getState()
+                .addToast(
+                  `Undo failed: ${err instanceof Error ? err.message : String(err)}`,
+                  "error",
+                );
+            }
+          },
+        },
+        5000,
+      );
+    } catch (err) {
+      useToastStore
+        .getState()
+        .addToast(`Delete failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+    }
+  }, []);
 
   const handleContextAction = useCallback(
     (action: string) => {
@@ -867,6 +861,14 @@ export function FileTree() {
   );
 
   useEffect(() => {
+    const executeDeleteSelected = () => {
+      const selected = useFileTreeStore.getState().selectedPath;
+      if (selected) {
+        const node = findNode(useFileTreeStore.getState().tree, selected);
+        if (node) handleDelete(node);
+      }
+    };
+
     const commands = [
       {
         id: "file.rename",
@@ -885,26 +887,14 @@ export function FileTree() {
         label: "Delete",
         shortcut: "Delete",
         context: "sidebar" as const,
-        execute: () => {
-          const selected = useFileTreeStore.getState().selectedPath;
-          if (selected) {
-            const node = findNode(useFileTreeStore.getState().tree, selected);
-            if (node) handleDelete(node);
-          }
-        },
+        execute: executeDeleteSelected,
       },
       {
         id: "file.delete-backspace",
         label: "Delete",
         shortcut: "Backspace",
         context: "sidebar" as const,
-        execute: () => {
-          const selected = useFileTreeStore.getState().selectedPath;
-          if (selected) {
-            const node = findNode(useFileTreeStore.getState().tree, selected);
-            if (node) handleDelete(node);
-          }
-        },
+        execute: executeDeleteSelected,
       },
     ];
 
