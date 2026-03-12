@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useWorkspaceStore } from "../stores/workspace";
 import { openWorkspace, createWorkspace, deleteWorkspace } from "../lib/tauri";
 import { useToastStore } from "./Toast";
@@ -20,8 +20,12 @@ function relativeTime(iso: string): string {
 
 export function WorkspacePicker() {
   const workspaces = useWorkspaceStore((s) => s.workspaces);
-  const sorted = workspaces.toSorted(
-    (a, b) => new Date(b.last_opened).getTime() - new Date(a.last_opened).getTime(),
+  const sorted = useMemo(
+    () =>
+      workspaces.toSorted(
+        (a, b) => new Date(b.last_opened).getTime() - new Date(a.last_opened).getTime(),
+      ),
+    [workspaces],
   );
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [creatingNew, setCreatingNew] = useState(false);
@@ -33,10 +37,12 @@ export function WorkspacePicker() {
       const meta = await openWorkspace(ws.id);
       useWorkspaceStore.getState().setActiveWorkspace(meta);
     } catch (err) {
-      useToastStore.getState().addToast(
-        `Failed to open workspace: ${err instanceof Error ? err.message : String(err)}`,
-        "error",
-      );
+      useToastStore
+        .getState()
+        .addToast(
+          `Failed to open workspace: ${err instanceof Error ? err.message : String(err)}`,
+          "error",
+        );
     }
   }, []);
 
@@ -64,15 +70,19 @@ export function WorkspacePicker() {
         if (ws && window.confirm(`Delete workspace '${ws.name}'? This cannot be undone.`)) {
           deleteWorkspace(ws.id)
             .then(() => {
-              const remaining = workspaces.filter((w) => w.id !== ws.id);
+              const remaining = useWorkspaceStore
+                .getState()
+                .workspaces.filter((w) => w.id !== ws.id);
               useWorkspaceStore.getState().setWorkspaces(remaining);
               setSelectedIndex((i) => Math.min(i, remaining.length - 1));
             })
             .catch((err) => {
-              useToastStore.getState().addToast(
-                `Failed to delete workspace: ${err instanceof Error ? err.message : String(err)}`,
-                "error",
-              );
+              useToastStore
+                .getState()
+                .addToast(
+                  `Failed to delete workspace: ${err instanceof Error ? err.message : String(err)}`,
+                  "error",
+                );
             });
         }
       }
@@ -92,10 +102,12 @@ export function WorkspacePicker() {
       const meta = await openWorkspace(id);
       useWorkspaceStore.getState().setActiveWorkspace(meta);
     } catch (err) {
-      useToastStore.getState().addToast(
-        `Failed to create workspace: ${err instanceof Error ? err.message : String(err)}`,
-        "error",
-      );
+      useToastStore
+        .getState()
+        .addToast(
+          `Failed to create workspace: ${err instanceof Error ? err.message : String(err)}`,
+          "error",
+        );
     }
   }, []);
 

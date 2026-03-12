@@ -235,6 +235,23 @@ describe("WorkspacePicker", () => {
         expect(openWorkspace).toHaveBeenCalledWith("new-id");
       });
     });
+
+    it("keeps input visible when createWorkspace fails", async () => {
+      vi.mocked(createWorkspace).mockRejectedValue(new Error("duplicate name"));
+
+      render(<WorkspacePicker />);
+      fireEvent.click(screen.getByText("New workspace"));
+      const input = screen.getByPlaceholderText("Workspace name...");
+
+      fireEvent.change(input, { target: { value: "Existing" } });
+      fireEvent.keyDown(input, { key: "Enter" });
+
+      await waitFor(() => {
+        expect(createWorkspace).toHaveBeenCalledWith("Existing");
+      });
+      // Input should still be visible (creatingNew stays true on error)
+      expect(screen.getByPlaceholderText("Workspace name...")).toBeDefined();
+    });
   });
 
   describe("Task 5: workspace deletion", () => {
@@ -287,6 +304,46 @@ describe("WorkspacePicker", () => {
       fireEvent.keyDown(window, { key: "Delete" });
 
       expect(deleteWorkspace).not.toHaveBeenCalled();
+    });
+
+    it("deletes workspace on Backspace key after confirm", async () => {
+      useWorkspaceStore.setState({
+        workspaces: twoWorkspaces,
+        activeWorkspace: null,
+        currentBranch: "main",
+        mergeState: null,
+      });
+      vi.spyOn(window, "confirm").mockReturnValue(true);
+      vi.mocked(deleteWorkspace).mockResolvedValue(undefined);
+
+      render(<WorkspacePicker />);
+
+      fireEvent.keyDown(window, { key: "Backspace" });
+
+      await waitFor(() => {
+        expect(deleteWorkspace).toHaveBeenCalledWith("b");
+      });
+    });
+
+    it("keeps workspace in list when deleteWorkspace fails", async () => {
+      useWorkspaceStore.setState({
+        workspaces: twoWorkspaces,
+        activeWorkspace: null,
+        currentBranch: "main",
+        mergeState: null,
+      });
+      vi.spyOn(window, "confirm").mockReturnValue(true);
+      vi.mocked(deleteWorkspace).mockRejectedValue(new Error("disk error"));
+
+      render(<WorkspacePicker />);
+
+      fireEvent.keyDown(window, { key: "Delete" });
+
+      await waitFor(() => {
+        expect(deleteWorkspace).toHaveBeenCalledWith("b");
+      });
+      // Workspace should still be in the list (not removed on failure)
+      expect(screen.getByText("Beta")).toBeDefined();
     });
   });
 });
