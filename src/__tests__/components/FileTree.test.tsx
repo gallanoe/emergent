@@ -1,6 +1,6 @@
 import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { moveDocument, moveFolder } from "../../lib/tauri";
+import { moveDocument, moveFolder, createDocument, createFolder } from "../../lib/tauri";
 import { useFileTreeStore } from "../../stores/file-tree";
 import { useEditorStore } from "../../stores/editor";
 import { FileTree } from "../../components/FileTree";
@@ -208,6 +208,99 @@ describe("FileTree — inline rename", () => {
 
     await waitFor(() => {
       expect(moveDocument).toHaveBeenCalledWith("notes.md", "blurred.md");
+    });
+  });
+});
+
+describe("FileTree — inline creation", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useFileTreeStore.setState({
+      tree: sampleTree,
+      expandedPaths: new Set(["docs"]),
+      selectedPath: null,
+      loading: false,
+    });
+    useEditorStore.setState({
+      openTabs: [],
+      activeTab: null,
+      dirtyTabs: new Set(),
+    });
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("context menu New File on folder shows input inside folder", () => {
+    render(<FileTree />);
+    fireEvent.contextMenu(screen.getByText("docs"));
+    fireEvent.click(screen.getByText("New File"));
+    expect(screen.getByPlaceholderText("untitled.md")).toBeDefined();
+  });
+
+  it("Enter on creation input calls createDocument", async () => {
+    vi.mocked(createDocument).mockResolvedValue(undefined);
+    render(<FileTree />);
+    fireEvent.contextMenu(screen.getByText("docs"));
+    fireEvent.click(screen.getByText("New File"));
+    const input = screen.getByPlaceholderText("untitled.md");
+    fireEvent.change(input, { target: { value: "new-doc.md" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() => {
+      expect(createDocument).toHaveBeenCalledWith("docs/new-doc.md");
+    });
+  });
+
+  it("Escape on creation input removes temporary row", () => {
+    render(<FileTree />);
+    fireEvent.contextMenu(screen.getByText("docs"));
+    fireEvent.click(screen.getByText("New File"));
+    const input = screen.getByPlaceholderText("untitled.md");
+    fireEvent.keyDown(input, { key: "Escape" });
+    expect(screen.queryByPlaceholderText("untitled.md")).toBeNull();
+  });
+
+  it("successful file creation opens file in a tab", async () => {
+    vi.mocked(createDocument).mockResolvedValue(undefined);
+    render(<FileTree />);
+    fireEvent.contextMenu(screen.getByText("docs"));
+    fireEvent.click(screen.getByText("New File"));
+    const input = screen.getByPlaceholderText("untitled.md");
+    fireEvent.change(input, { target: { value: "new-doc.md" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() => {
+      expect(useEditorStore.getState().activeTab).toBe("docs/new-doc.md");
+    });
+  });
+
+  it("creation failure removes temporary node and shows error toast", async () => {
+    vi.mocked(createDocument).mockRejectedValue(new Error("exists"));
+    render(<FileTree />);
+    fireEvent.contextMenu(screen.getByText("docs"));
+    fireEvent.click(screen.getByText("New File"));
+    const input = screen.getByPlaceholderText("untitled.md");
+    fireEvent.change(input, { target: { value: "readme.md" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() => {
+      expect(createDocument).toHaveBeenCalled();
+    });
+  });
+
+  it("context menu New Folder calls createFolder", async () => {
+    vi.mocked(createFolder).mockResolvedValue(undefined);
+    render(<FileTree />);
+    fireEvent.contextMenu(screen.getByText("docs"));
+    fireEvent.click(screen.getByText("New Folder"));
+    const input = screen.getByPlaceholderText("New folder");
+    fireEvent.change(input, { target: { value: "subfolder" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() => {
+      expect(createFolder).toHaveBeenCalledWith("docs/subfolder");
     });
   });
 });

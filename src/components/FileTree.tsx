@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useFileTreeStore } from "../stores/file-tree";
 import { useEditorStore } from "../stores/editor";
 import type { TreeNode } from "../lib/tauri";
-import { moveDocument, moveFolder } from "../lib/tauri";
+import { moveDocument, moveFolder, createDocument, createFolder } from "../lib/tauri";
 import { ContextMenu, type MenuItem } from "./ContextMenu";
 import { useToastStore } from "./Toast";
 
@@ -130,6 +130,75 @@ function RenameInput({
   );
 }
 
+function CreationInput({
+  kind,
+  depth,
+  onConfirm,
+  onCancel,
+}: {
+  kind: "file" | "folder";
+  depth: number;
+  onConfirm: (name: string) => void;
+  onCancel: () => void;
+}) {
+  const confirmedRef = useRef(false);
+
+  const doConfirm = useCallback(
+    (value: string) => {
+      if (confirmedRef.current) return;
+      confirmedRef.current = true;
+      const name = value.trim();
+      if (name) onConfirm(name);
+      else onCancel();
+    },
+    [onConfirm, onCancel],
+  );
+
+  return (
+    <div
+      style={{
+        height: 28,
+        display: "flex",
+        alignItems: "center",
+        paddingLeft: depth * 16 + 8,
+        borderLeft: "2px solid var(--color-accent)",
+      }}
+    >
+      <input
+        autoFocus
+        placeholder={kind === "file" ? "untitled.md" : "New folder"}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            e.stopPropagation();
+            doConfirm(e.currentTarget.value);
+          } else if (e.key === "Escape") {
+            e.preventDefault();
+            e.stopPropagation();
+            confirmedRef.current = true;
+            onCancel();
+          }
+        }}
+        onBlur={(e) => {
+          doConfirm(e.currentTarget.value);
+        }}
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: "var(--color-bg-base)",
+          border: "1px solid var(--color-accent)",
+          borderRadius: 4,
+          fontSize: 13,
+          color: "var(--color-fg-default)",
+          padding: "0 4px",
+          outline: "none",
+          width: "100%",
+          height: 20,
+        }}
+      />
+    </div>
+  );
+}
+
 function FileTreeNode({
   node,
   depth,
@@ -139,6 +208,9 @@ function FileTreeNode({
   onRenameCancel,
   onRenameStart,
   onSelect,
+  creating,
+  onCreateConfirm,
+  onCreateCancel,
 }: {
   node: TreeNode;
   depth: number;
@@ -148,6 +220,9 @@ function FileTreeNode({
   onRenameCancel: () => void;
   onRenameStart: (path: string) => void;
   onSelect: (path: string) => void;
+  creating: { parentPath: string; kind: "file" | "folder" } | null;
+  onCreateConfirm: (name: string) => void;
+  onCreateCancel: () => void;
 }) {
   const { expandedPaths, selectedPath, toggleExpanded } = useFileTreeStore();
   const openTab = useEditorStore((s) => s.openTab);
@@ -242,6 +317,14 @@ function FileTreeNode({
       </div>
       {isFolder && isExpanded && node.children && (
         <>
+          {creating?.parentPath === node.path && (
+            <CreationInput
+              kind={creating.kind}
+              depth={depth + 1}
+              onConfirm={onCreateConfirm}
+              onCancel={onCreateCancel}
+            />
+          )}
           {node.children.map((child) => (
             <FileTreeNode
               key={child.path}
@@ -253,6 +336,9 @@ function FileTreeNode({
               onRenameCancel={onRenameCancel}
               onRenameStart={onRenameStart}
               onSelect={onSelect}
+              creating={creating}
+              onCreateConfirm={onCreateConfirm}
+              onCreateCancel={onCreateCancel}
             />
           ))}
         </>
@@ -267,6 +353,10 @@ export function FileTree() {
   const openTab = useEditorStore((s) => s.openTab);
   const treeRef = useRef<HTMLDivElement>(null);
   const [renamingPath, setRenamingPath] = useState<string | null>(null);
+  const [creating, setCreating] = useState<{
+    parentPath: string;
+    kind: "file" | "folder";
+  } | null>(null);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -305,11 +395,30 @@ export function FileTree() {
     (action: string) => {
       const target = contextMenu?.target;
       setContextMenu(null);
-      if (action === "rename" && target) {
-        setRenamingPath(target.path);
+      switch (action) {
+        case "rename": {
+          if (target) setRenamingPath(target.path);
+          break;
+        }
+        case "new-file": {
+          const parentPath = target?.kind === "folder" ? target.path : "";
+          if (target?.kind === "folder" && !expandedPaths.has(target.path)) {
+            toggleExpanded(target.path);
+          }
+          setCreating({ parentPath, kind: "file" });
+          break;
+        }
+        case "new-folder": {
+          const parentPath = target?.kind === "folder" ? target.path : "";
+          if (target?.kind === "folder" && !expandedPaths.has(target.path)) {
+            toggleExpanded(target.path);
+          }
+          setCreating({ parentPath, kind: "folder" });
+          break;
+        }
       }
     },
-    [contextMenu],
+    [contextMenu, expandedPaths, toggleExpanded],
   );
 
   const handleRenameConfirm = useCallback(
@@ -347,6 +456,31 @@ export function FileTree() {
   const handleRenameCancel = useCallback(() => {
     setRenamingPath(null);
   }, []);
+
+  const handleCreateConfirm = useCallback(
+    async (name: string) => {
+      if (!creating) return;
+      const fullPath = creating.parentPath ? `${creating.parentPath}/${name}` : name;
+      setCreating(null);
+
+      try {
+        if (creating.kind === "file") {
+          await createDocument(fullPath);
+          openTab(fullPath);
+        } else {
+          await createFolder(fullPath);
+        }
+      } catch (err) {
+        useToastStore
+          .getState()
+          .addToast(
+            `Failed to create: ${err instanceof Error ? err.message : String(err)}`,
+            "error",
+          );
+      }
+    },
+    [creating, openTab],
+  );
 
   const handleSelect = useCallback(
     (path: string) => {
@@ -462,6 +596,14 @@ export function FileTree() {
       onContextMenu={(e) => handleContextMenu(e, null)}
       style={{ outline: "none" }}
     >
+      {creating && creating.parentPath === "" && (
+        <CreationInput
+          kind={creating.kind}
+          depth={0}
+          onConfirm={handleCreateConfirm}
+          onCancel={() => setCreating(null)}
+        />
+      )}
       {tree.map((node) => (
         <FileTreeNode
           key={node.path}
@@ -473,6 +615,9 @@ export function FileTree() {
           onRenameCancel={handleRenameCancel}
           onRenameStart={setRenamingPath}
           onSelect={handleSelect}
+          creating={creating}
+          onCreateConfirm={handleCreateConfirm}
+          onCreateCancel={() => setCreating(null)}
         />
       ))}
       {contextMenu && (
