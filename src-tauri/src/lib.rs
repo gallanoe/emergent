@@ -1,3 +1,5 @@
+mod agent;
+
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
@@ -17,7 +19,10 @@ mod tests {
 
     #[test]
     fn greet_returns_greeting() {
-        assert_eq!(greet("world"), "Hello, world! You've been greeted from Rust!");
+        assert_eq!(
+            greet("world"),
+            "Hello, world! You've been greeted from Rust!"
+        );
     }
 
     #[test]
