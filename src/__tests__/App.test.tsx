@@ -1,8 +1,51 @@
 import { render, screen } from "@testing-library/react";
-import { expect, test } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import App from "../App";
+import { useWorkspaceStore } from "../stores/workspace";
 
-test("renders app shell", () => {
-  render(<App />);
-  expect(screen.getByText("No document open")).toBeDefined();
+vi.mock("../lib/tauri", () => ({
+  listWorkspaces: vi.fn().mockResolvedValue([]),
+  createWorkspace: vi.fn().mockResolvedValue("new-id"),
+  openWorkspace: vi.fn().mockResolvedValue({
+    id: "new-id",
+    name: "Test",
+    created_at: "",
+    last_opened: "",
+  }),
+  deleteWorkspace: vi.fn().mockResolvedValue(undefined),
+  readDocument: vi.fn().mockResolvedValue(""),
+  writeDocument: vi.fn().mockResolvedValue(undefined),
+  createDocument: vi.fn().mockResolvedValue(undefined),
+  createFolder: vi.fn().mockResolvedValue(undefined),
+  listTree: vi.fn().mockResolvedValue([]),
+}));
+
+describe("App", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useWorkspaceStore.setState({
+      activeWorkspace: null,
+      workspaces: [],
+      currentBranch: "main",
+      mergeState: null,
+    });
+  });
+
+  it("renders workspace picker when no active workspace", () => {
+    render(<App />);
+    expect(screen.getByText("Open a workspace")).toBeDefined();
+  });
+
+  it("renders app shell when workspace is active", () => {
+    useWorkspaceStore.setState({
+      activeWorkspace: {
+        id: "ws-1",
+        name: "Test",
+        created_at: "",
+        last_opened: "",
+      },
+    });
+    render(<App />);
+    expect(screen.getAllByText("No document open").length).toBeGreaterThan(0);
+  });
 });
