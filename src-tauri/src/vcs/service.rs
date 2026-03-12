@@ -13,6 +13,12 @@ pub struct CommitInfo {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct BranchInfo {
+    pub name: String,
+    pub head_oid: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct FileStatus {
     pub path: String,
     pub status: String, // "new", "modified", "deleted"
@@ -103,6 +109,37 @@ impl VcsService {
         }
         Ok(result)
     }
+
+    pub fn create_branch(&self, repo: &Repository, name: &str) -> Result<(), AppError> {
+        let head = repo.head()?.peel_to_commit()?;
+        if repo.find_branch(name, git2::BranchType::Local).is_ok() {
+            return Err(AppError::BranchAlreadyExists {
+                name: name.to_string(),
+            });
+        }
+        repo.branch(name, &head, false)?;
+        Ok(())
+    }
+
+    pub fn list_branches(&self, repo: &Repository) -> Result<Vec<BranchInfo>, AppError> {
+        let mut branches = Vec::new();
+        for branch in repo.branches(Some(git2::BranchType::Local))? {
+            let (branch, _) = branch?;
+            let name = branch.name()?.unwrap_or("").to_string();
+            let oid = branch.get().peel_to_commit()?.id().to_string();
+            branches.push(BranchInfo {
+                name,
+                head_oid: oid,
+            });
+        }
+        Ok(branches)
+    }
+
+    pub fn delete_branch(&self, repo: &Repository, name: &str) -> Result<(), AppError> {
+        let mut branch = repo.find_branch(name, git2::BranchType::Local)?;
+        branch.delete()?;
+        Ok(())
+    }
 }
 
 // Note on API design: VcsService methods take &Repository and &Path as parameters
@@ -187,5 +224,39 @@ mod tests {
         create_file(tmp.path(), "new.md", "new file");
         let status = svc.get_status(&repo).unwrap();
         assert!(status.len() >= 2);
+    }
+
+    #[test]
+    fn test_create_and_list_branches() {
+        let (tmp, svc, repo) = setup();
+        create_file(tmp.path(), "note.md", "content");
+        svc.commit(&repo, tmp.path(), "initial").unwrap();
+        svc.create_branch(&repo, "feature").unwrap();
+        let branches = svc.list_branches(&repo).unwrap();
+        let names: Vec<&str> = branches.iter().map(|b| b.name.as_str()).collect();
+        assert!(names.contains(&"main") || names.contains(&"master"));
+        assert!(names.contains(&"feature"));
+    }
+
+    #[test]
+    fn test_create_duplicate_branch_errors() {
+        let (tmp, svc, repo) = setup();
+        create_file(tmp.path(), "note.md", "content");
+        svc.commit(&repo, tmp.path(), "initial").unwrap();
+        svc.create_branch(&repo, "feature").unwrap();
+        let result = svc.create_branch(&repo, "feature");
+        assert!(matches!(result, Err(AppError::BranchAlreadyExists { .. })));
+    }
+
+    #[test]
+    fn test_delete_branch() {
+        let (tmp, svc, repo) = setup();
+        create_file(tmp.path(), "note.md", "content");
+        svc.commit(&repo, tmp.path(), "initial").unwrap();
+        svc.create_branch(&repo, "temp").unwrap();
+        svc.delete_branch(&repo, "temp").unwrap();
+        let branches = svc.list_branches(&repo).unwrap();
+        let names: Vec<&str> = branches.iter().map(|b| b.name.as_str()).collect();
+        assert!(!names.contains(&"temp"));
     }
 }
