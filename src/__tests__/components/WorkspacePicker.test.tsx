@@ -1,8 +1,10 @@
-import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, waitFor, act } from "@testing-library/react";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { useWorkspaceStore } from "../../stores/workspace";
 import { WorkspacePicker } from "../../components/WorkspacePicker";
 import { openWorkspace, createWorkspace, deleteWorkspace } from "../../lib/tauri";
+import { useCommandStore } from "../../stores/commands";
+import { useFocusContextStore } from "../../stores/focus-context";
 
 vi.mock("../../lib/tauri", () => ({
   listWorkspaces: vi.fn(),
@@ -19,6 +21,8 @@ describe("WorkspacePicker", () => {
       currentBranch: "main",
       mergeState: null,
     });
+    useCommandStore.setState({ commands: new Map(), paletteOpen: false });
+    useFocusContextStore.setState({ activeRegion: "global" });
     vi.clearAllMocks();
   });
 
@@ -197,7 +201,9 @@ describe("WorkspacePicker", () => {
 
     it("shows input on Cmd+N", () => {
       render(<WorkspacePicker />);
-      fireEvent.keyDown(window, { key: "n", metaKey: true });
+      act(() => {
+        useCommandStore.getState().executeCommand("workspace.create");
+      });
       expect(screen.getByPlaceholderText("Workspace name...")).toBeDefined();
     });
 
@@ -270,14 +276,13 @@ describe("WorkspacePicker", () => {
       },
     ];
 
-    it("deletes workspace on Delete key after confirm", async () => {
+    it("deletes workspace on Delete key", async () => {
       useWorkspaceStore.setState({
         workspaces: twoWorkspaces,
         activeWorkspace: null,
         currentBranch: "main",
         mergeState: null,
       });
-      vi.spyOn(window, "confirm").mockReturnValue(true);
       vi.mocked(deleteWorkspace).mockResolvedValue(undefined);
 
       render(<WorkspacePicker />);
@@ -290,30 +295,13 @@ describe("WorkspacePicker", () => {
       });
     });
 
-    it("does not delete when confirm is cancelled", () => {
+    it("deletes workspace on Backspace key", async () => {
       useWorkspaceStore.setState({
         workspaces: twoWorkspaces,
         activeWorkspace: null,
         currentBranch: "main",
         mergeState: null,
       });
-      vi.spyOn(window, "confirm").mockReturnValue(false);
-
-      render(<WorkspacePicker />);
-
-      fireEvent.keyDown(window, { key: "Delete" });
-
-      expect(deleteWorkspace).not.toHaveBeenCalled();
-    });
-
-    it("deletes workspace on Backspace key after confirm", async () => {
-      useWorkspaceStore.setState({
-        workspaces: twoWorkspaces,
-        activeWorkspace: null,
-        currentBranch: "main",
-        mergeState: null,
-      });
-      vi.spyOn(window, "confirm").mockReturnValue(true);
       vi.mocked(deleteWorkspace).mockResolvedValue(undefined);
 
       render(<WorkspacePicker />);
@@ -332,7 +320,6 @@ describe("WorkspacePicker", () => {
         currentBranch: "main",
         mergeState: null,
       });
-      vi.spyOn(window, "confirm").mockReturnValue(true);
       vi.mocked(deleteWorkspace).mockRejectedValue(new Error("disk error"));
 
       render(<WorkspacePicker />);
@@ -353,6 +340,28 @@ describe("WorkspacePicker", () => {
       expect(screen.getByText(/navigate/)).toBeDefined();
       expect(screen.getByText(/open/)).toBeDefined();
       expect(screen.getAllByText(/new/).length).toBeGreaterThan(0);
+    });
+  });
+
+  describe("command registration", () => {
+    it("registers workspace.create command on mount", () => {
+      render(<WorkspacePicker />);
+      const cmd = useCommandStore.getState().commands.get("workspace.create");
+      expect(cmd).toBeDefined();
+      expect(cmd!.shortcut).toBe("Mod+N");
+      expect(cmd!.context).toBe("workspace-picker");
+    });
+
+    it("sets focus region to workspace-picker on mount", () => {
+      render(<WorkspacePicker />);
+      expect(useFocusContextStore.getState().activeRegion).toBe("workspace-picker");
+    });
+
+    it("unregisters commands on unmount", () => {
+      const { unmount } = render(<WorkspacePicker />);
+      expect(useCommandStore.getState().commands.has("workspace.create")).toBe(true);
+      unmount();
+      expect(useCommandStore.getState().commands.has("workspace.create")).toBe(false);
     });
   });
 

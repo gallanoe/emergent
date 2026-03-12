@@ -12,6 +12,8 @@ import { markdown } from "@codemirror/lang-markdown";
 import { defaultKeymap } from "@codemirror/commands";
 import { syntaxTree } from "@codemirror/language";
 import { useEditorStore } from "../stores/editor";
+import { useCommandStore } from "../stores/commands";
+import { useFocusContextStore } from "../stores/focus-context";
 
 class HeadingWidget extends WidgetType {
   constructor(readonly level: number) {
@@ -159,6 +161,22 @@ export function Editor({ content, path, onSave }: EditorProps) {
   );
 
   useEffect(() => {
+    useCommandStore.getState().registerCommand({
+      id: "document.save",
+      label: "Save Document",
+      shortcut: "Mod+S",
+      context: "editor" as const,
+      execute: () => {
+        if (viewRef.current) {
+          const content = viewRef.current.state.doc.toString();
+          onSave(content);
+        }
+      },
+    });
+    return () => useCommandStore.getState().unregisterCommand("document.save");
+  }, [onSave]);
+
+  useEffect(() => {
     if (!containerRef.current) return;
 
     const state = EditorState.create({
@@ -231,5 +249,11 @@ export function Editor({ content, path, onSave }: EditorProps) {
     };
   }, [path, content, markDirty, handleSave]);
 
-  return <div ref={containerRef} className="editor-content flex-1 overflow-auto" />;
+  return (
+    <div
+      ref={containerRef}
+      className="editor-content flex-1 overflow-auto"
+      onFocus={() => useFocusContextStore.getState().setActiveRegion("editor")}
+    />
+  );
 }

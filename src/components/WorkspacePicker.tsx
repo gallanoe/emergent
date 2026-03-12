@@ -3,6 +3,8 @@ import { useWorkspaceStore } from "../stores/workspace";
 import { openWorkspace, createWorkspace, deleteWorkspace } from "../lib/tauri";
 import { useToastStore } from "./Toast";
 import type { WorkspaceMeta } from "../lib/tauri";
+import { useCommandStore } from "../stores/commands";
+import { useFocusContextStore } from "../stores/focus-context";
 
 function relativeTime(iso: string): string {
   const now = Date.now();
@@ -47,14 +49,22 @@ export function WorkspacePicker() {
   }, []);
 
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      const mod = e.metaKey || e.ctrlKey;
-      if (mod && e.key === "n") {
-        e.preventDefault();
-        setCreatingNew(true);
-        return;
-      }
+    useFocusContextStore.getState().setActiveRegion("workspace-picker");
+  }, []);
 
+  useEffect(() => {
+    useCommandStore.getState().registerCommand({
+      id: "workspace.create",
+      label: "New Workspace",
+      shortcut: "Mod+N",
+      context: "workspace-picker" as const,
+      execute: () => setCreatingNew(true),
+    });
+    return () => useCommandStore.getState().unregisterCommand("workspace.create");
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
       if (creatingNew) return;
 
       if (e.key === "ArrowDown") {
@@ -66,8 +76,9 @@ export function WorkspacePicker() {
       } else if (e.key === "Enter") {
         if (sorted[selectedIndex]) handleOpen(sorted[selectedIndex]);
       } else if ((e.key === "Delete" || e.key === "Backspace") && sorted.length > 0) {
+        e.preventDefault();
         const ws = sorted[selectedIndex];
-        if (ws && window.confirm(`Delete workspace '${ws.name}'? This cannot be undone.`)) {
+        if (ws) {
           deleteWorkspace(ws.id)
             .then(() => {
               const remaining = useWorkspaceStore
@@ -77,6 +88,7 @@ export function WorkspacePicker() {
               setSelectedIndex((i) =>
                 remaining.length === 0 ? 0 : Math.min(i, remaining.length - 1),
               );
+              useToastStore.getState().addToast(`Deleted "${ws.name}"`, "info");
             })
             .catch((err) => {
               useToastStore
