@@ -230,7 +230,7 @@ export function WorkspacePicker() {
           )}
         </div>
 
-        <div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <span
             onClick={() => setCreatingNew(true)}
             style={{
@@ -240,6 +240,50 @@ export function WorkspacePicker() {
           >
             New workspace
           </span>
+          <div style={{ display: "flex", gap: 12 }}>
+            <span
+              style={{
+                color: "var(--color-fg-disabled)",
+                fontSize: 10,
+                fontFamily: "var(--font-mono)",
+              }}
+            >
+              <span
+                style={{ background: "var(--color-bg-hover)", padding: "1px 4px", borderRadius: 2 }}
+              >
+                {"↑↓"}
+              </span>
+              {" navigate"}
+            </span>
+            <span
+              style={{
+                color: "var(--color-fg-disabled)",
+                fontSize: 10,
+                fontFamily: "var(--font-mono)",
+              }}
+            >
+              <span
+                style={{ background: "var(--color-bg-hover)", padding: "1px 4px", borderRadius: 2 }}
+              >
+                {"↵"}
+              </span>
+              {" open"}
+            </span>
+            <span
+              style={{
+                color: "var(--color-fg-disabled)",
+                fontSize: 10,
+                fontFamily: "var(--font-mono)",
+              }}
+            >
+              <span
+                style={{ background: "var(--color-bg-hover)", padding: "1px 4px", borderRadius: 2 }}
+              >
+                {"⌘N"}
+              </span>
+              {" new"}
+            </span>
+          </div>
         </div>
       </div>
     </div>

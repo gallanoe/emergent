@@ -347,6 +347,15 @@ describe("WorkspacePicker", () => {
     });
   });
 
+  describe("Task 7: keyboard hints", () => {
+    it("renders keyboard hints", () => {
+      render(<WorkspacePicker />);
+      expect(screen.getByText(/navigate/)).toBeDefined();
+      expect(screen.getByText(/open/)).toBeDefined();
+      expect(screen.getAllByText(/new/).length).toBeGreaterThan(0);
+    });
+  });
+
   describe("Task 6: click interaction", () => {
     it("selects workspace on click", () => {
       useWorkspaceStore.setState({
