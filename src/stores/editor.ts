@@ -14,6 +14,7 @@ type EditorState = {
   setActiveTab: (path: string) => void;
   markDirty: (path: string) => void;
   markClean: (path: string) => void;
+  updateTabPath: (oldPath: string, newPath: string) => void;
 };
 
 export const useEditorStore = create<EditorState>((set, get) => ({
@@ -59,5 +60,41 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const newDirty = new Set(get().dirtyTabs);
     newDirty.delete(path);
     set({ dirtyTabs: newDirty });
+  },
+
+  updateTabPath: (oldPath: string, newPath: string) => {
+    const { openTabs, activeTab, dirtyTabs } = get();
+
+    // Check if this is an exact file match or a folder prefix
+    const isExactMatch = openTabs.some((t) => t.path === oldPath);
+    const isFolderRename = !isExactMatch && openTabs.some((t) => t.path.startsWith(oldPath + "/"));
+
+    if (!isExactMatch && !isFolderRename) return;
+
+    const newDirty = new Set<string>();
+    const newTabs = openTabs.map((t) => {
+      let newTabPath: string;
+      if (isExactMatch && t.path === oldPath) {
+        newTabPath = newPath;
+      } else if (isFolderRename && t.path.startsWith(oldPath + "/")) {
+        newTabPath = newPath + t.path.slice(oldPath.length);
+      } else {
+        if (dirtyTabs.has(t.path)) newDirty.add(t.path);
+        return t;
+      }
+      if (dirtyTabs.has(t.path)) newDirty.add(newTabPath);
+      return { path: newTabPath, name: newTabPath.split("/").pop() ?? newTabPath };
+    });
+
+    let newActive = activeTab;
+    if (activeTab) {
+      if (isExactMatch && activeTab === oldPath) {
+        newActive = newPath;
+      } else if (isFolderRename && activeTab.startsWith(oldPath + "/")) {
+        newActive = newPath + activeTab.slice(oldPath.length);
+      }
+    }
+
+    set({ openTabs: newTabs, activeTab: newActive, dirtyTabs: newDirty });
   },
 }));
