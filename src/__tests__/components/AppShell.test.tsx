@@ -3,6 +3,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { useWorkspaceStore } from "../../stores/workspace";
 import { useEditorStore } from "../../stores/editor";
 import { useFileTreeStore } from "../../stores/file-tree";
+import { useCommandStore } from "../../stores/commands";
+import { useUIStore } from "../../stores/ui";
 import { AppShell } from "../../components/AppShell";
 import { listTree, readDocument, onTreeChanged, onDocumentChanged } from "../../lib/tauri";
 
@@ -44,12 +46,16 @@ describe("AppShell — event wiring", () => {
       expandedPaths: new Set(),
       selectedPath: null,
       loading: false,
+      pendingCreation: null,
+      pendingRename: null,
     });
     useEditorStore.setState({
       openTabs: [],
       activeTab: null,
       dirtyTabs: new Set(),
     });
+    useCommandStore.setState({ commands: new Map(), paletteOpen: false });
+    useUIStore.setState({ sidebarCollapsed: false });
   });
 
   afterEach(() => {
@@ -148,6 +154,8 @@ describe("AppShell — empty workspace state", () => {
       activeTab: null,
       dirtyTabs: new Set(),
     });
+    useCommandStore.setState({ commands: new Map(), paletteOpen: false });
+    useUIStore.setState({ sidebarCollapsed: false });
   });
 
   afterEach(() => {
@@ -181,5 +189,96 @@ describe("AppShell — empty workspace state", () => {
       expect(screen.getByText("No document open")).toBeDefined();
     });
     expect(screen.queryByText("Create your first document")).toBeNull();
+  });
+});
+
+describe("command registration", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useWorkspaceStore.setState({
+      activeWorkspace: { id: "ws-1", name: "Test", created_at: "", last_opened: "" },
+      workspaces: [],
+      currentBranch: "main",
+      mergeState: null,
+    });
+    useFileTreeStore.setState({
+      tree: [],
+      expandedPaths: new Set(),
+      selectedPath: null,
+      loading: false,
+      pendingCreation: null,
+      pendingRename: null,
+    });
+    useEditorStore.setState({ openTabs: [], activeTab: null, dirtyTabs: new Set() });
+    useCommandStore.setState({ commands: new Map(), paletteOpen: false });
+    useUIStore.setState({ sidebarCollapsed: false });
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("registers sidebar.toggle command on mount", () => {
+    render(<AppShell />);
+    const cmd = useCommandStore.getState().commands.get("sidebar.toggle");
+    expect(cmd).toBeDefined();
+    expect(cmd!.shortcut).toBe("Mod+B");
+    expect(cmd!.context).toBe("global");
+  });
+
+  it("registers tab.close command on mount", () => {
+    render(<AppShell />);
+    const cmd = useCommandStore.getState().commands.get("tab.close");
+    expect(cmd).toBeDefined();
+    expect(cmd!.shortcut).toBe("Mod+W");
+  });
+
+  it("registers file.create command on mount", () => {
+    render(<AppShell />);
+    const cmd = useCommandStore.getState().commands.get("file.create");
+    expect(cmd).toBeDefined();
+    expect(cmd!.shortcut).toBe("Mod+N");
+  });
+
+  it("registers folder.create command on mount", () => {
+    render(<AppShell />);
+    const cmd = useCommandStore.getState().commands.get("folder.create");
+    expect(cmd).toBeDefined();
+    expect(cmd!.shortcut).toBe("Mod+Shift+N");
+  });
+
+  it("sidebar.toggle command toggles sidebar via UI store", () => {
+    render(<AppShell />);
+    expect(useUIStore.getState().sidebarCollapsed).toBe(false);
+    useCommandStore.getState().executeCommand("sidebar.toggle");
+    expect(useUIStore.getState().sidebarCollapsed).toBe(true);
+  });
+
+  it("file.create command sets pendingCreation in file-tree store", () => {
+    render(<AppShell />);
+    useCommandStore.getState().executeCommand("file.create");
+    expect(useFileTreeStore.getState().pendingCreation).toEqual({
+      type: "file",
+      parentPath: "",
+    });
+  });
+
+  it("folder.create command sets pendingCreation in file-tree store", () => {
+    render(<AppShell />);
+    useCommandStore.getState().executeCommand("folder.create");
+    expect(useFileTreeStore.getState().pendingCreation).toEqual({
+      type: "folder",
+      parentPath: "",
+    });
+  });
+
+  it("unregisters commands on unmount", () => {
+    const { unmount } = render(<AppShell />);
+    expect(useCommandStore.getState().commands.size).toBeGreaterThan(0);
+    unmount();
+    expect(useCommandStore.getState().commands.has("sidebar.toggle")).toBe(false);
+    expect(useCommandStore.getState().commands.has("tab.close")).toBe(false);
+    expect(useCommandStore.getState().commands.has("file.create")).toBe(false);
+    expect(useCommandStore.getState().commands.has("folder.create")).toBe(false);
   });
 });
