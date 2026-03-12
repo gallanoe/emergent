@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import { Sidebar } from "./Sidebar";
 import { TabBar } from "./TabBar";
 import { StatusBar } from "./StatusBar";
+import { ToastContainer } from "./Toast";
 
 export function AppShell() {
   const [sidebarWidth, setSidebarWidth] = useState(220);
@@ -39,6 +40,7 @@ export function AppShell() {
         </div>
       </div>
       <StatusBar />
+      <ToastContainer />
     </div>
   );
 }
