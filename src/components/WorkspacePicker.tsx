@@ -201,6 +201,7 @@ export function WorkspacePicker() {
                 role="option"
                 aria-selected={i === selectedIndex}
                 onClick={() => setSelectedIndex(i)}
+                onDoubleClick={() => handleOpen(ws)}
                 style={{
                   display: "flex",
                   alignItems: "center",

@@ -346,4 +346,60 @@ describe("WorkspacePicker", () => {
       expect(screen.getByText("Beta")).toBeDefined();
     });
   });
+
+  describe("Task 6: click interaction", () => {
+    it("selects workspace on click", () => {
+      useWorkspaceStore.setState({
+        workspaces: [
+          {
+            id: "a",
+            name: "First",
+            created_at: "2024-01-01T00:00:00Z",
+            last_opened: "2024-06-01T00:00:00Z",
+          },
+          {
+            id: "b",
+            name: "Second",
+            created_at: "2024-01-01T00:00:00Z",
+            last_opened: "2024-01-01T00:00:00Z",
+          },
+        ],
+        activeWorkspace: null,
+        currentBranch: "main",
+        mergeState: null,
+      });
+      render(<WorkspacePicker />);
+      const items = screen.getAllByRole("option");
+      fireEvent.click(items[1]!);
+      expect(items[1]?.getAttribute("aria-selected")).toBe("true");
+    });
+
+    it("opens workspace on double-click", async () => {
+      useWorkspaceStore.setState({
+        workspaces: [
+          {
+            id: "ws-1",
+            name: "Test",
+            created_at: "2024-01-01T00:00:00Z",
+            last_opened: "2024-06-01T00:00:00Z",
+          },
+        ],
+        activeWorkspace: null,
+        currentBranch: "main",
+        mergeState: null,
+      });
+      vi.mocked(openWorkspace).mockResolvedValue({
+        id: "ws-1",
+        name: "Test",
+        created_at: "2024-01-01T00:00:00Z",
+        last_opened: "2024-06-01T00:00:00Z",
+      });
+      render(<WorkspacePicker />);
+      const items = screen.getAllByRole("option");
+      fireEvent.doubleClick(items[0]!);
+      await waitFor(() => {
+        expect(openWorkspace).toHaveBeenCalledWith("ws-1");
+      });
+    });
+  });
 });
