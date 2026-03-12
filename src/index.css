@@ -98,6 +98,24 @@ input,
   animation: fade-in 150ms ease-out;
 }
 
+.interactive {
+  cursor: default;
+  transition: background-color 100ms ease-out;
+}
+
+.interactive:hover {
+  background-color: var(--color-bg-hover);
+}
+
+.interactive:active {
+  background-color: var(--color-bg-active);
+}
+
+.interactive:focus-visible {
+  outline: 1px solid var(--color-accent);
+  outline-offset: -1px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

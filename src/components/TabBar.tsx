@@ -21,7 +21,7 @@ export function TabBar() {
           <div
             key={tab.path}
             onClick={() => setActiveTab(tab.path)}
-            className="group flex cursor-default items-center gap-2 px-3"
+            className="interactive group flex items-center gap-2 px-3"
             style={{
               fontSize: 13,
               color: isActive ? "var(--color-fg-heading)" : "var(--color-fg-muted)",
@@ -46,7 +46,7 @@ export function TabBar() {
                 e.stopPropagation();
                 closeTab(tab.path);
               }}
-              className="opacity-0 group-hover:opacity-100"
+              className="interactive opacity-0 group-hover:opacity-100"
               style={{
                 fontSize: 10,
                 color: "var(--color-fg-muted)",

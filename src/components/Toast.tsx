@@ -75,12 +75,12 @@ export function ToastContainer() {
                 toast.action!.onClick();
                 removeToast(toast.id);
               }}
+              className="interactive"
               style={{
                 background: "none",
                 border: "none",
                 color: "var(--color-accent-text)",
                 fontSize: 12,
-                cursor: "default",
                 padding: "2px 6px",
               }}
             >
@@ -89,10 +89,10 @@ export function ToastContainer() {
           )}
           <span
             onClick={() => removeToast(toast.id)}
+            className="interactive"
             style={{
               color: "var(--color-fg-muted)",
               fontSize: 10,
-              cursor: "default",
             }}
           >
             ×

@@ -103,13 +103,13 @@ export function ContextMenu({ x, y, items, onAction, onClose }: ContextMenuProps
               onAction(item.action);
               onClose();
             }}
+            className="interactive"
             style={{
               height: 28,
               display: "flex",
               alignItems: "center",
               padding: "0 12px",
               fontSize: 13,
-              cursor: "default",
               color: isFocused ? "var(--color-fg-heading)" : "var(--color-fg-default)",
               background: isFocused ? "var(--color-bg-active)" : "transparent",
             }}

@@ -376,7 +376,7 @@ function FileTreeNode({
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
         onContextMenu={(e) => onContextMenu(e, node)}
-        className="flex cursor-default items-center px-2"
+        className="interactive flex items-center px-2"
         style={{
           height: ITEM_HEIGHT,
           paddingLeft: depth * INDENT + 8,
