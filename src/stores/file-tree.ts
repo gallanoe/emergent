@@ -2,10 +2,11 @@ import { create } from "zustand";
 import type { TreeNode } from "../lib/tauri";
 
 function deepCopyTree(tree: TreeNode[]): TreeNode[] {
-  return tree.map((node) => ({
-    ...node,
-    children: node.children ? deepCopyTree(node.children) : undefined,
-  }));
+  return tree.map((node) => {
+    const copy: TreeNode = { name: node.name, path: node.path, kind: node.kind };
+    if (node.children) copy.children = deepCopyTree(node.children);
+    return copy;
+  });
 }
 
 type FileTreeState = {
