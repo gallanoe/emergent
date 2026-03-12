@@ -2,7 +2,7 @@ import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/re
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { useWorkspaceStore } from "../../stores/workspace";
 import { WorkspacePicker } from "../../components/WorkspacePicker";
-import { openWorkspace } from "../../lib/tauri";
+import { openWorkspace, createWorkspace } from "../../lib/tauri";
 
 vi.mock("../../lib/tauri", () => ({
   listWorkspaces: vi.fn(),
@@ -184,6 +184,55 @@ describe("WorkspacePicker", () => {
 
       await waitFor(() => {
         expect(openWorkspace).toHaveBeenCalledWith("b");
+      });
+    });
+  });
+
+  describe("Task 4: inline new workspace creation", () => {
+    it("shows input when clicking New workspace", () => {
+      render(<WorkspacePicker />);
+      fireEvent.click(screen.getByText("New workspace"));
+      expect(screen.getByPlaceholderText("Workspace name...")).toBeDefined();
+    });
+
+    it("shows input on Cmd+N", () => {
+      render(<WorkspacePicker />);
+      fireEvent.keyDown(window, { key: "n", metaKey: true });
+      expect(screen.getByPlaceholderText("Workspace name...")).toBeDefined();
+    });
+
+    it("hides input on Escape", () => {
+      render(<WorkspacePicker />);
+      fireEvent.click(screen.getByText("New workspace"));
+      const input = screen.getByPlaceholderText("Workspace name...");
+      expect(input).toBeDefined();
+
+      fireEvent.keyDown(input, { key: "Escape" });
+      expect(screen.queryByPlaceholderText("Workspace name...")).toBeNull();
+    });
+
+    it("creates and opens workspace on Enter in input", async () => {
+      vi.mocked(createWorkspace).mockResolvedValue("new-id");
+      const mockMeta = {
+        id: "new-id",
+        name: "My Project",
+        created_at: "2024-06-01T00:00:00Z",
+        last_opened: "2024-06-01T00:00:00Z",
+      };
+      vi.mocked(openWorkspace).mockResolvedValue(mockMeta);
+
+      render(<WorkspacePicker />);
+      fireEvent.click(screen.getByText("New workspace"));
+      const input = screen.getByPlaceholderText("Workspace name...");
+
+      fireEvent.change(input, { target: { value: "My Project" } });
+      fireEvent.keyDown(input, { key: "Enter" });
+
+      await waitFor(() => {
+        expect(createWorkspace).toHaveBeenCalledWith("My Project");
+      });
+      await waitFor(() => {
+        expect(openWorkspace).toHaveBeenCalledWith("new-id");
       });
     });
   });

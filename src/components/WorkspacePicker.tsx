@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useWorkspaceStore } from "../stores/workspace";
-import { openWorkspace } from "../lib/tauri";
+import { openWorkspace, createWorkspace } from "../lib/tauri";
 import { useToastStore } from "./Toast";
 import type { WorkspaceMeta } from "../lib/tauri";
 
@@ -25,6 +25,8 @@ export function WorkspacePicker() {
   );
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [creatingNew, setCreatingNew] = useState(false);
+  const [newName, setNewName] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const handleOpen = useCallback(async (ws: WorkspaceMeta) => {
     try {
@@ -40,6 +42,13 @@ export function WorkspacePicker() {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (mod && e.key === "n") {
+        e.preventDefault();
+        setCreatingNew(true);
+        return;
+      }
+
       if (creatingNew) return;
 
       if (e.key === "ArrowDown") {
@@ -56,6 +65,35 @@ export function WorkspacePicker() {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [creatingNew, sorted, selectedIndex, handleOpen]);
+
+  useEffect(() => {
+    if (creatingNew) inputRef.current?.focus();
+  }, [creatingNew]);
+
+  const handleCreate = useCallback(async (name: string) => {
+    try {
+      const id = await createWorkspace(name);
+      const meta = await openWorkspace(id);
+      useWorkspaceStore.getState().setActiveWorkspace(meta);
+    } catch (err) {
+      useToastStore.getState().addToast(
+        `Failed to create workspace: ${err instanceof Error ? err.message : String(err)}`,
+        "error",
+      );
+    }
+  }, []);
+
+  const handleInputKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === "Escape") {
+        setCreatingNew(false);
+        setNewName("");
+      } else if (e.key === "Enter" && newName.trim()) {
+        handleCreate(newName.trim());
+      }
+    },
+    [newName, handleCreate],
+  );
 
   return (
     <div
@@ -97,6 +135,27 @@ export function WorkspacePicker() {
             overflow: "hidden",
           }}
         >
+          {creatingNew && (
+            <input
+              ref={inputRef}
+              type="text"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              onKeyDown={handleInputKeyDown}
+              placeholder="Workspace name..."
+              style={{
+                width: "100%",
+                padding: "8px 12px",
+                background: "var(--color-bg-base)",
+                border: "none",
+                borderBottom: "1px solid var(--color-border-default)",
+                color: "var(--color-fg-heading)",
+                fontSize: 13,
+                outline: "none",
+                boxSizing: "border-box",
+              }}
+            />
+          )}
           {sorted.length === 0 ? (
             <div
               style={{
@@ -144,6 +203,7 @@ export function WorkspacePicker() {
 
         <div>
           <span
+            onClick={() => setCreatingNew(true)}
             style={{
               fontSize: 12,
               color: "var(--color-accent-text)",
