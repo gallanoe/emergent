@@ -29,3 +29,9 @@ tokio = { version = "1", features = ["full"] }
 futures = "0.3"
 nanoid = "0.4"
 eyre = "0.6"
+git2 = { version = "0.20", features = ["vendored-libgit2"] }
+thiserror = "2"
+chrono = { version = "0.4", features = ["serde"] }
+
+[dev-dependencies]
+tempfile = "3"
