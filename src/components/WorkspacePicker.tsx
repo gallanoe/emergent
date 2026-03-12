@@ -1,5 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useWorkspaceStore } from "../stores/workspace";
+import { openWorkspace } from "../lib/tauri";
+import { useToastStore } from "./Toast";
+import type { WorkspaceMeta } from "../lib/tauri";
 
 function relativeTime(iso: string): string {
   const now = Date.now();
@@ -21,6 +24,38 @@ export function WorkspacePicker() {
     (a, b) => new Date(b.last_opened).getTime() - new Date(a.last_opened).getTime(),
   );
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [creatingNew, setCreatingNew] = useState(false);
+
+  const handleOpen = useCallback(async (ws: WorkspaceMeta) => {
+    try {
+      const meta = await openWorkspace(ws.id);
+      useWorkspaceStore.getState().setActiveWorkspace(meta);
+    } catch (err) {
+      useToastStore.getState().addToast(
+        `Failed to open workspace: ${err instanceof Error ? err.message : String(err)}`,
+        "error",
+      );
+    }
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (creatingNew) return;
+
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setSelectedIndex((i) => (i + 1) % sorted.length);
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setSelectedIndex((i) => (i - 1 + sorted.length) % sorted.length);
+      } else if (e.key === "Enter") {
+        if (sorted[selectedIndex]) handleOpen(sorted[selectedIndex]);
+      }
+    };
+
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [creatingNew, sorted, selectedIndex, handleOpen]);
 
   return (
     <div
