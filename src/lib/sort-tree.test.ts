@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { sortTree } from "../../lib/sort-tree";
-import type { TreeNode } from "../../lib/tauri";
+import { sortTree } from "./sort-tree";
+import type { TreeNode } from "./tauri";
 
 describe("sortTree", () => {
   it("sorts folders before files", () => {

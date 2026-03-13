@@ -4,7 +4,11 @@
   import { toastStore } from "../stores/toast.svelte";
   import { commandStore } from "../stores/commands.svelte";
   import { focusContextStore } from "../stores/focus-context.svelte";
-  import { openWorkspace, createWorkspace, deleteWorkspace } from "../lib/tauri";
+  import {
+    openWorkspace,
+    createWorkspace,
+    deleteWorkspace,
+  } from "../lib/tauri";
   import type { WorkspaceMeta } from "../lib/tauri";
 
   function relativeTime(iso: string): string {
@@ -28,7 +32,8 @@
 
   const sorted = $derived(
     [...workspaceStore.workspaces].sort(
-      (a, b) => new Date(b.last_opened).getTime() - new Date(a.last_opened).getTime(),
+      (a, b) =>
+        new Date(b.last_opened).getTime() - new Date(a.last_opened).getTime(),
     ),
   );
 
@@ -40,7 +45,9 @@
       label: "New Workspace",
       shortcut: "Mod+N",
       context: "workspace-picker" as const,
-      execute: () => { creatingNew = true; },
+      execute: () => {
+        creatingNew = true;
+      },
     });
 
     return () => {
@@ -94,21 +101,31 @@
 
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      if (sorted.length > 0) selectedIndex = (selectedIndex + 1) % sorted.length;
+      if (sorted.length > 0)
+        selectedIndex = (selectedIndex + 1) % sorted.length;
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      if (sorted.length > 0) selectedIndex = (selectedIndex - 1 + sorted.length) % sorted.length;
+      if (sorted.length > 0)
+        selectedIndex = (selectedIndex - 1 + sorted.length) % sorted.length;
     } else if (e.key === "Enter") {
-      if (sorted[selectedIndex]) handleOpen(sorted[selectedIndex]);
-    } else if ((e.key === "Delete" || e.key === "Backspace") && sorted.length > 0) {
+      if (sorted[selectedIndex]) handleOpen(sorted[selectedIndex]!);
+    } else if (
+      (e.key === "Delete" || e.key === "Backspace") &&
+      sorted.length > 0
+    ) {
       e.preventDefault();
       const ws = sorted[selectedIndex];
       if (ws) {
         deleteWorkspace(ws.id)
           .then(() => {
-            const remaining = workspaceStore.workspaces.filter((w) => w.id !== ws.id);
+            const remaining = workspaceStore.workspaces.filter(
+              (w) => w.id !== ws.id,
+            );
             workspaceStore.setWorkspaces(remaining);
-            selectedIndex = remaining.length === 0 ? 0 : Math.min(selectedIndex, remaining.length - 1);
+            selectedIndex =
+              remaining.length === 0
+                ? 0
+                : Math.min(selectedIndex, remaining.length - 1);
             toastStore.addToast(`Deleted "${ws.name}"`, "info");
           })
           .catch((err) => {
@@ -166,14 +183,21 @@
           <div
             role="option"
             aria-selected={i === selectedIndex}
-            onclick={() => { selectedIndex = i; }}
+            onclick={() => {
+              selectedIndex = i;
+            }}
             ondblclick={() => handleOpen(ws)}
-            style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; cursor: default; border-bottom: {i < sorted.length - 1 ? '1px solid var(--color-border-default)' : 'none'}; background: {i === selectedIndex ? 'var(--color-bg-selected)' : 'transparent'}; color: {i === selectedIndex ? 'var(--color-fg-heading)' : 'var(--color-fg-default)'}; min-height: 34px;"
+            style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; cursor: default; border-bottom: {i <
+            sorted.length - 1
+              ? '1px solid var(--color-border-default)'
+              : 'none'}; background: {i === selectedIndex
+              ? 'var(--color-bg-selected)'
+              : 'transparent'}; color: {i === selectedIndex
+              ? 'var(--color-fg-heading)'
+              : 'var(--color-fg-default)'}; min-height: 34px;"
           >
             <span style="font-size: 13px;">{ws.name}</span>
-            <span
-              style="font-size: 11px; color: var(--color-fg-disabled);"
-            >
+            <span style="font-size: 11px; color: var(--color-fg-disabled);">
               {relativeTime(ws.last_opened)}
             </span>
           </div>
@@ -181,9 +205,13 @@
       {/if}
     </div>
 
-    <div style="display: flex; align-items: center; justify-content: space-between;">
+    <div
+      style="display: flex; align-items: center; justify-content: space-between;"
+    >
       <span
-        onclick={() => { creatingNew = true; }}
+        onclick={() => {
+          creatingNew = true;
+        }}
         style="font-size: 12px; color: var(--color-accent-text);"
       >
         New workspace
@@ -192,7 +220,9 @@
         <span
           style="color: var(--color-fg-disabled); font-size: 10px; font-family: var(--font-mono);"
         >
-          <span style="background: var(--color-bg-hover); padding: 1px 4px; border-radius: 2px;">
+          <span
+            style="background: var(--color-bg-hover); padding: 1px 4px; border-radius: 2px;"
+          >
             {"\u2191\u2193"}
           </span>
           {" navigate"}
@@ -200,7 +230,9 @@
         <span
           style="color: var(--color-fg-disabled); font-size: 10px; font-family: var(--font-mono);"
         >
-          <span style="background: var(--color-bg-hover); padding: 1px 4px; border-radius: 2px;">
+          <span
+            style="background: var(--color-bg-hover); padding: 1px 4px; border-radius: 2px;"
+          >
             {"\u21B5"}
           </span>
           {" open"}
@@ -208,7 +240,9 @@
         <span
           style="color: var(--color-fg-disabled); font-size: 10px; font-family: var(--font-mono);"
         >
-          <span style="background: var(--color-bg-hover); padding: 1px 4px; border-radius: 2px;">
+          <span
+            style="background: var(--color-bg-hover); padding: 1px 4px; border-radius: 2px;"
+          >
             {"\u2318N"}
           </span>
           {" new"}

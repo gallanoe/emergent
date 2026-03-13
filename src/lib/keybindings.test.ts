@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { normalizeShortcut, resolveCommand } from "../../lib/keybindings";
-import type { Command } from "../../stores/commands";
+import { normalizeShortcut, resolveCommand } from "./keybindings";
+import type { Command } from "../stores/commands.svelte";
 
 function makeKeyEvent(overrides: Partial<KeyboardEvent> = {}): KeyboardEvent {
   return {

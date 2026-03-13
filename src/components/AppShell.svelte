@@ -64,8 +64,12 @@
     const tab = editorStore.activeTab;
     if (tab) {
       readDocument(tab)
-        .then((c) => { editorContent = c; })
-        .catch(() => { editorContent = ""; });
+        .then((c) => {
+          editorContent = c;
+        })
+        .catch(() => {
+          editorContent = "";
+        });
     }
   });
 
@@ -77,15 +81,21 @@
     let unlistenTree: (() => void) | null = null;
     let unlistenDoc: (() => void) | null = null;
 
-    onTreeChanged(() => loadTree()).then((fn) => { unlistenTree = fn; });
+    onTreeChanged(() => loadTree()).then((fn) => {
+      unlistenTree = fn;
+    });
 
     onDocumentChanged(({ path }) => {
       if (editorStore.activeTab === path) {
         readDocument(path)
-          .then((c) => { editorContent = c; })
+          .then((c) => {
+            editorContent = c;
+          })
           .catch(() => {});
       }
-    }).then((fn) => { unlistenDoc = fn; });
+    }).then((fn) => {
+      unlistenDoc = fn;
+    });
 
     return () => {
       unlistenTree?.();
@@ -157,7 +167,9 @@
         context: "global" as const,
         execute: () => {
           focusContextStore.setActiveRegion("editor");
-          document.querySelector<HTMLElement>(".cm-editor .cm-content")?.focus();
+          document
+            .querySelector<HTMLElement>(".cm-editor .cm-content")
+            ?.focus();
         },
       },
     ];
@@ -179,13 +191,22 @@
 <div class="flex h-screen flex-col">
   <div class="flex flex-1 overflow-hidden">
     {#if !uiStore.sidebarCollapsed}
-      <Sidebar width={sidebarWidth} onwidthchange={(w) => { sidebarWidth = w; }} />
+      <Sidebar
+        width={sidebarWidth}
+        onwidthchange={(w) => {
+          sidebarWidth = w;
+        }}
+      />
     {/if}
     <div class="flex flex-1 flex-col overflow-hidden">
       <TabBar />
       <div class="flex-1 overflow-auto p-6">
         {#if editorStore.activeTab}
-          <Editor content={editorContent} path={editorStore.activeTab} onsave={handleSave} />
+          <Editor
+            content={editorContent}
+            path={editorStore.activeTab}
+            onsave={handleSave}
+          />
         {:else if fileTreeStore.tree.length === 0 && !fileTreeStore.loading}
           <div
             style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 4px;"

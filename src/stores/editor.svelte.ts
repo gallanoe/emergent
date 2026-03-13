@@ -27,9 +27,7 @@ class EditorStore {
 
     if (this.activeTab === path) {
       this.activeTab =
-        filtered.length === 0
-          ? null
-          : (filtered[Math.min(idx, filtered.length - 1)]?.path ?? null);
+        filtered.length === 0 ? null : (filtered[Math.min(idx, filtered.length - 1)]?.path ?? null);
     }
     this.openTabs = filtered;
   }

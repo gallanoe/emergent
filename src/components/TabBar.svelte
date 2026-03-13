@@ -13,7 +13,11 @@
       <div
         onclick={() => editorStore.setActiveTab(tab.path)}
         class="interactive group flex items-center gap-2 px-3"
-        style="font-size: 13px; color: {isActive ? 'var(--color-fg-heading)' : 'var(--color-fg-muted)'}; border-bottom: {isActive ? '1px solid var(--color-accent)' : '1px solid transparent'}; white-space: nowrap;"
+        style="font-size: 13px; color: {isActive
+          ? 'var(--color-fg-heading)'
+          : 'var(--color-fg-muted)'}; border-bottom: {isActive
+          ? '1px solid var(--color-accent)'
+          : '1px solid transparent'}; white-space: nowrap;"
       >
         <span>{tab.name}</span>
         {#if isDirty}
@@ -24,8 +28,16 @@
         <span
           role="button"
           tabindex="0"
-          onclick={(e) => { e.stopPropagation(); editorStore.closeTab(tab.path); }}
-          onkeydown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); editorStore.closeTab(tab.path); } }}
+          onclick={(e) => {
+            e.stopPropagation();
+            editorStore.closeTab(tab.path);
+          }}
+          onkeydown={(e) => {
+            if (e.key === "Enter") {
+              e.stopPropagation();
+              editorStore.closeTab(tab.path);
+            }
+          }}
           class="interactive opacity-0 group-hover:opacity-100"
           style="font-size: 10px; color: var(--color-fg-muted); transition: opacity 100ms ease-out;"
         >

@@ -1,6 +1,6 @@
 // src/__tests__/stores/editor.test.ts
 import { describe, it, expect, beforeEach } from "vitest";
-import { editorStore } from "../../stores/editor.svelte";
+import { editorStore } from "./editor.svelte";
 
 describe("EditorStore (Svelte)", () => {
   beforeEach(() => {

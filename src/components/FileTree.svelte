@@ -31,7 +31,8 @@
   let treeEl: HTMLDivElement | undefined = $state();
   let dragging: string | null = $state(null);
   let dropTarget: string | null = $state(null);
-  let contextMenu: { x: number; y: number; target: TreeNode | null } | null = $state(null);
+  let contextMenu: { x: number; y: number; target: TreeNode | null } | null =
+    $state(null);
 
   function getMenuItems(target: TreeNode | null): MenuItem[] {
     if (target === null) {
@@ -79,7 +80,9 @@
 
     if (targetPath.startsWith(sourcePath + "/")) return;
 
-    const newPath = targetPath ? `${targetPath}/${sourceNode.name}` : sourceNode.name;
+    const newPath = targetPath
+      ? `${targetPath}/${sourceNode.name}`
+      : sourceNode.name;
 
     const snapshot = fileTreeStore.snapshotTree();
 
@@ -119,9 +122,14 @@
             label: "Confirm",
             onClick: async () => {
               const snapshot = fileTreeStore.snapshotTree();
-              fileTreeStore.setTree(removeNodeFromTree(fileTreeStore.tree, node.path));
+              fileTreeStore.setTree(
+                removeNodeFromTree(fileTreeStore.tree, node.path),
+              );
               for (const tab of editorStore.openTabs) {
-                if (tab.path === node.path || tab.path.startsWith(node.path + "/")) {
+                if (
+                  tab.path === node.path ||
+                  tab.path.startsWith(node.path + "/")
+                ) {
                   editorStore.closeTab(tab.path);
                 }
               }
@@ -227,7 +235,10 @@
       }
       case "new-file": {
         const parentPath = target?.kind === "folder" ? target.path : "";
-        if (target?.kind === "folder" && !fileTreeStore.expandedPaths.has(target.path)) {
+        if (
+          target?.kind === "folder" &&
+          !fileTreeStore.expandedPaths.has(target.path)
+        ) {
           fileTreeStore.toggleExpanded(target.path);
         }
         fileTreeStore.setPendingCreation({ type: "file", parentPath });
@@ -235,7 +246,10 @@
       }
       case "new-folder": {
         const parentPath = target?.kind === "folder" ? target.path : "";
-        if (target?.kind === "folder" && !fileTreeStore.expandedPaths.has(target.path)) {
+        if (
+          target?.kind === "folder" &&
+          !fileTreeStore.expandedPaths.has(target.path)
+        ) {
           fileTreeStore.toggleExpanded(target.path);
         }
         fileTreeStore.setPendingCreation({ type: "folder", parentPath });
@@ -287,7 +301,9 @@
   async function handleCreateConfirm(name: string) {
     const pending = fileTreeStore.pendingCreation;
     if (!pending) return;
-    const fullPath = pending.parentPath ? `${pending.parentPath}/${name}` : name;
+    const fullPath = pending.parentPath
+      ? `${pending.parentPath}/${name}`
+      : name;
     fileTreeStore.clearPendingCreation();
 
     try {
@@ -313,7 +329,11 @@
     const result: TreeNode[] = [];
     for (const node of nodes) {
       result.push(node);
-      if (node.kind === "folder" && fileTreeStore.expandedPaths.has(node.path) && node.children) {
+      if (
+        node.kind === "folder" &&
+        fileTreeStore.expandedPaths.has(node.path) &&
+        node.children
+      ) {
         result.push(...flattenVisible(node.children));
       }
     }
@@ -329,7 +349,8 @@
     switch (e.key) {
       case "ArrowDown":
         e.preventDefault();
-        if (idx < flat.length - 1) fileTreeStore.setSelected(flat[idx + 1]!.path);
+        if (idx < flat.length - 1)
+          fileTreeStore.setSelected(flat[idx + 1]!.path);
         break;
       case "ArrowUp":
         e.preventDefault();
@@ -349,7 +370,10 @@
         e.preventDefault();
         if (idx >= 0) {
           const node = flat[idx]!;
-          if (node.kind === "folder" && fileTreeStore.expandedPaths.has(node.path)) {
+          if (
+            node.kind === "folder" &&
+            fileTreeStore.expandedPaths.has(node.path)
+          ) {
             fileTreeStore.toggleExpanded(node.path);
           } else {
             const parentPath = node.path.includes("/")
@@ -365,7 +389,8 @@
         break;
       case "End":
         e.preventDefault();
-        if (flat.length > 0) fileTreeStore.setSelected(flat[flat.length - 1]!.path);
+        if (flat.length > 0)
+          fileTreeStore.setSelected(flat[flat.length - 1]!.path);
         break;
       case "Enter":
         e.preventDefault();
@@ -383,8 +408,12 @@
           const char = e.key.toLowerCase();
           const startIdx = idx >= 0 ? idx + 1 : 0;
           const match =
-            flat.slice(startIdx).find((n) => n.name.toLowerCase().startsWith(char)) ??
-            flat.slice(0, startIdx).find((n) => n.name.toLowerCase().startsWith(char));
+            flat
+              .slice(startIdx)
+              .find((n) => n.name.toLowerCase().startsWith(char)) ??
+            flat
+              .slice(0, startIdx)
+              .find((n) => n.name.toLowerCase().startsWith(char));
           if (match) fileTreeStore.setSelected(match.path);
         }
         break;
@@ -443,7 +472,10 @@
 </script>
 
 {#if fileTreeStore.tree.length === 0 && !fileTreeStore.pendingCreation}
-  <div class="px-3 py-4" style="font-size: 11px; color: var(--color-fg-disabled);">
+  <div
+    class="px-3 py-4"
+    style="font-size: 11px; color: var(--color-fg-disabled);"
+  >
     No files yet
   </div>
 {:else}
@@ -460,13 +492,17 @@
       if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
       dropTarget = "__root__";
     }}
-    ondragleave={() => { dropTarget = null; }}
+    ondragleave={() => {
+      dropTarget = null;
+    }}
     ondrop={(e) => {
       e.preventDefault();
       const sourcePath = e.dataTransfer?.getData("text/plain") ?? "";
       handleDrop(sourcePath, null);
     }}
-    style="outline: none; background: {dropTarget === '__root__' ? 'var(--color-bg-selected)' : 'transparent'};"
+    style="outline: none; background: {dropTarget === '__root__'
+      ? 'var(--color-bg-selected)'
+      : 'transparent'};"
   >
     {#if fileTreeStore.pendingCreation && fileTreeStore.pendingCreation.parentPath === ""}
       <CreationInput
@@ -491,9 +527,15 @@
         oncreatecancel={() => fileTreeStore.clearPendingCreation()}
         {dragging}
         {dropTarget}
-        ondragstart={(n) => { dragging = n.path; }}
-        ondragover={(n) => { dropTarget = n.path; }}
-        ondragleave={() => { dropTarget = null; }}
+        ondragstart={(n) => {
+          dragging = n.path;
+        }}
+        ondragover={(n) => {
+          dropTarget = n.path;
+        }}
+        ondragleave={() => {
+          dropTarget = null;
+        }}
         ondrop={(sourcePath, targetNode) => handleDrop(sourcePath, targetNode)}
       />
     {/each}
@@ -503,7 +545,9 @@
         y={contextMenu.y}
         items={getMenuItems(contextMenu.target)}
         onaction={handleContextAction}
-        onclose={() => { contextMenu = null; }}
+        onclose={() => {
+          contextMenu = null;
+        }}
       />
     {/if}
   </div>

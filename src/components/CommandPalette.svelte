@@ -46,7 +46,8 @@
       commandStore.closePalette();
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
-      if (filtered.length > 0) selectedIndex = Math.min(selectedIndex + 1, filtered.length - 1);
+      if (filtered.length > 0)
+        selectedIndex = Math.min(selectedIndex + 1, filtered.length - 1);
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       if (filtered.length > 0) selectedIndex = Math.max(selectedIndex - 1, 0);
@@ -87,7 +88,9 @@
         role="combobox"
         aria-expanded="true"
         aria-controls="palette-results"
-        aria-activedescendant={filtered[selectedIndex] ? `palette-item-${filtered[selectedIndex].id}` : ""}
+        aria-activedescendant={filtered[selectedIndex]
+          ? `palette-item-${filtered[selectedIndex]!.id}`
+          : ""}
         style="flex: 1; background: transparent; border: none; outline: none; color: #e0e0e3; font-size: 13px; font-family: inherit;"
       />
     </div>
@@ -106,11 +109,18 @@
             commandStore.closePalette();
             commandStore.executeCommand(cmd.id);
           }}
-          style="height: 28px; display: flex; align-items: center; padding: 0 14px; font-size: 13px; color: {i === selectedIndex ? '#e0e0e3' : '#ababae'}; background: {i === selectedIndex ? 'rgba(255,255,255,0.04)' : 'transparent'}; justify-content: space-between; cursor: default;"
+          style="height: 28px; display: flex; align-items: center; padding: 0 14px; font-size: 13px; color: {i ===
+          selectedIndex
+            ? '#e0e0e3'
+            : '#ababae'}; background: {i === selectedIndex
+            ? 'rgba(255,255,255,0.04)'
+            : 'transparent'}; justify-content: space-between; cursor: default;"
         >
           <span>{cmd.label}</span>
           {#if cmd.shortcut}
-            <span style="font-size: 11px; color: #6b6d7b; font-family: ui-monospace, monospace;">
+            <span
+              style="font-size: 11px; color: #6b6d7b; font-family: ui-monospace, monospace;"
+            >
               {formatShortcut(cmd.shortcut)}
             </span>
           {/if}

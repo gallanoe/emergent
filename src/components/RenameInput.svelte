@@ -37,8 +37,16 @@
   bind:this={inputEl}
   value={defaultValue}
   onkeydown={(e) => {
-    if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); doConfirm(e.currentTarget.value); }
-    else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); confirmed = true; oncancel(); }
+    if (e.key === "Enter") {
+      e.preventDefault();
+      e.stopPropagation();
+      doConfirm(e.currentTarget.value);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      confirmed = true;
+      oncancel();
+    }
   }}
   onblur={(e) => doConfirm(e.currentTarget.value)}
   onclick={(e) => e.stopPropagation()}

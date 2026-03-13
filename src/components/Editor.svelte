@@ -33,8 +33,10 @@
   // --- CodeMirror pure code (copied from React version) ---
 
   class HeadingWidget extends WidgetType {
-    constructor(readonly level: number) {
+    level: number;
+    constructor(level: number) {
       super();
+      this.level = level;
     }
     toDOM() {
       const span = document.createElement("span");
@@ -46,7 +48,10 @@
     }
   }
 
-  const headingStyles: Record<number, { fontSize: string; fontWeight: string }> = {
+  const headingStyles: Record<
+    number,
+    { fontSize: string; fontWeight: string }
+  > = {
     1: { fontSize: "24px", fontWeight: "700" },
     2: { fontSize: "20px", fontWeight: "600" },
     3: { fontSize: "16px", fontWeight: "600" },

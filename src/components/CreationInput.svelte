@@ -20,14 +20,24 @@
 </script>
 
 <div
-  style="height: 28px; display: flex; align-items: center; padding-left: {depth * 16 + 8}px; border-left: 2px solid var(--color-accent);"
+  style="height: 28px; display: flex; align-items: center; padding-left: {depth *
+    16 +
+    8}px; border-left: 2px solid var(--color-accent);"
 >
   <input
     autofocus
     placeholder={kind === "file" ? "untitled.md" : "New folder"}
     onkeydown={(e) => {
-      if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); doConfirm(e.currentTarget.value); }
-      else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); confirmed = true; oncancel(); }
+      if (e.key === "Enter") {
+        e.preventDefault();
+        e.stopPropagation();
+        doConfirm(e.currentTarget.value);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        confirmed = true;
+        oncancel();
+      }
     }}
     onblur={(e) => doConfirm(e.currentTarget.value)}
     onclick={(e) => e.stopPropagation()}

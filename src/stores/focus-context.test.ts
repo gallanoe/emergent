@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { focusContextStore } from "../../stores/focus-context.svelte";
+import { focusContextStore } from "./focus-context.svelte";
 
 describe("FocusContextStore (Svelte)", () => {
   beforeEach(() => {

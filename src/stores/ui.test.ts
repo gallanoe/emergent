@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { uiStore } from "../../stores/ui.svelte";
+import { uiStore } from "./ui.svelte";
 
 describe("UIStore (Svelte)", () => {
   beforeEach(() => {

@@ -1,6 +1,6 @@
 // src/__tests__/stores/file-tree.test.ts
 import { describe, it, expect, beforeEach } from "vitest";
-import { fileTreeStore } from "../../stores/file-tree.svelte";
+import { fileTreeStore } from "./file-tree.svelte";
 
 describe("FileTreeStore (Svelte)", () => {
   beforeEach(() => {

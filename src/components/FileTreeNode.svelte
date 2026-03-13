@@ -115,7 +115,19 @@
   ondblclick={handleDoubleClick}
   oncontextmenu={(e) => oncontextmenu(e, node)}
   class="interactive flex items-center px-2"
-  style="height: {ITEM_HEIGHT}px; padding-left: {depth * INDENT + 8}px; font-size: 13px; opacity: {dragging === node.path ? 0.5 : 1}; color: {isSelected ? 'var(--color-fg-heading)' : 'var(--color-fg-default)'}; background: {dropTarget === node.path && node.kind === 'folder' ? 'var(--color-bg-selected)' : isSelected ? 'var(--color-bg-hover)' : 'transparent'}; border-left: {isSelected ? '2px solid var(--color-accent)' : '2px solid transparent'}; transition: background 100ms ease-out;"
+  style="height: {ITEM_HEIGHT}px; padding-left: {depth * INDENT +
+    8}px; font-size: 13px; opacity: {dragging === node.path
+    ? 0.5
+    : 1}; color: {isSelected
+    ? 'var(--color-fg-heading)'
+    : 'var(--color-fg-default)'}; background: {dropTarget === node.path &&
+  node.kind === 'folder'
+    ? 'var(--color-bg-selected)'
+    : isSelected
+      ? 'var(--color-bg-hover)'
+      : 'transparent'}; border-left: {isSelected
+    ? '2px solid var(--color-accent)'
+    : '2px solid transparent'}; transition: background 100ms ease-out;"
   onmouseenter={(e) => {
     if (!isSelected && dropTarget !== node.path) {
       e.currentTarget.style.background = "var(--color-bg-hover)";
@@ -129,7 +141,9 @@
 >
   {#if isFolder}
     <span
-      style="font-size: 10px; color: var(--color-fg-muted); margin-right: 6px; display: inline-block; transform: {isExpanded ? 'rotate(90deg)' : 'rotate(0deg)'}; transition: transform 100ms ease-out;"
+      style="font-size: 10px; color: var(--color-fg-muted); margin-right: 6px; display: inline-block; transform: {isExpanded
+        ? 'rotate(90deg)'
+        : 'rotate(0deg)'}; transition: transform 100ms ease-out;"
     >
       &#9654;
     </span>

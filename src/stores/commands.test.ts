@@ -1,7 +1,7 @@
 // src/__tests__/stores/commands.test.ts
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { commandStore } from "../../stores/commands.svelte";
-import type { Command } from "../../stores/commands.svelte";
+import { commandStore } from "./commands.svelte";
+import type { Command } from "./commands.svelte";
 
 const makeCommand = (overrides: Partial<Command> = {}): Command => ({
   id: "test.command",
@@ -78,9 +78,7 @@ describe("CommandStore (Svelte)", () => {
     });
 
     it("returns multiple commands with same shortcut different contexts", () => {
-      commandStore.registerCommand(
-        makeCommand({ id: "a", shortcut: "Mod+N", context: "global" }),
-      );
+      commandStore.registerCommand(makeCommand({ id: "a", shortcut: "Mod+N", context: "global" }));
       commandStore.registerCommand(
         makeCommand({ id: "b", shortcut: "Mod+N", context: "workspace-picker" }),
       );

@@ -58,11 +58,7 @@ export function removeNodeFromTree(tree: TreeNode[], path: string): TreeNode[] {
     });
 }
 
-export function insertNodeInTree(
-  tree: TreeNode[],
-  parentPath: string,
-  node: TreeNode,
-): TreeNode[] {
+export function insertNodeInTree(tree: TreeNode[], parentPath: string, node: TreeNode): TreeNode[] {
   if (!parentPath) {
     return [...tree, node];
   }

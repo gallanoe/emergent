@@ -15,7 +15,9 @@
   >
     {#each toastStore.toasts as toast (toast.id)}
       <div
-        style="background: var(--color-bg-active); border: 1px solid var(--color-border-default); border-left: 3px solid {TYPE_COLORS[toast.type]}; border-radius: 4px; padding: 8px 12px; font-size: 13px; color: var(--color-fg-default); display: flex; align-items: center; gap: 8px; max-width: 360px; animation: toast-in 150ms ease-out;"
+        style="background: var(--color-bg-active); border: 1px solid var(--color-border-default); border-left: 3px solid {TYPE_COLORS[
+          toast.type
+        ]}; border-radius: 4px; padding: 8px 12px; font-size: 13px; color: var(--color-fg-default); display: flex; align-items: center; gap: 8px; max-width: 360px; animation: toast-in 150ms ease-out;"
       >
         <span style="flex: 1;">{toast.message}</span>
         {#if toast.action}
@@ -34,7 +36,9 @@
           role="button"
           tabindex="0"
           onclick={() => toastStore.removeToast(toast.id)}
-          onkeydown={(e) => { if (e.key === 'Enter') toastStore.removeToast(toast.id); }}
+          onkeydown={(e) => {
+            if (e.key === "Enter") toastStore.removeToast(toast.id);
+          }}
           class="interactive"
           style="color: var(--color-fg-muted); font-size: 10px;"
         >

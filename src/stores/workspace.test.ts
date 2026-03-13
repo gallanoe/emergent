@@ -1,6 +1,6 @@
 // src/__tests__/stores/workspace.test.ts
 import { describe, it, expect, beforeEach } from "vitest";
-import { workspaceStore } from "../../stores/workspace.svelte";
+import { workspaceStore } from "./workspace.svelte";
 
 describe("WorkspaceStore (Svelte)", () => {
   beforeEach(() => {
