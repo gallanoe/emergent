@@ -4,6 +4,7 @@
   import { editorStore } from "../stores/editor.svelte";
   import RenameInput from "./RenameInput.svelte";
   import CreationInput from "./CreationInput.svelte";
+  import FileTreeNode from "./FileTreeNode.svelte";
 
   const INDENT = 16;
   const ITEM_HEIGHT = 28;
@@ -80,8 +81,11 @@
   }
 </script>
 
-<!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
+  role="treeitem"
+  tabindex={isSelected ? 0 : -1}
+  aria-selected={isSelected}
+  aria-expanded={isFolder ? isExpanded : undefined}
   draggable="true"
   ondragstart={(e) => {
     if (e.dataTransfer) {
@@ -113,6 +117,15 @@
   }}
   onclick={handleClick}
   ondblclick={handleDoubleClick}
+  onkeydown={(e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleClick();
+    } else if (e.key === "F2") {
+      e.preventDefault();
+      onrenamestart(node.path);
+    }
+  }}
   oncontextmenu={(e) => oncontextmenu(e, node)}
   class="interactive flex items-center px-2"
   style="height: {ITEM_HEIGHT}px; padding-left: {depth * INDENT +
@@ -169,7 +182,7 @@
     />
   {/if}
   {#each node.children as child (child.path)}
-    <svelte:self
+    <FileTreeNode
       node={child}
       depth={depth + 1}
       {dragging}

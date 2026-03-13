@@ -11,7 +11,12 @@
       {@const isActive = tab.path === editorStore.activeTab}
       {@const isDirty = editorStore.dirtyTabs.has(tab.path)}
       <div
+        role="tab"
+        tabindex={0}
         onclick={() => editorStore.setActiveTab(tab.path)}
+        onkeydown={(e) => {
+          if (e.key === "Enter") editorStore.setActiveTab(tab.path);
+        }}
         class="interactive group flex items-center gap-2 px-3"
         style="font-size: 13px; color: {isActive
           ? 'var(--color-fg-heading)'

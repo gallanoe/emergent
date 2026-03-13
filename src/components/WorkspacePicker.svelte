@@ -182,9 +182,13 @@
         {#each sorted as ws, i (ws.id)}
           <div
             role="option"
+            tabindex={-1}
             aria-selected={i === selectedIndex}
             onclick={() => {
               selectedIndex = i;
+            }}
+            onkeydown={(e) => {
+              if (e.key === "Enter") handleOpen(ws);
             }}
             ondblclick={() => handleOpen(ws)}
             style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; cursor: default; border-bottom: {i <
@@ -208,14 +212,15 @@
     <div
       style="display: flex; align-items: center; justify-content: space-between;"
     >
-      <span
+      <button
+        type="button"
         onclick={() => {
           creatingNew = true;
         }}
-        style="font-size: 12px; color: var(--color-accent-text);"
+        style="font-size: 12px; color: var(--color-accent-text); background: none; border: none; padding: 0; cursor: pointer; font-family: inherit;"
       >
         New workspace
-      </span>
+      </button>
       <div style="display: flex; gap: 12px;">
         <span
           style="color: var(--color-fg-disabled); font-size: 10px; font-family: var(--font-mono);"

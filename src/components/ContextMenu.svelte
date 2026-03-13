@@ -89,6 +89,13 @@
         .filter((it) => it.type !== "separator").length}
       <div
         role="menuitem"
+        tabindex={-1}
+        onkeydown={(e) => {
+          if (e.key === "Enter") {
+            onaction(item.action);
+            onclose();
+          }
+        }}
         onclick={() => {
           onaction(item.action);
           onclose();

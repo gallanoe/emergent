@@ -24,8 +24,17 @@
   let sidebarWidth = $state(220);
   let editorContent = $state("");
 
+  function isEditableTarget(target: EventTarget | null): boolean {
+    if (!(target instanceof HTMLElement)) return false;
+    if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)
+      return true;
+    if (target.isContentEditable) return true;
+    return false;
+  }
+
   function keybindingHandler(e: KeyboardEvent) {
     if (e.defaultPrevented) return;
+    if (isEditableTarget(e.target)) return;
     const shortcut = normalizeShortcut(e);
     if (!shortcut) return;
     const activeRegion = focusContextStore.activeRegion;

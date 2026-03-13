@@ -24,6 +24,7 @@
     16 +
     8}px; border-left: 2px solid var(--color-accent);"
 >
+  <!-- svelte-ignore a11y_autofocus -->
   <input
     autofocus
     placeholder={kind === "file" ? "untitled.md" : "New folder"}

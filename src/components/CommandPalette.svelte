@@ -103,8 +103,15 @@
         <div
           id="palette-item-{cmd.id}"
           role="option"
+          tabindex={-1}
           aria-selected={i === selectedIndex}
           data-selected={i === selectedIndex}
+          onkeydown={(e) => {
+            if (e.key === "Enter") {
+              commandStore.closePalette();
+              commandStore.executeCommand(cmd.id);
+            }
+          }}
           onclick={() => {
             commandStore.closePalette();
             commandStore.executeCommand(cmd.id);
