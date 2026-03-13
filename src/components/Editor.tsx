@@ -11,6 +11,7 @@ import { EditorState, RangeSetBuilder } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
 import { defaultKeymap } from "@codemirror/commands";
 import { syntaxTree } from "@codemirror/language";
+import { GFM } from "@lezer/markdown";
 import { useEditorStore } from "../stores/editor";
 import { useCommandStore } from "../stores/commands";
 import { useFocusContextStore } from "../stores/focus-context";
@@ -120,6 +121,45 @@ function buildDecorations(view: EditorView): DecorationSet {
           builder.add(node.to - 1, node.to, Decoration.replace({}));
           break;
         }
+        case "TableHeader": {
+          const headerLine = view.state.doc.lineAt(node.from);
+          builder.add(
+            headerLine.from,
+            headerLine.from,
+            Decoration.line({
+              attributes: {
+                style: "font-weight: 600; color: var(--color-fg-heading);",
+              },
+            }),
+          );
+          break;
+        }
+        case "TableDelimiter": {
+          const delimLine = view.state.doc.lineAt(node.from);
+          builder.add(
+            delimLine.from,
+            delimLine.from,
+            Decoration.line({
+              attributes: {
+                style: "color: var(--color-fg-disabled); font-size: 11px;",
+              },
+            }),
+          );
+          break;
+        }
+        case "TableRow": {
+          const rowLine = view.state.doc.lineAt(node.from);
+          builder.add(
+            rowLine.from,
+            rowLine.from,
+            Decoration.line({
+              attributes: {
+                style: "border-bottom: 1px solid var(--color-border-default); padding-bottom: 1px;",
+              },
+            }),
+          );
+          break;
+        }
       }
     },
   });
@@ -189,7 +229,7 @@ export function Editor({ content, path, onSave }: EditorProps) {
     const state = EditorState.create({
       doc: content,
       extensions: [
-        markdown(),
+        markdown({ extensions: GFM }),
         livePreview,
         keymap.of([
           ...defaultKeymap,
