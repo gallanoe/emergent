@@ -1,20 +1,19 @@
+// src/__tests__/stores/workspace.test.ts
 import { describe, it, expect, beforeEach } from "vitest";
-import { useWorkspaceStore } from "../../stores/workspace";
+import { workspaceStore } from "../../stores/workspace.svelte";
 
-describe("workspaceStore", () => {
+describe("WorkspaceStore (Svelte)", () => {
   beforeEach(() => {
-    useWorkspaceStore.setState({
-      activeWorkspace: null,
-      workspaces: [],
-      currentBranch: "main",
-      mergeState: null,
-    });
+    workspaceStore.activeWorkspace = null;
+    workspaceStore.workspaces = [];
+    workspaceStore.currentBranch = "main";
+    workspaceStore.mergeState = null;
   });
 
   it("sets active workspace", () => {
     const ws = { id: "abc", name: "Test", created_at: "", last_opened: "" };
-    useWorkspaceStore.getState().setActiveWorkspace(ws);
-    expect(useWorkspaceStore.getState().activeWorkspace).toEqual(ws);
+    workspaceStore.setActiveWorkspace(ws);
+    expect(workspaceStore.activeWorkspace).toEqual(ws);
   });
 
   it("sets workspaces list", () => {
@@ -22,27 +21,27 @@ describe("workspaceStore", () => {
       { id: "a", name: "A", created_at: "", last_opened: "" },
       { id: "b", name: "B", created_at: "", last_opened: "" },
     ];
-    useWorkspaceStore.getState().setWorkspaces(list);
-    expect(useWorkspaceStore.getState().workspaces).toHaveLength(2);
+    workspaceStore.setWorkspaces(list);
+    expect(workspaceStore.workspaces).toHaveLength(2);
   });
 
   it("sets current branch", () => {
-    useWorkspaceStore.getState().setCurrentBranch("feature");
-    expect(useWorkspaceStore.getState().currentBranch).toBe("feature");
+    workspaceStore.setCurrentBranch("feature");
+    expect(workspaceStore.currentBranch).toBe("feature");
   });
 
   it("sets merge state", () => {
-    useWorkspaceStore.getState().setMergeState({
+    workspaceStore.setMergeState({
       conflicts: [{ path: "a.md", ours: "x", theirs: "y" }],
     });
-    expect(useWorkspaceStore.getState().mergeState?.conflicts).toHaveLength(1);
+    expect(workspaceStore.mergeState?.conflicts).toHaveLength(1);
   });
 
   it("clears merge state", () => {
-    useWorkspaceStore.getState().setMergeState({
+    workspaceStore.setMergeState({
       conflicts: [{ path: "a.md", ours: "x", theirs: "y" }],
     });
-    useWorkspaceStore.getState().setMergeState(null);
-    expect(useWorkspaceStore.getState().mergeState).toBeNull();
+    workspaceStore.setMergeState(null);
+    expect(workspaceStore.mergeState).toBeNull();
   });
 });

@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { useToastStore } from "../../components/Toast";
+import { toastStore } from "../../stores/toast.svelte";
 
-describe("useToastStore", () => {
+describe("ToastStore (Svelte)", () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    useToastStore.setState({ toasts: [] });
+    toastStore.toasts = [];
   });
 
   afterEach(() => {
@@ -12,28 +12,26 @@ describe("useToastStore", () => {
   });
 
   it("auto-removes toast after default 4s", () => {
-    useToastStore.getState().addToast("hello", "info");
-    expect(useToastStore.getState().toasts).toHaveLength(1);
+    toastStore.addToast("hello", "info");
+    expect(toastStore.toasts).toHaveLength(1);
     vi.advanceTimersByTime(4000);
-    expect(useToastStore.getState().toasts).toHaveLength(0);
+    expect(toastStore.toasts).toHaveLength(0);
   });
 
   it("auto-removes toast after custom duration", () => {
-    useToastStore.getState().addToast("hello", "info", undefined, 5000);
-    expect(useToastStore.getState().toasts).toHaveLength(1);
+    toastStore.addToast("hello", "info", undefined, 5000);
+    expect(toastStore.toasts).toHaveLength(1);
     vi.advanceTimersByTime(4000);
-    expect(useToastStore.getState().toasts).toHaveLength(1);
+    expect(toastStore.toasts).toHaveLength(1);
     vi.advanceTimersByTime(1000);
-    expect(useToastStore.getState().toasts).toHaveLength(0);
+    expect(toastStore.toasts).toHaveLength(0);
   });
 
-  it("dismisses toast when action is triggered", () => {
-    const onClick = vi.fn();
-    useToastStore.getState().addToast("deleted", "info", { label: "Undo", onClick });
-    expect(useToastStore.getState().toasts).toHaveLength(1);
-    const toast = useToastStore.getState().toasts[0]!;
-    // Simulate what ToastContainer does when action is clicked
-    useToastStore.getState().removeToast(toast.id);
-    expect(useToastStore.getState().toasts).toHaveLength(0);
+  it("dismisses toast by id", () => {
+    toastStore.addToast("deleted", "info", { label: "Undo", onClick: vi.fn() });
+    expect(toastStore.toasts).toHaveLength(1);
+    const toast = toastStore.toasts[0]!;
+    toastStore.removeToast(toast.id);
+    expect(toastStore.toasts).toHaveLength(0);
   });
 });

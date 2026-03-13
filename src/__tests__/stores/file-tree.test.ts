@@ -1,47 +1,46 @@
+// src/__tests__/stores/file-tree.test.ts
 import { describe, it, expect, beforeEach } from "vitest";
-import { useFileTreeStore } from "../../stores/file-tree";
+import { fileTreeStore } from "../../stores/file-tree.svelte";
 
-describe("fileTreeStore", () => {
+describe("FileTreeStore (Svelte)", () => {
   beforeEach(() => {
-    useFileTreeStore.setState({
-      tree: [],
-      expandedPaths: new Set(),
-      selectedPath: null,
-      loading: false,
-      pendingCreation: null,
-      pendingRename: null,
-    });
+    fileTreeStore.tree = [];
+    fileTreeStore.expandedPaths.clear();
+    fileTreeStore.selectedPath = null;
+    fileTreeStore.loading = false;
+    fileTreeStore.pendingCreation = null;
+    fileTreeStore.pendingRename = null;
   });
 
   it("sets tree data", () => {
     const mockTree = [{ name: "notes", path: "notes", kind: "folder" as const, children: [] }];
-    useFileTreeStore.getState().setTree(mockTree);
-    expect(useFileTreeStore.getState().tree).toEqual(mockTree);
+    fileTreeStore.setTree(mockTree);
+    expect(fileTreeStore.tree).toEqual(mockTree);
   });
 
   it("toggles expanded state", () => {
-    useFileTreeStore.getState().toggleExpanded("notes");
-    expect(useFileTreeStore.getState().expandedPaths.has("notes")).toBe(true);
-    useFileTreeStore.getState().toggleExpanded("notes");
-    expect(useFileTreeStore.getState().expandedPaths.has("notes")).toBe(false);
+    fileTreeStore.toggleExpanded("notes");
+    expect(fileTreeStore.expandedPaths.has("notes")).toBe(true);
+    fileTreeStore.toggleExpanded("notes");
+    expect(fileTreeStore.expandedPaths.has("notes")).toBe(false);
   });
 
   it("sets selected path", () => {
-    useFileTreeStore.getState().setSelected("notes/hello.md");
-    expect(useFileTreeStore.getState().selectedPath).toBe("notes/hello.md");
+    fileTreeStore.setSelected("notes/hello.md");
+    expect(fileTreeStore.selectedPath).toBe("notes/hello.md");
   });
 
   it("clears selected path", () => {
-    useFileTreeStore.getState().setSelected("test.md");
-    useFileTreeStore.getState().setSelected(null);
-    expect(useFileTreeStore.getState().selectedPath).toBeNull();
+    fileTreeStore.setSelected("test.md");
+    fileTreeStore.setSelected(null);
+    expect(fileTreeStore.selectedPath).toBeNull();
   });
 
   it("setLoading toggles loading flag", () => {
-    useFileTreeStore.getState().setLoading(true);
-    expect(useFileTreeStore.getState().loading).toBe(true);
-    useFileTreeStore.getState().setLoading(false);
-    expect(useFileTreeStore.getState().loading).toBe(false);
+    fileTreeStore.setLoading(true);
+    expect(fileTreeStore.loading).toBe(true);
+    fileTreeStore.setLoading(false);
+    expect(fileTreeStore.loading).toBe(false);
   });
 
   it("snapshotTree returns a deep copy", () => {
@@ -53,62 +52,57 @@ describe("fileTreeStore", () => {
         children: [{ name: "a.md", path: "notes/a.md", kind: "file" as const }],
       },
     ];
-    useFileTreeStore.getState().setTree(tree);
-    const snapshot = useFileTreeStore.getState().snapshotTree();
+    fileTreeStore.setTree(tree);
+    const snapshot = fileTreeStore.snapshotTree();
 
-    // Mutate the store
-    useFileTreeStore.getState().setTree([]);
-    expect(useFileTreeStore.getState().tree).toEqual([]);
+    fileTreeStore.setTree([]);
+    expect(fileTreeStore.tree).toEqual([]);
 
-    // Snapshot is unaffected
     expect(snapshot).toHaveLength(1);
     expect(snapshot[0]!.children).toHaveLength(1);
   });
 
   it("rollbackTree restores previous state", () => {
     const tree = [{ name: "a.md", path: "a.md", kind: "file" as const }];
-    useFileTreeStore.getState().setTree(tree);
-    const snapshot = useFileTreeStore.getState().snapshotTree();
+    fileTreeStore.setTree(tree);
+    const snapshot = fileTreeStore.snapshotTree();
 
-    useFileTreeStore.getState().setTree([]);
-    useFileTreeStore.getState().rollbackTree(snapshot);
-    expect(useFileTreeStore.getState().tree).toEqual(tree);
+    fileTreeStore.setTree([]);
+    fileTreeStore.rollbackTree(snapshot);
+    expect(fileTreeStore.tree).toEqual(tree);
   });
 
   describe("pendingCreation", () => {
     it("defaults to null", () => {
-      expect(useFileTreeStore.getState().pendingCreation).toBeNull();
+      expect(fileTreeStore.pendingCreation).toBeNull();
     });
 
     it("sets pending creation", () => {
-      useFileTreeStore.getState().setPendingCreation({ type: "file", parentPath: "" });
-      expect(useFileTreeStore.getState().pendingCreation).toEqual({
-        type: "file",
-        parentPath: "",
-      });
+      fileTreeStore.setPendingCreation({ type: "file", parentPath: "" });
+      expect(fileTreeStore.pendingCreation).toEqual({ type: "file", parentPath: "" });
     });
 
     it("clears pending creation", () => {
-      useFileTreeStore.getState().setPendingCreation({ type: "file", parentPath: "" });
-      useFileTreeStore.getState().clearPendingCreation();
-      expect(useFileTreeStore.getState().pendingCreation).toBeNull();
+      fileTreeStore.setPendingCreation({ type: "file", parentPath: "" });
+      fileTreeStore.clearPendingCreation();
+      expect(fileTreeStore.pendingCreation).toBeNull();
     });
   });
 
   describe("pendingRename", () => {
     it("defaults to null", () => {
-      expect(useFileTreeStore.getState().pendingRename).toBeNull();
+      expect(fileTreeStore.pendingRename).toBeNull();
     });
 
     it("sets pending rename path", () => {
-      useFileTreeStore.getState().setPendingRename("docs/readme.md");
-      expect(useFileTreeStore.getState().pendingRename).toBe("docs/readme.md");
+      fileTreeStore.setPendingRename("docs/readme.md");
+      expect(fileTreeStore.pendingRename).toBe("docs/readme.md");
     });
 
     it("clears pending rename", () => {
-      useFileTreeStore.getState().setPendingRename("docs/readme.md");
-      useFileTreeStore.getState().clearPendingRename();
-      expect(useFileTreeStore.getState().pendingRename).toBeNull();
+      fileTreeStore.setPendingRename("docs/readme.md");
+      fileTreeStore.clearPendingRename();
+      expect(fileTreeStore.pendingRename).toBeNull();
     });
   });
 });

@@ -1,27 +1,27 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { useFocusContextStore } from "../../stores/focus-context";
+import { focusContextStore } from "../../stores/focus-context.svelte";
 
-describe("FocusContextStore", () => {
+describe("FocusContextStore (Svelte)", () => {
   beforeEach(() => {
-    useFocusContextStore.setState({ activeRegion: "global" });
+    focusContextStore.activeRegion = "global";
   });
 
   it("defaults to global region", () => {
-    expect(useFocusContextStore.getState().activeRegion).toBe("global");
+    expect(focusContextStore.activeRegion).toBe("global");
   });
 
   it("sets active region to sidebar", () => {
-    useFocusContextStore.getState().setActiveRegion("sidebar");
-    expect(useFocusContextStore.getState().activeRegion).toBe("sidebar");
+    focusContextStore.setActiveRegion("sidebar");
+    expect(focusContextStore.activeRegion).toBe("sidebar");
   });
 
   it("sets active region to editor", () => {
-    useFocusContextStore.getState().setActiveRegion("editor");
-    expect(useFocusContextStore.getState().activeRegion).toBe("editor");
+    focusContextStore.setActiveRegion("editor");
+    expect(focusContextStore.activeRegion).toBe("editor");
   });
 
   it("sets active region to workspace-picker", () => {
-    useFocusContextStore.getState().setActiveRegion("workspace-picker");
-    expect(useFocusContextStore.getState().activeRegion).toBe("workspace-picker");
+    focusContextStore.setActiveRegion("workspace-picker");
+    expect(focusContextStore.activeRegion).toBe("workspace-picker");
   });
 });
