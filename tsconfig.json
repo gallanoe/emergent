@@ -14,8 +14,8 @@
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "react-jsx",
-    "noEmit": true
+    "noEmit": true,
+    "types": ["svelte"]
   },
   "include": ["src"]
 }

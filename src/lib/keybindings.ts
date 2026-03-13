@@ -1,5 +1,5 @@
-import type { Command } from "../stores/commands";
-import type { FocusRegion } from "../stores/focus-context";
+import type { Command } from "../stores/commands.svelte";
+import type { FocusRegion } from "../stores/focus-context.svelte";
 
 const MODIFIER_KEYS = new Set(["Meta", "Control", "Shift", "Alt"]);
 
