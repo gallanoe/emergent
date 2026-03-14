@@ -5,6 +5,8 @@
   import Toast from "./Toast.svelte";
   import Editor from "./Editor.svelte";
   import CommandPalette from "./CommandPalette.svelte";
+  import ActivityBar from "./ActivityBar.svelte";
+  import VcsView from "./VcsView.svelte";
   import { editorStore } from "../stores/editor.svelte";
   import { fileTreeStore } from "../stores/file-tree.svelte";
   import { uiStore } from "../stores/ui.svelte";
@@ -181,6 +183,15 @@
             ?.focus();
         },
       },
+      {
+        id: "view.vcs",
+        label: "Toggle Source Control View",
+        shortcut: "Mod+Shift+G",
+        context: "global" as const,
+        execute: () => uiStore.setActiveView(
+          uiStore.activeView === "vcs" ? "workspace" : "vcs"
+        ),
+      },
     ];
 
     for (const cmd of commands) {
@@ -199,41 +210,46 @@
 
 <div class="flex h-screen flex-col">
   <div class="flex flex-1 overflow-hidden">
-    {#if !uiStore.sidebarCollapsed}
-      <Sidebar
-        width={sidebarWidth}
-        onwidthchange={(w) => {
-          sidebarWidth = w;
-        }}
-      />
-    {/if}
-    <div class="flex flex-1 flex-col overflow-hidden">
-      <TabBar />
-      <div class="flex-1 overflow-auto p-6">
-        {#if editorStore.activeTab}
-          <Editor
-            content={editorContent}
-            path={editorStore.activeTab}
-            onsave={handleSave}
-          />
-        {:else if fileTreeStore.tree.length === 0 && !fileTreeStore.loading}
-          <div
-            style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 4px;"
-          >
-            <span
-              style="font-size: 16px; font-weight: 600; color: var(--color-fg-heading);"
+    <ActivityBar />
+    {#if uiStore.activeView === "workspace"}
+      {#if !uiStore.sidebarCollapsed}
+        <Sidebar
+          width={sidebarWidth}
+          onwidthchange={(w) => {
+            sidebarWidth = w;
+          }}
+        />
+      {/if}
+      <div class="flex flex-1 flex-col overflow-hidden">
+        <TabBar />
+        <div class="flex-1 overflow-auto p-6">
+          {#if editorStore.activeTab}
+            <Editor
+              content={editorContent}
+              path={editorStore.activeTab}
+              onsave={handleSave}
+            />
+          {:else if fileTreeStore.tree.length === 0 && !fileTreeStore.loading}
+            <div
+              style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 4px;"
             >
-              Create your first document
-            </span>
-            <span style="font-size: 12px; color: var(--color-fg-muted);">
-              {"Press \u2318N to get started"}
-            </span>
-          </div>
-        {:else}
-          <p style="color: var(--color-fg-muted);">No document open</p>
-        {/if}
+              <span
+                style="font-size: 16px; font-weight: 600; color: var(--color-fg-heading);"
+              >
+                Create your first document
+              </span>
+              <span style="font-size: 12px; color: var(--color-fg-muted);">
+                {"Press \u2318N to get started"}
+              </span>
+            </div>
+          {:else}
+            <p style="color: var(--color-fg-muted);">No document open</p>
+          {/if}
+        </div>
       </div>
-    </div>
+    {:else}
+      <VcsView />
+    {/if}
   </div>
   <StatusBar />
   <Toast />
