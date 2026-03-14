@@ -2,7 +2,6 @@ use crate::error::AppError;
 use crate::events::EventEmitter;
 use git2::{Repository, Signature};
 use serde::Serialize;
-use std::cell::RefCell;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -184,46 +183,39 @@ impl VcsService {
 
         let diff = repo.diff_tree_to_workdir_with_index(head_tree.as_ref(), Some(&mut opts))?;
 
-        let result_hunks: RefCell<Vec<DiffHunk>> = RefCell::new(Vec::new());
+        let mut hunks: Vec<DiffHunk> = Vec::new();
 
-        diff.foreach(
-            &mut |_, _| true,
-            None,
-            Some(&mut |_delta, hunk| {
-                let header = String::from_utf8_lossy(hunk.header()).to_string();
-                result_hunks.borrow_mut().push(DiffHunk {
-                    header,
-                    lines: Vec::new(),
-                });
-                true
-            }),
-            Some(&mut |_delta, _hunk, line| {
-                let kind = match line.origin() {
-                    '+' => "addition",
-                    '-' => "deletion",
-                    ' ' => "context",
-                    _ => "other",
-                }
-                .to_string();
-                let content = String::from_utf8_lossy(line.content()).to_string();
-                let old_lineno = line.old_lineno();
-                let new_lineno = line.new_lineno();
-                let mut hunks = result_hunks.borrow_mut();
-                if let Some(hunk) = hunks.last_mut() {
-                    hunk.lines.push(DiffLine {
-                        kind,
-                        content,
-                        old_lineno,
-                        new_lineno,
+        diff.print(git2::DiffFormat::Patch, |_delta, hunk, line| {
+            if let Some(hunk_header) = hunk {
+                let header = String::from_utf8_lossy(hunk_header.header()).trim().to_string();
+                // Only push a new hunk if this header differs from the last one
+                if hunks.last().map_or(true, |h: &DiffHunk| h.header != header) {
+                    hunks.push(DiffHunk {
+                        header,
+                        lines: Vec::new(),
                     });
                 }
-                true
-            }),
-        )?;
+            }
 
-        Ok(DiffResult {
-            hunks: result_hunks.into_inner(),
-        })
+            let kind = match line.origin() {
+                '+' => "add",
+                '-' => "remove",
+                ' ' => "context",
+                _ => return true,
+            };
+            let content = String::from_utf8_lossy(line.content()).to_string();
+            if let Some(current_hunk) = hunks.last_mut() {
+                current_hunk.lines.push(DiffLine {
+                    kind: kind.to_string(),
+                    content,
+                    old_lineno: line.old_lineno(),
+                    new_lineno: line.new_lineno(),
+                });
+            }
+            true
+        })?;
+
+        Ok(DiffResult { hunks })
     }
 
     pub fn get_log(&self, repo: &Repository, limit: usize) -> Result<Vec<CommitInfo>, AppError> {
@@ -785,11 +777,11 @@ mod tests {
         assert!(!result.hunks.is_empty(), "diff should have at least one hunk");
         let all_lines: Vec<_> = result.hunks.iter().flat_map(|h| h.lines.iter()).collect();
         assert!(
-            all_lines.iter().any(|l| l.kind == "addition"),
+            all_lines.iter().any(|l| l.kind == "add"),
             "diff should contain addition lines"
         );
         assert!(
-            all_lines.iter().any(|l| l.kind == "deletion"),
+            all_lines.iter().any(|l| l.kind == "remove"),
             "diff should contain deletion lines"
         );
     }
@@ -809,11 +801,11 @@ mod tests {
         assert!(!result.hunks.is_empty(), "new file diff should have hunks");
         let all_lines: Vec<_> = result.hunks.iter().flat_map(|h| h.lines.iter()).collect();
         assert!(
-            all_lines.iter().all(|l| l.kind == "addition" || l.kind == "other"),
-            "new file diff lines should all be additions (or other markers)"
+            all_lines.iter().all(|l| l.kind == "add"),
+            "new file diff lines should all be additions"
         );
         assert!(
-            all_lines.iter().any(|l| l.kind == "addition"),
+            all_lines.iter().any(|l| l.kind == "add"),
             "new file diff should have at least one addition line"
         );
     }
