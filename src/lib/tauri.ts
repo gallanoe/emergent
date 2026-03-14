@@ -73,6 +73,9 @@ export const onCommitCreated = (
 ): Promise<UnlistenFn> =>
   listen("commit:created", (e) => cb(e.payload as { oid: string; message: string }));
 
+export const onVcsStatusChanged = (cb: () => void): Promise<UnlistenFn> =>
+  listen("vcs:status-changed", () => cb());
+
 // VCS types
 export type CommitInfo = {
   oid: string;
@@ -83,6 +86,7 @@ export type CommitInfo = {
 export type FileStatus = {
   path: string;
   status: "new" | "modified" | "deleted" | "unknown";
+  staged: boolean;
 };
 
 export type BranchInfo = {
@@ -91,6 +95,22 @@ export type BranchInfo = {
 };
 
 export type MergeResult = { type: "Clean" } | { type: "Conflict"; paths: string[] };
+
+export type DiffLine = {
+  kind: "add" | "remove" | "context";
+  content: string;
+  old_lineno: number | null;
+  new_lineno: number | null;
+};
+
+export type DiffHunk = {
+  header: string;
+  lines: DiffLine[];
+};
+
+export type DiffResult = {
+  hunks: DiffHunk[];
+};
 
 // VCS commands
 export const vcsCommit = (message: string) => invoke<string>("vcs_commit", { message });
@@ -107,3 +127,12 @@ export const vcsDeleteBranch = (name: string) => invoke<void>("vcs_delete_branch
 
 export const vcsMergeBranch = (sourceBranch: string) =>
   invoke<MergeResult>("vcs_merge_branch", { sourceBranch });
+
+export const vcsStage = (paths: string[]) =>
+  invoke<void>("vcs_stage", { paths });
+
+export const vcsUnstage = (paths: string[]) =>
+  invoke<void>("vcs_unstage", { paths });
+
+export const vcsDiff = (path: string) =>
+  invoke<DiffResult>("vcs_diff", { path });
