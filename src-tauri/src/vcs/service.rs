@@ -169,7 +169,7 @@ impl VcsService {
     pub fn diff(
         &self,
         repo: &Repository,
-        _worktree_path: &Path,
+        worktree_path: &Path,
         file_path: &str,
     ) -> Result<DiffResult, AppError> {
         let head_tree = repo
@@ -178,17 +178,53 @@ impl VcsService {
             .and_then(|h| h.peel_to_commit().ok())
             .and_then(|c| c.tree().ok());
 
+        // Check if file is untracked (not in HEAD and not in index)
+        let in_head = head_tree
+            .as_ref()
+            .and_then(|t| t.get_path(Path::new(file_path)).ok())
+            .is_some();
+        let _in_index = repo
+            .index()
+            .ok()
+            .and_then(|idx| idx.get_path(Path::new(file_path), 0))
+            .is_some();
+
+        if !in_head {
+            // New file (untracked or staged but not yet committed)
+            // Build synthetic diff showing all lines as additions
+            let full_path = worktree_path.join(file_path);
+            if let Ok(content) = std::fs::read_to_string(&full_path) {
+                let lines: Vec<DiffLine> = content
+                    .lines()
+                    .enumerate()
+                    .map(|(i, line)| DiffLine {
+                        kind: "add".to_string(),
+                        content: format!("{line}\n"),
+                        old_lineno: None,
+                        new_lineno: Some((i + 1) as u32),
+                    })
+                    .collect();
+                let line_count = lines.len();
+                return Ok(DiffResult {
+                    hunks: vec![DiffHunk {
+                        header: format!("@@ -0,0 +1,{line_count} @@"),
+                        lines,
+                    }],
+                });
+            }
+            return Ok(DiffResult { hunks: vec![] });
+        }
+
         let mut opts = git2::DiffOptions::new();
         opts.pathspec(file_path);
 
-        let diff = repo.diff_tree_to_workdir_with_index(head_tree.as_ref(), Some(&mut opts))?;
+        let diff = repo.diff_tree_to_workdir(head_tree.as_ref(), Some(&mut opts))?;
 
         let mut hunks: Vec<DiffHunk> = Vec::new();
 
         diff.print(git2::DiffFormat::Patch, |_delta, hunk, line| {
             if let Some(hunk_header) = hunk {
                 let header = String::from_utf8_lossy(hunk_header.header()).trim().to_string();
-                // Only push a new hunk if this header differs from the last one
                 if hunks.last().map_or(true, |h: &DiffHunk| h.header != header) {
                     hunks.push(DiffHunk {
                         header,
