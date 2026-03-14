@@ -1,5 +1,6 @@
 class UIStore {
   sidebarCollapsed = $state(false);
+  activeView: "workspace" | "vcs" = $state("workspace");
 
   toggleSidebar() {
     this.sidebarCollapsed = !this.sidebarCollapsed;
@@ -7,6 +8,10 @@ class UIStore {
 
   setSidebarCollapsed(collapsed: boolean) {
     this.sidebarCollapsed = collapsed;
+  }
+
+  setActiveView(view: "workspace" | "vcs") {
+    this.activeView = view;
   }
 }
 
