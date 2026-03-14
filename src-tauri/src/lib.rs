@@ -69,6 +69,9 @@ pub fn run() {
             commands::vcs::vcs_list_branches,
             commands::vcs::vcs_delete_branch,
             commands::vcs::vcs_merge_branch,
+            commands::vcs::vcs_stage,
+            commands::vcs::vcs_unstage,
+            commands::vcs::vcs_diff,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

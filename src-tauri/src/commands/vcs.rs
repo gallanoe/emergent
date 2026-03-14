@@ -4,6 +4,36 @@ use crate::vcs::{BranchInfo, CommitInfo, FileStatus, MergeResult};
 use tauri::State;
 
 #[tauri::command]
+pub fn vcs_stage(state: State<'_, AppState>, paths: Vec<String>) -> Result<(), AppError> {
+    let ws = state.workspace.lock().unwrap();
+    let repo = ws.repo().ok_or(AppError::WorkspaceNotOpen)?;
+    let worktree = ws.worktree_path().ok_or(AppError::WorkspaceNotOpen)?;
+    let vcs = state.vcs.lock().unwrap();
+    vcs.stage(repo, worktree, &paths)
+}
+
+#[tauri::command]
+pub fn vcs_unstage(state: State<'_, AppState>, paths: Vec<String>) -> Result<(), AppError> {
+    let ws = state.workspace.lock().unwrap();
+    let repo = ws.repo().ok_or(AppError::WorkspaceNotOpen)?;
+    let worktree = ws.worktree_path().ok_or(AppError::WorkspaceNotOpen)?;
+    let vcs = state.vcs.lock().unwrap();
+    vcs.unstage(repo, worktree, &paths)
+}
+
+#[tauri::command]
+pub fn vcs_diff(
+    state: State<'_, AppState>,
+    path: String,
+) -> Result<crate::vcs::DiffResult, AppError> {
+    let ws = state.workspace.lock().unwrap();
+    let repo = ws.repo().ok_or(AppError::WorkspaceNotOpen)?;
+    let worktree = ws.worktree_path().ok_or(AppError::WorkspaceNotOpen)?;
+    let vcs = state.vcs.lock().unwrap();
+    vcs.diff(repo, worktree, &path)
+}
+
+#[tauri::command]
 pub fn vcs_commit(state: State<'_, AppState>, message: String) -> Result<String, AppError> {
     let ws = state.workspace.lock().unwrap();
     let repo = ws.repo().ok_or(AppError::WorkspaceNotOpen)?;

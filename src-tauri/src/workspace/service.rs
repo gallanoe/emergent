@@ -219,6 +219,8 @@ impl WorkspaceService {
         })?;
         self.emitter
             .emit("document:changed", serde_json::json!({"path": path}));
+        self.emitter
+            .emit("vcs:status-changed", serde_json::json!({}));
         Ok(())
     }
 
@@ -233,6 +235,8 @@ impl WorkspaceService {
             message: format!("failed to delete document: {e}"),
         })?;
         self.emitter.emit("tree:changed", serde_json::json!({}));
+        self.emitter
+            .emit("vcs:status-changed", serde_json::json!({}));
         Ok(())
     }
 
