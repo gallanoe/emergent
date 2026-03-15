@@ -76,12 +76,12 @@
   )}px; top: {Math.min(
     y,
     globalThis.innerHeight - items.length * 28 - 16,
-  )}px; background: var(--color-bg-hover); border: 1px solid var(--color-border-default); border-radius: 4px; padding: 4px 0; min-width: 160px; z-index: 1000; outline: none;"
+  )}px; background: var(--color-bg-sidebar); border: 1px solid var(--color-border-default); border-radius: 8px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08); padding: 4px 0; min-width: 160px; z-index: 1000; outline: none;"
 >
   {#each items as item, i}
     {#if item.type === "separator"}
       <div
-        style="height: 1px; background: var(--color-border-default); margin: 4px 0;"
+        style="height: 1px; margin: 4px 8px; background: linear-gradient(to right, transparent, var(--color-border-strong), transparent);"
       ></div>
     {:else}
       {@const aIdx = items

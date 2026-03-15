@@ -147,7 +147,7 @@
   <div style="width: 320px; display: flex; flex-direction: column; gap: 12px;">
     <div>
       <div
-        style="font-size: 18px; font-weight: 600; color: var(--color-fg-heading);"
+        style="font-size: 18px; font-weight: 600; color: var(--color-fg-heading); font-family: var(--font-content);"
       >
         Open a workspace
       </div>
@@ -160,7 +160,7 @@
 
     <div
       role="listbox"
-      style="border: 1px solid var(--color-border-default); border-radius: 4px; overflow: hidden;"
+      style="border: 1.5px solid var(--color-border-default); border-radius: 8px; overflow: hidden;"
     >
       {#if creatingNew}
         <input
@@ -169,7 +169,7 @@
           bind:value={newName}
           onkeydown={handleInputKeyDown}
           placeholder="Workspace name..."
-          style="width: 100%; padding: 8px 12px; background: var(--color-bg-base); border: none; border-bottom: 1px solid var(--color-border-default); color: var(--color-fg-heading); font-size: 13px; outline: none; box-sizing: border-box;"
+          style="width: 100%; padding: 8px 12px; background: var(--color-bg-sidebar); border: none; border-bottom: 1px solid var(--color-border-default); color: var(--color-fg-heading); font-size: 13px; outline: none; box-sizing: border-box; font-family: var(--font-ui);"
         />
       {/if}
       {#if sorted.length === 0}
@@ -195,10 +195,10 @@
             sorted.length - 1
               ? '1px solid var(--color-border-default)'
               : 'none'}; background: {i === selectedIndex
-              ? 'var(--color-bg-selected)'
+              ? 'var(--color-bg-hover)'
               : 'transparent'}; color: {i === selectedIndex
               ? 'var(--color-fg-heading)'
-              : 'var(--color-fg-default)'}; min-height: 34px;"
+              : 'var(--color-fg-default)'}; min-height: 34px; border-radius: 6px;"
           >
             <span style="font-size: 13px;">{ws.name}</span>
             <span style="font-size: 11px; color: var(--color-fg-disabled);">

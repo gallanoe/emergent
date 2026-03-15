@@ -66,19 +66,19 @@
   <div
     data-testid="palette-backdrop"
     onclick={() => commandStore.closePalette()}
-    style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100;"
+    style="position: fixed; inset: 0; background: rgba(0, 0, 0, 0.3); z-index: 100;"
     role="presentation"
   ></div>
   <div
     role="dialog"
     aria-modal="true"
     aria-label="Command Palette"
-    style="position: fixed; top: 20%; left: 50%; transform: translateX(-50%); width: 480px; max-width: calc(100vw - 32px); background: #1e1f22; border: 1px solid rgba(255,255,255,0.08); border-radius: 4px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); z-index: 101; overflow: hidden; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;"
+    style="position: fixed; top: 20%; left: 50%; transform: translateX(-50%); width: 480px; max-width: calc(100vw - 32px); background: var(--color-bg-sidebar); border: 1px solid var(--color-border-default); border-radius: 8px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12); z-index: 101; overflow: hidden; font-family: var(--font-ui);"
   >
     <div
-      style="padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,0.06); display: flex; align-items: center; gap: 8px;"
+      style="padding: 10px 14px; border-bottom: 1px solid var(--color-border-default); display: flex; align-items: center; gap: 8px;"
     >
-      <span style="color: #6b6d7b; font-size: 13px;">{"\u2318"}</span>
+      <span style="color: var(--color-fg-muted); font-size: 13px;">{"\u2318"}</span>
       <input
         bind:this={inputEl}
         type="text"
@@ -91,7 +91,7 @@
         aria-activedescendant={filtered[selectedIndex]
           ? `palette-item-${filtered[selectedIndex]!.id}`
           : ""}
-        style="flex: 1; background: transparent; border: none; outline: none; color: #e0e0e3; font-size: 13px; font-family: inherit;"
+        style="flex: 1; background: transparent; border: none; outline: none; color: var(--color-fg-heading); font-size: 13px; font-family: inherit;"
       />
     </div>
     <div
@@ -118,15 +118,15 @@
           }}
           style="height: 28px; display: flex; align-items: center; padding: 0 14px; font-size: 13px; color: {i ===
           selectedIndex
-            ? '#e0e0e3'
-            : '#ababae'}; background: {i === selectedIndex
-            ? 'rgba(255,255,255,0.04)'
+            ? 'var(--color-fg-heading)'
+            : 'var(--color-fg-default)'}; background: {i === selectedIndex
+            ? 'var(--color-bg-hover)'
             : 'transparent'}; justify-content: space-between; cursor: default;"
         >
           <span>{cmd.label}</span>
           {#if cmd.shortcut}
             <span
-              style="font-size: 11px; color: #6b6d7b; font-family: ui-monospace, monospace;"
+              style="font-size: 11px; color: var(--color-fg-muted); font-family: var(--font-mono);"
             >
               {formatShortcut(cmd.shortcut)}
             </span>
@@ -134,7 +134,7 @@
         </div>
       {/each}
       {#if filtered.length === 0}
-        <div style="padding: 8px 14px; font-size: 13px; color: #6b6d7b;">
+        <div style="padding: 8px 14px; font-size: 13px; color: var(--color-fg-muted);">
           No matching commands
         </div>
       {/if}
