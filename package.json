@@ -15,7 +15,9 @@
     "fmt:check": "prettier --check 'src/**/*.svelte' && oxfmt --check",
     "typecheck": "svelte-check --tsconfig ./tsconfig.json",
     "test": "vitest run",
-    "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml"
+    "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
+    "test:e2e": "bunx playwright test",
+    "screenshot": "bunx playwright test --test-dir scripts scripts/screenshot.ts"
   },
   "dependencies": {
     "@codemirror/commands": "^6.10.2",
@@ -32,6 +34,7 @@
     "svelte": "^5.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@sveltejs/vite-plugin-svelte": "^7.0.0",
     "@tailwindcss/vite": "^4.0.0",
     "@tauri-apps/cli": "^2.10.1",

@@ -9,3 +9,6 @@ src-tauri/target/
 *.log
 .superpowers/
 .worktrees/
+.screenshots/
+e2e/results/
+test-results/
