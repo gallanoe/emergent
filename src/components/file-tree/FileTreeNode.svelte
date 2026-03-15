@@ -2,12 +2,12 @@
   import type { TreeNode } from "../../lib/tauri";
   import { fileTreeStore } from "../../stores/file-tree.svelte";
   import { editorStore } from "../../stores/editor.svelte";
+  import { File, Folder, FolderOpen, ChevronRight, ChevronDown } from "lucide-svelte";
   import RenameInput from "./RenameInput.svelte";
   import CreationInput from "./CreationInput.svelte";
   import FileTreeNode from "./FileTreeNode.svelte";
 
-  const INDENT = 16;
-  const ITEM_HEIGHT = 28;
+  const INDENT = 28;
 
   interface Props {
     node: TreeNode;
@@ -127,20 +127,11 @@
     }
   }}
   oncontextmenu={(e) => oncontextmenu(e, node)}
-  class="interactive flex items-center px-2"
-  style="height: {ITEM_HEIGHT}px; padding-left: {depth * INDENT +
-    8}px; font-size: 13px; opacity: {dragging === node.path
-    ? 0.5
-    : 1}; color: {isSelected
-    ? 'var(--color-fg-heading)'
-    : 'var(--color-fg-default)'}; background: {dropTarget === node.path &&
-  node.kind === 'folder'
-    ? 'var(--color-bg-selected)'
-    : isSelected
-      ? 'var(--color-bg-hover)'
-      : 'transparent'}; border-left: {isSelected
-    ? '2px solid var(--color-accent)'
-    : '2px solid transparent'}; transition: background 100ms ease-out;"
+  class="tree-item"
+  class:selected={isSelected}
+  class:drop-target={dropTarget === node.path && node.kind === "folder"}
+  class:dragging={dragging === node.path}
+  style="padding-left: {depth * INDENT + 8}px;"
   onmouseenter={(e) => {
     if (!isSelected && dropTarget !== node.path) {
       e.currentTarget.style.background = "var(--color-bg-hover)";
@@ -153,14 +144,25 @@
   }}
 >
   {#if isFolder}
-    <span
-      style="font-size: 10px; color: var(--color-fg-muted); margin-right: 6px; display: inline-block; transform: {isExpanded
-        ? 'rotate(90deg)'
-        : 'rotate(0deg)'}; transition: transform 100ms ease-out;"
-    >
-      &#9654;
+    <span class="chevron-icon">
+      {#if isExpanded}
+        <ChevronDown size={14} />
+      {:else}
+        <ChevronRight size={14} />
+      {/if}
     </span>
   {/if}
+  <span class="node-icon" class:selected-icon={isSelected}>
+    {#if isFolder}
+      {#if isExpanded}
+        <FolderOpen size={14} />
+      {:else}
+        <Folder size={14} />
+      {/if}
+    {:else}
+      <File size={14} />
+    {/if}
+  </span>
   {#if renamingPath === node.path}
     <RenameInput
       defaultValue={node.name}
@@ -169,7 +171,7 @@
       oncancel={onrenamecancel}
     />
   {:else}
-    <span class="truncate">{node.name}</span>
+    <span class="truncate node-name">{node.name}</span>
   {/if}
 </div>
 {#if isFolder && isExpanded && node.children}
@@ -203,3 +205,58 @@
     />
   {/each}
 {/if}
+
+<style>
+  .tree-item {
+    display: flex;
+    align-items: center;
+    padding: 6px 8px;
+    border-radius: 6px;
+    font-size: 13px;
+    color: var(--color-fg-default);
+    background: transparent;
+    transition: background 100ms ease-out;
+    cursor: default;
+    user-select: none;
+  }
+
+  .tree-item.selected {
+    background: var(--color-accent-soft);
+    color: var(--color-fg-heading);
+    font-weight: 500;
+  }
+
+  .tree-item.drop-target {
+    background: var(--color-bg-selected);
+  }
+
+  .tree-item.dragging {
+    opacity: 0.5;
+  }
+
+  .chevron-icon {
+    display: inline-flex;
+    align-items: center;
+    color: var(--color-fg-disabled);
+    margin-right: 2px;
+    flex-shrink: 0;
+  }
+
+  .node-icon {
+    display: inline-flex;
+    align-items: center;
+    color: var(--color-fg-disabled);
+    margin-right: 6px;
+    flex-shrink: 0;
+  }
+
+  .node-icon.selected-icon {
+    color: var(--color-accent);
+  }
+
+  .node-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+</style>
