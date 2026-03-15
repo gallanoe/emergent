@@ -52,12 +52,12 @@
     number,
     { fontSize: string; fontWeight: string }
   > = {
-    1: { fontSize: "24px", fontWeight: "700" },
-    2: { fontSize: "20px", fontWeight: "600" },
-    3: { fontSize: "16px", fontWeight: "600" },
-    4: { fontSize: "14px", fontWeight: "600" },
-    5: { fontSize: "13px", fontWeight: "600" },
-    6: { fontSize: "13px", fontWeight: "500" },
+    1: { fontSize: "28px", fontWeight: "600" },
+    2: { fontSize: "22px", fontWeight: "600" },
+    3: { fontSize: "18px", fontWeight: "600" },
+    4: { fontSize: "16px", fontWeight: "600" },
+    5: { fontSize: "15px", fontWeight: "600" },
+    6: { fontSize: "14px", fontWeight: "500" },
   };
 
   function buildDecorations(v: EditorView): DecorationSet {
@@ -135,7 +135,7 @@
               Decoration.mark({
                 attributes: {
                   style:
-                    "background: var(--color-bg-hover); padding: 1px 4px; border-radius: 3px; font-size: 12px;",
+                    "background: var(--color-bg-hover); padding: 1px 4px; border-radius: 3px; font-size: 12px; font-family: var(--font-mono);",
                 },
               }),
             );
@@ -177,6 +177,28 @@
                 attributes: {
                   style:
                     "border-bottom: 1px solid var(--color-border-default); padding-bottom: 1px;",
+                },
+              }),
+            );
+            break;
+          }
+          case "Blockquote": {
+            const bqLine = v.state.doc.lineAt(node.from);
+            const markerEnd = bqLine.text.indexOf(" ") + 1;
+            if (markerEnd > 0) {
+              builder.add(
+                bqLine.from,
+                bqLine.from + markerEnd,
+                Decoration.replace({}),
+              );
+            }
+            builder.add(
+              bqLine.from,
+              bqLine.from,
+              Decoration.line({
+                attributes: {
+                  style:
+                    "font-style: italic; color: var(--color-fg-muted); border-left: 3px solid rgba(124, 106, 78, 0.25); padding-left: 20px;",
                 },
               }),
             );
@@ -243,14 +265,15 @@
           "&": {
             backgroundColor: "var(--color-bg-base)",
             color: "var(--color-fg-default)",
-            fontSize: "13px",
-            fontFamily:
-              'ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", monospace',
+            fontSize: "17px",
+            fontFamily: '"Source Serif 4", Georgia, serif',
           },
           ".cm-content": {
             caretColor: "var(--color-accent)",
-            lineHeight: "1.6",
-            padding: "16px 0",
+            lineHeight: "1.8",
+            padding: "40px 0",
+            maxWidth: "720px",
+            margin: "0 auto",
           },
           ".cm-cursor": {
             borderLeftColor: "var(--color-accent)",
@@ -264,7 +287,11 @@
             border: "none",
           },
           ".cm-activeLine": {
-            backgroundColor: "transparent",
+            backgroundColor: "rgba(124, 106, 78, 0.04)",
+            fontFamily: '"JetBrains Mono", ui-monospace, monospace',
+            fontSize: "14px",
+            lineHeight: "1.7",
+            borderRadius: "4px",
           },
           ".cm-activeLineGutter": {
             backgroundColor: "transparent",
