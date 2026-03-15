@@ -3,7 +3,7 @@
   import { uiStore } from "../../stores/ui.svelte";
   import { workspaceStore } from "../../stores/workspace.svelte";
   import { fileTreeStore } from "../../stores/file-tree.svelte";
-  import { PanelLeft, GitBranch, Plus } from "lucide-svelte";
+  import { PanelLeft, GitBranch, Plus } from "@lucide/svelte";
 
   let width = $state(220);
 
@@ -37,54 +37,7 @@
   }
 </script>
 
-{#if uiStore.sidebarCollapsed}
-  <!-- Collapsed icon rail -->
-  <div
-    style="width: 44px; background: var(--color-bg-sidebar); flex-shrink: 0; position: relative;"
-    class="flex flex-col items-center"
-  >
-    <div
-      style="padding-top: 12px; gap: 4px;"
-      class="flex flex-col items-center"
-    >
-      <button
-        onclick={() => uiStore.toggleSidebar()}
-        style="width: 32px; height: 32px; border-radius: 6px; color: var(--color-fg-muted); border: none; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: color 0.1s, background-color 0.1s;"
-        onmouseenter={(e) => {
-          e.currentTarget.style.color = "var(--color-fg-default)";
-          e.currentTarget.style.background = "var(--color-bg-elevated)";
-        }}
-        onmouseleave={(e) => {
-          e.currentTarget.style.color = "var(--color-fg-muted)";
-          e.currentTarget.style.background = "transparent";
-        }}
-        aria-label="Expand sidebar"
-      >
-        <PanelLeft size={18} />
-      </button>
-      <button
-        onclick={() => uiStore.setActiveView("vcs")}
-        style="width: 32px; height: 32px; border-radius: 6px; color: var(--color-fg-muted); border: none; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: color 0.1s, background-color 0.1s;"
-        onmouseenter={(e) => {
-          e.currentTarget.style.color = "var(--color-fg-default)";
-          e.currentTarget.style.background = "var(--color-bg-elevated)";
-        }}
-        onmouseleave={(e) => {
-          e.currentTarget.style.color = "var(--color-fg-muted)";
-          e.currentTarget.style.background = "transparent";
-        }}
-        aria-label="Source control"
-      >
-        <GitBranch size={18} />
-      </button>
-    </div>
-    <!-- Right edge separator -->
-    <div
-      style="position: absolute; top: 0; right: 0; bottom: 0; width: 1px; background: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.06) 10%, rgba(0,0,0,0.06) 90%, transparent 100%);"
-    ></div>
-  </div>
-{:else}
-  <!-- Expanded sidebar -->
+<!-- Expanded sidebar -->
   <div
     style="width: {width}px; min-width: 180px; max-width: 400px; background: var(--color-bg-sidebar); flex-shrink: 0; position: relative; transition: opacity 200ms ease-out;"
     class="flex flex-col overflow-hidden"
@@ -212,4 +165,3 @@
       style="position: absolute; top: 0; right: -4px; bottom: 0; width: 8px; cursor: col-resize; z-index: 10;"
     ></div>
   </div>
-{/if}
