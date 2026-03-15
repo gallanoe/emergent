@@ -1,5 +1,5 @@
 class UIStore {
-  sidebarCollapsed = $state(false);
+  sidebarCollapsed = $state(true);
   activeView: "workspace" | "vcs" = $state("workspace");
 
   toggleSidebar() {
