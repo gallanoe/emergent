@@ -7,7 +7,7 @@
   ];
 </script>
 
-<div class="activity-bar" role="tablist" aria-label="Views">
+<div class="activity-bar" data-testid="activity-bar" role="tablist" aria-label="Views">
   {#each items as item (item.id)}
     <button
       role="tab"

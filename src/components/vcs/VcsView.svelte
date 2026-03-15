@@ -54,7 +54,7 @@
   });
 </script>
 
-<div class="vcs-view">
+<div class="vcs-view" data-testid="vcs-view">
   <CommitHistory bind:this={historyRef} />
   <div class="gradient-separator"></div>
 

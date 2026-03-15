@@ -83,9 +83,9 @@
   });
 </script>
 
-<div class="workspace-view">
+<div class="workspace-view" data-testid="workspace-view">
   <Sidebar />
-  <div class="editor-area">
+  <div class="editor-area" data-testid="editor-area">
     <TabBar />
     <div class="editor-content">
       {#if editorStore.activeTab}

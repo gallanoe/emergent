@@ -4,7 +4,7 @@
   import { GitBranch } from "@lucide/svelte";
 </script>
 
-<div class="sidebar">
+<div class="sidebar" data-testid="sidebar">
   <div class="sidebar-header">
     <span class="section-label">Workspace</span>
   </div>
