@@ -40,13 +40,6 @@
   $effect(() => {
     const commands = [
       {
-        id: "sidebar.toggle",
-        label: "Toggle Sidebar",
-        shortcut: "Mod+B",
-        context: "global" as const,
-        execute: () => uiStore.toggleSidebar(),
-      },
-      {
         id: "tab.close",
         label: "Close Tab",
         shortcut: "Mod+W",
@@ -63,7 +56,6 @@
         context: "global" as const,
         execute: () => {
           uiStore.setActiveView("workspace");
-          uiStore.setSidebarCollapsed(false);
           fileTreeStore.setPendingCreation({ type: "file", parentPath: "" });
         },
       },
@@ -74,7 +66,6 @@
         context: "global" as const,
         execute: () => {
           uiStore.setActiveView("workspace");
-          uiStore.setSidebarCollapsed(false);
           fileTreeStore.setPendingCreation({ type: "folder", parentPath: "" });
         },
       },

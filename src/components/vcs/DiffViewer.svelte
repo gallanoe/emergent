@@ -179,6 +179,15 @@
     font-size: 11px;
     padding: 3px 10px;
     font-family: var(--font-ui);
+    transition: background-color 150ms ease, color 150ms ease;
+  }
+
+  .view-toggle button:hover {
+    color: var(--color-fg-default);
+  }
+
+  .view-toggle button:active {
+    opacity: 0.8;
   }
 
   .view-toggle button.active {

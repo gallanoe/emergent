@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { X } from "lucide-svelte";
+  import { X } from "@lucide/svelte";
   import { editorStore } from "../../stores/editor.svelte";
 </script>
 

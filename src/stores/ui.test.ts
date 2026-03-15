@@ -1,24 +1,19 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { uiStore } from "./ui.svelte";
 
-describe("UIStore (Svelte)", () => {
+describe("UIStore", () => {
   beforeEach(() => {
-    uiStore.sidebarCollapsed = false;
+    uiStore.setActiveView("workspace");
   });
 
-  it("defaults to sidebar expanded", () => {
-    expect(uiStore.sidebarCollapsed).toBe(false);
+  it("defaults to workspace view", () => {
+    expect(uiStore.activeView).toBe("workspace");
   });
 
-  it("toggles sidebar", () => {
-    uiStore.toggleSidebar();
-    expect(uiStore.sidebarCollapsed).toBe(true);
-    uiStore.toggleSidebar();
-    expect(uiStore.sidebarCollapsed).toBe(false);
-  });
-
-  it("sets sidebar collapsed directly", () => {
-    uiStore.setSidebarCollapsed(true);
-    expect(uiStore.sidebarCollapsed).toBe(true);
+  it("switches active view", () => {
+    uiStore.setActiveView("vcs");
+    expect(uiStore.activeView).toBe("vcs");
+    uiStore.setActiveView("workspace");
+    expect(uiStore.activeView).toBe("workspace");
   });
 });

@@ -249,6 +249,7 @@
     color: var(--color-fg-default);
     border-radius: 4px;
     margin: 0 4px;
+    transition: background-color 150ms ease;
   }
 
   .tree-row:hover {
@@ -273,6 +274,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    transition: background-color 150ms ease, border-color 150ms ease;
   }
 
   .stage-checkbox:checked {

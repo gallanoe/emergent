@@ -82,6 +82,7 @@
     padding: 6px 10px;
     border-radius: 6px;
     margin: 2px 4px;
+    transition: background-color 150ms ease;
   }
 
   .commit-row:hover {
@@ -116,9 +117,14 @@
     font-size: 11px;
     cursor: pointer;
     text-align: center;
+    transition: background-color 150ms ease, color 150ms ease;
   }
 
   .show-more:hover {
     background: var(--color-bg-hover);
+  }
+
+  .show-more:active {
+    opacity: 0.8;
   }
 </style>

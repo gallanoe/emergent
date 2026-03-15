@@ -47,7 +47,7 @@
     position: relative;
   }
 
-  /* Right edge gradient separator */
+  /* Right edge separator */
   .activity-bar::after {
     content: "";
     position: absolute;
@@ -55,13 +55,7 @@
     right: 0;
     bottom: 0;
     width: 1px;
-    background: linear-gradient(
-      to bottom,
-      transparent 0%,
-      rgba(0, 0, 0, 0.06) 10%,
-      rgba(0, 0, 0, 0.06) 90%,
-      transparent 100%
-    );
+    background: var(--color-border-default);
   }
 
   .activity-item {

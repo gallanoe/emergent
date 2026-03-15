@@ -7,6 +7,13 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig({
   plugins: [svelte(), tailwindcss()],
   clearScreen: false,
+  build: {
+    target: 'esnext',
+  },
+  optimizeDeps: {
+    exclude: ['@lucide/svelte'],
+    include: ['@lucide/svelete > lucide']
+  },
   server: {
     port: 1420,
     strictPort: true,

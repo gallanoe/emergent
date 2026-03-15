@@ -4,7 +4,6 @@
   import Editor from "../editor/Editor.svelte";
   import { editorStore } from "../../stores/editor.svelte";
   import { fileTreeStore } from "../../stores/file-tree.svelte";
-  import { uiStore } from "../../stores/ui.svelte";
   import { toastStore } from "../../stores/toast.svelte";
   import {
     listTree,
@@ -85,9 +84,7 @@
 </script>
 
 <div class="workspace-view">
-  <div class="sidebar-container" class:hidden={uiStore.sidebarCollapsed}>
-    <Sidebar />
-  </div>
+  <Sidebar />
   <div class="editor-area">
     <TabBar />
     <div class="editor-content">
@@ -103,7 +100,9 @@
           <span class="empty-subtitle">{"Press \u2318N to get started"}</span>
         </div>
       {:else}
-        <p class="no-doc">No document open</p>
+        <div class="empty-state">
+          <span class="empty-subtitle">No document open</span>
+        </div>
       {/if}
     </div>
   </div>
@@ -121,10 +120,6 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-  }
-
-  .sidebar-container.hidden {
-    display: none;
   }
 
   .editor-content {
@@ -152,7 +147,4 @@
     color: var(--color-fg-muted);
   }
 
-  .no-doc {
-    color: var(--color-fg-muted);
-  }
 </style>

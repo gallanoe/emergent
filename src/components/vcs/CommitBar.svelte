@@ -76,6 +76,7 @@
     font-size: 12px;
     font-family: var(--font-ui);
     outline: none;
+    transition: border-color 150ms ease;
   }
 
   .commit-input:focus {
@@ -98,11 +99,15 @@
     font-weight: 500;
     cursor: pointer;
     white-space: nowrap;
-    transition: opacity 0.1s;
+    transition: opacity 150ms ease, background-color 150ms ease;
   }
 
   .commit-button:hover:not(:disabled) {
     opacity: 0.9;
+  }
+
+  .commit-button:active:not(:disabled) {
+    opacity: 0.8;
   }
 
   .commit-button:disabled {

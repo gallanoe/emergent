@@ -97,13 +97,7 @@
 
   .gradient-separator {
     height: 1px;
-    background: linear-gradient(
-      to right,
-      transparent 0%,
-      rgba(0, 0, 0, 0.08) 15%,
-      rgba(0, 0, 0, 0.08) 85%,
-      transparent 100%
-    );
+    background: var(--color-border-default);
     flex-shrink: 0;
   }
 
@@ -129,13 +123,7 @@
     right: 0;
     bottom: 0;
     width: 1px;
-    background: linear-gradient(
-      to bottom,
-      transparent 0%,
-      rgba(0, 0, 0, 0.08) 15%,
-      rgba(0, 0, 0, 0.08) 85%,
-      transparent 100%
-    );
+    background: var(--color-border-default);
   }
 
   .diff-panel {
@@ -179,6 +167,7 @@
     border-radius: 4px;
     font-size: 12px;
     cursor: pointer;
+    transition: opacity 150ms ease;
   }
 
   .retry-button:hover {

@@ -8,7 +8,7 @@
     FolderOpen,
     ChevronRight,
     ChevronDown,
-  } from "lucide-svelte";
+  } from "@lucide/svelte";
   import RenameInput from "./RenameInput.svelte";
   import CreationInput from "./CreationInput.svelte";
   import FileTreeNode from "./FileTreeNode.svelte";
