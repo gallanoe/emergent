@@ -28,7 +28,10 @@
 
   function isEditableTarget(target: EventTarget | null): boolean {
     if (!(target instanceof HTMLElement)) return false;
-    if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)
+    if (
+      target instanceof HTMLInputElement ||
+      target instanceof HTMLTextAreaElement
+    )
       return true;
     if (target.isContentEditable) return true;
     return false;
@@ -188,9 +191,10 @@
         label: "Toggle Source Control View",
         shortcut: "Mod+Shift+G",
         context: "global" as const,
-        execute: () => uiStore.setActiveView(
-          uiStore.activeView === "vcs" ? "workspace" : "vcs"
-        ),
+        execute: () =>
+          uiStore.setActiveView(
+            uiStore.activeView === "vcs" ? "workspace" : "vcs",
+          ),
       },
     ];
 

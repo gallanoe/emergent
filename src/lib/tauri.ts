@@ -128,11 +128,8 @@ export const vcsDeleteBranch = (name: string) => invoke<void>("vcs_delete_branch
 export const vcsMergeBranch = (sourceBranch: string) =>
   invoke<MergeResult>("vcs_merge_branch", { sourceBranch });
 
-export const vcsStage = (paths: string[]) =>
-  invoke<void>("vcs_stage", { paths });
+export const vcsStage = (paths: string[]) => invoke<void>("vcs_stage", { paths });
 
-export const vcsUnstage = (paths: string[]) =>
-  invoke<void>("vcs_unstage", { paths });
+export const vcsUnstage = (paths: string[]) => invoke<void>("vcs_unstage", { paths });
 
-export const vcsDiff = (path: string) =>
-  invoke<DiffResult>("vcs_diff", { path });
+export const vcsDiff = (path: string) => invoke<DiffResult>("vcs_diff", { path });

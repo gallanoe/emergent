@@ -25,9 +25,7 @@ describe("VcsStore", () => {
   });
 
   it("sets changed files", () => {
-    const files = [
-      { path: "a.txt", status: "modified" as const, staged: false },
-    ];
+    const files = [{ path: "a.txt", status: "modified" as const, staged: false }];
     vcsStore.setChangedFiles(files);
     expect(vcsStore.changedFiles).toEqual(files);
   });
@@ -45,9 +43,7 @@ describe("VcsStore", () => {
 
   it("computes hasChanges", () => {
     expect(vcsStore.hasChanges).toBe(false);
-    vcsStore.setChangedFiles([
-      { path: "a.txt", status: "modified" as const, staged: false },
-    ]);
+    vcsStore.setChangedFiles([{ path: "a.txt", status: "modified" as const, staged: false }]);
     expect(vcsStore.hasChanges).toBe(true);
   });
 

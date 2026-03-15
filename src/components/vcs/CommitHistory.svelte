@@ -50,9 +50,7 @@
       </div>
     {/each}
     {#if totalLoaded >= limit}
-      <button class="show-more" onclick={showMore}>
-        Show more
-      </button>
+      <button class="show-more" onclick={showMore}> Show more </button>
     {/if}
   </div>
 </div>

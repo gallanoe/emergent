@@ -76,9 +76,7 @@
             <div class="hunk">
               <div class="hunk-header">{hunk.header}</div>
               {#each hunk.lines as line, j (j)}
-                <div
-                  class="diff-line {line.kind}"
-                >
+                <div class="diff-line {line.kind}">
                   <span class="line-no old">{line.old_lineno ?? ""}</span>
                   <span class="line-no new">{line.new_lineno ?? ""}</span>
                   <span class="line-origin"

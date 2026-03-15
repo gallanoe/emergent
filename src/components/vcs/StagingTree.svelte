@@ -40,7 +40,12 @@
         if (!existing) {
           existing = isFile
             ? { name: part, path: fullPath, kind: "file" as const, status }
-            : { name: part, path: fullPath, kind: "folder" as const, children: [] };
+            : {
+                name: part,
+                path: fullPath,
+                kind: "folder" as const,
+                children: [],
+              };
           current.push(existing);
         }
         if (!isFile && existing.children) {
@@ -100,7 +105,9 @@
       vcsGetStatus()
         .then((files) => {
           vcsStore.setChangedFiles(files);
-          vcsStore.setStagedPaths(new Set(files.filter((f) => f.staged).map((f) => f.path)));
+          vcsStore.setStagedPaths(
+            new Set(files.filter((f) => f.staged).map((f) => f.path)),
+          );
         })
         .catch(() => {});
     }
@@ -144,7 +151,8 @@
     class:selected={vcsStore.selectedFile === node.path && node.kind === "file"}
     style="padding-left: {8 + depth * 16}px;"
     onclick={() => node.kind === "file" && selectFile(node.path)}
-    onkeydown={(e) => e.key === "Enter" && node.kind === "file" && selectFile(node.path)}
+    onkeydown={(e) =>
+      e.key === "Enter" && node.kind === "file" && selectFile(node.path)}
     role="treeitem"
     tabindex={0}
     aria-selected={vcsStore.selectedFile === node.path && node.kind === "file"}
@@ -153,7 +161,9 @@
       type="checkbox"
       checked={checkState === "checked"}
       indeterminate={checkState === "indeterminate"}
-      aria-checked={checkState === "indeterminate" ? "mixed" : checkState === "checked"}
+      aria-checked={checkState === "indeterminate"
+        ? "mixed"
+        : checkState === "checked"}
       onclick={(e) => {
         e.stopPropagation();
         toggleNode(node);
