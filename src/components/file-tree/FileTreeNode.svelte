@@ -2,7 +2,13 @@
   import type { TreeNode } from "../../lib/tauri";
   import { fileTreeStore } from "../../stores/file-tree.svelte";
   import { editorStore } from "../../stores/editor.svelte";
-  import { File, Folder, FolderOpen, ChevronRight, ChevronDown } from "lucide-svelte";
+  import {
+    File,
+    Folder,
+    FolderOpen,
+    ChevronRight,
+    ChevronDown,
+  } from "lucide-svelte";
   import RenameInput from "./RenameInput.svelte";
   import CreationInput from "./CreationInput.svelte";
   import FileTreeNode from "./FileTreeNode.svelte";

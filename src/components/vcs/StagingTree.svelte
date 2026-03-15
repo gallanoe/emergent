@@ -177,7 +177,9 @@
       <span class="status-badge {statusClass(node.status ?? '')}"
         >{statusLabel(node.status ?? "")}</span
       >
-      <span class="node-name" class:deleted-file={node.status === "deleted"}>{node.name}</span>
+      <span class="node-name" class:deleted-file={node.status === "deleted"}
+        >{node.name}</span
+      >
     {/if}
   </div>
   {#if node.children}

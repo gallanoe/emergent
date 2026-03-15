@@ -78,7 +78,9 @@
     <div
       style="padding: 10px 14px; border-bottom: 1px solid var(--color-border-default); display: flex; align-items: center; gap: 8px;"
     >
-      <span style="color: var(--color-fg-muted); font-size: 13px;">{"\u2318"}</span>
+      <span style="color: var(--color-fg-muted); font-size: 13px;"
+        >{"\u2318"}</span
+      >
       <input
         bind:this={inputEl}
         type="text"
@@ -134,7 +136,9 @@
         </div>
       {/each}
       {#if filtered.length === 0}
-        <div style="padding: 8px 14px; font-size: 13px; color: var(--color-fg-muted);">
+        <div
+          style="padding: 8px 14px; font-size: 13px; color: var(--color-fg-muted);"
+        >
           No matching commands
         </div>
       {/if}

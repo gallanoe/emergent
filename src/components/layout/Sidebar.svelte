@@ -43,21 +43,36 @@
     style="width: 44px; background: var(--color-bg-sidebar); flex-shrink: 0; position: relative;"
     class="flex flex-col items-center"
   >
-    <div style="padding-top: 12px; gap: 4px;" class="flex flex-col items-center">
+    <div
+      style="padding-top: 12px; gap: 4px;"
+      class="flex flex-col items-center"
+    >
       <button
         onclick={() => uiStore.toggleSidebar()}
         style="width: 32px; height: 32px; border-radius: 6px; color: var(--color-fg-muted); border: none; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: color 0.1s, background-color 0.1s;"
-        onmouseenter={(e) => { e.currentTarget.style.color = 'var(--color-fg-default)'; e.currentTarget.style.background = 'var(--color-bg-elevated)'; }}
-        onmouseleave={(e) => { e.currentTarget.style.color = 'var(--color-fg-muted)'; e.currentTarget.style.background = 'transparent'; }}
+        onmouseenter={(e) => {
+          e.currentTarget.style.color = "var(--color-fg-default)";
+          e.currentTarget.style.background = "var(--color-bg-elevated)";
+        }}
+        onmouseleave={(e) => {
+          e.currentTarget.style.color = "var(--color-fg-muted)";
+          e.currentTarget.style.background = "transparent";
+        }}
         aria-label="Expand sidebar"
       >
         <PanelLeft size={18} />
       </button>
       <button
-        onclick={() => uiStore.setActiveView('vcs')}
+        onclick={() => uiStore.setActiveView("vcs")}
         style="width: 32px; height: 32px; border-radius: 6px; color: var(--color-fg-muted); border: none; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: color 0.1s, background-color 0.1s;"
-        onmouseenter={(e) => { e.currentTarget.style.color = 'var(--color-fg-default)'; e.currentTarget.style.background = 'var(--color-bg-elevated)'; }}
-        onmouseleave={(e) => { e.currentTarget.style.color = 'var(--color-fg-muted)'; e.currentTarget.style.background = 'transparent'; }}
+        onmouseenter={(e) => {
+          e.currentTarget.style.color = "var(--color-fg-default)";
+          e.currentTarget.style.background = "var(--color-bg-elevated)";
+        }}
+        onmouseleave={(e) => {
+          e.currentTarget.style.color = "var(--color-fg-muted)";
+          e.currentTarget.style.background = "transparent";
+        }}
         aria-label="Source control"
       >
         <GitBranch size={18} />
@@ -75,16 +90,27 @@
     class="flex flex-col overflow-hidden"
   >
     <!-- Header -->
-    <div style="padding: 16px 16px 12px;" class="flex items-center justify-between">
-      <span style="font-size: 13px; font-weight: 600; color: var(--color-fg-heading); letter-spacing: -0.01em;">
+    <div
+      style="padding: 16px 16px 12px;"
+      class="flex items-center justify-between"
+    >
+      <span
+        style="font-size: 13px; font-weight: 600; color: var(--color-fg-heading); letter-spacing: -0.01em;"
+      >
         Workspace
       </span>
       <div class="flex items-center" style="gap: 2px;">
         <button
           onclick={handleNewFile}
           style="width: 28px; height: 28px; border-radius: 6px; color: var(--color-fg-muted); border: none; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: color 0.1s, background-color 0.1s;"
-          onmouseenter={(e) => { e.currentTarget.style.color = 'var(--color-fg-default)'; e.currentTarget.style.background = 'var(--color-bg-elevated)'; }}
-          onmouseleave={(e) => { e.currentTarget.style.color = 'var(--color-fg-muted)'; e.currentTarget.style.background = 'transparent'; }}
+          onmouseenter={(e) => {
+            e.currentTarget.style.color = "var(--color-fg-default)";
+            e.currentTarget.style.background = "var(--color-bg-elevated)";
+          }}
+          onmouseleave={(e) => {
+            e.currentTarget.style.color = "var(--color-fg-muted)";
+            e.currentTarget.style.background = "transparent";
+          }}
           aria-label="New file"
         >
           <Plus size={16} />
@@ -92,8 +118,14 @@
         <button
           onclick={() => uiStore.toggleSidebar()}
           style="width: 28px; height: 28px; border-radius: 6px; color: var(--color-fg-muted); border: none; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: color 0.1s, background-color 0.1s;"
-          onmouseenter={(e) => { e.currentTarget.style.color = 'var(--color-fg-default)'; e.currentTarget.style.background = 'var(--color-bg-elevated)'; }}
-          onmouseleave={(e) => { e.currentTarget.style.color = 'var(--color-fg-muted)'; e.currentTarget.style.background = 'transparent'; }}
+          onmouseenter={(e) => {
+            e.currentTarget.style.color = "var(--color-fg-default)";
+            e.currentTarget.style.background = "var(--color-bg-elevated)";
+          }}
+          onmouseleave={(e) => {
+            e.currentTarget.style.color = "var(--color-fg-muted)";
+            e.currentTarget.style.background = "transparent";
+          }}
           aria-label="Collapse sidebar"
         >
           <PanelLeft size={16} />
@@ -102,10 +134,14 @@
     </div>
 
     <!-- Gradient separator -->
-    <div style="height: 1px; background: linear-gradient(to right, transparent 0%, rgba(0,0,0,0.08) 15%, rgba(0,0,0,0.08) 85%, transparent 100%); margin: 0 8px;"></div>
+    <div
+      style="height: 1px; background: linear-gradient(to right, transparent 0%, rgba(0,0,0,0.08) 15%, rgba(0,0,0,0.08) 85%, transparent 100%); margin: 0 8px;"
+    ></div>
 
     <!-- Section label -->
-    <div style="padding: 4px 16px; font-size: 11px; font-weight: 500; color: var(--color-fg-muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 2px;">
+    <div
+      style="padding: 4px 16px; font-size: 11px; font-weight: 500; color: var(--color-fg-muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 2px;"
+    >
       Documents
     </div>
 
@@ -115,12 +151,19 @@
     </div>
 
     <!-- Footer separator -->
-    <div style="height: 1px; background: linear-gradient(to right, transparent 0%, rgba(0,0,0,0.08) 15%, rgba(0,0,0,0.08) 85%, transparent 100%); margin: 0 8px;"></div>
+    <div
+      style="height: 1px; background: linear-gradient(to right, transparent 0%, rgba(0,0,0,0.08) 15%, rgba(0,0,0,0.08) 85%, transparent 100%); margin: 0 8px;"
+    ></div>
 
     <!-- Footer with branch info -->
-    <div style="padding: 8px 12px;" class="flex items-center" >
-      <GitBranch size={14} style="color: var(--color-fg-muted); flex-shrink: 0;" />
-      <span style="font-size: 12px; color: var(--color-fg-muted); margin-left: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+    <div style="padding: 8px 12px;" class="flex items-center">
+      <GitBranch
+        size={14}
+        style="color: var(--color-fg-muted); flex-shrink: 0;"
+      />
+      <span
+        style="font-size: 12px; color: var(--color-fg-muted); margin-left: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+      >
         {workspaceStore.currentBranch}
       </span>
     </div>
@@ -142,7 +185,9 @@
       aria-valuemax={400}
       tabindex={0}
       onmousedown={handleMouseDown}
-      ondblclick={() => { width = 220; }}
+      ondblclick={() => {
+        width = 220;
+      }}
       onkeydown={(e) => {
         const step = e.shiftKey ? 40 : 10;
         if (e.key === "ArrowLeft") {
