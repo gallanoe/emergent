@@ -1,28 +1,47 @@
+@import "@fontsource/inter/300.css";
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
+@import "@fontsource/source-serif-4/400.css";
+@import "@fontsource/source-serif-4/600.css";
+@import "@fontsource/jetbrains-mono/400.css";
+@import "@fontsource/jetbrains-mono/500.css";
 @import "tailwindcss";
 
 :root {
-  --color-bg-base: #111113;
-  --color-bg-hover: #212225;
-  --color-bg-active: #272a2d;
-  --color-bg-selected: rgba(0, 133, 235, 0.08);
-  --color-fg-default: #b0b4ba;
-  --color-fg-heading: #edeef0;
-  --color-fg-muted: #7b8088;
-  --color-fg-disabled: #5a6169;
-  --color-border-default: rgba(255, 255, 255, 0.06);
-  --color-border-strong: rgba(255, 255, 255, 0.12);
-  --color-border-focus: #0085eb;
-  --color-accent: #0085eb;
-  --color-accent-hover: #0090ff;
-  --color-accent-text: #70b8ff;
-  --color-success: #30a46c;
-  --color-warning: #f5a623;
-  --color-error: #e5484d;
-  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", monospace;
+  --color-bg-base: #faf9f7;
+  --color-bg-sidebar: #f5f3f0;
+  --color-bg-elevated: #f5f3f0;
+  --color-bg-hover: #efecea;
+  --color-bg-active: #e8e5e2;
+  --color-bg-selected: rgba(124, 106, 78, 0.08);
+  --color-fg-default: #3d3833;
+  --color-fg-heading: #1a1714;
+  --color-fg-muted: #706860;
+  --color-fg-disabled: #b5afa6;
+  --color-border-default: rgba(0, 0, 0, 0.06);
+  --color-border-strong: rgba(0, 0, 0, 0.10);
+  --color-border-focus: #7c6a4e;
+  --color-accent: #7c6a4e;
+  --color-accent-hover: #6b5b42;
+  --color-accent-text: #7c6a4e;
+  --color-accent-soft: rgba(124, 106, 78, 0.12);
+  --color-success: #2d8c50;
+  --color-warning: #c48a1a;
+  --color-error: #c83c3c;
+  --color-added-bg: rgba(45, 140, 80, 0.07);
+  --color-added-fg: #2d6e46;
+  --color-removed-bg: rgba(200, 60, 60, 0.07);
+  --color-removed-fg: #a83232;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
+  --font-ui: "Inter", -apple-system, system-ui, sans-serif;
+  --font-content: "Source Serif 4", Georgia, serif;
 }
 
 @theme {
   --color-bg-base: var(--color-bg-base);
+  --color-bg-sidebar: var(--color-bg-sidebar);
+  --color-bg-elevated: var(--color-bg-elevated);
   --color-bg-hover: var(--color-bg-hover);
   --color-bg-active: var(--color-bg-active);
   --color-bg-selected: var(--color-bg-selected);
@@ -34,20 +53,23 @@
   --color-border-strong: var(--color-border-strong);
   --color-border-focus: var(--color-border-focus);
   --color-accent: var(--color-accent);
+  --color-accent-hover: var(--color-accent-hover);
+  --color-accent-text: var(--color-accent-text);
+  --color-accent-soft: var(--color-accent-soft);
   --color-success: var(--color-success);
   --color-warning: var(--color-warning);
   --color-error: var(--color-error);
-  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", monospace;
+  --color-added-bg: var(--color-added-bg);
+  --color-added-fg: var(--color-added-fg);
+  --color-removed-bg: var(--color-removed-bg);
+  --color-removed-fg: var(--color-removed-fg);
+  --font-mono: var(--font-mono);
+  --font-ui: var(--font-ui);
+  --font-content: var(--font-content);
 }
 
 body {
-  font-family:
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
+  font-family: var(--font-ui);
   font-size: 13px;
   line-height: 1.3;
   cursor: default;
@@ -71,7 +93,7 @@ input,
 
 :focus-visible {
   outline: 2px solid var(--color-border-focus);
-  outline-offset: 2px;
+  outline-offset: 1px;
 }
 
 @keyframes toast-in {
@@ -95,12 +117,12 @@ input,
 }
 
 .view-fade-in {
-  animation: fade-in 150ms ease-out;
+  animation: fade-in 200ms ease-out;
 }
 
 .interactive {
   cursor: default;
-  transition: background-color 100ms ease-out;
+  transition: background-color 150ms ease-out;
 }
 
 .interactive:hover {
@@ -112,8 +134,8 @@ input,
 }
 
 .interactive:focus-visible {
-  outline: 1px solid var(--color-accent);
-  outline-offset: -1px;
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 1px;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -123,4 +145,22 @@ input,
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.12);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.2);
 }
