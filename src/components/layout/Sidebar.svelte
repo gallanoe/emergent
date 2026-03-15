@@ -28,11 +28,12 @@
   .sidebar {
     width: 220px;
     height: 100%;
-    background: var(--color-bg-sidebar);
+    background: var(--color-bg-base);
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    border-right: 1px solid var(--color-border-default);
   }
 
   .sidebar-header {

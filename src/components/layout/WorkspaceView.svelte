@@ -10,7 +10,6 @@
     readDocument,
     writeDocument,
     onTreeChanged,
-    onDocumentChanged,
   } from "../../lib/tauri";
   import { sortTree } from "../../lib/sort-tree";
 
@@ -58,27 +57,13 @@
     loadTree();
 
     let unlistenTree: (() => void) | null = null;
-    let unlistenDoc: (() => void) | null = null;
 
     onTreeChanged(() => loadTree()).then((fn) => {
       unlistenTree = fn;
     });
 
-    onDocumentChanged(({ path }) => {
-      if (editorStore.activeTab === path) {
-        readDocument(path)
-          .then((c) => {
-            editorContent = c;
-          })
-          .catch(() => {});
-      }
-    }).then((fn) => {
-      unlistenDoc = fn;
-    });
-
     return () => {
       unlistenTree?.();
-      unlistenDoc?.();
     };
   });
 </script>
@@ -146,5 +131,4 @@
     font-size: 12px;
     color: var(--color-fg-muted);
   }
-
 </style>

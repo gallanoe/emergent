@@ -179,7 +179,9 @@
     font-size: 11px;
     padding: 3px 10px;
     font-family: var(--font-ui);
-    transition: background-color 150ms ease, color 150ms ease;
+    transition:
+      background-color 150ms ease,
+      color 150ms ease;
   }
 
   .view-toggle button:hover {

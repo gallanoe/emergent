@@ -274,7 +274,9 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: background-color 150ms ease, border-color 150ms ease;
+    transition:
+      background-color 150ms ease,
+      border-color 150ms ease;
   }
 
   .stage-checkbox:checked {

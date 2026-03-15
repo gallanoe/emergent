@@ -16,9 +16,7 @@ test("activity bar is always visible with correct width", async ({ page }) => {
   expect(box!.width).toBeCloseTo(40, 0);
 });
 
-test("workspace view renders with sidebar and editor area", async ({
-  page,
-}) => {
+test("workspace view renders with sidebar and editor area", async ({ page }) => {
   const workspaceView = page.getByTestId("workspace-view");
   const sidebar = page.getByTestId("sidebar");
   const editorArea = page.getByTestId("editor-area");
@@ -40,9 +38,7 @@ test("sidebar fills full height of parent", async ({ page }) => {
   expect(sidebarBox!.height).toBeCloseTo(parentBox!.height, 0);
 });
 
-test("switching to VCS view shows vcs-view and hides workspace", async ({
-  page,
-}) => {
+test("switching to VCS view shows vcs-view and hides workspace", async ({ page }) => {
   // Click Source Control tab
   await page.getByRole("tab", { name: "Source Control" }).click();
 

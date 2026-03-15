@@ -8,11 +8,11 @@ export default defineConfig({
   plugins: [svelte(), tailwindcss()],
   clearScreen: false,
   build: {
-    target: 'esnext',
+    target: "esnext",
   },
   optimizeDeps: {
-    exclude: ['@lucide/svelte'],
-    include: ['@lucide/svelete > lucide']
+    exclude: ["@lucide/svelte"],
+    include: ["@lucide/svelete > lucide"],
   },
   server: {
     port: 1420,

@@ -117,7 +117,9 @@
     font-size: 11px;
     cursor: pointer;
     text-align: center;
-    transition: background-color 150ms ease, color 150ms ease;
+    transition:
+      background-color 150ms ease,
+      color 150ms ease;
   }
 
   .show-more:hover {

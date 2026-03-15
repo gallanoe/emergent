@@ -28,7 +28,6 @@
 
   // Plain variables — NOT $state. CodeMirror manages its own state.
   let view: EditorView | null = null;
-  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   // --- CodeMirror pure code (copied from React version) ---
 
@@ -254,11 +253,6 @@
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
             editorStore.markDirty(currentPath);
-            if (debounceTimer) clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(() => {
-              const doc = update.state.doc.toString();
-              handleSave(doc);
-            }, 1000);
           }
         }),
         EditorView.theme({
@@ -320,8 +314,6 @@
     });
 
     return () => {
-      if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = null;
       newView.destroy();
       view = null;
       commandStore.unregisterCommand("document.save");

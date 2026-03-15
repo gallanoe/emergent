@@ -99,7 +99,9 @@
     font-weight: 500;
     cursor: pointer;
     white-space: nowrap;
-    transition: opacity 150ms ease, background-color 150ms ease;
+    transition:
+      opacity 150ms ease,
+      background-color 150ms ease;
   }
 
   .commit-button:hover:not(:disabled) {

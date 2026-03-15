@@ -81,7 +81,7 @@
   {#each items as item, i}
     {#if item.type === "separator"}
       <div
-        style="height: 1px; margin: 4px 8px; background: linear-gradient(to right, transparent, var(--color-border-strong), transparent);"
+        style="height: 1px; margin: 4px 8px; background: var(--color-border-default);"
       ></div>
     {:else}
       {@const aIdx = items

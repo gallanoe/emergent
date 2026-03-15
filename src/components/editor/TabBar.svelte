@@ -57,6 +57,6 @@
     {/each}
   </div>
   <div
-    style="height: 1px; background: linear-gradient(to right, transparent 0%, rgba(0,0,0,0.06) 10%, rgba(0,0,0,0.06) 90%, transparent 100%); margin: 0 16px;"
+    style="height: 1px; background: var(--color-border-default); margin: 0 16px;"
   ></div>
 {/if}
