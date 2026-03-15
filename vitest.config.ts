@@ -5,5 +5,6 @@ export default defineConfig({
   plugins: [svelte()],
   test: {
     environment: "jsdom",
+    exclude: ["e2e/**", "scripts/**", "node_modules/**", ".claude/**"],
   },
 });

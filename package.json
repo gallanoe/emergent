@@ -17,7 +17,7 @@
     "test": "vitest run",
     "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
     "test:e2e": "bunx playwright test",
-    "screenshot": "bunx playwright test --test-dir scripts scripts/screenshot.ts"
+    "screenshot": "bun scripts/screenshot.ts"
   },
   "dependencies": {
     "@codemirror/commands": "^6.10.2",
