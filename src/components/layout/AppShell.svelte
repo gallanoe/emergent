@@ -1,11 +1,9 @@
 <script lang="ts">
   import Sidebar from "./Sidebar.svelte";
   import TabBar from "../editor/TabBar.svelte";
-  import StatusBar from "./StatusBar.svelte";
   import Toast from "../shared/Toast.svelte";
   import Editor from "../editor/Editor.svelte";
   import CommandPalette from "../shared/CommandPalette.svelte";
-  import ActivityBar from "./ActivityBar.svelte";
   import VcsView from "../vcs/VcsView.svelte";
   import { editorStore } from "../../stores/editor.svelte";
   import { fileTreeStore } from "../../stores/file-tree.svelte";
@@ -23,7 +21,6 @@
   import { sortTree } from "../../lib/sort-tree";
   import { normalizeShortcut, resolveCommand } from "../../lib/keybindings";
 
-  let sidebarWidth = $state(220);
   let editorContent = $state("");
 
   function isEditableTarget(target: EventTarget | null): boolean {
@@ -214,19 +211,11 @@
 
 <div class="flex h-screen flex-col">
   <div class="flex flex-1 overflow-hidden">
-    <ActivityBar />
+    <Sidebar />
     {#if uiStore.activeView === "workspace"}
-      {#if !uiStore.sidebarCollapsed}
-        <Sidebar
-          width={sidebarWidth}
-          onwidthchange={(w) => {
-            sidebarWidth = w;
-          }}
-        />
-      {/if}
       <div class="flex flex-1 flex-col overflow-hidden">
         <TabBar />
-        <div class="flex-1 overflow-auto p-6">
+        <div class="flex-1 overflow-auto">
           {#if editorStore.activeTab}
             <Editor
               content={editorContent}
@@ -255,7 +244,6 @@
       <VcsView />
     {/if}
   </div>
-  <StatusBar />
   <Toast />
   <CommandPalette />
 </div>
