@@ -27,6 +27,9 @@ pub enum AppError {
 
     #[error("{message}")]
     Internal { message: String },
+
+    #[error("internal lock was poisoned")]
+    LockPoisoned,
 }
 
 impl From<git2::Error> for AppError {

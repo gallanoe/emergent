@@ -4,10 +4,11 @@ mod error;
 mod events;
 mod vcs;
 mod workspace;
+mod state;
 
 use commands::workspace::AppState;
 use events::EventEmitter;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, RwLock};
 use tauri::{Emitter, Manager};
 
 struct TauriEmitter {
@@ -39,11 +40,11 @@ pub fn run() {
                 app_handle: app.handle().clone(),
             });
             let app_state = AppState {
-                workspace: Mutex::new(workspace::WorkspaceService::new(
+                workspace: RwLock::new(workspace::WorkspaceService::new(
                     base_dir,
                     emitter.clone(),
                 )),
-                vcs: Mutex::new(vcs::VcsService::new(emitter)),
+                vcs: RwLock::new(vcs::VcsService::new(emitter)),
             };
             app.manage(app_state);
             Ok(())

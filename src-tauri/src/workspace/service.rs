@@ -44,6 +44,12 @@ pub struct WorkspaceService {
     state: WorkspaceState,
 }
 
+// SAFETY: WorkspaceService is always accessed behind an RwLock, which ensures
+// exclusive access for writes and shared access for reads. The inner
+// git2::Repository contains a *mut raw pointer that prevents auto-Sync, but
+// the RwLock guarantees no concurrent mutable access.
+unsafe impl Sync for WorkspaceService {}
+
 impl WorkspaceService {
     pub fn new(base_dir: PathBuf, emitter: Arc<dyn EventEmitter>) -> Self {
         Self {
