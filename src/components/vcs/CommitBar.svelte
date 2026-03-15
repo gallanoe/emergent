@@ -59,8 +59,7 @@
 <style>
   .commit-bar {
     padding: 8px 12px;
-    background: var(--color-bg-elevated);
-    border-top: 1px solid var(--color-border-default);
+    background: var(--color-bg-sidebar);
     display: flex;
     gap: 8px;
     align-items: center;
@@ -70,17 +69,17 @@
   .commit-input {
     flex: 1;
     background: var(--color-bg-base);
-    border: 1px solid var(--color-border-default);
+    border: 1.5px solid var(--color-border-default);
     color: var(--color-fg-default);
     padding: 5px 8px;
-    border-radius: 4px;
+    border-radius: 8px;
     font-size: 12px;
-    font-family: ui-monospace, monospace;
+    font-family: var(--font-ui);
     outline: none;
   }
 
   .commit-input:focus {
-    border-color: var(--color-accent, #7c3aed);
+    border-color: var(--color-border-strong);
   }
 
   .staged-count {
@@ -90,12 +89,13 @@
   }
 
   .commit-button {
-    background: var(--color-accent, #7c3aed);
+    background: var(--color-accent);
     color: white;
     border: none;
     padding: 5px 14px;
-    border-radius: 4px;
+    border-radius: 8px;
     font-size: 12px;
+    font-weight: 500;
     cursor: pointer;
     white-space: nowrap;
     transition: opacity 0.1s;

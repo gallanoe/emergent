@@ -57,19 +57,18 @@
 
 <style>
   .commit-history {
-    border-bottom: 1px solid var(--color-border-default);
+    flex-shrink: 0;
   }
 
   .history-header {
     padding: 6px 12px;
-    border-bottom: 1px solid var(--color-border-default);
-    background: var(--color-bg-elevated);
+    background: var(--color-bg-sidebar);
   }
 
   .section-label {
     font-size: 11px;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.04em;
     color: var(--color-fg-muted);
     font-weight: 600;
   }
@@ -80,8 +79,13 @@
   }
 
   .commit-row {
-    padding: 6px 12px;
-    border-bottom: 1px solid var(--color-border-subtle, transparent);
+    padding: 6px 10px;
+    border-radius: 6px;
+    margin: 2px 4px;
+  }
+
+  .commit-row:hover {
+    background: var(--color-bg-hover);
   }
 
   .commit-message {
@@ -95,24 +99,26 @@
 
   .commit-meta {
     display: block;
-    font-size: 10px;
+    font-size: 11px;
     color: var(--color-fg-muted);
     margin-top: 1px;
-    font-family: ui-monospace, monospace;
+    font-family: var(--font-mono);
   }
 
   .show-more {
-    width: 100%;
+    width: calc(100% - 8px);
+    margin: 2px 4px;
     padding: 4px 12px;
-    background: var(--color-bg-elevated);
-    border: none;
-    color: var(--color-accent, #7c3aed);
+    background: none;
+    border: 1px solid var(--color-border-default);
+    border-radius: 6px;
+    color: var(--color-fg-muted);
     font-size: 11px;
     cursor: pointer;
     text-align: center;
   }
 
   .show-more:hover {
-    background: var(--color-bg-base);
+    background: var(--color-bg-hover);
   }
 </style>

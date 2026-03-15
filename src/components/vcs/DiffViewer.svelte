@@ -53,7 +53,6 @@
           class:active={viewMode === "unified"}
           onclick={() => (viewMode = "unified")}>unified</button
         >
-        <span class="toggle-sep">|</span>
         <button
           class:active={viewMode === "split"}
           onclick={() => (viewMode = "split")}>split</button
@@ -71,7 +70,7 @@
         {#if viewMode === "unified"}
           {#each diffResult.hunks as hunk, i (i)}
             {#if i > 0}
-              <div class="collapsed-divider">···</div>
+              <div class="collapsed-divider">· · ·</div>
             {/if}
             <div class="hunk">
               <div class="hunk-header">{hunk.header}</div>
@@ -94,7 +93,7 @@
         {:else}
           {#each diffResult.hunks as hunk, i (i)}
             {#if i > 0}
-              <div class="collapsed-divider">···</div>
+              <div class="collapsed-divider">· · ·</div>
             {/if}
             <div class="hunk">
               <div class="hunk-header">{hunk.header}</div>
@@ -144,14 +143,13 @@
     flex-direction: column;
     flex: 1;
     overflow: hidden;
-    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    font-family: var(--font-mono);
     font-size: 12px;
   }
 
   .diff-header {
     padding: 6px 12px;
-    background: var(--color-bg-elevated);
-    border-bottom: 1px solid var(--color-border-default);
+    background: var(--color-bg-base);
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -166,7 +164,11 @@
   .view-toggle {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 0;
+    background: var(--color-bg-base);
+    border: 1px solid var(--color-border-default);
+    border-radius: 6px;
+    overflow: hidden;
   }
 
   .view-toggle button {
@@ -175,18 +177,13 @@
     color: var(--color-fg-muted);
     cursor: pointer;
     font-size: 11px;
-    padding: 0;
-    font-family: inherit;
+    padding: 3px 10px;
+    font-family: var(--font-ui);
   }
 
   .view-toggle button.active {
+    background: var(--color-bg-hover);
     color: var(--color-fg-default);
-    text-decoration: underline;
-  }
-
-  .toggle-sep {
-    color: var(--color-fg-muted);
-    font-size: 11px;
   }
 
   .diff-content {
@@ -203,28 +200,28 @@
     height: 100%;
     color: var(--color-fg-muted);
     font-size: 12px;
-    font-family: system-ui, sans-serif;
+    font-family: var(--font-ui);
   }
 
   .error-state {
-    color: var(--color-error, #f87171);
+    color: var(--color-error);
   }
 
   .hunk-header {
     padding: 2px 12px;
     color: var(--color-fg-muted);
     font-size: 11px;
-    background: var(--color-bg-elevated);
-    border-bottom: 1px solid var(--color-border-default);
+    font-family: var(--font-mono);
+    background: var(--color-accent-soft);
+    border-radius: 4px;
+    margin: 2px 4px;
   }
 
   .collapsed-divider {
     padding: 4px 12px;
-    color: var(--color-fg-muted);
+    color: var(--color-fg-disabled);
     font-size: 10px;
     text-align: center;
-    border-top: 1px solid var(--color-border-default);
-    border-bottom: 1px solid var(--color-border-default);
     background: var(--color-bg-base);
   }
 
@@ -232,20 +229,21 @@
     display: flex;
     line-height: 1.6;
     white-space: pre;
+    font-family: var(--font-mono);
   }
 
   .diff-line.add {
-    background: rgba(74, 222, 128, 0.1);
-    color: var(--color-success, #4ade80);
+    background: var(--color-added-bg);
+    color: var(--color-added-fg);
   }
 
   .diff-line.remove {
-    background: rgba(248, 113, 113, 0.1);
-    color: var(--color-error, #f87171);
+    background: var(--color-removed-bg);
+    color: var(--color-removed-fg);
   }
 
   .diff-line.context {
-    color: var(--color-fg-muted);
+    color: var(--color-fg-default);
   }
 
   .diff-line.spacer {
@@ -256,8 +254,7 @@
     width: 40px;
     text-align: right;
     padding-right: 8px;
-    color: var(--color-fg-muted);
-    opacity: 0.5;
+    color: var(--color-fg-disabled);
     flex-shrink: 0;
     user-select: none;
   }
@@ -275,11 +272,13 @@
     text-align: center;
     flex-shrink: 0;
     user-select: none;
+    font-weight: 500;
   }
 
   .line-content {
     flex: 1;
     padding-right: 12px;
+    font-family: var(--font-mono);
   }
 
   .split-view {

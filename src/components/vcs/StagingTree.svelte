@@ -130,16 +130,16 @@
     }
   }
 
-  function statusColor(status: string): string {
+  function statusClass(status: string): string {
     switch (status) {
       case "new":
-        return "var(--color-info, #22d3ee)";
+        return "status-added";
       case "modified":
-        return "var(--color-success, #4ade80)";
+        return "status-modified";
       case "deleted":
-        return "var(--color-error, #f87171)";
+        return "status-deleted";
       default:
-        return "var(--color-fg-muted)";
+        return "";
     }
   }
 </script>
@@ -174,10 +174,10 @@
       <span class="folder-icon">📁</span>
       <span class="node-name folder-name">{node.name}/</span>
     {:else}
-      <span class="status-badge" style="color: {statusColor(node.status ?? '')}"
+      <span class="status-badge {statusClass(node.status ?? '')}"
         >{statusLabel(node.status ?? "")}</span
       >
-      <span class="node-name">{node.name}</span>
+      <span class="node-name" class:deleted-file={node.status === "deleted"}>{node.name}</span>
     {/if}
   </div>
   {#if node.children}
@@ -204,12 +204,12 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    flex: 1;
   }
 
   .staging-header {
     padding: 6px 10px;
-    background: var(--color-bg-elevated);
-    border-bottom: 1px solid var(--color-border-default);
+    background: var(--color-bg-sidebar);
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -218,19 +218,23 @@
   .section-label {
     font-size: 11px;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.04em;
     color: var(--color-fg-muted);
     font-weight: 600;
   }
 
   .change-count {
     font-size: 10px;
-    color: var(--color-accent, #7c3aed);
+    color: var(--color-accent);
+    background: var(--color-accent-soft);
+    border-radius: 10px;
+    padding: 1px 7px;
   }
 
   .tree-content {
     flex: 1;
     overflow-y: auto;
+    padding: 2px 0;
   }
 
   .tree-row {
@@ -241,20 +245,60 @@
     cursor: pointer;
     font-size: 12px;
     color: var(--color-fg-default);
+    border-radius: 4px;
+    margin: 0 4px;
   }
 
   .tree-row:hover {
-    background: var(--color-bg-elevated);
+    background: var(--color-bg-hover);
   }
 
   .tree-row.selected {
-    background: var(--color-bg-selected, rgba(124, 58, 237, 0.15));
+    background: var(--color-bg-selected);
   }
 
   .stage-checkbox {
-    accent-color: var(--color-accent, #7c3aed);
+    appearance: none;
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    border: 1.5px solid var(--color-fg-disabled);
+    background: transparent;
     cursor: pointer;
     flex-shrink: 0;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .stage-checkbox:checked {
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+  }
+
+  .stage-checkbox:checked::after {
+    content: "";
+    display: block;
+    width: 4px;
+    height: 8px;
+    border: solid white;
+    border-width: 0 1.5px 1.5px 0;
+    transform: rotate(45deg);
+    margin-top: -1px;
+  }
+
+  .stage-checkbox:indeterminate {
+    border-color: var(--color-fg-muted);
+  }
+
+  .stage-checkbox:indeterminate::after {
+    content: "";
+    display: block;
+    width: 8px;
+    height: 1.5px;
+    background: var(--color-fg-muted);
   }
 
   .folder-icon {
@@ -265,10 +309,27 @@
   .status-badge {
     font-size: 10px;
     font-weight: 600;
-    font-family: ui-monospace, monospace;
-    width: 14px;
+    font-family: var(--font-mono);
+    padding: 0 4px;
+    border-radius: 4px;
     text-align: center;
     flex-shrink: 0;
+    line-height: 1.6;
+  }
+
+  .status-badge.status-added {
+    color: var(--color-success);
+    background: rgba(45, 140, 80, 0.1);
+  }
+
+  .status-badge.status-modified {
+    color: var(--color-accent);
+    background: var(--color-accent-soft);
+  }
+
+  .status-badge.status-deleted {
+    color: var(--color-error);
+    background: rgba(200, 60, 60, 0.1);
   }
 
   .node-name {
@@ -277,7 +338,12 @@
     text-overflow: ellipsis;
   }
 
+  .node-name.deleted-file {
+    text-decoration: line-through;
+    text-decoration-color: var(--color-fg-disabled);
+  }
+
   .folder-name {
-    color: var(--color-accent, #7c3aed);
+    color: var(--color-accent);
   }
 </style>

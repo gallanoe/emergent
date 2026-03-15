@@ -56,6 +56,7 @@
 
 <div class="vcs-view">
   <CommitHistory bind:this={historyRef} />
+  <div class="gradient-separator"></div>
 
   {#if statusError}
     <div class="empty-state">
@@ -66,11 +67,13 @@
     <div class="staging-area">
       <div class="staging-tree-panel">
         <StagingTree />
+        <div class="vertical-separator"></div>
       </div>
       <div class="diff-panel">
         <DiffViewer refreshKey={diffRefreshKey} />
       </div>
     </div>
+    <div class="gradient-separator"></div>
     <CommitBar oncommit={handleCommit} />
   {:else}
     <div class="empty-state">
@@ -89,6 +92,19 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    background: var(--color-bg-base);
+  }
+
+  .gradient-separator {
+    height: 1px;
+    background: linear-gradient(
+      to right,
+      transparent 0%,
+      rgba(0, 0, 0, 0.08) 15%,
+      rgba(0, 0, 0, 0.08) 85%,
+      transparent 100%
+    );
+    flex-shrink: 0;
   }
 
   .staging-area {
@@ -101,10 +117,25 @@
     width: 220px;
     min-width: 160px;
     max-width: 360px;
-    border-right: 1px solid var(--color-border-default);
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    position: relative;
+  }
+
+  .vertical-separator {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 1px;
+    background: linear-gradient(
+      to bottom,
+      transparent 0%,
+      rgba(0, 0, 0, 0.08) 15%,
+      rgba(0, 0, 0, 0.08) 85%,
+      transparent 100%
+    );
   }
 
   .diff-panel {
@@ -125,7 +156,7 @@
 
   .empty-icon {
     font-size: 24px;
-    opacity: 0.3;
+    color: var(--color-fg-disabled);
     margin-bottom: 8px;
   }
 
@@ -141,7 +172,7 @@
 
   .retry-button {
     margin-top: 8px;
-    background: var(--color-accent, #7c3aed);
+    background: var(--color-accent);
     color: white;
     border: none;
     padding: 4px 12px;
