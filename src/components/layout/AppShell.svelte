@@ -1,27 +1,15 @@
 <script lang="ts">
-  import Sidebar from "./Sidebar.svelte";
-  import TabBar from "../editor/TabBar.svelte";
-  import Toast from "../shared/Toast.svelte";
-  import Editor from "../editor/Editor.svelte";
-  import CommandPalette from "../shared/CommandPalette.svelte";
+  import ActivityBar from "./ActivityBar.svelte";
+  import WorkspaceView from "./WorkspaceView.svelte";
   import VcsView from "../vcs/VcsView.svelte";
-  import { editorStore } from "../../stores/editor.svelte";
-  import { fileTreeStore } from "../../stores/file-tree.svelte";
+  import Toast from "../shared/Toast.svelte";
+  import CommandPalette from "../shared/CommandPalette.svelte";
   import { uiStore } from "../../stores/ui.svelte";
   import { commandStore } from "../../stores/commands.svelte";
   import { focusContextStore } from "../../stores/focus-context.svelte";
-  import { toastStore } from "../../stores/toast.svelte";
-  import {
-    listTree,
-    readDocument,
-    writeDocument,
-    onTreeChanged,
-    onDocumentChanged,
-  } from "../../lib/tauri";
-  import { sortTree } from "../../lib/sort-tree";
+  import { editorStore } from "../../stores/editor.svelte";
+  import { fileTreeStore } from "../../stores/file-tree.svelte";
   import { normalizeShortcut, resolveCommand } from "../../lib/keybindings";
-
-  let editorContent = $state("");
 
   function isEditableTarget(target: EventTarget | null): boolean {
     if (!(target instanceof HTMLElement)) return false;
@@ -47,72 +35,6 @@
       commandStore.executeCommand(command.id);
     }
   }
-
-  function handleSave(content: string) {
-    const tab = editorStore.activeTab;
-    if (tab) {
-      writeDocument(tab, content);
-    }
-  }
-
-  function loadTree() {
-    listTree()
-      .then((tree) => {
-        fileTreeStore.setTree(sortTree(tree));
-        fileTreeStore.setLoading(false);
-      })
-      .catch((err) => {
-        fileTreeStore.setLoading(false);
-        toastStore.addToast(
-          `Failed to load files: ${err instanceof Error ? err.message : String(err)}`,
-          "error",
-        );
-      });
-  }
-
-  // Load editor content when active tab changes
-  $effect(() => {
-    const tab = editorStore.activeTab;
-    if (tab) {
-      readDocument(tab)
-        .then((c) => {
-          editorContent = c;
-        })
-        .catch(() => {
-          editorContent = "";
-        });
-    }
-  });
-
-  // Load tree on mount + subscribe to Tauri events
-  $effect(() => {
-    fileTreeStore.setLoading(true);
-    loadTree();
-
-    let unlistenTree: (() => void) | null = null;
-    let unlistenDoc: (() => void) | null = null;
-
-    onTreeChanged(() => loadTree()).then((fn) => {
-      unlistenTree = fn;
-    });
-
-    onDocumentChanged(({ path }) => {
-      if (editorStore.activeTab === path) {
-        readDocument(path)
-          .then((c) => {
-            editorContent = c;
-          })
-          .catch(() => {});
-      }
-    }).then((fn) => {
-      unlistenDoc = fn;
-    });
-
-    return () => {
-      unlistenTree?.();
-      unlistenDoc?.();
-    };
-  });
 
   // Register global commands
   $effect(() => {
@@ -140,6 +62,7 @@
         shortcut: "Mod+N",
         context: "global" as const,
         execute: () => {
+          uiStore.setActiveView("workspace");
           uiStore.setSidebarCollapsed(false);
           fileTreeStore.setPendingCreation({ type: "file", parentPath: "" });
         },
@@ -150,6 +73,7 @@
         shortcut: "Mod+Shift+N",
         context: "global" as const,
         execute: () => {
+          uiStore.setActiveView("workspace");
           uiStore.setSidebarCollapsed(false);
           fileTreeStore.setPendingCreation({ type: "folder", parentPath: "" });
         },
@@ -209,37 +133,11 @@
 
 <svelte:document onkeydown={keybindingHandler} />
 
-<div class="flex h-screen flex-col">
-  <div class="flex flex-1 overflow-hidden">
-    <Sidebar />
+<div class="app-shell">
+  <div class="main-layout">
+    <ActivityBar />
     {#if uiStore.activeView === "workspace"}
-      <div class="flex flex-1 flex-col overflow-hidden">
-        <TabBar />
-        <div class="flex-1 overflow-auto">
-          {#if editorStore.activeTab}
-            <Editor
-              content={editorContent}
-              path={editorStore.activeTab}
-              onsave={handleSave}
-            />
-          {:else if fileTreeStore.tree.length === 0 && !fileTreeStore.loading}
-            <div
-              style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 4px;"
-            >
-              <span
-                style="font-size: 16px; font-weight: 600; color: var(--color-fg-heading);"
-              >
-                Create your first document
-              </span>
-              <span style="font-size: 12px; color: var(--color-fg-muted);">
-                {"Press \u2318N to get started"}
-              </span>
-            </div>
-          {:else}
-            <p style="color: var(--color-fg-muted);">No document open</p>
-          {/if}
-        </div>
-      </div>
+      <WorkspaceView />
     {:else}
       <VcsView />
     {/if}
@@ -247,3 +145,17 @@
   <Toast />
   <CommandPalette />
 </div>
+
+<style>
+  .app-shell {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+
+  .main-layout {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+  }
+</style>
