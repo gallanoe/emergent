@@ -70,10 +70,6 @@ impl WorkspaceService {
         }
     }
 
-    pub fn worktree_path(&self) -> Option<&Path> {
-        self.open_state().ok().map(|o| o.worktree_path)
-    }
-
     pub fn create_workspace(&mut self, name: &str) -> Result<String, AppError> {
         let id = nanoid::nanoid!(12);
         let workspace_dir = self.base_dir.join(&id);
