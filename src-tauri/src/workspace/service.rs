@@ -22,12 +22,26 @@ pub struct TreeNode {
     pub children: Option<Vec<TreeNode>>,
 }
 
+pub(crate) enum WorkspaceState {
+    Closed,
+    Open {
+        repo: Repository,
+        meta: WorkspaceMeta,
+        worktree_path: PathBuf,
+    },
+}
+
+#[allow(dead_code)]
+pub(crate) struct OpenWorkspace<'a> {
+    pub repo: &'a Repository,
+    pub meta: &'a WorkspaceMeta,
+    pub worktree_path: &'a Path,
+}
+
 pub struct WorkspaceService {
     base_dir: PathBuf,
     pub(crate) emitter: Arc<dyn EventEmitter>,
-    pub repo: Option<Repository>,
-    pub meta: Option<WorkspaceMeta>,
-    pub worktree_path: Option<PathBuf>,
+    state: WorkspaceState,
 }
 
 impl WorkspaceService {
@@ -35,18 +49,23 @@ impl WorkspaceService {
         Self {
             base_dir,
             emitter,
-            repo: None,
-            meta: None,
-            worktree_path: None,
+            state: WorkspaceState::Closed,
         }
     }
 
-    pub fn repo(&self) -> Option<&Repository> {
-        self.repo.as_ref()
+    pub(crate) fn open_state(&self) -> Result<OpenWorkspace<'_>, AppError> {
+        match &self.state {
+            WorkspaceState::Open { repo, meta, worktree_path } => Ok(OpenWorkspace {
+                repo,
+                meta,
+                worktree_path,
+            }),
+            WorkspaceState::Closed => Err(AppError::WorkspaceNotOpen),
+        }
     }
 
     pub fn worktree_path(&self) -> Option<&Path> {
-        self.worktree_path.as_deref()
+        self.open_state().ok().map(|o| o.worktree_path)
     }
 
     pub fn create_workspace(&mut self, name: &str) -> Result<String, AppError> {
@@ -116,14 +135,12 @@ impl WorkspaceService {
             message: format!("failed to write metadata: {e}"),
         })?;
 
-        self.repo = Some(repo);
-        self.meta = Some(meta.clone());
-        self.worktree_path = Some(workspace_dir.join("worktrees").join("main"));
+        let worktree_path = workspace_dir.join("worktrees").join("main");
 
         // Create initial worktree checkout if it doesn't exist
-        if !self.worktree_path.as_ref().unwrap().exists() {
-            self.init_main_worktree(&workspace_dir)?;
-        }
+        Self::init_main_worktree(&repo, &worktree_path)?;
+
+        self.state = WorkspaceState::Open { repo, meta: meta.clone(), worktree_path };
 
         // Emit with initial tree so frontend can render immediately
         let tree = self.list_tree().unwrap_or_default();
@@ -140,12 +157,8 @@ impl WorkspaceService {
         Ok(meta)
     }
 
-    fn init_main_worktree(&self, workspace_dir: &Path) -> Result<(), AppError> {
-        let repo = self.repo.as_ref().unwrap();
-        let worktree_path = workspace_dir.join("worktrees").join("main");
-
+    fn init_main_worktree(repo: &Repository, worktree_path: &Path) -> Result<(), AppError> {
         if repo.head().is_err() {
-            // Empty repo — no commits yet. Create an initial empty commit so we have a HEAD.
             let sig = repo.signature().or_else(|_| {
                 git2::Signature::now("Emergent", "emergent@local")
             })?;
@@ -154,7 +167,6 @@ impl WorkspaceService {
             repo.commit(Some("HEAD"), &sig, &sig, "Initial workspace", &tree, &[])?;
         }
 
-        // Use git2 worktree API to check out main branch
         if !worktree_path.exists() {
             let head = repo.head()?.peel_to_commit()?;
             let branch = repo
@@ -162,7 +174,7 @@ impl WorkspaceService {
                 .or_else(|_| repo.branch("main", &head, false))?;
             repo.worktree(
                 "main",
-                &worktree_path,
+                worktree_path,
                 Some(git2::WorktreeAddOptions::new().reference(Some(branch.get()))),
             )?;
         }
@@ -171,9 +183,7 @@ impl WorkspaceService {
     }
 
     pub(crate) fn worktree_dir(&self) -> Result<&Path, AppError> {
-        self.worktree_path
-            .as_deref()
-            .ok_or(AppError::WorkspaceNotOpen)
+        Ok(self.open_state()?.worktree_path)
     }
 
     pub fn create_document(&mut self, path: &str) -> Result<(), AppError> {
@@ -405,11 +415,9 @@ impl WorkspaceService {
             });
         }
         // Close if this is the active workspace
-        if let Some(meta) = &self.meta {
+        if let WorkspaceState::Open { meta, .. } = &self.state {
             if meta.id == id {
-                self.repo = None;
-                self.meta = None;
-                self.worktree_path = None;
+                self.state = WorkspaceState::Closed;
             }
         }
         std::fs::remove_dir_all(&workspace_dir).map_err(|e| AppError::Internal {
@@ -475,9 +483,8 @@ mod tests {
         let (_tmp, mut svc) = setup();
         let id = svc.create_workspace("My Notes").unwrap();
         svc.open_workspace(&id).unwrap();
-        assert!(svc.repo.is_some());
-        assert!(svc.meta.is_some());
-        assert_eq!(svc.meta.as_ref().unwrap().name, "My Notes");
+        let open = svc.open_state().expect("workspace should be open");
+        assert_eq!(open.meta.name, "My Notes");
     }
 
     #[test]
