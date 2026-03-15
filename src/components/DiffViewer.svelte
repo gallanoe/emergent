@@ -69,13 +69,13 @@
         <div class="empty-state">No changes</div>
       {:else if diffResult}
         {#if viewMode === "unified"}
-          {#each diffResult.hunks as hunk, i}
+          {#each diffResult.hunks as hunk, i (i)}
             {#if i > 0}
               <div class="collapsed-divider">···</div>
             {/if}
             <div class="hunk">
               <div class="hunk-header">{hunk.header}</div>
-              {#each hunk.lines as line}
+              {#each hunk.lines as line, j (j)}
                 <div
                   class="diff-line {line.kind}"
                 >
@@ -94,7 +94,7 @@
             </div>
           {/each}
         {:else}
-          {#each diffResult.hunks as hunk, i}
+          {#each diffResult.hunks as hunk, i (i)}
             {#if i > 0}
               <div class="collapsed-divider">···</div>
             {/if}
@@ -102,7 +102,7 @@
               <div class="hunk-header">{hunk.header}</div>
               <div class="split-view">
                 <div class="split-side old-side">
-                  {#each hunk.lines as line}
+                  {#each hunk.lines as line, j (j)}
                     {#if line.kind === "remove" || line.kind === "context"}
                       <div class="diff-line {line.kind}">
                         <span class="line-no">{line.old_lineno ?? ""}</span>
@@ -117,7 +117,7 @@
                   {/each}
                 </div>
                 <div class="split-side new-side">
-                  {#each hunk.lines as line}
+                  {#each hunk.lines as line, j (j)}
                     {#if line.kind === "add" || line.kind === "context"}
                       <div class="diff-line {line.kind}">
                         <span class="line-no">{line.new_lineno ?? ""}</span>

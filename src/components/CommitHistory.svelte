@@ -41,7 +41,7 @@
     <span class="section-label">History</span>
   </div>
   <div class="commit-list">
-    {#each vcsStore.commits as commit}
+    {#each vcsStore.commits as commit (commit.oid)}
       <div class="commit-row">
         <span class="commit-message">{commit.message}</span>
         <span class="commit-meta">
