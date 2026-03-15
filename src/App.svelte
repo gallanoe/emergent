@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import AppShell from "./components/AppShell.svelte";
-  import WorkspacePicker from "./components/WorkspacePicker.svelte";
+  import AppShell from "./components/layout/AppShell.svelte";
+  import WorkspacePicker from "./components/workspace/WorkspacePicker.svelte";
   import { workspaceStore } from "./stores/workspace.svelte";
   import { listWorkspaces } from "./lib/tauri";
   import { toastStore } from "./stores/toast.svelte";

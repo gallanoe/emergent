@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { commandStore } from "../stores/commands.svelte";
+  import { commandStore } from "../../stores/commands.svelte";
 
   function formatShortcut(shortcut: string): string {
     const isMac = navigator.platform.startsWith("Mac");

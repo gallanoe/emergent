@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { vcsStore } from "../stores/vcs.svelte";
-  import { vcsDiff } from "../lib/tauri";
-  import type { DiffResult } from "../lib/tauri";
+  import { vcsStore } from "../../stores/vcs.svelte";
+  import { vcsDiff } from "../../lib/tauri";
+  import type { DiffResult } from "../../lib/tauri";
 
   interface Props {
     refreshKey?: number;

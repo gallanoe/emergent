@@ -12,9 +12,9 @@
   import { defaultKeymap } from "@codemirror/commands";
   import { syntaxTree } from "@codemirror/language";
   import { GFM } from "@lezer/markdown";
-  import { editorStore } from "../stores/editor.svelte";
-  import { commandStore } from "../stores/commands.svelte";
-  import { focusContextStore } from "../stores/focus-context.svelte";
+  import { editorStore } from "../../stores/editor.svelte";
+  import { commandStore } from "../../stores/commands.svelte";
+  import { focusContextStore } from "../../stores/focus-context.svelte";
 
   interface Props {
     content: string;

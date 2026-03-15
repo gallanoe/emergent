@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { vcsStore } from "../stores/vcs.svelte";
-  import { vcsCommit } from "../lib/tauri";
-  import { toastStore } from "../stores/toast.svelte";
+  import { vcsStore } from "../../stores/vcs.svelte";
+  import { vcsCommit } from "../../lib/tauri";
+  import { toastStore } from "../../stores/toast.svelte";
 
   interface Props {
     oncommit: () => void;

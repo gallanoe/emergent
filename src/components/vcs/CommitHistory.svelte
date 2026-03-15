@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { vcsStore } from "../stores/vcs.svelte";
-  import { vcsGetLog } from "../lib/tauri";
-  import { toastStore } from "../stores/toast.svelte";
+  import { vcsStore } from "../../stores/vcs.svelte";
+  import { vcsGetLog } from "../../lib/tauri";
+  import { toastStore } from "../../stores/toast.svelte";
 
   let limit = $state(5);
   let totalLoaded = $derived(vcsStore.commits.length);

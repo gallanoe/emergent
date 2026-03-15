@@ -1,5 +1,5 @@
 <script lang="ts">
-  import FileTree from "./FileTree.svelte";
+  import FileTree from "../file-tree/FileTree.svelte";
 
   interface Props {
     width: number;

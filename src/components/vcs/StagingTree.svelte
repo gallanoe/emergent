@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { vcsStore } from "../stores/vcs.svelte";
-  import { vcsStage, vcsUnstage, vcsGetStatus } from "../lib/tauri";
-  import { toastStore } from "../stores/toast.svelte";
+  import { vcsStore } from "../../stores/vcs.svelte";
+  import { vcsStage, vcsUnstage, vcsGetStatus } from "../../lib/tauri";
+  import { toastStore } from "../../stores/toast.svelte";
 
   type TreeNode = {
     name: string;

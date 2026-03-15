@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { editorStore } from "../stores/editor.svelte";
+  import { editorStore } from "../../stores/editor.svelte";
 </script>
 
 {#if editorStore.openTabs.length > 0}

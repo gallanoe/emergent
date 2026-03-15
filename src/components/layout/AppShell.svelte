@@ -1,27 +1,27 @@
 <script lang="ts">
   import Sidebar from "./Sidebar.svelte";
-  import TabBar from "./TabBar.svelte";
+  import TabBar from "../editor/TabBar.svelte";
   import StatusBar from "./StatusBar.svelte";
-  import Toast from "./Toast.svelte";
-  import Editor from "./Editor.svelte";
-  import CommandPalette from "./CommandPalette.svelte";
+  import Toast from "../shared/Toast.svelte";
+  import Editor from "../editor/Editor.svelte";
+  import CommandPalette from "../shared/CommandPalette.svelte";
   import ActivityBar from "./ActivityBar.svelte";
-  import VcsView from "./VcsView.svelte";
-  import { editorStore } from "../stores/editor.svelte";
-  import { fileTreeStore } from "../stores/file-tree.svelte";
-  import { uiStore } from "../stores/ui.svelte";
-  import { commandStore } from "../stores/commands.svelte";
-  import { focusContextStore } from "../stores/focus-context.svelte";
-  import { toastStore } from "../stores/toast.svelte";
+  import VcsView from "../vcs/VcsView.svelte";
+  import { editorStore } from "../../stores/editor.svelte";
+  import { fileTreeStore } from "../../stores/file-tree.svelte";
+  import { uiStore } from "../../stores/ui.svelte";
+  import { commandStore } from "../../stores/commands.svelte";
+  import { focusContextStore } from "../../stores/focus-context.svelte";
+  import { toastStore } from "../../stores/toast.svelte";
   import {
     listTree,
     readDocument,
     writeDocument,
     onTreeChanged,
     onDocumentChanged,
-  } from "../lib/tauri";
-  import { sortTree } from "../lib/sort-tree";
-  import { normalizeShortcut, resolveCommand } from "../lib/keybindings";
+  } from "../../lib/tauri";
+  import { sortTree } from "../../lib/sort-tree";
+  import { normalizeShortcut, resolveCommand } from "../../lib/keybindings";
 
   let sidebarWidth = $state(220);
   let editorContent = $state("");

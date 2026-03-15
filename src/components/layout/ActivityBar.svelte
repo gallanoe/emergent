@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { uiStore } from "../stores/ui.svelte";
+  import { uiStore } from "../../stores/ui.svelte";
 
   const items = [
     { id: "workspace" as const, label: "Files", icon: "files" },

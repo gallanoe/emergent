@@ -1,7 +1,7 @@
 <!-- src/components/StatusBar.svelte -->
 <script lang="ts">
-  import { editorStore } from "../stores/editor.svelte";
-  import { workspaceStore } from "../stores/workspace.svelte";
+  import { editorStore } from "../../stores/editor.svelte";
+  import { workspaceStore } from "../../stores/workspace.svelte";
 </script>
 
 <div

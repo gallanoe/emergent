@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { TreeNode } from "../lib/tauri";
+  import type { TreeNode } from "../../lib/tauri";
   import {
     moveDocument,
     moveFolder,
@@ -9,8 +9,8 @@
     deleteDocument,
     deleteFolder,
     writeDocument,
-  } from "../lib/tauri";
-  import { sortTree } from "../lib/sort-tree";
+  } from "../../lib/tauri";
+  import { sortTree } from "../../lib/sort-tree";
   import {
     findNode,
     removeNodeFromTree,
@@ -18,13 +18,13 @@
     renameNodeInTree,
     countFilesInSubtree,
     stashFolderContents,
-  } from "../lib/file-tree-helpers";
-  import { fileTreeStore } from "../stores/file-tree.svelte";
-  import { editorStore } from "../stores/editor.svelte";
-  import { commandStore } from "../stores/commands.svelte";
-  import { focusContextStore } from "../stores/focus-context.svelte";
-  import { toastStore } from "../stores/toast.svelte";
-  import ContextMenu, { type MenuItem } from "./ContextMenu.svelte";
+  } from "../../lib/file-tree-helpers";
+  import { fileTreeStore } from "../../stores/file-tree.svelte";
+  import { editorStore } from "../../stores/editor.svelte";
+  import { commandStore } from "../../stores/commands.svelte";
+  import { focusContextStore } from "../../stores/focus-context.svelte";
+  import { toastStore } from "../../stores/toast.svelte";
+  import ContextMenu, { type MenuItem } from "../shared/ContextMenu.svelte";
   import CreationInput from "./CreationInput.svelte";
   import FileTreeNode from "./FileTreeNode.svelte";
 

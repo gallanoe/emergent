@@ -1,6 +1,6 @@
 <!-- src/components/Toast.svelte -->
 <script lang="ts">
-  import { toastStore } from "../stores/toast.svelte";
+  import { toastStore } from "../../stores/toast.svelte";
 
   const TYPE_COLORS: Record<string, string> = {
     success: "var(--color-success)",

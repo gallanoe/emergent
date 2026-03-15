@@ -3,9 +3,9 @@
   import StagingTree from "./StagingTree.svelte";
   import DiffViewer from "./DiffViewer.svelte";
   import CommitBar from "./CommitBar.svelte";
-  import { vcsStore } from "../stores/vcs.svelte";
-  import { vcsGetStatus, onVcsStatusChanged } from "../lib/tauri";
-  import { toastStore } from "../stores/toast.svelte";
+  import { vcsStore } from "../../stores/vcs.svelte";
+  import { vcsGetStatus, onVcsStatusChanged } from "../../lib/tauri";
+  import { toastStore } from "../../stores/toast.svelte";
 
   let historyRef: ReturnType<typeof CommitHistory> | undefined = $state();
   let diffRefreshKey = $state(0);

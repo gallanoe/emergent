@@ -1,15 +1,15 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { workspaceStore } from "../stores/workspace.svelte";
-  import { toastStore } from "../stores/toast.svelte";
-  import { commandStore } from "../stores/commands.svelte";
-  import { focusContextStore } from "../stores/focus-context.svelte";
+  import { workspaceStore } from "../../stores/workspace.svelte";
+  import { toastStore } from "../../stores/toast.svelte";
+  import { commandStore } from "../../stores/commands.svelte";
+  import { focusContextStore } from "../../stores/focus-context.svelte";
   import {
     openWorkspace,
     createWorkspace,
     deleteWorkspace,
-  } from "../lib/tauri";
-  import type { WorkspaceMeta } from "../lib/tauri";
+  } from "../../lib/tauri";
+  import type { WorkspaceMeta } from "../../lib/tauri";
 
   function relativeTime(iso: string): string {
     const now = Date.now();
