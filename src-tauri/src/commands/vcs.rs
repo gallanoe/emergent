@@ -1,7 +1,7 @@
 use crate::commands::workspace::AppState;
 use crate::error::AppError;
 use crate::state::read_lock;
-use crate::vcs::{BranchInfo, CommitInfo, FileStatus, MergeResult};
+use crate::vcs::{BranchInfo, CommitInfo, FileStatus, HeadInfo, MergeResult};
 use git2::Repository;
 use tauri::State;
 
@@ -39,10 +39,14 @@ pub fn vcs_diff(
 }
 
 #[tauri::command]
-pub fn vcs_commit(state: State<'_, AppState>, message: String) -> Result<String, AppError> {
+pub fn vcs_commit(
+    state: State<'_, AppState>,
+    message: String,
+    branch_name: Option<String>,
+) -> Result<String, AppError> {
     let (repo, worktree_path) = open_worktree_repo(&state)?;
     let vcs = read_lock(&state.vcs)?;
-    vcs.commit(&repo, &worktree_path, &message, None)
+    vcs.commit(&repo, &worktree_path, &message, branch_name.as_deref())
 }
 
 #[tauri::command]
@@ -91,4 +95,24 @@ pub fn vcs_merge_branch(
     let (repo, worktree_path) = open_worktree_repo(&state)?;
     let vcs = read_lock(&state.vcs)?;
     vcs.merge_branch(&repo, &worktree_path, &source_branch)
+}
+
+#[tauri::command]
+pub fn vcs_checkout_commit(
+    state: State<'_, AppState>,
+    oid: String,
+) -> Result<CommitInfo, AppError> {
+    let (repo, worktree_path) = open_worktree_repo(&state)?;
+    let vcs = read_lock(&state.vcs)?;
+    vcs.checkout_commit(&repo, &worktree_path, &oid)
+}
+
+#[tauri::command]
+pub fn vcs_get_head_info(
+    state: State<'_, AppState>,
+    origin_branch: Option<String>,
+) -> Result<HeadInfo, AppError> {
+    let (repo, _) = open_worktree_repo(&state)?;
+    let vcs = read_lock(&state.vcs)?;
+    vcs.get_head_info(&repo, origin_branch.as_deref())
 }
