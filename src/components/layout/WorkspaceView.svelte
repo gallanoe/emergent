@@ -10,7 +10,9 @@
     readDocument,
     writeDocument,
     onTreeChanged,
+    onCommitCreated,
   } from "../../lib/tauri";
+  import { workspaceStore } from "../../stores/workspace.svelte";
   import { sortTree } from "../../lib/sort-tree";
 
   let editorContent = $state("");
@@ -55,15 +57,24 @@
   $effect(() => {
     fileTreeStore.setLoading(true);
     loadTree();
+    workspaceStore.refreshHeadInfo();
 
     let unlistenTree: (() => void) | null = null;
+    let unlistenCommit: (() => void) | null = null;
 
     onTreeChanged(() => loadTree()).then((fn) => {
       unlistenTree = fn;
     });
 
+    onCommitCreated(() => {
+      workspaceStore.refreshHeadInfo();
+    }).then((fn) => {
+      unlistenCommit = fn;
+    });
+
     return () => {
       unlistenTree?.();
+      unlistenCommit?.();
     };
   });
 </script>
