@@ -64,6 +64,7 @@ impl VcsService {
         repo: &Repository,
         _worktree_path: &Path,
         message: &str,
+        _branch_name: Option<&str>,
     ) -> Result<String, AppError> {
         let mut index = repo.index()?;
         index.write()?;
@@ -88,6 +89,31 @@ impl VcsService {
             .emit("vcs:status-changed", serde_json::json!({}));
 
         Ok(oid_str)
+    }
+
+    pub fn checkout_commit(
+        &self,
+        repo: &Repository,
+        _worktree_path: &Path,
+        oid: &str,
+    ) -> Result<CommitInfo, AppError> {
+        let oid = git2::Oid::from_str(oid).map_err(|e| AppError::GitError {
+            message: format!("invalid OID: {e}"),
+        })?;
+        let commit = repo.find_commit(oid)?;
+
+        repo.set_head_detached(oid)?;
+        repo.checkout_head(Some(
+            git2::build::CheckoutBuilder::new().force(),
+        ))?;
+
+        self.emitter.emit("tree:changed", serde_json::json!({}));
+
+        Ok(CommitInfo {
+            oid: oid.to_string(),
+            message: commit.message().unwrap_or("").to_string(),
+            time: commit.time().seconds(),
+        })
     }
 
     pub fn stage(
@@ -487,7 +513,7 @@ mod tests {
         create_file(tmp.path(), "note.md", "# Hello");
         svc.stage(&repo, tmp.path(), &["note.md".to_string()])
             .unwrap();
-        let oid = svc.commit(&repo, tmp.path(), "initial commit").unwrap();
+        let oid = svc.commit(&repo, tmp.path(), "initial commit", None).unwrap();
         assert!(!oid.is_empty());
     }
 
@@ -497,11 +523,11 @@ mod tests {
         create_file(tmp.path(), "note.md", "# Hello");
         svc.stage(&repo, tmp.path(), &["note.md".to_string()])
             .unwrap();
-        svc.commit(&repo, tmp.path(), "first").unwrap();
+        svc.commit(&repo, tmp.path(), "first", None).unwrap();
         create_file(tmp.path(), "note.md", "# Updated");
         svc.stage(&repo, tmp.path(), &["note.md".to_string()])
             .unwrap();
-        svc.commit(&repo, tmp.path(), "second").unwrap();
+        svc.commit(&repo, tmp.path(), "second", None).unwrap();
         let log = svc.get_log(&repo, 10).unwrap();
         assert_eq!(log.len(), 2);
         assert_eq!(log[0].message, "second");
@@ -515,7 +541,7 @@ mod tests {
             create_file(tmp.path(), "note.md", &format!("v{i}"));
             svc.stage(&repo, tmp.path(), &["note.md".to_string()])
                 .unwrap();
-            svc.commit(&repo, tmp.path(), &format!("commit {i}"))
+            svc.commit(&repo, tmp.path(), &format!("commit {i}"), None)
                 .unwrap();
         }
         let log = svc.get_log(&repo, 3).unwrap();
@@ -533,7 +559,7 @@ mod tests {
         create_file(tmp.path(), "note.md", "content");
         svc.stage(&repo, tmp.path(), &["note.md".to_string()])
             .unwrap();
-        svc.commit(&repo, tmp.path(), "msg").unwrap();
+        svc.commit(&repo, tmp.path(), "msg", None).unwrap();
         assert!(test_emitter.has_event("commit:created"));
     }
 
@@ -543,7 +569,7 @@ mod tests {
         create_file(tmp.path(), "note.md", "content");
         svc.stage(&repo, tmp.path(), &["note.md".to_string()])
             .unwrap();
-        svc.commit(&repo, tmp.path(), "initial").unwrap();
+        svc.commit(&repo, tmp.path(), "initial", None).unwrap();
         create_file(tmp.path(), "note.md", "changed");
         create_file(tmp.path(), "new.md", "new file");
         let status = svc.get_status(&repo).unwrap();
@@ -556,7 +582,7 @@ mod tests {
         create_file(tmp.path(), "note.md", "content");
         svc.stage(&repo, tmp.path(), &["note.md".to_string()])
             .unwrap();
-        svc.commit(&repo, tmp.path(), "initial").unwrap();
+        svc.commit(&repo, tmp.path(), "initial", None).unwrap();
         svc.create_branch(&repo, "feature").unwrap();
         let branches = svc.list_branches(&repo).unwrap();
         let names: Vec<&str> = branches.iter().map(|b| b.name.as_str()).collect();
@@ -570,7 +596,7 @@ mod tests {
         create_file(tmp.path(), "note.md", "content");
         svc.stage(&repo, tmp.path(), &["note.md".to_string()])
             .unwrap();
-        svc.commit(&repo, tmp.path(), "initial").unwrap();
+        svc.commit(&repo, tmp.path(), "initial", None).unwrap();
         svc.create_branch(&repo, "feature").unwrap();
         let result = svc.create_branch(&repo, "feature");
         assert!(matches!(result, Err(AppError::BranchAlreadyExists { .. })));
@@ -589,7 +615,7 @@ mod tests {
         create_file(tmp.path(), "note.md", "original");
         svc.stage(&repo, tmp.path(), &["note.md".to_string()])
             .unwrap();
-        svc.commit(&repo, tmp.path(), "initial").unwrap();
+        svc.commit(&repo, tmp.path(), "initial", None).unwrap();
 
         let default_branch = head_branch_name(&repo);
 
@@ -601,7 +627,7 @@ mod tests {
         create_file(tmp.path(), "new.md", "new content");
         svc.stage(&repo, tmp.path(), &["new.md".to_string()])
             .unwrap();
-        svc.commit(&repo, tmp.path(), "add new file").unwrap();
+        svc.commit(&repo, tmp.path(), "add new file", None).unwrap();
 
         // Switch back to default branch
         repo.set_head(&format!("refs/heads/{default_branch}"))
@@ -621,7 +647,7 @@ mod tests {
         create_file(tmp.path(), "note.md", "original content");
         svc.stage(&repo, tmp.path(), &["note.md".to_string()])
             .unwrap();
-        svc.commit(&repo, tmp.path(), "initial").unwrap();
+        svc.commit(&repo, tmp.path(), "initial", None).unwrap();
 
         let default_branch = head_branch_name(&repo);
 
@@ -633,7 +659,7 @@ mod tests {
         create_file(tmp.path(), "note.md", "feature changes");
         svc.stage(&repo, tmp.path(), &["note.md".to_string()])
             .unwrap();
-        svc.commit(&repo, tmp.path(), "feature change").unwrap();
+        svc.commit(&repo, tmp.path(), "feature change", None).unwrap();
 
         // Switch back to default branch and make a conflicting change
         repo.set_head(&format!("refs/heads/{default_branch}"))
@@ -643,7 +669,7 @@ mod tests {
         create_file(tmp.path(), "note.md", "main changes");
         svc.stage(&repo, tmp.path(), &["note.md".to_string()])
             .unwrap();
-        svc.commit(&repo, tmp.path(), "main change").unwrap();
+        svc.commit(&repo, tmp.path(), "main change", None).unwrap();
 
         // Merge feature into default branch — should conflict
         let result = svc.merge_branch(&repo, tmp.path(), "feature").unwrap();
@@ -658,7 +684,7 @@ mod tests {
         create_file(tmp.path(), "note.md", "content");
         svc.stage(&repo, tmp.path(), &["note.md".to_string()])
             .unwrap();
-        svc.commit(&repo, tmp.path(), "initial").unwrap();
+        svc.commit(&repo, tmp.path(), "initial", None).unwrap();
         svc.create_branch(&repo, "temp").unwrap();
         svc.delete_branch(&repo, "temp").unwrap();
         let branches = svc.list_branches(&repo).unwrap();
@@ -676,7 +702,7 @@ mod tests {
         create_file(tmp.path(), "existing.md", "original");
         svc.stage(&repo, tmp.path(), &["existing.md".to_string()])
             .unwrap();
-        svc.commit(&repo, tmp.path(), "initial").unwrap();
+        svc.commit(&repo, tmp.path(), "initial", None).unwrap();
 
         // Stage a new file
         create_file(tmp.path(), "staged.md", "staged content");
@@ -744,7 +770,7 @@ mod tests {
         create_file(tmp.path(), "other.md", "seed");
         svc.stage(&repo, tmp.path(), &["other.md".to_string()])
             .unwrap();
-        svc.commit(&repo, tmp.path(), "seed commit").unwrap();
+        svc.commit(&repo, tmp.path(), "seed commit", None).unwrap();
 
         // Stage a new file then unstage it
         create_file(tmp.path(), "file.md", "hello");
@@ -803,7 +829,7 @@ mod tests {
         create_file(tmp.path(), "note.md", "line one\nline two\n");
         svc.stage(&repo, tmp.path(), &["note.md".to_string()])
             .unwrap();
-        svc.commit(&repo, tmp.path(), "initial").unwrap();
+        svc.commit(&repo, tmp.path(), "initial", None).unwrap();
 
         // Modify the file (don't stage yet — diff shows workdir vs HEAD)
         create_file(tmp.path(), "note.md", "line one\nline two modified\n");
@@ -858,7 +884,7 @@ mod tests {
 
         svc.stage(&repo, tmp.path(), &["staged.md".to_string()])
             .unwrap();
-        svc.commit(&repo, tmp.path(), "only staged file").unwrap();
+        svc.commit(&repo, tmp.path(), "only staged file", None).unwrap();
 
         // After commit, unstaged.md should still appear as changed (untracked)
         let status = svc.get_status(&repo).unwrap();
@@ -873,5 +899,37 @@ mod tests {
             !status.iter().any(|e| e.path == "staged.md"),
             "staged.md should be clean after commit"
         );
+    }
+
+    // ── checkout_commit tests ───────────────────────────────────────────────
+
+    #[test]
+    fn test_checkout_commit_detaches_head() {
+        let (tmp, _emitter, svc, repo) = setup();
+
+        // Create two commits
+        create_file(tmp.path(), "note.md", "v1");
+        svc.stage(&repo, tmp.path(), &["note.md".to_string()]).unwrap();
+        svc.commit(&repo, tmp.path(), "first", None).unwrap();
+
+        create_file(tmp.path(), "note.md", "v2");
+        svc.stage(&repo, tmp.path(), &["note.md".to_string()]).unwrap();
+        svc.commit(&repo, tmp.path(), "second", None).unwrap();
+
+        // Get the first commit OID
+        let log = svc.get_log(&repo, 10).unwrap();
+        let first_oid = &log[1].oid; // second commit is index 0 (newest first)
+
+        // Checkout the first commit
+        let result = svc.checkout_commit(&repo, tmp.path(), first_oid).unwrap();
+        assert_eq!(result.oid, *first_oid);
+        assert_eq!(result.message, "first");
+
+        // HEAD should be detached
+        assert!(repo.head_detached().unwrap());
+
+        // Working directory should reflect the first commit
+        let content = std::fs::read_to_string(tmp.path().join("note.md")).unwrap();
+        assert_eq!(content, "v1");
     }
 }

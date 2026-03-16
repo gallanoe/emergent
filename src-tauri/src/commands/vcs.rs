@@ -42,7 +42,7 @@ pub fn vcs_diff(
 pub fn vcs_commit(state: State<'_, AppState>, message: String) -> Result<String, AppError> {
     let (repo, worktree_path) = open_worktree_repo(&state)?;
     let vcs = read_lock(&state.vcs)?;
-    vcs.commit(&repo, &worktree_path, &message)
+    vcs.commit(&repo, &worktree_path, &message, None)
 }
 
 #[tauri::command]
