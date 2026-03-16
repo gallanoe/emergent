@@ -44,6 +44,12 @@ class EditorStore {
     this.dirtyTabs.delete(path);
   }
 
+  closeAllTabs() {
+    this.openTabs = [];
+    this.activeTab = null;
+    this.dirtyTabs.clear();
+  }
+
   updateTabPath(oldPath: string, newPath: string) {
     const isExactMatch = this.openTabs.some((t) => t.path === oldPath);
     const isFolderRename =

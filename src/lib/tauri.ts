@@ -112,8 +112,19 @@ export type DiffResult = {
   hunks: DiffHunk[];
 };
 
+export type HeadInfo = {
+  oid: string;
+  message: string;
+  time: number;
+  is_detached: boolean;
+  branch_name: string | null;
+  commits_behind: number;
+  commits_ahead: number;
+};
+
 // VCS commands
-export const vcsCommit = (message: string) => invoke<string>("vcs_commit", { message });
+export const vcsCommit = (message: string, branchName?: string) =>
+  invoke<string>("vcs_commit", { message, branchName: branchName ?? null });
 
 export const vcsGetLog = (limit: number) => invoke<CommitInfo[]>("vcs_get_log", { limit });
 
@@ -133,3 +144,9 @@ export const vcsStage = (paths: string[]) => invoke<void>("vcs_stage", { paths }
 export const vcsUnstage = (paths: string[]) => invoke<void>("vcs_unstage", { paths });
 
 export const vcsDiff = (path: string) => invoke<DiffResult>("vcs_diff", { path });
+
+export const vcsCheckoutCommit = (oid: string) =>
+  invoke<CommitInfo>("vcs_checkout_commit", { oid });
+
+export const vcsGetHeadInfo = (originBranch?: string) =>
+  invoke<HeadInfo>("vcs_get_head_info", { originBranch: originBranch ?? null });
