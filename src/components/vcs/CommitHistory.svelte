@@ -2,6 +2,12 @@
   import { vcsStore } from "../../stores/vcs.svelte";
   import { vcsGetLog } from "../../lib/tauri";
   import { toastStore } from "../../stores/toast.svelte";
+  import { workspaceStore } from "../../stores/workspace.svelte";
+
+  interface Props {
+    onloadcommit: (oid: string) => void;
+  }
+  let { onloadcommit }: Props = $props();
 
   let limit = $state(5);
   let totalLoaded = $derived(vcsStore.commits.length);
@@ -43,10 +49,24 @@
   <div class="commit-list">
     {#each vcsStore.commits as commit (commit.oid)}
       <div class="commit-row">
-        <span class="commit-message">{commit.message}</span>
-        <span class="commit-meta">
-          {commit.oid.slice(0, 7)} · {formatTime(commit.time)}
-        </span>
+        <div class="commit-info">
+          <span class="commit-message">{commit.message}</span>
+          <span class="commit-meta">
+            {commit.oid.slice(0, 7)} · {formatTime(commit.time)}
+          </span>
+        </div>
+        <div class="commit-actions">
+          {#if commit.oid === workspaceStore.headCommit?.oid}
+            <span class="head-badge">HEAD</span>
+          {:else}
+            <button
+              class="load-button"
+              onclick={() => onloadcommit(commit.oid)}
+            >
+              Load
+            </button>
+          {/if}
+        </div>
       </div>
     {/each}
     {#if totalLoaded >= limit}
@@ -83,6 +103,54 @@
     border-radius: 6px;
     margin: 2px 4px;
     transition: background-color 150ms ease;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .commit-info {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .commit-actions {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+  }
+
+  .head-badge {
+    font-size: 10px;
+    color: var(--color-fg-muted);
+    background: var(--color-bg-hover);
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+
+  .load-button {
+    font-size: 10px;
+    color: var(--color-fg-default);
+    background: rgba(99, 102, 241, 0.15);
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    padding: 2px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 150ms ease, background-color 150ms ease;
+  }
+
+  .commit-row:hover .load-button,
+  .commit-row:focus-within .load-button {
+    opacity: 1;
+  }
+
+  .load-button:hover {
+    background: rgba(99, 102, 241, 0.25);
+  }
+
+  .load-button:active {
+    opacity: 0.8;
   }
 
   .commit-row:hover {
