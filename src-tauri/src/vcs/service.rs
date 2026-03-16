@@ -75,8 +75,43 @@ impl VcsService {
         repo: &Repository,
         _worktree_path: &Path,
         message: &str,
-        _branch_name: Option<&str>,
+        branch_name: Option<&str>,
     ) -> Result<String, AppError> {
+        // If branch_name provided and HEAD is detached, fork into a new branch
+        if let Some(name) = branch_name {
+            if repo.head_detached().unwrap_or(false) {
+                if repo.find_branch(name, git2::BranchType::Local).is_ok() {
+                    return Err(AppError::BranchAlreadyExists {
+                        name: name.to_string(),
+                    });
+                }
+
+                let mut index = repo.index()?;
+                index.write()?;
+                let tree_oid = index.write_tree()?;
+                let tree = repo.find_tree(tree_oid)?;
+                let sig = repo
+                    .signature()
+                    .or_else(|_| Signature::now("Emergent", "emergent@local"))?;
+                let parent = repo.head()?.peel_to_commit()?;
+                let oid = repo.commit(Some("HEAD"), &sig, &sig, message, &tree, &[&parent])?;
+
+                let new_commit = repo.find_commit(oid)?;
+                repo.branch(name, &new_commit, false)?;
+                repo.set_head(&format!("refs/heads/{name}"))?;
+
+                let oid_str = oid.to_string();
+                self.emitter.emit(
+                    "commit:created",
+                    serde_json::json!({"oid": oid_str, "message": message}),
+                );
+                self.emitter
+                    .emit("vcs:status-changed", serde_json::json!({}));
+
+                return Ok(oid_str);
+            }
+        }
+
         let mut index = repo.index()?;
         index.write()?;
 
@@ -1063,5 +1098,54 @@ mod tests {
 
         let result = svc.checkout_commit(&repo, tmp.path(), "not-a-valid-oid");
         assert!(result.is_err());
+    }
+
+    // ── fork-on-commit tests ───────────────────────────────────────────────
+
+    #[test]
+    fn test_commit_with_branch_name_on_detached_head() {
+        let (tmp, _emitter, svc, repo) = setup();
+
+        create_file(tmp.path(), "note.md", "v1");
+        svc.stage(&repo, tmp.path(), &["note.md".to_string()]).unwrap();
+        svc.commit(&repo, tmp.path(), "initial", None).unwrap();
+
+        create_file(tmp.path(), "note.md", "v2");
+        svc.stage(&repo, tmp.path(), &["note.md".to_string()]).unwrap();
+        svc.commit(&repo, tmp.path(), "second", None).unwrap();
+
+        let log = svc.get_log(&repo, 10).unwrap();
+        let first_oid = log.iter().find(|c| c.message == "initial").unwrap().oid.clone();
+        svc.checkout_commit(&repo, tmp.path(), &first_oid).unwrap();
+
+        create_file(tmp.path(), "note.md", "forked content");
+        svc.stage(&repo, tmp.path(), &["note.md".to_string()]).unwrap();
+
+        let oid = svc.commit(&repo, tmp.path(), "forked commit", Some("my-fork")).unwrap();
+        assert!(!oid.is_empty());
+
+        assert!(!repo.head_detached().unwrap());
+        let head = repo.head().unwrap();
+        assert_eq!(head.shorthand().unwrap(), "my-fork");
+    }
+
+    #[test]
+    fn test_commit_with_existing_branch_name_errors() {
+        let (tmp, _emitter, svc, repo) = setup();
+
+        create_file(tmp.path(), "note.md", "v1");
+        svc.stage(&repo, tmp.path(), &["note.md".to_string()]).unwrap();
+        svc.commit(&repo, tmp.path(), "initial", None).unwrap();
+
+        svc.create_branch(&repo, "taken").unwrap();
+
+        let log = svc.get_log(&repo, 10).unwrap();
+        svc.checkout_commit(&repo, tmp.path(), &log[0].oid).unwrap();
+
+        create_file(tmp.path(), "note.md", "edited");
+        svc.stage(&repo, tmp.path(), &["note.md".to_string()]).unwrap();
+
+        let result = svc.commit(&repo, tmp.path(), "fork", Some("taken"));
+        assert!(matches!(result, Err(AppError::BranchAlreadyExists { .. })));
     }
 }
