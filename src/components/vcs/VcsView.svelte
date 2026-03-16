@@ -3,13 +3,68 @@
   import StagingTree from "./StagingTree.svelte";
   import DiffViewer from "./DiffViewer.svelte";
   import CommitBar from "./CommitBar.svelte";
+  import UnsavedChangesModal from "../shared/UnsavedChangesModal.svelte";
   import { vcsStore } from "../../stores/vcs.svelte";
-  import { vcsGetStatus, onVcsStatusChanged } from "../../lib/tauri";
+  import { editorStore } from "../../stores/editor.svelte";
+  import { workspaceStore } from "../../stores/workspace.svelte";
+  import { vcsGetStatus, onVcsStatusChanged, vcsCheckoutCommit } from "../../lib/tauri";
   import { toastStore } from "../../stores/toast.svelte";
+
+  interface Props {
+    onsaveeditor?: () => void;
+  }
+  let { onsaveeditor }: Props = $props();
 
   let historyRef: ReturnType<typeof CommitHistory> | undefined = $state();
   let diffRefreshKey = $state(0);
   let statusError = $state(false);
+  let showUnsavedModal = $state(false);
+  let pendingCheckoutOid: string | null = $state(null);
+
+  function handleLoadCommit(oid: string) {
+    if (editorStore.dirtyTabs.size > 0) {
+      pendingCheckoutOid = oid;
+      showUnsavedModal = true;
+    } else {
+      performCheckout(oid);
+    }
+  }
+
+  async function performCheckout(oid: string) {
+    try {
+      await vcsCheckoutCommit(oid);
+      editorStore.closeAllTabs();
+      await workspaceStore.refreshHeadInfo();
+      refreshStatus();
+      historyRef?.refresh();
+    } catch (err) {
+      toastStore.addToast(
+        `Failed to load commit: ${err instanceof Error ? err.message : String(err)}`,
+        "error",
+      );
+    }
+  }
+
+  function handleModalSave() {
+    showUnsavedModal = false;
+    const oid = pendingCheckoutOid;
+    pendingCheckoutOid = null;
+    if (!oid) return;
+    onsaveeditor?.();
+    performCheckout(oid);
+  }
+
+  function handleModalDiscard() {
+    showUnsavedModal = false;
+    const oid = pendingCheckoutOid;
+    pendingCheckoutOid = null;
+    if (oid) performCheckout(oid);
+  }
+
+  function handleModalCancel() {
+    showUnsavedModal = false;
+    pendingCheckoutOid = null;
+  }
 
   function refreshStatus() {
     statusError = false;
@@ -35,6 +90,7 @@
   function handleCommit() {
     refreshStatus();
     historyRef?.refresh();
+    workspaceStore.refreshHeadInfo();
   }
 
   $effect(() => {
@@ -55,7 +111,7 @@
 </script>
 
 <div class="vcs-view" data-testid="vcs-view">
-  <CommitHistory bind:this={historyRef} />
+  <CommitHistory bind:this={historyRef} onloadcommit={handleLoadCommit} />
   <div class="gradient-separator"></div>
 
   {#if statusError}
@@ -83,6 +139,15 @@
         Changes will appear here as you edit documents
       </div>
     </div>
+  {/if}
+
+  {#if showUnsavedModal}
+    <UnsavedChangesModal
+      dirtyPaths={[...editorStore.dirtyTabs]}
+      oncancel={handleModalCancel}
+      onsave={handleModalSave}
+      ondiscard={handleModalDiscard}
+    />
   {/if}
 </div>
 

@@ -36,6 +36,10 @@
     }
   }
 
+  function saveActiveEditor() {
+    commandStore.executeCommand("document.save");
+  }
+
   // Register global commands
   $effect(() => {
     const commands = [
@@ -130,7 +134,7 @@
     {#if uiStore.activeView === "workspace"}
       <WorkspaceView />
     {:else}
-      <VcsView />
+      <VcsView onsaveeditor={saveActiveEditor} />
     {/if}
   </div>
   <Toast />
