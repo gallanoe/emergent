@@ -53,10 +53,11 @@ pub fn vcs_commit(
 pub fn vcs_get_log(
     state: State<'_, AppState>,
     limit: usize,
+    origin_branch: Option<String>,
 ) -> Result<Vec<CommitInfo>, AppError> {
     let (repo, _worktree_path) = open_worktree_repo(&state)?;
     let vcs = read_lock(&state.vcs)?;
-    vcs.get_log(&repo, limit)
+    vcs.get_log(&repo, limit, origin_branch.as_deref())
 }
 
 #[tauri::command]

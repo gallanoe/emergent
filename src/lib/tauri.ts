@@ -126,7 +126,8 @@ export type HeadInfo = {
 export const vcsCommit = (message: string, branchName?: string) =>
   invoke<string>("vcs_commit", { message, branchName: branchName ?? null });
 
-export const vcsGetLog = (limit: number) => invoke<CommitInfo[]>("vcs_get_log", { limit });
+export const vcsGetLog = (limit: number, originBranch?: string) =>
+  invoke<CommitInfo[]>("vcs_get_log", { limit, originBranch: originBranch ?? null });
 
 export const vcsGetStatus = () => invoke<FileStatus[]>("vcs_get_status");
 

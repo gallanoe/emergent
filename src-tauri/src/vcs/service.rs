@@ -365,9 +365,23 @@ impl VcsService {
         Ok(DiffResult { hunks })
     }
 
-    pub fn get_log(&self, repo: &Repository, limit: usize) -> Result<Vec<CommitInfo>, AppError> {
+    pub fn get_log(
+        &self,
+        repo: &Repository,
+        limit: usize,
+        origin_branch: Option<&str>,
+    ) -> Result<Vec<CommitInfo>, AppError> {
         let mut revwalk = repo.revwalk()?;
         revwalk.push_head()?;
+        // Also walk from origin branch so detached HEAD still shows full history
+        if let Some(branch) = origin_branch {
+            let origin_ref = format!("refs/heads/{branch}");
+            if let Ok(reference) = repo.find_reference(&origin_ref) {
+                if let Ok(oid) = reference.peel_to_commit().map(|c| c.id()) {
+                    let _ = revwalk.push(oid);
+                }
+            }
+        }
         revwalk.set_sorting(git2::Sort::TIME)?;
 
         let mut commits = Vec::new();
@@ -613,7 +627,7 @@ mod tests {
         svc.stage(&repo, tmp.path(), &["note.md".to_string()])
             .unwrap();
         svc.commit(&repo, tmp.path(), "second", None).unwrap();
-        let log = svc.get_log(&repo, 10).unwrap();
+        let log = svc.get_log(&repo, 10, None).unwrap();
         assert_eq!(log.len(), 2);
         assert_eq!(log[0].message, "second");
         assert_eq!(log[1].message, "first");
@@ -629,7 +643,7 @@ mod tests {
             svc.commit(&repo, tmp.path(), &format!("commit {i}"), None)
                 .unwrap();
         }
-        let log = svc.get_log(&repo, 3).unwrap();
+        let log = svc.get_log(&repo, 3, None).unwrap();
         assert_eq!(log.len(), 3);
     }
 
@@ -1002,7 +1016,7 @@ mod tests {
         svc.commit(&repo, tmp.path(), "second", None).unwrap();
 
         // Get the first commit OID
-        let log = svc.get_log(&repo, 10).unwrap();
+        let log = svc.get_log(&repo, 10, None).unwrap();
         let first_oid = &log[1].oid; // second commit is index 0 (newest first)
 
         // Checkout the first commit
@@ -1051,7 +1065,7 @@ mod tests {
         svc.commit(&repo, tmp.path(), "third", None).unwrap();
 
         // Find the "first" commit by message (log order may vary for same-second commits)
-        let log = svc.get_log(&repo, 10).unwrap();
+        let log = svc.get_log(&repo, 10, None).unwrap();
         let first_oid = log.iter().find(|c| c.message == "first").unwrap().oid.clone();
         svc.checkout_commit(&repo, tmp.path(), &first_oid).unwrap();
 
@@ -1075,7 +1089,7 @@ mod tests {
 
         let default_branch = head_branch_name(&repo);
 
-        let log = svc.get_log(&repo, 10).unwrap();
+        let log = svc.get_log(&repo, 10, None).unwrap();
         svc.checkout_commit(&repo, tmp.path(), &log[0].oid).unwrap();
 
         create_file(tmp.path(), "note.md", "forked");
@@ -1114,7 +1128,7 @@ mod tests {
         svc.stage(&repo, tmp.path(), &["note.md".to_string()]).unwrap();
         svc.commit(&repo, tmp.path(), "second", None).unwrap();
 
-        let log = svc.get_log(&repo, 10).unwrap();
+        let log = svc.get_log(&repo, 10, None).unwrap();
         let first_oid = log.iter().find(|c| c.message == "initial").unwrap().oid.clone();
         svc.checkout_commit(&repo, tmp.path(), &first_oid).unwrap();
 
@@ -1139,7 +1153,7 @@ mod tests {
 
         svc.create_branch(&repo, "taken").unwrap();
 
-        let log = svc.get_log(&repo, 10).unwrap();
+        let log = svc.get_log(&repo, 10, None).unwrap();
         svc.checkout_commit(&repo, tmp.path(), &log[0].oid).unwrap();
 
         create_file(tmp.path(), "note.md", "edited");

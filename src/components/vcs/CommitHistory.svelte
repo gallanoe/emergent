@@ -13,7 +13,7 @@
   let totalLoaded = $derived(vcsStore.commits.length);
 
   export function refresh() {
-    vcsGetLog(limit)
+    vcsGetLog(limit, workspaceStore.originBranch)
       .then((commits) => vcsStore.setCommits(commits))
       .catch((err) =>
         toastStore.addToast(
