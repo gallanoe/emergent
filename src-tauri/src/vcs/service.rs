@@ -50,6 +50,17 @@ pub struct DiffResult {
     pub hunks: Vec<DiffHunk>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct HeadInfo {
+    pub oid: String,
+    pub message: String,
+    pub time: i64,
+    pub is_detached: bool,
+    pub branch_name: Option<String>,
+    pub commits_behind: usize,
+    pub commits_ahead: usize,
+}
+
 pub struct VcsService {
     emitter: Arc<dyn EventEmitter>,
 }
@@ -113,6 +124,45 @@ impl VcsService {
             oid: oid.to_string(),
             message: commit.message().unwrap_or("").to_string(),
             time: commit.time().seconds(),
+        })
+    }
+
+    pub fn get_head_info(
+        &self,
+        repo: &Repository,
+        origin_branch: Option<&str>,
+    ) -> Result<HeadInfo, AppError> {
+        let head = repo.head()?;
+        let is_detached = repo.head_detached()?;
+        let commit = head.peel_to_commit()?;
+        let oid = commit.id();
+
+        let branch_name = if is_detached {
+            None
+        } else {
+            head.shorthand().map(|s| s.to_string())
+        };
+
+        let (commits_ahead, commits_behind) = if let Some(origin) = origin_branch {
+            let origin_ref = format!("refs/heads/{origin}");
+            if let Ok(reference) = repo.find_reference(&origin_ref) {
+                let origin_oid = reference.peel_to_commit()?.id();
+                repo.graph_ahead_behind(oid, origin_oid)?
+            } else {
+                (0, 0)
+            }
+        } else {
+            (0, 0)
+        };
+
+        Ok(HeadInfo {
+            oid: oid.to_string(),
+            message: commit.message().unwrap_or("").to_string(),
+            time: commit.time().seconds(),
+            is_detached,
+            branch_name,
+            commits_behind,
+            commits_ahead,
         })
     }
 
@@ -931,5 +981,87 @@ mod tests {
         // Working directory should reflect the first commit
         let content = std::fs::read_to_string(tmp.path().join("note.md")).unwrap();
         assert_eq!(content, "v1");
+    }
+
+    // ── get_head_info tests ────────────────────────────────────────────────
+
+    #[test]
+    fn test_get_head_info_on_branch() {
+        let (tmp, _emitter, svc, repo) = setup();
+        create_file(tmp.path(), "note.md", "v1");
+        svc.stage(&repo, tmp.path(), &["note.md".to_string()]).unwrap();
+        svc.commit(&repo, tmp.path(), "initial", None).unwrap();
+
+        let info = svc.get_head_info(&repo, None).unwrap();
+        assert!(!info.is_detached);
+        assert!(info.branch_name.is_some());
+        assert_eq!(info.commits_behind, 0);
+        assert_eq!(info.commits_ahead, 0);
+    }
+
+    #[test]
+    fn test_get_head_info_detached_behind() {
+        let (tmp, _emitter, svc, repo) = setup();
+
+        create_file(tmp.path(), "note.md", "v1");
+        svc.stage(&repo, tmp.path(), &["note.md".to_string()]).unwrap();
+        svc.commit(&repo, tmp.path(), "first", None).unwrap();
+
+        create_file(tmp.path(), "note.md", "v2");
+        svc.stage(&repo, tmp.path(), &["note.md".to_string()]).unwrap();
+        svc.commit(&repo, tmp.path(), "second", None).unwrap();
+
+        create_file(tmp.path(), "note.md", "v3");
+        svc.stage(&repo, tmp.path(), &["note.md".to_string()]).unwrap();
+        svc.commit(&repo, tmp.path(), "third", None).unwrap();
+
+        // Find the "first" commit by message (log order may vary for same-second commits)
+        let log = svc.get_log(&repo, 10).unwrap();
+        let first_oid = log.iter().find(|c| c.message == "first").unwrap().oid.clone();
+        svc.checkout_commit(&repo, tmp.path(), &first_oid).unwrap();
+
+        let branches = svc.list_branches(&repo).unwrap();
+        let default_branch = &branches[0].name;
+
+        let info = svc.get_head_info(&repo, Some(default_branch)).unwrap();
+        assert!(info.is_detached);
+        assert!(info.branch_name.is_none());
+        assert_eq!(info.commits_behind, 2);
+        assert_eq!(info.commits_ahead, 0);
+    }
+
+    #[test]
+    fn test_get_head_info_ahead_of_origin() {
+        let (tmp, _emitter, svc, repo) = setup();
+
+        create_file(tmp.path(), "note.md", "v1");
+        svc.stage(&repo, tmp.path(), &["note.md".to_string()]).unwrap();
+        svc.commit(&repo, tmp.path(), "first", None).unwrap();
+
+        let default_branch = head_branch_name(&repo);
+
+        let log = svc.get_log(&repo, 10).unwrap();
+        svc.checkout_commit(&repo, tmp.path(), &log[0].oid).unwrap();
+
+        create_file(tmp.path(), "note.md", "forked");
+        svc.stage(&repo, tmp.path(), &["note.md".to_string()]).unwrap();
+        svc.commit(&repo, tmp.path(), "fork commit", Some("my-fork")).unwrap();
+
+        let info = svc.get_head_info(&repo, Some(&default_branch)).unwrap();
+        assert!(!info.is_detached);
+        assert_eq!(info.branch_name.as_deref(), Some("my-fork"));
+        assert_eq!(info.commits_ahead, 1);
+        assert_eq!(info.commits_behind, 0);
+    }
+
+    #[test]
+    fn test_checkout_commit_invalid_oid() {
+        let (tmp, _emitter, svc, repo) = setup();
+        create_file(tmp.path(), "note.md", "v1");
+        svc.stage(&repo, tmp.path(), &["note.md".to_string()]).unwrap();
+        svc.commit(&repo, tmp.path(), "initial", None).unwrap();
+
+        let result = svc.checkout_commit(&repo, tmp.path(), "not-a-valid-oid");
+        assert!(result.is_err());
     }
 }
