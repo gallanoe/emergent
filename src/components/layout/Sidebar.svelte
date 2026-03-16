@@ -1,7 +1,21 @@
 <script lang="ts">
   import FileTree from "../file-tree/FileTree.svelte";
   import { workspaceStore } from "../../stores/workspace.svelte";
-  import { GitBranch } from "@lucide/svelte";
+  import { GitBranch, Circle } from "@lucide/svelte";
+
+  let shortOid = $derived(
+    workspaceStore.headCommit?.oid.slice(0, 7) ?? ""
+  );
+
+  let behindAheadText = $derived.by(() => {
+    if (workspaceStore.commitsBehind > 0) {
+      return `${workspaceStore.commitsBehind} behind HEAD`;
+    }
+    if (workspaceStore.commitsAhead > 0) {
+      return `${workspaceStore.commitsAhead} ahead`;
+    }
+    return "";
+  });
 </script>
 
 <div class="sidebar" data-testid="sidebar">
@@ -14,13 +28,28 @@
   </div>
 
   <div class="sidebar-footer">
-    <GitBranch
-      size={14}
-      style="color: var(--color-fg-muted); flex-shrink: 0;"
-    />
-    <span class="branch-name">
-      {workspaceStore.currentBranch}
-    </span>
+    {#if workspaceStore.isDetached}
+      <Circle
+        size={14}
+        style="color: var(--color-fg-muted); flex-shrink: 0;"
+      />
+      <span class="branch-name">{shortOid}</span>
+      {#if behindAheadText}
+        <span class="behind-ahead">· {behindAheadText}</span>
+      {/if}
+    {:else}
+      <GitBranch
+        size={14}
+        style="color: var(--color-fg-muted); flex-shrink: 0;"
+      />
+      <span class="branch-name">{workspaceStore.currentBranch}</span>
+      {#if shortOid}
+        <span class="commit-oid">· {shortOid}</span>
+      {/if}
+      {#if behindAheadText}
+        <span class="behind-ahead">· {behindAheadText}</span>
+      {/if}
+    {/if}
   </div>
 </div>
 
@@ -67,6 +96,21 @@
     margin-left: 6px;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .commit-oid {
+    font-size: 11px;
+    color: var(--color-fg-muted);
+    font-family: var(--font-mono);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .behind-ahead {
+    font-size: 11px;
+    color: var(--color-fg-muted);
     white-space: nowrap;
   }
 </style>
