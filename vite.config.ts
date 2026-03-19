@@ -12,7 +12,6 @@ export default defineConfig({
   },
   optimizeDeps: {
     exclude: ["@lucide/svelte"],
-    include: ["@lucide/svelete > lucide"],
   },
   server: {
     port: 1420,

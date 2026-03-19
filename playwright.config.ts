@@ -14,5 +14,6 @@ export default defineConfig({
     url: "http://localhost:1420",
     reuseExistingServer: true,
     timeout: 10000,
+    env: { VITE_DEMO_MODE: "true" },
   },
 });

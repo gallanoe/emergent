@@ -1,6 +1,7 @@
 node_modules/
 .bun/
-.claude/
+.claude/*
+!.claude/skills/
 dist/
 src-tauri/target/
 .env*

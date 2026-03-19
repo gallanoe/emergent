@@ -23,15 +23,10 @@ serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
 tauri = { version = "2.10.3", features = [] }
 tauri-plugin-log = "2"
-async-openai = { version = "0.33.0", features = ["chat-completion"] }
-async-trait = "0.1"
+agent-client-protocol = "0.10"
+which = "7"
 tokio = { version = "1", features = ["full"] }
-futures = "0.3"
-nanoid = "0.4"
-eyre = "0.6"
-git2 = { version = "0.20", features = ["vendored-libgit2"] }
-thiserror = "2"
-chrono = { version = "0.4", features = ["serde"] }
-
-[dev-dependencies]
-tempfile = "3"
+uuid = { version = "1", features = ["v4"] }
+tokio-util = { version = "0.7", features = ["compat"] }
+async-trait = "0.1"
+tauri-plugin-dialog = "2.6.0"

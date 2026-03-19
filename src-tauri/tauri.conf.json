@@ -13,6 +13,9 @@
     "windows": [
       {
         "title": "Emergent",
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "trafficLightPosition": { "x": 16, "y": 21 },
         "width": 1024,
         "height": 700,
         "minWidth": 720,

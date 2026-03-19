@@ -1,29 +1,45 @@
 <script lang="ts">
+  import { appState } from "./stores/app-state.svelte";
+  import Sidebar from "./components/Sidebar.svelte";
+  import TopBar from "./components/TopBar.svelte";
+  import ChatArea from "./components/ChatArea.svelte";
+  import ChatInput from "./components/ChatInput.svelte";
   import { onMount } from "svelte";
-  import AppShell from "./components/layout/AppShell.svelte";
-  import WorkspacePicker from "./components/workspace/WorkspacePicker.svelte";
-  import { workspaceStore } from "./stores/workspace.svelte";
-  import { listWorkspaces } from "./lib/tauri";
-  import { toastStore } from "./stores/toast.svelte";
 
   onMount(() => {
-    listWorkspaces()
-      .then((list) => {
-        workspaceStore.setWorkspaces(list);
-      })
-      .catch((err) => {
-        toastStore.addToast(
-          `Failed to load workspaces: ${err instanceof Error ? err.message : String(err)}`,
-          "error",
-        );
-      });
+    appState.initialize();
   });
 </script>
 
-<div class="view-fade-in">
-  {#if workspaceStore.activeWorkspace}
-    <AppShell />
-  {:else}
-    <WorkspacePicker />
-  {/if}
+<!-- Drag region overlay for window dragging -->
+<div
+  class="fixed top-0 left-0 right-0 h-[38px] z-50"
+  data-tauri-drag-region
+></div>
+
+<div class="grid grid-cols-[240px_1fr] h-screen">
+  <Sidebar
+    swarms={appState.swarms}
+    selectedAgentId={appState.selectedAgentId}
+    demoMode={appState.demoMode}
+    onSelectAgent={(id) => (appState.selectedAgentId = id)}
+    onToggleSwarm={(id) => appState.toggleSwarmCollapsed(id)}
+    onNewSwarm={() => appState.newSwarm()}
+    onAddAgent={(swarmId) => {
+      const agent = appState.availableAgents[0];
+      if (agent) appState.addAgentToSwarm(swarmId, agent.binary);
+    }}
+  />
+  <main class="flex flex-col min-h-0">
+    <TopBar agent={appState.selectedAgent} />
+    <ChatArea agent={appState.selectedAgent} />
+    <ChatInput
+      agent={appState.selectedAgent}
+      demoMode={appState.demoMode}
+      onSend={(text) => {
+        const agent = appState.selectedAgent;
+        if (agent) appState.sendPrompt(agent.id, text);
+      }}
+    />
+  </main>
 </div>
