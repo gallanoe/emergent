@@ -1,0 +1,181 @@
+/* Scoped markdown styles for rendered message content.
+   Applied via the `.markdown` class on containers using {@html}. */
+
+.markdown {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--color-fg-default);
+  user-select: text;
+}
+
+/* ── Headings ────────────────────────────── */
+
+.markdown h1,
+.markdown h2,
+.markdown h3,
+.markdown h4 {
+  font-family: var(--font-ui);
+  color: var(--color-fg-heading);
+  margin-top: 0.8em;
+  margin-bottom: 0.3em;
+  line-height: 1.3;
+}
+
+.markdown h1:first-child,
+.markdown h2:first-child,
+.markdown h3:first-child {
+  margin-top: 0;
+}
+
+.markdown h1 {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.markdown h2 {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.markdown h3 {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.markdown h4 {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-fg-muted);
+}
+
+/* ── Paragraphs ──────────────────────────── */
+
+.markdown p {
+  margin-bottom: 0.5em;
+}
+
+.markdown p:last-child {
+  margin-bottom: 0;
+}
+
+/* ── Inline formatting ───────────────────── */
+
+.markdown strong {
+  font-weight: 600;
+}
+
+.markdown em {
+  font-style: italic;
+}
+
+.markdown a {
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-decoration-color: rgba(124, 106, 78, 0.3);
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.markdown a:hover {
+  text-decoration-color: var(--color-accent);
+}
+
+/* ── Inline code ─────────────────────────── */
+
+.markdown code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: var(--color-bg-elevated);
+  padding: 1px 4px;
+  border-radius: 3px;
+  border: 1px solid var(--color-border-default);
+}
+
+/* ── Code blocks ─────────────────────────── */
+
+.markdown pre {
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border-default);
+  border-radius: 4px;
+  padding: 10px 12px;
+  margin: 0.5em 0;
+  overflow-x: auto;
+}
+
+.markdown pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* ── Lists ───────────────────────────────── */
+
+.markdown ul,
+.markdown ol {
+  margin: 0.3em 0 0.5em 0;
+  padding-left: 1.4em;
+}
+
+.markdown li {
+  margin-bottom: 0.15em;
+}
+
+.markdown li::marker {
+  color: var(--color-fg-disabled);
+}
+
+/* ── Blockquotes ─────────────────────────── */
+
+.markdown blockquote {
+  border-left: 2px solid var(--color-border-strong);
+  padding-left: 10px;
+  margin: 0.5em 0;
+  color: var(--color-fg-muted);
+  font-style: italic;
+}
+
+/* ── Horizontal rules ────────────────────── */
+
+.markdown hr {
+  border: none;
+  border-top: 1px solid var(--color-border-default);
+  margin: 0.7em 0;
+}
+
+/* ── Tables ──────────────────────────────── */
+
+.markdown table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.5em 0;
+  font-size: 11px;
+}
+
+.markdown th {
+  text-align: left;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--color-border-strong);
+  color: var(--color-fg-muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.markdown td {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--color-border-default);
+}
+
+/* ── Images ──────────────────────────────── */
+
+.markdown img {
+  max-width: 100%;
+  border-radius: 4px;
+  margin: 0.5em 0;
+}
