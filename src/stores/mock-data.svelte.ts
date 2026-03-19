@@ -1,21 +1,6 @@
 // src/stores/mock-data.svelte.ts
 
-import type {
-  AgentStatus,
-  DisplayAgent,
-  DisplayMessage,
-  DisplaySwarm,
-  DisplayToolCall,
-} from "./types";
-
-// Re-export types for backward compatibility
-export type {
-  DisplayAgent as Agent,
-  DisplayMessage as Message,
-  DisplayToolCall as ToolCall,
-  DisplaySwarm as Swarm,
-  AgentStatus,
-};
+import type { DisplayAgent, DisplaySwarm } from "./types";
 
 const swarms: DisplaySwarm[] = [
   {

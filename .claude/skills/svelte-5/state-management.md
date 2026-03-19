@@ -24,8 +24,8 @@ digraph state_decision {
 ```ts
 // app-state.svelte.ts
 export const appState = $state({
-  theme: 'light',
-  sidebarOpen: false
+  theme: "light",
+  sidebarOpen: false,
 });
 // Components mutate properties: appState.theme = 'dark'
 ```
@@ -37,8 +37,12 @@ export const appState = $state({
 export function createCounter(initial = 0) {
   let count = $state(initial);
   return {
-    get count() { return count; },
-    increment() { count += 1; }
+    get count() {
+      return count;
+    },
+    increment() {
+      count += 1;
+    },
   };
 }
 export const counter = createCounter();
@@ -50,9 +54,15 @@ export const counter = createCounter();
 // auth.svelte.ts
 class AuthState {
   user = $state<User | null>(null);
-  get isLoggedIn() { return this.user !== null; }
-  login(user: User) { this.user = user; }
-  logout() { this.user = null; }
+  get isLoggedIn() {
+    return this.user !== null;
+  }
+  login(user: User) {
+    this.user = user;
+  }
+  logout() {
+    this.user = null;
+  }
 }
 export const auth = new AuthState();
 ```
@@ -90,18 +100,19 @@ Since **Svelte 5.40**, `createContext()` returns a type-safe `[get, set]` pair.
 
 `$state` only deep-proxies plain objects and arrays. For built-in collections:
 
-| Need | Use |
-|------|-----|
-| `Map` | `SvelteMap` from `svelte/reactivity` |
-| `Set` | `SvelteSet` from `svelte/reactivity` |
+| Need   | Use                                   |
+| ------ | ------------------------------------- |
+| `Map`  | `SvelteMap` from `svelte/reactivity`  |
+| `Set`  | `SvelteSet` from `svelte/reactivity`  |
 | `Date` | `SvelteDate` from `svelte/reactivity` |
-| `URL` | `SvelteURL` from `svelte/reactivity` |
+| `URL`  | `SvelteURL` from `svelte/reactivity`  |
 
 Values inside `SvelteMap`/`SvelteSet` are NOT made deeply reactive — only collection membership is tracked.
 
 ## When to Use Stores
 
 `svelte/store` is **not deprecated but no longer primary**. Still useful for:
+
 - Complex async data streams
 - RxJS interop
 - Custom subscription patterns with start/stop logic

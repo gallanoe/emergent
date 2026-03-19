@@ -2,6 +2,7 @@
 <script lang="ts">
   import { ChevronRight, ChevronDown } from "@lucide/svelte";
   import type { DisplayAgent } from "../stores/types";
+  import * as chatUtils from "../lib/chat-utils";
 
   interface Props {
     agent: DisplayAgent | undefined;
@@ -13,8 +14,9 @@
   let expandedToolGroups: Record<string, boolean> = $state({});
 
   // Reset expansion state when switching agents
+  let agentId = $derived(agent?.id);
   $effect(() => {
-    agent;
+    agentId;
     expandedToolGroups = {};
   });
 
@@ -24,28 +26,12 @@
 
   function shouldShowTimestamp(index: number): boolean {
     if (!agent) return true;
-    const messages = agent.messages;
-    if (index === 0) return true;
-    const current = messages[index]!;
-    const prev = messages[index - 1]!;
-    if (current.role === "tool-group") return false;
-    return current.timestamp !== prev.timestamp;
+    return chatUtils.shouldShowTimestamp(agent.messages, index);
   }
 
-  /** True when the speaker changes (user↔assistant), ignoring tool-groups */
   function isNewTurn(index: number): boolean {
-    if (!agent || index === 0) return false;
-    const messages = agent.messages;
-    const current = messages[index]!;
-    if (current.role === "tool-group") return false;
-    // Walk back past tool-groups to find the previous speaker
-    for (let j = index - 1; j >= 0; j--) {
-      const prev = messages[j]!;
-      if (prev.role !== "tool-group") {
-        return prev.role !== current.role;
-      }
-    }
-    return false;
+    if (!agent) return false;
+    return chatUtils.isNewTurn(agent.messages, index);
   }
 </script>
 

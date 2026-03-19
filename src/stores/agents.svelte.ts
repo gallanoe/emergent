@@ -229,7 +229,7 @@ function createAgentStore() {
       swarmId: conn.swarmId,
       name: conn.cli,
       status: statusMap[conn.status],
-      preview: lastMsg?.content?.slice(0, 30) + "..." || "",
+      preview: lastMsg?.content ? lastMsg.content.slice(0, 30) + "..." : "",
       updatedAt: "just now",
       messages: conn.messages,
     };

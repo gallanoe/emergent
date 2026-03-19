@@ -40,20 +40,20 @@ The neutral gray scale is the backbone of the interface. You need 10–12 steps 
 
 **Dark mode neutral scale** (recommended starting point):
 
-| Step | Hex       | Usage                                      |
-|------|-----------|---------------------------------------------|
-| 1    | #111113   | App background, deepest surface             |
-| 2    | #18191b   | Card/panel background, sidebar              |
-| 3    | #212225   | Elevated surface, hover background          |
-| 4    | #272a2d   | Active/pressed background                   |
-| 5    | #2e3135   | Subtle border, divider                      |
-| 6    | #363a3f   | Medium border, input border                 |
-| 7    | #43484e   | Strong border, separator                    |
-| 8    | #5a6169   | Placeholder text, disabled icons            |
-| 9    | #696e77   | Muted text, secondary labels                |
-| 10   | #7b8088   | Secondary text                              |
-| 11   | #b0b4ba   | Primary text, icons                         |
-| 12   | #edeef0   | High-emphasis text, headings                |
+| Step | Hex     | Usage                              |
+| ---- | ------- | ---------------------------------- |
+| 1    | #111113 | App background, deepest surface    |
+| 2    | #18191b | Card/panel background, sidebar     |
+| 3    | #212225 | Elevated surface, hover background |
+| 4    | #272a2d | Active/pressed background          |
+| 5    | #2e3135 | Subtle border, divider             |
+| 6    | #363a3f | Medium border, input border        |
+| 7    | #43484e | Strong border, separator           |
+| 8    | #5a6169 | Placeholder text, disabled icons   |
+| 9    | #696e77 | Muted text, secondary labels       |
+| 10   | #7b8088 | Secondary text                     |
+| 11   | #b0b4ba | Primary text, icons                |
+| 12   | #edeef0 | High-emphasis text, headings       |
 
 **Key principles**:
 
@@ -71,20 +71,20 @@ The neutral gray scale is the backbone of the interface. You need 10–12 steps 
 
 For each accent and semantic color, build a 12-step scale with defined usage per step. The Radix Colors system provides the best-documented mapping:
 
-| Step | Role                | Usage                                                 |
-|------|---------------------|-------------------------------------------------------|
-| 1    | Background          | Very subtle tinted background for large areas         |
-| 2    | Background subtle   | Slightly more visible tinted background               |
-| 3    | Element background  | Default state for tinted interactive elements         |
-| 4    | Element hover       | Hover state for tinted interactive elements           |
-| 5    | Element active      | Pressed/active state for tinted interactive elements  |
-| 6    | Subtle border       | Borders on tinted surfaces                            |
-| 7    | Border              | Interactive element borders, focus rings (inner)      |
-| 8    | Border strong       | High-contrast borders where needed                    |
-| 9    | Solid background    | Primary button fill, badges, indicators               |
-| 10   | Solid hover         | Hover state for solid-fill elements                   |
-| 11   | Text low-contrast   | Tinted secondary text, icons on untinted backgrounds  |
-| 12   | Text high-contrast  | Tinted primary text on untinted backgrounds           |
+| Step | Role               | Usage                                                |
+| ---- | ------------------ | ---------------------------------------------------- |
+| 1    | Background         | Very subtle tinted background for large areas        |
+| 2    | Background subtle  | Slightly more visible tinted background              |
+| 3    | Element background | Default state for tinted interactive elements        |
+| 4    | Element hover      | Hover state for tinted interactive elements          |
+| 5    | Element active     | Pressed/active state for tinted interactive elements |
+| 6    | Subtle border      | Borders on tinted surfaces                           |
+| 7    | Border             | Interactive element borders, focus rings (inner)     |
+| 8    | Border strong      | High-contrast borders where needed                   |
+| 9    | Solid background   | Primary button fill, badges, indicators              |
+| 10   | Solid hover        | Hover state for solid-fill elements                  |
+| 11   | Text low-contrast  | Tinted secondary text, icons on untinted backgrounds |
+| 12   | Text high-contrast | Tinted primary text on untinted backgrounds          |
 
 This eliminates the guesswork of "which blue do I use here?" Each step has one job.
 
@@ -139,20 +139,20 @@ Even if dark mode is the default, provide a light mode option for users in brigh
 
 **Light mode neutral scale** (approximate inverse):
 
-| Step | Hex       | Usage                                      |
-|------|-----------|---------------------------------------------|
-| 1    | #FCFCFD   | App background                              |
-| 2    | #F9F9FB   | Elevated surface                            |
-| 3    | #F0F0F3   | Hover background                            |
-| 4    | #E8E8EC   | Active/pressed background                   |
-| 5    | #E0E1E6   | Subtle border                               |
-| 6    | #D9D9E0   | Medium border                               |
-| 7    | #CDCED6   | Strong border                               |
-| 8    | #B0B1B9   | Placeholder text                            |
-| 9    | #8B8D98   | Muted text                                  |
-| 10   | #6F7082   | Secondary text                              |
-| 11   | #60616D   | Primary text                                |
-| 12   | #1C2024   | High-emphasis text                          |
+| Step | Hex     | Usage                     |
+| ---- | ------- | ------------------------- |
+| 1    | #FCFCFD | App background            |
+| 2    | #F9F9FB | Elevated surface          |
+| 3    | #F0F0F3 | Hover background          |
+| 4    | #E8E8EC | Active/pressed background |
+| 5    | #E0E1E6 | Subtle border             |
+| 6    | #D9D9E0 | Medium border             |
+| 7    | #CDCED6 | Strong border             |
+| 8    | #B0B1B9 | Placeholder text          |
+| 9    | #8B8D98 | Muted text                |
+| 10   | #6F7082 | Secondary text            |
+| 11   | #60616D | Primary text              |
+| 12   | #1C2024 | High-emphasis text        |
 
 **Light mode adjustments**:
 
@@ -228,7 +228,7 @@ Build the color system with two token layers to enable easy theming.
 }
 
 [data-theme="light"] {
-  --color-bg-base: var(--gray-1);   /* Light mode gray-1 */
+  --color-bg-base: var(--gray-1); /* Light mode gray-1 */
   /* ... remap all semantic tokens to light mode values */
 }
 ```
@@ -274,12 +274,12 @@ Build the color system with two token layers to enable easy theming.
 
 **Status color usage**:
 
-| Status  | Color  | Usage                                                |
-|---------|--------|------------------------------------------------------|
-| Success | Green  | Successful operations, connected states, valid input |
-| Warning | Amber  | Non-blocking alerts, degraded states, approaching limits |
-| Error   | Red    | Failed operations, validation errors, destructive actions |
-| Info    | Blue   | Informational notices, neutral alerts, tips           |
+| Status  | Color | Usage                                                     |
+| ------- | ----- | --------------------------------------------------------- |
+| Success | Green | Successful operations, connected states, valid input      |
+| Warning | Amber | Non-blocking alerts, degraded states, approaching limits  |
+| Error   | Red   | Failed operations, validation errors, destructive actions |
+| Info    | Blue  | Informational notices, neutral alerts, tips               |
 
 - Status colors appear as: text color, background tint (with text on top), dot/badge indicators, icon color, border color.
 - Never use status colors for decoration or branding — their meaning must be immediate and unambiguous.
@@ -318,16 +318,22 @@ Build the color system with two token layers to enable easy theming.
 ```css
 /* Respect OS color scheme preference */
 @media (prefers-color-scheme: dark) {
-  :root { /* Apply dark theme tokens */ }
+  :root {
+    /* Apply dark theme tokens */
+  }
 }
 
 @media (prefers-color-scheme: light) {
-  :root { /* Apply light theme tokens */ }
+  :root {
+    /* Apply light theme tokens */
+  }
 }
 
 /* Respect OS reduced motion preference */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+  *,
+  *::before,
+  *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
@@ -350,12 +356,16 @@ Build the color system with two token layers to enable easy theming.
 **CSS custom properties + data attributes** (recommended approach):
 
 ```html
-<html data-theme="dark">
+<html data-theme="dark"></html>
 ```
 
 ```css
-[data-theme="dark"] { /* dark tokens */ }
-[data-theme="light"] { /* light tokens */ }
+[data-theme="dark"] {
+  /* dark tokens */
+}
+[data-theme="light"] {
+  /* light tokens */
+}
 ```
 
 Switch themes by changing the `data-theme` attribute on the root element. No class toggling, no stylesheet swapping, no FOUC.
@@ -371,17 +381,17 @@ module.exports = {
     extend: {
       colors: {
         bg: {
-          base: 'var(--color-bg-base)',
-          elevated: 'var(--color-bg-elevated)',
-          hover: 'var(--color-bg-hover)',
+          base: "var(--color-bg-base)",
+          elevated: "var(--color-bg-elevated)",
+          hover: "var(--color-bg-hover)",
         },
         fg: {
-          default: 'var(--color-fg-default)',
-          muted: 'var(--color-fg-muted)',
+          default: "var(--color-fg-default)",
+          muted: "var(--color-fg-muted)",
         },
         accent: {
-          DEFAULT: 'var(--color-accent)',
-          hover: 'var(--color-accent-hover)',
+          DEFAULT: "var(--color-accent)",
+          hover: "var(--color-accent-hover)",
         },
       },
     },

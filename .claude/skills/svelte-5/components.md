@@ -29,6 +29,7 @@ For wrapper components forwarding native attributes:
 ```
 
 **Rules:**
+
 - Props are reactive — they update when the parent changes them
 - Never mutate prop objects directly — use callbacks or `$bindable`
 - `$props.id()` (v5.20+) generates hydration-safe unique IDs
@@ -135,7 +136,7 @@ Combine multiple handlers inline (no duplicate attributes allowed):
 ### Typing Snippets
 
 ```ts
-import type { Snippet } from 'svelte';
+import type { Snippet } from "svelte";
 
 interface Props {
   header: Snippet;
@@ -166,6 +167,6 @@ interface Props {
 Use `Component` (not legacy `SvelteComponent`):
 
 ```ts
-import type { Component, ComponentProps } from 'svelte';
+import type { Component, ComponentProps } from "svelte";
 type MyProps = ComponentProps<typeof MyComp>;
 ```

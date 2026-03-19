@@ -82,10 +82,10 @@ Consider LTO (`lto = true` in release profile) as an alternative that enables cr
 
 ## String handling: &str vs String vs Cow<str>
 
-| Type | Use when |
-|------|----------|
-| `&str` | Function parameters (read-only), returning substrings, string literals |
-| `String` | Need ownership, mutation, storing in structs |
+| Type           | Use when                                                               |
+| -------------- | ---------------------------------------------------------------------- |
+| `&str`         | Function parameters (read-only), returning substrings, string literals |
+| `String`       | Need ownership, mutation, storing in structs                           |
 | `Cow<'a, str>` | Sometimes borrow, sometimes own — avoids allocation in the common case |
 
 ```rust

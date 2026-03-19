@@ -4,20 +4,21 @@ Runes are **compiler directives** (not functions). Never import them. They only 
 
 ## Quick Reference
 
-| Rune | Purpose | Triggers update on |
-|------|---------|-------------------|
-| `$state(value)` | Reactive state | Reassignment; mutation (deep proxy for objects/arrays) |
-| `$state.raw(value)` | Shallow reactive state | Reassignment only (no proxy) |
-| `$state.snapshot(proxy)` | Static deep copy | N/A — returns plain object |
-| `$derived(expr)` | Computed value | Dependencies change (lazy, memoized) |
-| `$derived.by(() => { ... })` | Multi-statement computed | Same as `$derived` |
-| `$effect(() => { ... })` | Side effect (escape hatch) | Synchronously-read dependencies change |
-| `$effect.pre(() => { ... })` | Pre-DOM-update effect | Same, runs before DOM updates |
-| `$inspect(value)` | Dev-only reactive log | Dependencies change (no-op in prod) |
+| Rune                         | Purpose                    | Triggers update on                                     |
+| ---------------------------- | -------------------------- | ------------------------------------------------------ |
+| `$state(value)`              | Reactive state             | Reassignment; mutation (deep proxy for objects/arrays) |
+| `$state.raw(value)`          | Shallow reactive state     | Reassignment only (no proxy)                           |
+| `$state.snapshot(proxy)`     | Static deep copy           | N/A — returns plain object                             |
+| `$derived(expr)`             | Computed value             | Dependencies change (lazy, memoized)                   |
+| `$derived.by(() => { ... })` | Multi-statement computed   | Same as `$derived`                                     |
+| `$effect(() => { ... })`     | Side effect (escape hatch) | Synchronously-read dependencies change                 |
+| `$effect.pre(() => { ... })` | Pre-DOM-update effect      | Same, runs before DOM updates                          |
+| `$inspect(value)`            | Dev-only reactive log      | Dependencies change (no-op in prod)                    |
 
 ## $state — Deep Reactivity Rules
 
 Deep proxy applies to **plain objects and arrays only**. These are NOT proxied:
+
 - Class instances
 - `Map`, `Set`, `Date`, `URL`
 - Objects via `Object.create()`
@@ -27,6 +28,7 @@ For collections, use `SvelteMap`, `SvelteSet`, `SvelteDate`, `SvelteURL` from `s
 ### When to use $state.raw
 
 Use for data you **replace wholesale, never mutate property-by-property**:
+
 - API responses, paginated data, large datasets, data from external libraries
 
 ```js
@@ -40,6 +42,7 @@ data.push(item);
 ### $state.snapshot
 
 Use before passing reactive state to code that doesn't expect `Proxy`:
+
 - `structuredClone`, Web Workers, `postMessage`, third-party libraries
 
 ## $derived — Your Primary Tool
@@ -69,6 +72,7 @@ Since Svelte 5.25, `let`-declared derived values can be temporarily overridden (
 Use ONLY for: canvas drawing, third-party library integration, analytics, subscriptions, DOM measurement.
 
 **Before reaching for $effect, try in order:**
+
 1. `$derived` — computed values
 2. Template expressions — `style:color={color}`
 3. Event handlers — user-triggered logic
@@ -85,7 +89,7 @@ Use ONLY for: canvas drawing, third-party library integration, analytics, subscr
 
 ```js
 $effect(() => {
-  const interval = setInterval(() => count += 1, ms);
+  const interval = setInterval(() => (count += 1), ms);
   return () => clearInterval(interval);
 });
 ```
@@ -97,12 +101,17 @@ Class instances aren't proxied. Use `$state` on individual fields:
 ```js
 class Todo {
   done = $state(false);
-  text = $state('');
+  text = $state("");
 
-  constructor(text) { this.text = text; }
+  constructor(text) {
+    this.text = text;
+  }
 
   // Arrow function preserves `this` in event handlers
-  reset = () => { this.text = ''; this.done = false; };
+  reset = () => {
+    this.text = "";
+    this.done = false;
+  };
 }
 ```
 

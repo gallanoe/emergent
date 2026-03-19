@@ -10,12 +10,12 @@
 
 ## Shared state: choosing the right primitive
 
-| Approach | Best for |
-|----------|----------|
-| `Arc<Mutex<T>>` | Shared mutable state, in-place updates, low-latency reads |
-| `Arc<RwLock<T>>` | Read-heavy shared state (>90% reads) |
-| Channels (`crossbeam`, `std::sync::mpsc`) | Producer/consumer pipelines, decoupled components |
-| `ArcSwap` | Extremely read-heavy / write-rare (config hot-reloading) |
+| Approach                                  | Best for                                                  |
+| ----------------------------------------- | --------------------------------------------------------- |
+| `Arc<Mutex<T>>`                           | Shared mutable state, in-place updates, low-latency reads |
+| `Arc<RwLock<T>>`                          | Read-heavy shared state (>90% reads)                      |
+| Channels (`crossbeam`, `std::sync::mpsc`) | Producer/consumer pipelines, decoupled components         |
+| `ArcSwap`                                 | Extremely read-heavy / write-rare (config hot-reloading)  |
 
 ### Minimize lock scope
 
@@ -69,12 +69,12 @@ Helps for CPU-bound on large collections (>10K elements). Hurts for I/O-bound, t
 
 ## Async concurrency: join!, select!, and spawn
 
-| Primitive | Behavior | Use case |
-|-----------|----------|----------|
-| `tokio::join!` | All futures complete, same task | Fan-out/fan-in, can borrow local data |
-| `tokio::try_join!` | Short-circuits on first error | Same, with early exit on failure |
-| `tokio::select!` | Races futures, cancels losers | Timeouts, graceful shutdown |
-| `tokio::spawn` | Independent task on separate thread | Background work, requires `'static + Send` |
+| Primitive          | Behavior                            | Use case                                   |
+| ------------------ | ----------------------------------- | ------------------------------------------ |
+| `tokio::join!`     | All futures complete, same task     | Fan-out/fan-in, can borrow local data      |
+| `tokio::try_join!` | Short-circuits on first error       | Same, with early exit on failure           |
+| `tokio::select!`   | Races futures, cancels losers       | Timeouts, graceful shutdown                |
+| `tokio::spawn`     | Independent task on separate thread | Background work, requires `'static + Send` |
 
 ```rust
 // ✅ GOOD: graceful shutdown with select! loop

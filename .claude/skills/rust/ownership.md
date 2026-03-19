@@ -170,13 +170,13 @@ fn error_message(code: u16) -> Cow<'static, str> {
 
 ## Interior mutability: choosing the right tool
 
-| Type | Thread-safe | Use case |
-|------|-------------|----------|
-| `Cell<T>` | No | Small `Copy` types (counters, flags) — zero runtime cost |
-| `RefCell<T>` | No | Non-`Copy` types, single-threaded — runtime-checked borrows |
-| `Mutex<T>` | Yes | Exclusive access across threads |
-| `RwLock<T>` | Yes | Read-heavy multi-threaded workloads |
-| `OnceLock<T>` | Yes | One-time initialization of a shared value |
+| Type          | Thread-safe | Use case                                                    |
+| ------------- | ----------- | ----------------------------------------------------------- |
+| `Cell<T>`     | No          | Small `Copy` types (counters, flags) — zero runtime cost    |
+| `RefCell<T>`  | No          | Non-`Copy` types, single-threaded — runtime-checked borrows |
+| `Mutex<T>`    | Yes         | Exclusive access across threads                             |
+| `RwLock<T>`   | Yes         | Read-heavy multi-threaded workloads                         |
+| `OnceLock<T>` | Yes         | One-time initialization of a shared value                   |
 
 **Common pairings:**
 

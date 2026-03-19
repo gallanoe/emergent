@@ -25,13 +25,13 @@ Every action in the application should be registered as a named command. This de
 
 ```typescript
 interface Command {
-  id: string;             // Unique identifier: 'editor.toggleWordWrap'
-  title: string;          // Human-readable: 'Toggle Word Wrap'
-  category?: string;      // Grouping: 'Editor', 'View', 'File'
-  icon?: string;          // For toolbar/menu display
-  keybinding?: string;    // Default shortcut: 'Alt+Z'
-  when?: string;          // Context condition: 'editorFocus'
-  handler: () => void;    // The actual action
+  id: string; // Unique identifier: 'editor.toggleWordWrap'
+  title: string; // Human-readable: 'Toggle Word Wrap'
+  category?: string; // Grouping: 'Editor', 'View', 'File'
+  icon?: string; // For toolbar/menu display
+  keybinding?: string; // Default shortcut: 'Alt+Z'
+  when?: string; // Context condition: 'editorFocus'
+  handler: () => void; // The actual action
 }
 ```
 
@@ -81,6 +81,7 @@ The keybinding system maps keyboard input to commands, resolving conflicts throu
 ```
 
 Display the correct symbols per platform:
+
 - macOS: ⌘ (Command), ⌥ (Option), ⌃ (Control), ⇧ (Shift)
 - Windows/Linux: Ctrl, Alt, Shift
 
@@ -92,33 +93,33 @@ These shortcuts are deeply ingrained user expectations. Never override them.
 
 **Universal (all platforms)**:
 
-| Action           | macOS       | Windows/Linux |
-|------------------|-------------|---------------|
-| Save             | ⌘S          | Ctrl+S        |
-| Undo             | ⌘Z          | Ctrl+Z        |
-| Redo             | ⌘⇧Z         | Ctrl+Y        |
-| Copy             | ⌘C          | Ctrl+C        |
-| Paste            | ⌘V          | Ctrl+V        |
-| Cut              | ⌘X          | Ctrl+X        |
-| Select All       | ⌘A          | Ctrl+A        |
-| Find             | ⌘F          | Ctrl+F        |
-| Close tab/view   | ⌘W          | Ctrl+W        |
-| Quit             | ⌘Q          | Alt+F4        |
-| Preferences      | ⌘,          | Ctrl+,        |
-| New              | ⌘N          | Ctrl+N        |
+| Action         | macOS | Windows/Linux |
+| -------------- | ----- | ------------- |
+| Save           | ⌘S    | Ctrl+S        |
+| Undo           | ⌘Z    | Ctrl+Z        |
+| Redo           | ⌘⇧Z   | Ctrl+Y        |
+| Copy           | ⌘C    | Ctrl+C        |
+| Paste          | ⌘V    | Ctrl+V        |
+| Cut            | ⌘X    | Ctrl+X        |
+| Select All     | ⌘A    | Ctrl+A        |
+| Find           | ⌘F    | Ctrl+F        |
+| Close tab/view | ⌘W    | Ctrl+W        |
+| Quit           | ⌘Q    | Alt+F4        |
+| Preferences    | ⌘,    | Ctrl+,        |
+| New            | ⌘N    | Ctrl+N        |
 
 **Common desktop app shortcuts** (strong conventions):
 
-| Action              | macOS           | Windows/Linux      |
-|----------------------|-----------------|--------------------|
-| Command palette      | ⌘⇧P or ⌘K      | Ctrl+Shift+P       |
-| Quick open/search    | ⌘P              | Ctrl+P             |
-| Toggle sidebar       | ⌘B              | Ctrl+B             |
-| Toggle terminal      | ⌃` or ⌘J       | Ctrl+`             |
-| Go to line           | ⌃G              | Ctrl+G             |
-| Zoom in              | ⌘+              | Ctrl++             |
-| Zoom out             | ⌘-              | Ctrl+-             |
-| Reset zoom           | ⌘0              | Ctrl+0             |
+| Action            | macOS     | Windows/Linux |
+| ----------------- | --------- | ------------- |
+| Command palette   | ⌘⇧P or ⌘K | Ctrl+Shift+P  |
+| Quick open/search | ⌘P        | Ctrl+P        |
+| Toggle sidebar    | ⌘B        | Ctrl+B        |
+| Toggle terminal   | ⌃` or ⌘J  | Ctrl+`        |
+| Go to line        | ⌃G        | Ctrl+G        |
+| Zoom in           | ⌘+        | Ctrl++        |
+| Zoom out          | ⌘-        | Ctrl+-        |
+| Reset zoom        | ⌘0        | Ctrl+0        |
 
 **Choosing new shortcuts**:
 
@@ -257,7 +258,7 @@ How arrow keys work inside complex components.
 - Left: collapse an expanded node; if already collapsed, move to parent.
 - Enter: activate the selected node.
 - Home/End: first/last visible node.
-- Asterisk (*): expand all siblings.
+- Asterisk (\*): expand all siblings.
 
 **Grids and tables**:
 

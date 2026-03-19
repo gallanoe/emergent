@@ -9,14 +9,14 @@ This skill is split into focused sub-files. **Read only the files relevant to yo
 
 ## Sub-File Directory
 
-| File | Load when... |
-|------|-------------|
-| `ownership.md` | Working with borrows, lifetimes, `Cow<T>`, interior mutability (`Cell`, `RefCell`, `Mutex`), or restructuring data ownership |
-| `error-handling.md` | Defining error types, choosing `thiserror` vs `anyhow`, using `Result`/`Option` combinators, `let-else`, or adding error context |
-| `performance.md` | Optimizing allocations, using `Vec::with_capacity`/`SmallVec`, writing iterator chains, choosing generics vs `dyn Trait`, `#[inline]`, string handling, or benchmarking with Criterion |
-| `api-design.md` | Designing public APIs: newtype pattern, builder pattern, typestate, sealed traits, `From`/`Into`/`AsRef` conversions, associated types vs generics, common trait impls |
-| `concurrency.md` | Writing concurrent or async code: `Send`/`Sync`, `Arc<Mutex<T>>` vs channels, Rayon, `tokio::join!/select!/spawn`, `JoinSet`, deadlock prevention, atomics, async runtime rules |
-| `project-setup.md` | Scaffolding a project, workspace layout, module visibility, feature flags, documentation conventions, Clippy lint config, CI pipeline, Rust 2024 edition |
+| File                | Load when...                                                                                                                                                                           |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ownership.md`      | Working with borrows, lifetimes, `Cow<T>`, interior mutability (`Cell`, `RefCell`, `Mutex`), or restructuring data ownership                                                           |
+| `error-handling.md` | Defining error types, choosing `thiserror` vs `anyhow`, using `Result`/`Option` combinators, `let-else`, or adding error context                                                       |
+| `performance.md`    | Optimizing allocations, using `Vec::with_capacity`/`SmallVec`, writing iterator chains, choosing generics vs `dyn Trait`, `#[inline]`, string handling, or benchmarking with Criterion |
+| `api-design.md`     | Designing public APIs: newtype pattern, builder pattern, typestate, sealed traits, `From`/`Into`/`AsRef` conversions, associated types vs generics, common trait impls                 |
+| `concurrency.md`    | Writing concurrent or async code: `Send`/`Sync`, `Arc<Mutex<T>>` vs channels, Rayon, `tokio::join!/select!/spawn`, `JoinSet`, deadlock prevention, atomics, async runtime rules        |
+| `project-setup.md`  | Scaffolding a project, workspace layout, module visibility, feature flags, documentation conventions, Clippy lint config, CI pipeline, Rust 2024 edition                               |
 
 ## How to Use
 

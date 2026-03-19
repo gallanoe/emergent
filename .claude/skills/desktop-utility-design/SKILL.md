@@ -82,9 +82,9 @@ Choose one and use it for ALL transitions. A 100ms ease-out on one button and a 
 
 **Step 6 — Write it down.** Before coding, state the design language in 2–3 sentences. This is the creative brief that guides all implementation. Examples:
 
-- *"Polished minimal with cool slate grays, 4px radius, background-shift surfaces, and 120ms ease-out transitions. One blue accent. The app should feel like a well-organized workspace — clean, efficient, quietly sophisticated."*
-- *"Engineering austere with neutral grays, 0px radius, thin border surfaces, and zero animation. Monospace type for all data. The app should feel like a precision instrument — nothing decorative, nothing slow."*
-- *"Warm productivity with slightly warm grays, 6px radius, subtle shadow surfaces, and 150ms spring transitions. Green accent. The app should feel inviting and calm — a tool you enjoy returning to."*
+- _"Polished minimal with cool slate grays, 4px radius, background-shift surfaces, and 120ms ease-out transitions. One blue accent. The app should feel like a well-organized workspace — clean, efficient, quietly sophisticated."_
+- _"Engineering austere with neutral grays, 0px radius, thin border surfaces, and zero animation. Monospace type for all data. The app should feel like a precision instrument — nothing decorative, nothing slow."_
+- _"Warm productivity with slightly warm grays, 6px radius, subtle shadow surfaces, and 150ms spring transitions. Green accent. The app should feel inviting and calm — a tool you enjoy returning to."_
 
 This statement is the north star. When making any visual decision during implementation, check it against this brief. If a decision doesn't serve the stated personality, change the decision — not the brief.
 
@@ -180,10 +180,10 @@ Color in utility apps is a **communication tool**, not decoration. 90%+ of the i
 /* Semantic tokens — functional meaning */
 --color-bg-base: var(--gray-1);
 --color-bg-elevated: var(--gray-2);
---color-fg-default: #ECECEF;
---color-fg-muted: #8B8D98;
+--color-fg-default: #ececef;
+--color-fg-muted: #8b8d98;
 --color-accent: var(--blue-9);
---color-border: rgba(255,255,255,0.06);
+--color-border: rgba(255, 255, 255, 0.06);
 ```
 
 For comprehensive color scale guidance, Radix Colors' 12-step system is the gold standard — read `references/color-and-theming.md`.
@@ -257,16 +257,18 @@ Desktop apps built with web technology (Electron, Tauri) must feel native. This 
 
 ```css
 body {
-  font-size: 14px;                    /* Not 16px */
-  line-height: 1.3;                   /* Not 1.5 */
-  cursor: default;                    /* Not pointer */
-  user-select: none;                  /* Re-enable on content areas */
+  font-size: 14px; /* Not 16px */
+  line-height: 1.3; /* Not 1.5 */
+  cursor: default; /* Not pointer */
+  user-select: none; /* Re-enable on content areas */
   -webkit-app-region: no-drag;
-  overflow: hidden;                   /* App manages its own scrolling */
+  overflow: hidden; /* App manages its own scrolling */
 }
 
 /* Pointer cursor ONLY for external links */
-a[href^="http"] { cursor: pointer; }
+a[href^="http"] {
+  cursor: pointer;
+}
 
 /* Re-enable text selection in content areas */
 .content-area,

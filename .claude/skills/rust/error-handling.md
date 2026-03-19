@@ -136,13 +136,13 @@ fn process_order(order_id: u64) -> Result<Receipt> {
 
 **Key combinators reference:**
 
-| Combinator       | Purpose                                  |
-|-------------------|------------------------------------------|
-| `map`             | Transform the inner value                |
-| `and_then`        | Chain / flatmap (returns `Option`)       |
-| `unwrap_or_else`  | Lazy default when `None`                 |
-| `filter`          | Conditional — keeps `Some` only if predicate passes |
-| `ok_or_else`      | Convert `Option` → `Result`             |
+| Combinator       | Purpose                                             |
+| ---------------- | --------------------------------------------------- |
+| `map`            | Transform the inner value                           |
+| `and_then`       | Chain / flatmap (returns `Option`)                  |
+| `unwrap_or_else` | Lazy default when `None`                            |
+| `filter`         | Conditional — keeps `Some` only if predicate passes |
+| `ok_or_else`     | Convert `Option` → `Result`                         |
 
 ## When to panic vs return Result
 

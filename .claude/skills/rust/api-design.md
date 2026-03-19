@@ -321,11 +321,11 @@ pub fn read_file(path: impl AsRef<Path>) -> io::Result<String> {
 
 ### Naming conventions for conversions
 
-| Prefix   | Cost               | Ownership          | Example         |
-|----------|--------------------|--------------------|-----------------|
-| `as_`    | Free, borrow-to-borrow | Borrows input   | `as_str()`      |
-| `to_`    | Potentially expensive  | May allocate     | `to_string()`   |
-| `into_`  | Ownership transfer     | Consumes input   | `into_inner()`  |
+| Prefix  | Cost                   | Ownership      | Example        |
+| ------- | ---------------------- | -------------- | -------------- |
+| `as_`   | Free, borrow-to-borrow | Borrows input  | `as_str()`     |
+| `to_`   | Potentially expensive  | May allocate   | `to_string()`  |
+| `into_` | Ownership transfer     | Consumes input | `into_inner()` |
 
 ## Trait design: associated types vs generics
 

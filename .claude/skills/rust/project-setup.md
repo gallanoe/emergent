@@ -55,12 +55,12 @@ pub fn run() -> anyhow::Result<()> {
 
 ## Module visibility: default to private
 
-| Modifier | Scope | Use case |
-|----------|-------|----------|
-| *(private)* | Same module | Implementation details (default) |
-| `pub(super)` | Parent module | Module-internal helpers |
-| `pub(crate)` | Current crate | Internal APIs across modules |
-| `pub` | Everywhere | Public API |
+| Modifier     | Scope         | Use case                         |
+| ------------ | ------------- | -------------------------------- |
+| _(private)_  | Same module   | Implementation details (default) |
+| `pub(super)` | Parent module | Module-internal helpers          |
+| `pub(crate)` | Current crate | Internal APIs across modules     |
+| `pub`        | Everywhere    | Public API                       |
 
 - Prefer `pub(crate)` over `pub` for items used across modules but not public API
 - Keep struct fields private with public accessor methods to preserve invariants
@@ -128,7 +128,7 @@ Follow RFC 1574 sections: **Examples** (required for public functions), **Errors
 
 Doc examples are compiled and run as tests — leverage for living documentation.
 
-```rust
+````rust
 /// Creates a new database connection using the provided [`Config`].
 ///
 /// # Examples
@@ -152,7 +152,7 @@ Doc examples are compiled and run as tests — leverage for living documentation
 pub async fn connect(config: &Config) -> Result<Connection, ConnectionError> {
     // ...
 }
-```
+````
 
 ## Clippy lint configuration
 
@@ -214,8 +214,8 @@ fn process(items: &[Item]) -> Vec<String> {
 - cargo clippy --all-targets --all-features -- -D warnings
 - cargo test --all-features
 - cargo test --no-default-features
-- cargo doc --no-deps           # catch doc warnings
-- cargo deny check              # supply chain security
+- cargo doc --no-deps # catch doc warnings
+- cargo deny check # supply chain security
 ```
 
 ## Rust 2024 edition highlights
