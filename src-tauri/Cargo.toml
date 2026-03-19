@@ -23,3 +23,7 @@ serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
 tauri = { version = "2.10.3", features = [] }
 tauri-plugin-log = "2"
+agent-client-protocol = "0.10"
+which = "7"
+tokio = { version = "1", features = ["full"] }
+uuid = { version = "1", features = ["v4"] }
