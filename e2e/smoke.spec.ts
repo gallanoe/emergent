@@ -13,7 +13,9 @@ test("app renders with swarm UI", async ({ page }) => {
   await expect(page.locator("text=website-redesign")).toBeVisible();
 
   // Selected agent's chat heading is visible
-  await expect(page.getByRole("heading", { name: "Refactoring the navigation component" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Refactoring the navigation component" }),
+  ).toBeVisible();
 
   // Chat messages render
   await expect(
