@@ -9,8 +9,7 @@
 </script>
 
 <header
-  class="flex items-center px-5 pt-7 pb-3 border-b border-border-default bg-bg-base"
-  style="-webkit-app-region: drag"
+  class="flex items-center h-[38px] px-5 border-b border-border-default bg-bg-base"
 >
   <h1
     class="text-[13px] font-medium text-fg-heading truncate font-[family-name:var(--font-ui)]"

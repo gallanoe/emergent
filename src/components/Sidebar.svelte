@@ -17,10 +17,9 @@
 <aside
   class="flex flex-col h-full bg-bg-sidebar border-r border-border-default"
 >
-  <!-- App title (padded for macOS traffic lights) -->
+  <!-- App title (inline with macOS traffic lights) -->
   <div
-    class="px-4 pt-7 pb-3 border-b border-border-default"
-    style="-webkit-app-region: drag"
+    class="flex items-center justify-end h-[38px] px-4 border-b border-border-default"
   >
     <span
       class="text-[13px] font-semibold text-fg-heading font-[family-name:var(--font-ui)]"
@@ -29,9 +28,9 @@
   </div>
 
   <!-- Swarm list -->
-  <div class="flex-1 overflow-y-auto py-1">
+  <div class="flex-1 overflow-y-auto">
     {#each swarms as swarm (swarm.id)}
-      <div class="py-1">
+      <div>
         <!-- Swarm header -->
         <button
           class="interactive flex items-center gap-1 w-full px-4 py-1 text-[11px] font-semibold text-fg-muted"

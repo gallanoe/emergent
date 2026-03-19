@@ -46,7 +46,7 @@
         <!-- Tool group — inline collapsible -->
         <div class="mb-4">
           <button
-            class="interactive flex items-center gap-1 py-1 text-[11px] text-fg-muted font-medium rounded"
+            class="interactive flex items-center gap-1 px-1.5 py-1 text-[11px] text-fg-muted font-medium rounded"
             onclick={() => toggleToolGroup(message.id)}
           >
             {#if expandedToolGroups[message.id]}

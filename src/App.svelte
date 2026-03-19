@@ -6,6 +6,12 @@
   import ChatInput from "./components/ChatInput.svelte";
 </script>
 
+<!-- Drag region overlay for window dragging -->
+<div
+  class="fixed top-0 left-0 right-0 h-[38px] z-50"
+  data-tauri-drag-region
+></div>
+
 <div class="grid grid-cols-[240px_1fr] h-screen">
   <Sidebar
     swarms={appState.swarms}
