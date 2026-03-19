@@ -12,6 +12,12 @@
   // Track which tool-group messages are expanded (by message id)
   let expandedToolGroups: Record<string, boolean> = $state({});
 
+  // Reset expansion state when switching agents
+  $effect(() => {
+    agent;
+    expandedToolGroups = {};
+  });
+
   function toggleToolGroup(messageId: string) {
     expandedToolGroups[messageId] = !expandedToolGroups[messageId];
   }
@@ -24,16 +30,18 @@
         <!-- Assistant message -->
         <div class="mb-4">
           <div class="text-[11px] text-fg-muted mb-1">{message.timestamp}</div>
-          <div class="text-[12px] text-fg-default leading-relaxed">{message.content}</div>
+          <div class="text-[12px] text-fg-default leading-relaxed">
+            {message.content}
+          </div>
         </div>
-
       {:else if message.role === "user"}
         <!-- User message -->
         <div class="mb-4 bg-accent-soft rounded-lg px-3 py-2">
           <div class="text-[11px] text-fg-muted mb-1">{message.timestamp}</div>
-          <div class="text-[12px] text-fg-default leading-relaxed">{message.content}</div>
+          <div class="text-[12px] text-fg-default leading-relaxed">
+            {message.content}
+          </div>
         </div>
-
       {:else if message.role === "tool-group" && message.toolCalls}
         <!-- Tool group — inline collapsible -->
         <div class="mb-4">
@@ -46,13 +54,18 @@
             {:else}
               <ChevronRight size={12} />
             {/if}
-            {message.toolCalls.length} tool call{message.toolCalls.length !== 1 ? "s" : ""}
+            {message.toolCalls.length} tool call{message.toolCalls.length !== 1
+              ? "s"
+              : ""}
           </button>
 
           {#if expandedToolGroups[message.id]}
             {#each message.toolCalls as toolCall (toolCall.id)}
-              <div class="flex items-center gap-1.5 py-0.5 pl-4 text-[11px] font-[family-name:var(--font-mono)] text-fg-muted">
-                <span class="w-1.5 h-1.5 rounded-full bg-accent shrink-0"></span>
+              <div
+                class="flex items-center gap-1.5 py-0.5 pl-4 text-[11px] font-[family-name:var(--font-mono)] text-fg-muted"
+              >
+                <span class="w-1.5 h-1.5 rounded-full bg-accent shrink-0"
+                ></span>
                 {toolCall.name}
                 <span class="text-fg-default">{toolCall.argument}</span>
               </div>
@@ -70,7 +83,9 @@
       </div>
     {/if}
   {:else}
-    <div class="flex items-center justify-center h-full text-fg-muted text-[13px]">
+    <div
+      class="flex items-center justify-center h-full text-fg-muted text-[13px]"
+    >
       Select an agent to view its conversation
     </div>
   {/if}
