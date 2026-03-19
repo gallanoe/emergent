@@ -91,28 +91,6 @@ describe("ChatArea", () => {
     expect(screen.getByText("Read file")).toBeTruthy();
   });
 
-  it("deduplicates timestamps for same-time messages", () => {
-    const agent = makeAgent([
-      msg("assistant", "First", "1:00 PM"),
-      msg("assistant", "Second", "1:00 PM"),
-    ]);
-    render(ChatArea, { props: { agent } });
-
-    const timestamps = screen.getAllByText("1:00 PM");
-    expect(timestamps).toHaveLength(1);
-  });
-
-  it("shows both timestamps when times differ", () => {
-    const agent = makeAgent([
-      msg("assistant", "First", "1:00 PM"),
-      msg("assistant", "Second", "1:01 PM"),
-    ]);
-    render(ChatArea, { props: { agent } });
-
-    expect(screen.getByText("1:00 PM")).toBeTruthy();
-    expect(screen.getByText("1:01 PM")).toBeTruthy();
-  });
-
   it("shows working indicator when agent is working", () => {
     const agent = makeAgent([msg("assistant", "Working...", "1:00 PM")], {
       status: "working",

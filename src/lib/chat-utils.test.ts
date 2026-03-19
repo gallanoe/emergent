@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { DisplayMessage } from "../stores/types";
-import { shouldShowTimestamp, isNewTurn } from "./chat-utils";
+import { isNewTurn } from "./chat-utils";
 
 function msg(role: DisplayMessage["role"], timestamp: string, id?: string): DisplayMessage {
   return {
@@ -15,52 +15,6 @@ function msg(role: DisplayMessage["role"], timestamp: string, id?: string): Disp
       : {}),
   };
 }
-
-describe("shouldShowTimestamp", () => {
-  it("always shows timestamp for the first message", () => {
-    const messages = [msg("user", "1:00 PM")];
-    expect(shouldShowTimestamp(messages, 0)).toBe(true);
-  });
-
-  it("shows timestamp when it differs from the previous message", () => {
-    const messages = [msg("assistant", "1:00 PM"), msg("assistant", "1:01 PM")];
-    expect(shouldShowTimestamp(messages, 1)).toBe(true);
-  });
-
-  it("hides timestamp when same as previous message", () => {
-    const messages = [msg("assistant", "1:00 PM"), msg("assistant", "1:00 PM")];
-    expect(shouldShowTimestamp(messages, 1)).toBe(false);
-  });
-
-  it("never shows timestamp for tool-group messages", () => {
-    const messages = [msg("assistant", "1:00 PM"), msg("tool-group", "1:00 PM")];
-    expect(shouldShowTimestamp(messages, 1)).toBe(false);
-  });
-
-  it("never shows timestamp for tool-group even with different time", () => {
-    const messages = [msg("assistant", "1:00 PM"), msg("tool-group", "1:01 PM")];
-    expect(shouldShowTimestamp(messages, 1)).toBe(false);
-  });
-
-  it("shows timestamp for user message after tool-group with same time", () => {
-    const messages = [
-      msg("assistant", "1:00 PM"),
-      msg("tool-group", "1:00 PM"),
-      msg("user", "1:00 PM"),
-    ];
-    // Previous message is tool-group at 1:00 PM, current is user at 1:00 PM — same timestamp
-    expect(shouldShowTimestamp(messages, 2)).toBe(false);
-  });
-
-  it("shows timestamp for user message after tool-group with different time", () => {
-    const messages = [
-      msg("assistant", "1:00 PM"),
-      msg("tool-group", "1:00 PM"),
-      msg("user", "1:05 PM"),
-    ];
-    expect(shouldShowTimestamp(messages, 2)).toBe(true);
-  });
-});
 
 describe("isNewTurn", () => {
   it("returns false for the first message", () => {
