@@ -20,6 +20,13 @@ const swarms: DisplaySwarm[] = [
         updatedAt: "2m ago",
         messages: [
           {
+            id: "m0",
+            role: "user",
+            content:
+              "Refactor the navigation component into smaller, reusable pieces.",
+            timestamp: "1:09 PM",
+          },
+          {
             id: "m1",
             role: "assistant",
             content:

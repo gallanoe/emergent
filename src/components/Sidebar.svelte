@@ -82,15 +82,11 @@
                     {agent.status === 'error' ? 'bg-error' : agent.status === 'working' ? 'bg-success' : 'bg-fg-muted'}"
                 ></span>
                 <span
-                  class="text-[12px] font-medium {isSelected
+                  class="text-[12px] font-medium truncate {isSelected
                     ? 'text-fg-heading'
                     : 'text-fg-default'}"
                 >
-                  {agent.status === "working"
-                    ? "Working"
-                    : agent.status === "idle"
-                      ? "Idle"
-                      : "Error"}
+                  {agent.name}
                 </span>
                 <span class="text-[11px] text-fg-muted ml-auto shrink-0"
                   >{agent.updatedAt}</span

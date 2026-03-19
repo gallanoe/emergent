@@ -24,6 +24,10 @@ function createAppState() {
   // ── Initialization ────────────────────────────────────────────
 
   async function initialize() {
+    // TODO: remove hardcoded demo mode
+    demoMode = true;
+    return;
+
     const detected = await agentStore.detectAgents();
     availableAgents = detected;
 
