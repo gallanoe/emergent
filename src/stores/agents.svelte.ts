@@ -14,7 +14,7 @@ interface AgentConnection {
   cli: string;
   status: "initializing" | "idle" | "working" | "error";
   messages: DisplayMessage[];
-  activeToolCalls: Map<string, DisplayToolCall>;
+  activeToolCalls: Record<string, DisplayToolCall>;
   stopReason: string | null;
 }
 
@@ -57,24 +57,23 @@ interface AgentInfo {
 // ── Store ───────────────────────────────────────────────────────
 
 function createAgentStore() {
-  let agents = $state<Map<string, AgentConnection>>(new Map());
+  // Plain object instead of Map — Svelte 5 reliably deep-proxies plain objects
+  let agents: Record<string, AgentConnection> = $state({});
 
   function getAgent(agentId: string): AgentConnection | undefined {
-    return agents.get(agentId);
+    return agents[agentId];
   }
 
   // ── Message assembly ──────────────────────────────────────────
 
   function handleMessageChunk(payload: MessageChunkPayload) {
-    const agent = agents.get(payload.agent_id);
+    const agent = agents[payload.agent_id];
     if (!agent) return;
 
     const lastMsg = agent.messages.at(-1);
     if (lastMsg && lastMsg.role === "assistant" && !lastMsg.toolCalls?.length) {
-      // Append to existing in-progress assistant message
       lastMsg.content += payload.content;
     } else {
-      // Start a new assistant message
       agent.messages.push({
         id: crypto.randomUUID(),
         role: "assistant",
@@ -88,7 +87,7 @@ function createAgentStore() {
   }
 
   function handleToolCallUpdate(payload: ToolCallUpdatePayload) {
-    const agent = agents.get(payload.agent_id);
+    const agent = agents[payload.agent_id];
     if (!agent) return;
 
     const tc: DisplayToolCall = {
@@ -98,17 +97,16 @@ function createAgentStore() {
       ...(payload.content !== undefined ? { content: payload.content } : {}),
     };
 
-    agent.activeToolCalls.set(payload.tool_call_id, tc);
+    agent.activeToolCalls[payload.tool_call_id] = tc;
 
-    // When a tool call completes/fails, check if all active tool calls are done
     if (payload.status === "completed" || payload.status === "failed") {
-      const allDone = [...agent.activeToolCalls.values()].every(
+      const allDone = Object.values(agent.activeToolCalls).every(
         (t) => t.status === "completed" || t.status === "failed",
       );
+      const count = Object.keys(agent.activeToolCalls).length;
 
-      if (allDone && agent.activeToolCalls.size > 0) {
-        // Flush active tool calls into a tool-group message
-        const toolCalls = [...agent.activeToolCalls.values()];
+      if (allDone && count > 0) {
+        const toolCalls = Object.values(agent.activeToolCalls);
         agent.messages.push({
           id: crypto.randomUUID(),
           role: "tool-group",
@@ -119,13 +117,14 @@ function createAgentStore() {
             minute: "2-digit",
           }),
         });
-        agent.activeToolCalls.clear();
+        // Clear by replacing with empty object
+        agent.activeToolCalls = {};
       }
     }
   }
 
   function handlePromptComplete(payload: PromptCompletePayload) {
-    const agent = agents.get(payload.agent_id);
+    const agent = agents[payload.agent_id];
     if (!agent) return;
 
     agent.stopReason = payload.stop_reason;
@@ -135,13 +134,13 @@ function createAgentStore() {
   }
 
   function handleError(payload: AgentErrorPayload) {
-    const agent = agents.get(payload.agent_id);
+    const agent = agents[payload.agent_id];
     if (!agent) return;
     agent.status = "error";
   }
 
   function handleStatusChange(payload: StatusChangePayload) {
-    const agent = agents.get(payload.agent_id);
+    const agent = agents[payload.agent_id];
     if (!agent) return;
     agent.status = payload.status as AgentConnection["status"];
   }
@@ -182,28 +181,23 @@ function createAgentStore() {
       agentCli,
     });
 
-    agents.set(agentId, {
+    agents[agentId] = {
       id: agentId,
       swarmId,
       cli: agentCli,
-      status: "initializing",
+      status: "idle",
       messages: [],
-      activeToolCalls: new Map(),
+      activeToolCalls: {},
       stopReason: null,
-    });
-
-    // Once spawn_agent returns, the agent is initialized and has a session
-    const agent = agents.get(agentId)!;
-    agent.status = "idle";
+    };
 
     return agentId;
   }
 
   async function sendPrompt(agentId: string, text: string): Promise<void> {
-    const agent = agents.get(agentId);
+    const agent = agents[agentId];
     if (!agent) throw new Error(`Agent ${agentId} not found`);
 
-    // Add user message to the conversation
     agent.messages.push({
       id: crypto.randomUUID(),
       role: "user",
@@ -216,7 +210,6 @@ function createAgentStore() {
 
     agent.status = "working";
 
-    // Fire and forget — responses come via events
     invoke("send_prompt", { agentId, text }).catch((err) => {
       agent.status = "error";
       console.error("send_prompt failed:", err);
@@ -229,7 +222,7 @@ function createAgentStore() {
 
   async function killAgent(agentId: string): Promise<void> {
     await invoke("kill_agent", { agentId });
-    agents.delete(agentId);
+    delete agents[agentId];
   }
 
   function toDisplayAgent(conn: AgentConnection): DisplayAgent {

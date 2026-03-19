@@ -111,6 +111,27 @@ impl EmergentClient {
         Self { agent_id, app }
     }
 
+    fn tool_call_status_str(status: &acp::ToolCallStatus) -> String {
+        // Use serde serialization to get the snake_case string that matches the ACP spec
+        serde_json::to_value(status)
+            .ok()
+            .and_then(|v| v.as_str().map(String::from))
+            .unwrap_or_else(|| format!("{:?}", status))
+    }
+
+    fn extract_tool_call_content(content: &[acp::ToolCallContent]) -> Option<String> {
+        if content.is_empty() {
+            return None;
+        }
+        let texts: Vec<String> = content.iter().map(|c| match c {
+            acp::ToolCallContent::Content(inner) => Self::extract_text(&inner.content),
+            acp::ToolCallContent::Diff(diff) => format!("[diff: {}]", diff.path.display()),
+            acp::ToolCallContent::Terminal(term) => format!("[terminal: {}]", term.terminal_id),
+            _ => "[unknown]".into(),
+        }).collect();
+        Some(texts.join(""))
+    }
+
     fn extract_text(content: &acp::ContentBlock) -> String {
         match content {
             acp::ContentBlock::Text(tc) => tc.text.clone(),
@@ -161,12 +182,8 @@ impl acp::Client for EmergentClient {
                         agent_id: self.agent_id.clone(),
                         tool_call_id: tc.tool_call_id.to_string(),
                         title: Some(tc.title.clone()),
-                        status: Some(format!("{:?}", tc.status)),
-                        content: if tc.content.is_empty() {
-                            None
-                        } else {
-                            Some(format!("{:?}", tc.content))
-                        },
+                        status: Some(Self::tool_call_status_str(&tc.status)),
+                        content: Self::extract_tool_call_content(&tc.content),
                     },
                 );
             }
@@ -177,8 +194,8 @@ impl acp::Client for EmergentClient {
                         agent_id: self.agent_id.clone(),
                         tool_call_id: tcu.tool_call_id.to_string(),
                         title: tcu.fields.title.clone(),
-                        status: tcu.fields.status.map(|s| format!("{:?}", s)),
-                        content: tcu.fields.content.as_ref().map(|c| format!("{:?}", c)),
+                        status: tcu.fields.status.map(|s| Self::tool_call_status_str(&s)),
+                        content: tcu.fields.content.as_ref().and_then(|c| Self::extract_tool_call_content(c)),
                     },
                 );
             }
@@ -193,7 +210,7 @@ impl acp::Client for EmergentClient {
                 );
             }
             _ => {
-                // Plan, AvailableCommandsUpdate, etc. — ignored for v1
+                // Plan, AvailableCommandsUpdate, usage_update, etc. — ignored for v1
             }
         }
 
