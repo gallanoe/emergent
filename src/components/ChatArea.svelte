@@ -1,10 +1,10 @@
 <!-- src/components/ChatArea.svelte -->
 <script lang="ts">
   import { ChevronRight, ChevronDown } from "@lucide/svelte";
-  import type { Agent } from "../stores/mock-data.svelte";
+  import type { DisplayAgent } from "../stores/types";
 
   interface Props {
-    agent: Agent | undefined;
+    agent: DisplayAgent | undefined;
   }
 
   let { agent }: Props = $props();

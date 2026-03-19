@@ -1,9 +1,14 @@
 <script lang="ts">
-  import { appState } from "./stores/mock-data.svelte";
+  import { appState } from "./stores/app-state.svelte";
   import Sidebar from "./components/Sidebar.svelte";
   import TopBar from "./components/TopBar.svelte";
   import ChatArea from "./components/ChatArea.svelte";
   import ChatInput from "./components/ChatInput.svelte";
+  import { onMount } from "svelte";
+
+  onMount(() => {
+    appState.initialize();
+  });
 </script>
 
 <!-- Drag region overlay for window dragging -->
@@ -22,6 +27,13 @@
   <main class="flex flex-col min-h-0">
     <TopBar agent={appState.selectedAgent} />
     <ChatArea agent={appState.selectedAgent} />
-    <ChatInput />
+    <ChatInput
+      agent={appState.selectedAgent}
+      demoMode={appState.demoMode}
+      onSend={(text) => {
+        const agent = appState.selectedAgent;
+        if (agent) appState.sendPrompt(agent.id, text);
+      }}
+    />
   </main>
 </div>

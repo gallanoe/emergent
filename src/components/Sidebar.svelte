@@ -1,11 +1,11 @@
 <!-- src/components/Sidebar.svelte -->
 <script lang="ts">
   import { ChevronRight, ChevronDown, Plus } from "@lucide/svelte";
-  import type { Swarm } from "../stores/mock-data.svelte";
+  import type { DisplaySwarm } from "../stores/types";
 
   interface Props {
-    swarms: Swarm[];
-    selectedAgentId: string;
+    swarms: DisplaySwarm[];
+    selectedAgentId: string | null;
     onSelectAgent: (id: string) => void;
     onToggleSwarm: (id: string) => void;
   }
@@ -58,7 +58,7 @@
               <div class="flex items-center gap-1.5 w-full">
                 <span
                   class="w-1.5 h-1.5 rounded-full shrink-0
-                    {agent.status === 'error' ? 'bg-error' : 'bg-success'}"
+                    {agent.status === 'error' ? 'bg-error' : agent.status === 'working' ? 'bg-success' : 'bg-fg-muted'}"
                 ></span>
                 <span
                   class="text-[12px] font-medium {isSelected
