@@ -6,12 +6,22 @@
   interface Props {
     swarms: DisplaySwarm[];
     selectedAgentId: string | null;
+    demoMode: boolean;
     onSelectAgent: (id: string) => void;
     onToggleSwarm: (id: string) => void;
+    onNewSwarm: () => void;
+    onAddAgent: (swarmId: string) => void;
   }
 
-  let { swarms, selectedAgentId, onSelectAgent, onToggleSwarm }: Props =
-    $props();
+  let {
+    swarms,
+    selectedAgentId,
+    demoMode,
+    onSelectAgent,
+    onToggleSwarm,
+    onNewSwarm,
+    onAddAgent,
+  }: Props = $props();
 </script>
 
 <aside
@@ -32,17 +42,28 @@
     {#each swarms as swarm (swarm.id)}
       <div>
         <!-- Swarm header -->
-        <button
-          class="interactive flex items-center gap-1 w-full px-4 py-1 text-[11px] font-semibold text-fg-muted"
-          onclick={() => onToggleSwarm(swarm.id)}
-        >
-          {#if swarm.collapsed}
-            <ChevronRight size={12} />
-          {:else}
-            <ChevronDown size={12} />
+        <div class="flex items-center">
+          <button
+            class="interactive flex items-center gap-1 flex-1 px-4 py-1 text-[11px] font-semibold text-fg-muted"
+            onclick={() => onToggleSwarm(swarm.id)}
+          >
+            {#if swarm.collapsed}
+              <ChevronRight size={12} />
+            {:else}
+              <ChevronDown size={12} />
+            {/if}
+            {swarm.name}
+          </button>
+          {#if !demoMode}
+            <button
+              class="interactive flex items-center justify-center w-5 h-5 mr-2 text-fg-muted rounded hover:text-fg-default"
+              onclick={() => onAddAgent(swarm.id)}
+              title="Add agent"
+            >
+              <Plus size={10} />
+            </button>
           {/if}
-          {swarm.name}
-        </button>
+        </div>
 
         <!-- Agent list (when expanded) -->
         {#if !swarm.collapsed}
@@ -86,10 +107,13 @@
   </div>
 
   <!-- New swarm button -->
-  <button
-    class="interactive flex items-center gap-1.5 px-4 py-3 border-t border-border-default text-[11px] text-fg-muted"
-  >
-    <Plus size={12} />
-    New swarm
-  </button>
+  {#if !demoMode}
+    <button
+      class="interactive flex items-center gap-1.5 px-4 py-3 border-t border-border-default text-[11px] text-fg-muted"
+      onclick={onNewSwarm}
+    >
+      <Plus size={12} />
+      New swarm
+    </button>
+  {/if}
 </aside>

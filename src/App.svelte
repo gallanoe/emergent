@@ -21,8 +21,14 @@
   <Sidebar
     swarms={appState.swarms}
     selectedAgentId={appState.selectedAgentId}
+    demoMode={appState.demoMode}
     onSelectAgent={(id) => (appState.selectedAgentId = id)}
     onToggleSwarm={(id) => appState.toggleSwarmCollapsed(id)}
+    onNewSwarm={() => appState.newSwarm()}
+    onAddAgent={(swarmId) => {
+      const agent = appState.availableAgents[0];
+      if (agent) appState.addAgentToSwarm(swarmId, agent.binary);
+    }}
   />
   <main class="flex flex-col min-h-0">
     <TopBar agent={appState.selectedAgent} />

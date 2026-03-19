@@ -1,3 +1,4 @@
+import { open } from "@tauri-apps/plugin-dialog";
 import { agentStore } from "./agents.svelte";
 import type { DisplayAgent, DisplaySwarm } from "./types";
 
@@ -59,6 +60,20 @@ function createAppState() {
     }
 
     return agentId;
+  }
+
+  async function newSwarm(): Promise<void> {
+    if (demoMode || availableAgents.length === 0) return;
+
+    const selected = await open({ directory: true, multiple: false });
+    if (!selected) return; // user cancelled
+
+    const path = selected as string;
+    const name = path.split("/").pop() || path;
+    const swarmId = createSwarm(name, path);
+
+    // Auto-spawn one agent using the first detected CLI
+    await addAgentToSwarm(swarmId, availableAgents[0]!.binary);
   }
 
   function toggleSwarmCollapsed(swarmId: string) {
@@ -127,6 +142,7 @@ function createAppState() {
     initialize,
     createSwarm,
     addAgentToSwarm,
+    newSwarm,
     toggleSwarmCollapsed,
     sendPrompt: agentStore.sendPrompt,
     cancelPrompt: agentStore.cancelPrompt,
