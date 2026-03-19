@@ -1,29 +1,4 @@
 <script lang="ts">
-  import { onMount } from "svelte";
-  import AppShell from "./components/layout/AppShell.svelte";
-  import WorkspacePicker from "./components/workspace/WorkspacePicker.svelte";
-  import { workspaceStore } from "./stores/workspace.svelte";
-  import { listWorkspaces } from "./lib/tauri";
-  import { toastStore } from "./stores/toast.svelte";
-
-  onMount(() => {
-    listWorkspaces()
-      .then((list) => {
-        workspaceStore.setWorkspaces(list);
-      })
-      .catch((err) => {
-        toastStore.addToast(
-          `Failed to load workspaces: ${err instanceof Error ? err.message : String(err)}`,
-          "error",
-        );
-      });
-  });
 </script>
 
-<div class="view-fade-in">
-  {#if workspaceStore.activeWorkspace}
-    <AppShell />
-  {:else}
-    <WorkspacePicker />
-  {/if}
-</div>
+<h1 class="text-fg-heading font-[family-name:var(--font-ui)]">emergent</h1>
