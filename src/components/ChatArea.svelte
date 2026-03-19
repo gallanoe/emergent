@@ -1,6 +1,7 @@
 <!-- src/components/ChatArea.svelte -->
 <script lang="ts">
   import { ChevronRight, ChevronDown } from "@lucide/svelte";
+  import StreamingText from "./StreamingText.svelte";
   import type { DisplayAgent } from "../stores/types";
   import * as chatUtils from "../lib/chat-utils";
 
@@ -47,7 +48,11 @@
             </div>
           {/if}
           <div class="text-[12px] text-fg-default leading-relaxed">
-            {message.content}
+            {#if agent.status === "working" && i === agent.messages.length - 1}
+              <StreamingText content={message.content} streaming={true} />
+            {:else}
+              {message.content}
+            {/if}
           </div>
         </div>
       {:else if message.role === "user"}

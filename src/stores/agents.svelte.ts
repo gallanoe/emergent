@@ -60,25 +60,50 @@ function createAgentStore() {
     return agents[agentId];
   }
 
+  // ── Chunk buffering ─────────────────────────────────────────
+  // Accumulate chunks in a plain (non-reactive) buffer and flush
+  // once per animation frame to avoid per-chunk re-renders.
+
+  const chunkBuffers: Record<string, string> = {};
+  let flushScheduled = false;
+
+  function flushChunkBuffers() {
+    for (const agentId of Object.keys(chunkBuffers)) {
+      const buffered = chunkBuffers[agentId];
+      const agent = agents[agentId];
+      if (!agent || !buffered) continue;
+
+      const lastMsg = agent.messages.at(-1);
+      if (lastMsg && lastMsg.role === "assistant" && !lastMsg.toolCalls?.length) {
+        lastMsg.content += buffered;
+      } else {
+        agent.messages.push({
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: buffered,
+          timestamp: new Date().toLocaleTimeString([], {
+            hour: "numeric",
+            minute: "2-digit",
+          }),
+        });
+      }
+    }
+
+    // Reset buffer state
+    for (const key of Object.keys(chunkBuffers)) {
+      delete chunkBuffers[key];
+    }
+    flushScheduled = false;
+  }
+
   // ── Message assembly ──────────────────────────────────────────
 
   function handleMessageChunk(payload: MessageChunkPayload) {
-    const agent = agents[payload.agent_id];
-    if (!agent) return;
+    chunkBuffers[payload.agent_id] = (chunkBuffers[payload.agent_id] ?? "") + payload.content;
 
-    const lastMsg = agent.messages.at(-1);
-    if (lastMsg && lastMsg.role === "assistant" && !lastMsg.toolCalls?.length) {
-      lastMsg.content += payload.content;
-    } else {
-      agent.messages.push({
-        id: crypto.randomUUID(),
-        role: "assistant",
-        content: payload.content,
-        timestamp: new Date().toLocaleTimeString([], {
-          hour: "numeric",
-          minute: "2-digit",
-        }),
-      });
+    if (!flushScheduled) {
+      flushScheduled = true;
+      requestAnimationFrame(flushChunkBuffers);
     }
   }
 
@@ -121,6 +146,11 @@ function createAgentStore() {
   }
 
   function handlePromptComplete(payload: PromptCompletePayload) {
+    // Flush any buffered chunks before finalizing
+    if (chunkBuffers[payload.agent_id]) {
+      flushChunkBuffers();
+    }
+
     const agent = agents[payload.agent_id];
     if (!agent) return;
 
