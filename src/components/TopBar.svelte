@@ -8,8 +8,13 @@
   let { agent }: Props = $props();
 </script>
 
-<header class="flex items-center px-5 h-10 border-b border-border-default bg-bg-base">
-  <h1 class="text-[13px] font-medium text-fg-heading truncate font-[family-name:var(--font-ui)]">
+<header
+  class="flex items-center px-5 pt-7 pb-3 border-b border-border-default bg-bg-base"
+  style="-webkit-app-region: drag"
+>
+  <h1
+    class="text-[13px] font-medium text-fg-heading truncate font-[family-name:var(--font-ui)]"
+  >
     {agent?.name ?? "No agent selected"}
   </h1>
 </header>

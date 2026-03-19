@@ -13,6 +13,8 @@
     "windows": [
       {
         "title": "Emergent",
+        "titleBarStyle": "transparent",
+        "hiddenTitle": true,
         "width": 1024,
         "height": 700,
         "minWidth": 720,
