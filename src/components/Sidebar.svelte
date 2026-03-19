@@ -67,8 +67,8 @@
                 >
                   {agent.status === "working"
                     ? "Working"
-                    : agent.status === "completed"
-                      ? "Completed"
+                    : agent.status === "idle"
+                      ? "Idle"
                       : "Error"}
                 </span>
                 <span class="text-[11px] text-fg-muted ml-auto shrink-0"
