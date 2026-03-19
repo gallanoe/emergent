@@ -10,7 +10,10 @@ export const tauriMockScript = `
 
   window.__TAURI_INTERNALS__ = {
     invoke: function(cmd, args) {
-      return Promise.resolve(null);
+      const responses = {
+        detect_agents: [],
+      };
+      return Promise.resolve(responses[cmd] ?? null);
     },
     transformCallback: function(cb) {
       const id = ++callbackId;

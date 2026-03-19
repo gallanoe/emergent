@@ -14,7 +14,7 @@ interface Swarm {
 }
 
 function createAppState() {
-  let demoMode = $state(true);
+  let demoMode = $state(import.meta.env.VITE_DEMO_MODE === "true");
   let swarms = $state<Swarm[]>([]);
   let selectedAgentId = $state<string | null>(null);
   let availableAgents = $state<{ name: string; binary: string; path: string }[]>([]);
@@ -22,9 +22,7 @@ function createAppState() {
   // ── Initialization ────────────────────────────────────────────
 
   async function initialize() {
-    // TODO: remove hardcoded demo mode
-    demoMode = true;
-    return;
+    if (demoMode) return;
 
     const detected = await agentStore.detectAgents();
     availableAgents = detected;
