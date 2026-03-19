@@ -27,3 +27,5 @@ agent-client-protocol = "0.10"
 which = "7"
 tokio = { version = "1", features = ["full"] }
 uuid = { version = "1", features = ["v4"] }
+tokio-util = { version = "0.7", features = ["compat"] }
+async-trait = "0.1"
