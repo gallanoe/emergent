@@ -30,7 +30,9 @@
   <div class="border border-border-strong rounded-lg overflow-hidden">
     <textarea
       class="w-full px-3 py-2.5 text-[12px] text-fg-default bg-transparent resize-none leading-relaxed placeholder:text-fg-disabled"
-      placeholder={demoMode ? "Demo mode — input disabled" : "Message this agent..."}
+      placeholder={demoMode
+        ? "Demo mode — input disabled"
+        : "Message this agent..."}
       rows="1"
       disabled={demoMode || !agent}
       bind:value={message}

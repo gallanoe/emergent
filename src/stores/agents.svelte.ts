@@ -1,10 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type {
-  DisplayAgent,
-  DisplayMessage,
-  DisplayToolCall,
-} from "./types";
+import type { DisplayAgent, DisplayMessage, DisplayToolCall } from "./types";
 
 // ── Internal state per agent ────────────────────────────────────
 
@@ -149,21 +145,15 @@ function createAgentStore() {
   // ── Event listener setup ──────────────────────────────────────
 
   async function setupListeners() {
-    await listen<MessageChunkPayload>("agent:message-chunk", (e) =>
-      handleMessageChunk(e.payload),
-    );
+    await listen<MessageChunkPayload>("agent:message-chunk", (e) => handleMessageChunk(e.payload));
     await listen<ToolCallUpdatePayload>("agent:tool-call-update", (e) =>
       handleToolCallUpdate(e.payload),
     );
     await listen<PromptCompletePayload>("agent:prompt-complete", (e) =>
       handlePromptComplete(e.payload),
     );
-    await listen<AgentErrorPayload>("agent:error", (e) =>
-      handleError(e.payload),
-    );
-    await listen<StatusChangePayload>("agent:status-change", (e) =>
-      handleStatusChange(e.payload),
-    );
+    await listen<AgentErrorPayload>("agent:error", (e) => handleError(e.payload));
+    await listen<StatusChangePayload>("agent:status-change", (e) => handleStatusChange(e.payload));
   }
 
   // ── Public API ────────────────────────────────────────────────

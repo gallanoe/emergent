@@ -16,7 +16,9 @@ test("app renders with swarm UI", async ({ page }) => {
   await expect(page.locator("text=Refactoring the navigation component")).toBeVisible();
 
   // Chat messages render
-  await expect(page.locator("text=analyzing the current navigation structure").first()).toBeVisible();
+  await expect(
+    page.locator("text=analyzing the current navigation structure").first(),
+  ).toBeVisible();
 
   // Chat input is visible
   await expect(page.locator("textarea")).toBeVisible();

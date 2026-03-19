@@ -56,7 +56,9 @@
         <!-- Assistant message -->
         <div class="mb-1.5 {isNewTurn(i) ? 'mt-4' : ''}">
           {#if shouldShowTimestamp(i)}
-            <div class="text-[11px] text-fg-muted mb-0.5">{message.timestamp}</div>
+            <div class="text-[11px] text-fg-muted mb-0.5">
+              {message.timestamp}
+            </div>
           {/if}
           <div class="text-[12px] text-fg-default leading-relaxed">
             {message.content}
@@ -64,9 +66,15 @@
         </div>
       {:else if message.role === "user"}
         <!-- User message -->
-        <div class="mb-1.5 {isNewTurn(i) ? 'mt-4' : ''} bg-accent-soft rounded-lg px-3 py-2">
+        <div
+          class="mb-1.5 {isNewTurn(i)
+            ? 'mt-4'
+            : ''} bg-accent-soft rounded-lg px-3 py-2"
+        >
           {#if shouldShowTimestamp(i)}
-            <div class="text-[11px] text-fg-muted mb-0.5">{message.timestamp}</div>
+            <div class="text-[11px] text-fg-muted mb-0.5">
+              {message.timestamp}
+            </div>
           {/if}
           <div class="text-[12px] text-fg-default leading-relaxed">
             {message.content}
@@ -94,8 +102,7 @@
               <div
                 class="flex items-center gap-1.5 py-0.5 pl-4 text-[11px] font-[family-name:var(--font-mono)] text-fg-muted"
               >
-                <span class="w-1 h-1 rounded-full bg-accent shrink-0"
-                ></span>
+                <span class="w-1 h-1 rounded-full bg-accent shrink-0"></span>
                 {toolCall.name}
               </div>
             {/each}

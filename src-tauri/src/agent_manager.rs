@@ -2,10 +2,10 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use agent_client_protocol as acp;
 use acp::Agent as _;
+use agent_client_protocol as acp;
 use serde::{Deserialize, Serialize};
-use tokio::sync::{Mutex, RwLock, mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot, Mutex, RwLock};
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
 // ---------------------------------------------------------------------------
@@ -89,7 +89,6 @@ enum AgentCommand {
 
 struct AgentHandle {
     status: AgentStatus,
-    session_id: acp::SessionId,
     command_tx: mpsc::UnboundedSender<AgentCommand>,
     /// Handle to the OS-level child process (for kill).
     child: tokio::process::Child,
@@ -123,12 +122,15 @@ impl EmergentClient {
         if content.is_empty() {
             return None;
         }
-        let texts: Vec<String> = content.iter().map(|c| match c {
-            acp::ToolCallContent::Content(inner) => Self::extract_text(&inner.content),
-            acp::ToolCallContent::Diff(diff) => format!("[diff: {}]", diff.path.display()),
-            acp::ToolCallContent::Terminal(term) => format!("[terminal: {}]", term.terminal_id),
-            _ => "[unknown]".into(),
-        }).collect();
+        let texts: Vec<String> = content
+            .iter()
+            .map(|c| match c {
+                acp::ToolCallContent::Content(inner) => Self::extract_text(&inner.content),
+                acp::ToolCallContent::Diff(diff) => format!("[diff: {}]", diff.path.display()),
+                acp::ToolCallContent::Terminal(term) => format!("[terminal: {}]", term.terminal_id),
+                _ => "[unknown]".into(),
+            })
+            .collect();
         Some(texts.join(""))
     }
 
@@ -195,7 +197,11 @@ impl acp::Client for EmergentClient {
                         tool_call_id: tcu.tool_call_id.to_string(),
                         title: tcu.fields.title.clone(),
                         status: tcu.fields.status.map(|s| Self::tool_call_status_str(&s)),
-                        content: tcu.fields.content.as_ref().and_then(|c| Self::extract_tool_call_content(c)),
+                        content: tcu
+                            .fields
+                            .content
+                            .as_ref()
+                            .and_then(|c| Self::extract_tool_call_content(c)),
                     },
                 );
             }
@@ -265,7 +271,10 @@ impl AgentManager {
             .map_err(|e| format!("Failed to spawn agent '{}': {}", agent_binary, e))?;
 
         let child_stdin = child.stdin.take().ok_or("Failed to capture agent stdin")?;
-        let child_stdout = child.stdout.take().ok_or("Failed to capture agent stdout")?;
+        let child_stdout = child
+            .stdout
+            .take()
+            .ok_or("Failed to capture agent stdout")?;
 
         let (command_tx, command_rx) = mpsc::unbounded_channel::<AgentCommand>();
 
@@ -309,8 +318,9 @@ impl AgentManager {
                     // Initialize + create session
                     let init_result = async {
                         conn.initialize(
-                            acp::InitializeRequest::new(acp::ProtocolVersion::V1)
-                                .client_info(acp::Implementation::new("emergent", "0.1.0").title("Emergent")),
+                            acp::InitializeRequest::new(acp::ProtocolVersion::V1).client_info(
+                                acp::Implementation::new("emergent", "0.1.0").title("Emergent"),
+                            ),
                         )
                         .await
                         .map_err(|e| format!("ACP initialize failed: {}", e))?;
@@ -336,16 +346,17 @@ impl AgentManager {
                     };
 
                     // Command loop: receive commands from the main thread
-                    Self::agent_command_loop(conn, session_id, command_rx, agent_id, app_clone).await;
+                    Self::agent_command_loop(conn, session_id, command_rx, agent_id, app_clone)
+                        .await;
                 });
             })
             .map_err(|e| format!("Failed to spawn agent thread: {}", e))?;
 
         // Wait for initialization to complete
-        let session_id = init_rx
+        let _session_id = init_rx
             .await
             .map_err(|_| "Agent thread terminated during initialization".to_string())?
-            .map_err(|e| {
+            .inspect_err(|e| {
                 let _ = app.emit(
                     "agent:error",
                     AgentErrorPayload {
@@ -353,13 +364,11 @@ impl AgentManager {
                         message: e.clone(),
                     },
                 );
-                e
             })?;
 
         // Store the handle
         let handle = AgentHandle {
             status: AgentStatus::Idle,
-            session_id,
             command_tx,
             child,
             thread_handle: Some(thread_handle),
@@ -402,10 +411,7 @@ impl AgentManager {
                         },
                     );
 
-                    let prompt_req = acp::PromptRequest::new(
-                        session_id.clone(),
-                        vec![text.into()],
-                    );
+                    let prompt_req = acp::PromptRequest::new(session_id.clone(), vec![text.into()]);
 
                     match conn.prompt(prompt_req).await {
                         Ok(resp) => {

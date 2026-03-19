@@ -8,9 +8,7 @@ pub struct AgentInfo {
 }
 
 /// Known agent CLIs and their binary names.
-const KNOWN_AGENTS: &[(&str, &str)] = &[
-    ("Claude Code", "claude-agent-acp"),
-];
+const KNOWN_AGENTS: &[(&str, &str)] = &[("Claude Code", "claude-agent-acp")];
 
 /// Detect which known agent CLIs are installed on the system.
 pub fn detect_agents() -> Vec<AgentInfo> {

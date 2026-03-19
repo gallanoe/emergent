@@ -16,7 +16,9 @@ pub async fn spawn_agent(
     working_directory: String,
     agent_cli: String,
 ) -> Result<String, String> {
-    manager.spawn_agent(app, working_directory.into(), agent_cli).await
+    manager
+        .spawn_agent(app, working_directory.into(), agent_cli)
+        .await
 }
 
 #[tauri::command]

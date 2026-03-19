@@ -2,8 +2,8 @@ mod agent_manager;
 mod commands;
 mod detect;
 
-use std::sync::Arc;
 use agent_manager::AgentManager;
+use std::sync::Arc;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {

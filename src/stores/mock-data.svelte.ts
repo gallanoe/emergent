@@ -1,9 +1,21 @@
 // src/stores/mock-data.svelte.ts
 
-import type { AgentStatus, DisplayAgent, DisplayMessage, DisplaySwarm, DisplayToolCall } from "./types";
+import type {
+  AgentStatus,
+  DisplayAgent,
+  DisplayMessage,
+  DisplaySwarm,
+  DisplayToolCall,
+} from "./types";
 
 // Re-export types for backward compatibility
-export type { DisplayAgent as Agent, DisplayMessage as Message, DisplayToolCall as ToolCall, DisplaySwarm as Swarm, AgentStatus };
+export type {
+  DisplayAgent as Agent,
+  DisplayMessage as Message,
+  DisplayToolCall as ToolCall,
+  DisplaySwarm as Swarm,
+  AgentStatus,
+};
 
 const swarms: DisplaySwarm[] = [
   {
@@ -22,8 +34,7 @@ const swarms: DisplaySwarm[] = [
           {
             id: "m0",
             role: "user",
-            content:
-              "Refactor the navigation component into smaller, reusable pieces.",
+            content: "Refactor the navigation component into smaller, reusable pieces.",
             timestamp: "1:09 PM",
           },
           {
@@ -38,7 +49,12 @@ const swarms: DisplaySwarm[] = [
             role: "tool-group",
             content: "",
             toolCalls: [
-              { id: "tc1", name: "Read file", status: "completed", content: "src/components/Nav.svelte" },
+              {
+                id: "tc1",
+                name: "Read file",
+                status: "completed",
+                content: "src/components/Nav.svelte",
+              },
               { id: "tc2", name: "Read file", status: "completed", content: "src/lib/routes.ts" },
             ],
             timestamp: "1:10 PM",
@@ -55,9 +71,24 @@ const swarms: DisplaySwarm[] = [
             role: "tool-group",
             content: "",
             toolCalls: [
-              { id: "tc3", name: "Write file", status: "completed", content: "src/components/NavLogo.svelte" },
-              { id: "tc4", name: "Write file", status: "completed", content: "src/components/NavLinks.svelte" },
-              { id: "tc5", name: "Write file", status: "completed", content: "src/components/NavMenu.svelte" },
+              {
+                id: "tc3",
+                name: "Write file",
+                status: "completed",
+                content: "src/components/NavLogo.svelte",
+              },
+              {
+                id: "tc4",
+                name: "Write file",
+                status: "completed",
+                content: "src/components/NavLinks.svelte",
+              },
+              {
+                id: "tc5",
+                name: "Write file",
+                status: "completed",
+                content: "src/components/NavMenu.svelte",
+              },
             ],
             timestamp: "1:11 PM",
           },
@@ -113,7 +144,14 @@ const swarms: DisplaySwarm[] = [
             id: "m9",
             role: "tool-group",
             content: "",
-            toolCalls: [{ id: "tc8", name: "Read file", status: "completed", content: "src/components/Hero.svelte" }],
+            toolCalls: [
+              {
+                id: "tc8",
+                name: "Read file",
+                status: "completed",
+                content: "src/components/Hero.svelte",
+              },
+            ],
             timestamp: "1:05 PM",
           },
           {
