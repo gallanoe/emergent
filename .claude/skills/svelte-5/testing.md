@@ -6,11 +6,11 @@
 
 ### Three-Layer Strategy
 
-| Layer | What to test | Tool |
-|---|---|---|
-| **Pure logic** | Extracted functions, data transforms, derived calculations | Plain vitest (no DOM) |
+| Layer                  | What to test                                                              | Tool                                 |
+| ---------------------- | ------------------------------------------------------------------------- | ------------------------------------ |
+| **Pure logic**         | Extracted functions, data transforms, derived calculations                | Plain vitest (no DOM)                |
 | **Component behavior** | Rendered output, user interactions, conditional rendering, prop-driven UI | `@testing-library/svelte` with jsdom |
-| **E2E** | Full user flows, native API round-trips | Playwright |
+| **E2E**                | Full user flows, native API round-trips                                   | Playwright                           |
 
 **Invest most test budget in pure logic and component behavior.** E2E tests are slow and brittle — use them sparingly for critical paths.
 
@@ -78,8 +78,12 @@ Runes only work in `.svelte` or `.svelte.ts` files. Name your module accordingly
 export function createCounter(initial = 0) {
   let count = $state(initial);
   return {
-    get count() { return count; },
-    increment() { count += 1; },
+    get count() {
+      return count;
+    },
+    increment() {
+      count += 1;
+    },
   };
 }
 ```
@@ -110,7 +114,9 @@ test("effect tracks changes", () => {
   const log: number[] = [];
   const cleanup = $effect.root(() => {
     let count = $state(0);
-    $effect(() => { log.push(count); });
+    $effect(() => {
+      log.push(count);
+    });
 
     flushSync();
     expect(log).toEqual([0]);
@@ -147,7 +153,7 @@ Alternatively, add the `svelteTesting` plugin to vitest config for automatic cle
 ```typescript
 // vitest.config.ts
 import { svelteTesting } from "@testing-library/svelte/vite";
-plugins: [svelte(), svelteTesting()]
+plugins: [svelte(), svelteTesting()];
 ```
 
 ### Query Priority
@@ -200,7 +206,7 @@ Svelte 5 uses callback props instead of `createEventDispatcher`. Test directly:
 it("calls onSelectAgent when clicking an agent", async () => {
   const onSelectAgent = vi.fn();
   render(Sidebar, {
-    props: { onSelectAgent, /* ...other props */ },
+    props: { onSelectAgent /* ...other props */ },
   });
   await fireEvent.click(screen.getByText("Fix navigation bug"));
   expect(onSelectAgent).toHaveBeenCalledWith("agent-1");
@@ -243,7 +249,12 @@ For snippets needing interactivity, use the `setup` callback:
 const children = createRawSnippet(() => ({
   render: () => `<div></div>`,
   setup: (target) => {
-    const comp = mount(InnerComponent, { target, props: { /* ... */ } });
+    const comp = mount(InnerComponent, {
+      target,
+      props: {
+        /* ... */
+      },
+    });
     return () => unmount(comp);
   },
 }));
@@ -281,8 +292,14 @@ Mock `__TAURI_INTERNALS__` in your test setup so components importing `@tauri-ap
 // src/test-setup.ts
 (globalThis as any).__TAURI_INTERNALS__ = {
   invoke: (_cmd: string, _args?: unknown) => Promise.resolve(null),
-  transformCallback: (cb: Function) => { const id = ++callbackId; callbacks[id] = cb; return id; },
-  unregisterCallback: (id: number) => { delete callbacks[id]; },
+  transformCallback: (cb: Function) => {
+    const id = ++callbackId;
+    callbacks[id] = cb;
+    return id;
+  },
+  unregisterCallback: (id: number) => {
+    delete callbacks[id];
+  },
   callbacks,
 };
 
@@ -340,9 +357,15 @@ Group by behavior, not by method:
 
 ```typescript
 describe("Sidebar", () => {
-  describe("rendering", () => { /* static output tests */ });
-  describe("interactions", () => { /* click/type tests */ });
-  describe("edge cases", () => { /* empty data, error states */ });
+  describe("rendering", () => {
+    /* static output tests */
+  });
+  describe("interactions", () => {
+    /* click/type tests */
+  });
+  describe("edge cases", () => {
+    /* empty data, error states */
+  });
 });
 ```
 

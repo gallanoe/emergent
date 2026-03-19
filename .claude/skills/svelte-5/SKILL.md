@@ -14,7 +14,7 @@ This skill is split into focused sub-files. **Read only the files relevant to yo
 | `runes.md`            | Writing reactive state (`$state`), computed values (`$derived`), side effects (`$effect`), or reactive classes         |
 | `components.md`       | Creating/modifying component interfaces: `$props`, `$bindable`, snippets, callback events, TypeScript typing, generics |
 | `state-management.md` | Sharing state across components, setting up `.svelte.ts` modules, working with SvelteKit SSR/context                   |
-| `testing.md`          | Writing unit tests, component tests, vitest setup, mocking native APIs, Svelte 5 testing patterns                       |
+| `testing.md`          | Writing unit tests, component tests, vitest setup, mocking native APIs, Svelte 5 testing patterns                      |
 | `anti-patterns.md`    | Reviewing, debugging, or optimizing — the 10 critical mistakes and performance patterns                                |
 
 ## How to Use
