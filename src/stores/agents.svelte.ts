@@ -90,11 +90,12 @@ function createAgentStore() {
     const agent = agents[payload.agent_id];
     if (!agent) return;
 
+    // Only store title and status — don't store full tool output (can be huge)
+    const existing = agent.activeToolCalls[payload.tool_call_id];
     const tc: DisplayToolCall = {
       id: payload.tool_call_id,
-      name: payload.title,
-      status: payload.status as DisplayToolCall["status"],
-      ...(payload.content !== undefined ? { content: payload.content } : {}),
+      name: payload.title ?? existing?.name ?? "Tool call",
+      status: (payload.status ?? existing?.status ?? "pending") as DisplayToolCall["status"],
     };
 
     agent.activeToolCalls[payload.tool_call_id] = tc;

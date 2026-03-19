@@ -67,7 +67,6 @@
                 <span class="w-1.5 h-1.5 rounded-full bg-accent shrink-0"
                 ></span>
                 {toolCall.name}
-                <span class="text-fg-default">{toolCall.content}</span>
               </div>
             {/each}
           {/if}
