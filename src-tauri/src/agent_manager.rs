@@ -16,6 +16,8 @@ use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 pub struct MessageChunkPayload {
     pub agent_id: String,
     pub content: String,
+    /// "message" or "thinking"
+    pub kind: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -174,6 +176,7 @@ impl acp::Client for EmergentClient {
                     MessageChunkPayload {
                         agent_id: self.agent_id.clone(),
                         content: text,
+                        kind: "message".into(),
                     },
                 );
             }
@@ -212,6 +215,7 @@ impl acp::Client for EmergentClient {
                     MessageChunkPayload {
                         agent_id: self.agent_id.clone(),
                         content: text,
+                        kind: "thinking".into(),
                     },
                 );
             }

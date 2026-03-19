@@ -39,7 +39,29 @@
 <div class="flex-1 overflow-y-auto px-5 py-4">
   {#if agent}
     {#each agent.messages as message, i (message.id)}
-      {#if message.role === "assistant"}
+      {#if message.role === "thinking"}
+        <!-- Thinking block — collapsible, muted -->
+        <div class="mb-1 {isNewTurn(i) ? 'mt-4' : ''}">
+          <button
+            class="interactive flex items-center gap-1 px-1.5 py-0.5 text-[11px] text-fg-muted rounded"
+            onclick={() => toggleToolGroup(message.id)}
+          >
+            {#if expandedToolGroups[message.id]}
+              <ChevronDown size={10} />
+            {:else}
+              <ChevronRight size={10} />
+            {/if}
+            Thinking
+          </button>
+          {#if expandedToolGroups[message.id]}
+            <div
+              class="pl-4 text-[11px] text-fg-muted italic leading-relaxed whitespace-pre-wrap"
+            >
+              {message.content}
+            </div>
+          {/if}
+        </div>
+      {:else if message.role === "assistant"}
         <!-- Assistant message -->
         <div class="mb-1.5 {isNewTurn(i) ? 'mt-4' : ''}">
           {#if shouldShowTimestamp(i)}

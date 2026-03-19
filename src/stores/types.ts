@@ -10,7 +10,7 @@ export interface DisplayToolCall {
 
 export interface DisplayMessage {
   id: string;
-  role: "assistant" | "user" | "tool-group";
+  role: "assistant" | "thinking" | "user" | "tool-group";
   content: string;
   toolCalls?: DisplayToolCall[];
   timestamp: string;

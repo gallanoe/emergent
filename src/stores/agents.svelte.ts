@@ -19,6 +19,7 @@ interface AgentConnection {
 interface MessageChunkPayload {
   agent_id: string;
   content: string;
+  kind: "message" | "thinking";
 }
 
 interface ToolCallUpdatePayload {
@@ -52,6 +53,15 @@ interface AgentInfo {
 
 // ── Store ───────────────────────────────────────────────────────
 
+interface ChunkBuffer {
+  content: string;
+  kind: "message" | "thinking";
+}
+
+function roleForKind(kind: "message" | "thinking"): "assistant" | "thinking" {
+  return kind === "thinking" ? "thinking" : "assistant";
+}
+
 function createAgentStore() {
   // Plain object instead of Map — Svelte 5 reliably deep-proxies plain objects
   let agents: Record<string, AgentConnection> = $state({});
@@ -64,23 +74,26 @@ function createAgentStore() {
   // Accumulate chunks in a plain (non-reactive) buffer and flush
   // once per animation frame to avoid per-chunk re-renders.
 
-  const chunkBuffers: Record<string, string> = {};
+  const chunkBuffers: Record<string, ChunkBuffer> = {};
   let flushScheduled = false;
 
   function flushChunkBuffers() {
     for (const agentId of Object.keys(chunkBuffers)) {
-      const buffered = chunkBuffers[agentId];
+      const buffer = chunkBuffers[agentId];
       const agent = agents[agentId];
-      if (!agent || !buffered) continue;
+      if (!agent || !buffer?.content) continue;
 
+      const role = roleForKind(buffer.kind);
       const lastMsg = agent.messages.at(-1);
-      if (lastMsg && lastMsg.role === "assistant" && !lastMsg.toolCalls?.length) {
-        lastMsg.content += buffered;
+
+      // Append to the last message only if it matches the same role
+      if (lastMsg && lastMsg.role === role && !lastMsg.toolCalls?.length) {
+        lastMsg.content += buffer.content;
       } else {
         agent.messages.push({
           id: crypto.randomUUID(),
-          role: "assistant",
-          content: buffered,
+          role,
+          content: buffer.content,
           timestamp: new Date().toLocaleTimeString([], {
             hour: "numeric",
             minute: "2-digit",
@@ -99,7 +112,20 @@ function createAgentStore() {
   // ── Message assembly ──────────────────────────────────────────
 
   function handleMessageChunk(payload: MessageChunkPayload) {
-    chunkBuffers[payload.agent_id] = (chunkBuffers[payload.agent_id] ?? "") + payload.content;
+    const existing = chunkBuffers[payload.agent_id];
+
+    // If the kind changed mid-frame, flush first so thinking and message
+    // don't merge into the same buffer.
+    if (existing && existing.kind !== payload.kind) {
+      flushChunkBuffers();
+    }
+
+    const buffer = chunkBuffers[payload.agent_id];
+    if (buffer) {
+      buffer.content += payload.content;
+    } else {
+      chunkBuffers[payload.agent_id] = { content: payload.content, kind: payload.kind };
+    }
 
     if (!flushScheduled) {
       flushScheduled = true;
