@@ -47,7 +47,7 @@
         {#if message.role === "thinking"}
           <!-- Thinking block -->
           <div class={spacingClass(i)}>
-            <div class="bg-elevated rounded px-2 py-1">
+            <div class="bg-bg-elevated rounded px-2 py-1">
               <button
                 class="interactive flex items-center gap-1 text-[11px] text-fg-muted rounded"
                 onclick={() => toggleBlock(message.id)}
@@ -91,7 +91,7 @@
         {:else if message.role === "tool-group" && message.toolCalls}
           <!-- Tool call group -->
           <div class={spacingClass(i)}>
-            <div class="bg-elevated rounded px-2 py-1">
+            <div class="bg-bg-elevated rounded px-2 py-1">
               <button
                 class="interactive flex items-center gap-1 text-[11px] text-fg-muted rounded"
                 onclick={() => toggleBlock(message.id)}
