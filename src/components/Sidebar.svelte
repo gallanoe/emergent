@@ -4,22 +4,24 @@
   import AgentPickerPopover from "./AgentPickerPopover.svelte";
   import claudeLogo from "../assets/claude.svg";
   import openaiLogo from "../assets/openai.svg";
+  import geminiLogo from "../assets/gemini.svg";
   import type { DisplaySwarm } from "../stores/types";
 
   const AGENT_LOGOS: Record<string, string> = {
     "claude-agent-acp": claudeLogo,
     "codex-acp": openaiLogo,
+    "gemini --experimental-acp": geminiLogo,
   };
 
   interface Props {
     swarms: DisplaySwarm[];
     selectedAgentId: string | null;
     demoMode: boolean;
-    knownAgents: { name: string; binary: string; available: boolean }[];
+    knownAgents: { name: string; command: string; available: boolean }[];
     onSelectAgent: (id: string) => void;
     onToggleSwarm: (id: string) => void;
     onNewSwarm: () => void;
-    onAddAgent: (swarmId: string, agentBinary: string) => void;
+    onAddAgent: (swarmId: string, agentCommand: string) => void;
   }
 
   let {
@@ -80,8 +82,8 @@
               {#if pickerSwarmId === swarm.id}
                 <AgentPickerPopover
                   agents={knownAgents}
-                  onSelect={(binary) => {
-                    onAddAgent(swarm.id, binary);
+                  onSelect={(command) => {
+                    onAddAgent(swarm.id, command);
                     pickerSwarmId = null;
                   }}
                   onClose={() => {

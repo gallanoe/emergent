@@ -264,8 +264,16 @@ impl AgentManager {
             },
         );
 
+        // Parse command string into binary + args (e.g. "gemini --experimental-acp")
+        let parts: Vec<&str> = agent_binary.split_whitespace().collect();
+        let binary = parts
+            .first()
+            .ok_or_else(|| "Empty agent command".to_string())?;
+        let args = &parts[1..];
+
         // Spawn the agent subprocess
-        let mut child = tokio::process::Command::new(&agent_binary)
+        let mut child = tokio::process::Command::new(binary)
+            .args(args)
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::null())

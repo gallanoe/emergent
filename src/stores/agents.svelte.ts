@@ -275,6 +275,7 @@ function createAgentStore() {
   const CLI_DISPLAY_NAMES: Record<string, string> = {
     "claude-agent-acp": "Claude Code",
     "codex-acp": "Codex",
+    "gemini --experimental-acp": "Gemini",
   };
 
   function getAgentDisplayName(conn: AgentConnection): string {

@@ -4,19 +4,19 @@ import AgentPickerPopover from "./AgentPickerPopover.svelte";
 
 interface KnownAgent {
   name: string;
-  binary: string;
+  command: string;
   available: boolean;
 }
 
 const agents: KnownAgent[] = [
-  { name: "Claude Code", binary: "claude-agent-acp", available: true },
-  { name: "Codex", binary: "codex-acp", available: false },
+  { name: "Claude Code", command: "claude-agent-acp", available: true },
+  { name: "Codex", command: "codex-acp", available: false },
 ];
 
 function renderPopover(
   overrides: Partial<{
     agents: KnownAgent[];
-    onSelect: (binary: string) => void;
+    onSelect: (command: string) => void;
     onClose: () => void;
   }> = {},
 ) {
@@ -36,13 +36,13 @@ describe("AgentPickerPopover", () => {
     expect(screen.getByText("Codex")).toBeTruthy();
   });
 
-  it("renders binary names", () => {
+  it("renders command strings", () => {
     renderPopover();
     expect(screen.getByText("claude-agent-acp")).toBeTruthy();
     expect(screen.getByText("codex-acp")).toBeTruthy();
   });
 
-  it("calls onSelect with binary when clicking available agent", async () => {
+  it("calls onSelect with command when clicking available agent", async () => {
     const onSelect = vi.fn();
     renderPopover({ onSelect });
     await fireEvent.click(screen.getByText("Claude Code"));

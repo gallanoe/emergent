@@ -8,7 +8,7 @@ import { appState as mockState } from "./mock-data.svelte";
 
 interface KnownAgent {
   name: string;
-  binary: string;
+  command: string;
   available: boolean;
 }
 

@@ -40,11 +40,11 @@ interface SidebarOverrides {
   swarms?: DisplaySwarm[];
   selectedAgentId?: string | null;
   demoMode?: boolean;
-  knownAgents?: { name: string; binary: string; available: boolean }[];
+  knownAgents?: { name: string; command: string; available: boolean }[];
   onSelectAgent?: (id: string) => void;
   onToggleSwarm?: (id: string) => void;
   onNewSwarm?: () => void;
-  onAddAgent?: (swarmId: string, agentBinary: string) => void;
+  onAddAgent?: (swarmId: string, agentCommand: string) => void;
 }
 
 function renderSidebar(overrides: SidebarOverrides = {}) {
@@ -54,8 +54,8 @@ function renderSidebar(overrides: SidebarOverrides = {}) {
       selectedAgentId: overrides.selectedAgentId ?? null,
       demoMode: overrides.demoMode ?? true,
       knownAgents: overrides.knownAgents ?? [
-        { name: "Claude Code", binary: "claude-agent-acp", available: true },
-        { name: "Codex", binary: "codex-acp", available: true },
+        { name: "Claude Code", command: "claude-agent-acp", available: true },
+        { name: "Codex", command: "codex-acp", available: true },
       ],
       onSelectAgent: overrides.onSelectAgent ?? noop,
       onToggleSwarm: overrides.onToggleSwarm ?? noop,

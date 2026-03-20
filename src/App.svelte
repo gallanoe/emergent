@@ -26,8 +26,8 @@
     onSelectAgent={(id) => (appState.selectedAgentId = id)}
     onToggleSwarm={(id) => appState.toggleSwarmCollapsed(id)}
     onNewSwarm={() => appState.newSwarm()}
-    onAddAgent={(swarmId, agentBinary) => {
-      appState.addAgentToSwarm(swarmId, agentBinary);
+    onAddAgent={(swarmId, agentCommand) => {
+      appState.addAgentToSwarm(swarmId, agentCommand);
     }}
   />
   <main class="flex flex-col min-h-0">

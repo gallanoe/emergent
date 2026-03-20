@@ -7,16 +7,18 @@ pub struct AgentInfo {
     pub path: String,
 }
 
-/// Known agent CLIs and their binary names.
-const KNOWN_AGENTS: &[(&str, &str)] = &[
-    ("Claude Code", "claude-agent-acp"),
-    ("Codex", "codex-acp"),
+/// Known agent CLIs: (display name, binary, extra args).
+const KNOWN_AGENTS: &[(&str, &str, &[&str])] = &[
+    ("Claude Code", "claude-agent-acp", &[]),
+    ("Codex", "codex-acp", &[]),
+    ("Gemini", "gemini", &["--experimental-acp"]),
 ];
 
 #[derive(Debug, Clone, Serialize)]
 pub struct KnownAgent {
     pub name: String,
-    pub binary: String,
+    /// The full command string used to spawn the agent (e.g. "gemini --experimental-acp").
+    pub command: String,
     pub available: bool,
 }
 
@@ -24,10 +26,17 @@ pub struct KnownAgent {
 pub fn known_agents() -> Vec<KnownAgent> {
     KNOWN_AGENTS
         .iter()
-        .map(|&(name, binary)| KnownAgent {
-            name: name.to_string(),
-            binary: binary.to_string(),
-            available: which::which(binary).is_ok(),
+        .map(|&(name, binary, args)| {
+            let command = if args.is_empty() {
+                binary.to_string()
+            } else {
+                format!("{} {}", binary, args.join(" "))
+            };
+            KnownAgent {
+                name: name.to_string(),
+                command,
+                available: which::which(binary).is_ok(),
+            }
         })
         .collect()
 }
@@ -35,7 +44,7 @@ pub fn known_agents() -> Vec<KnownAgent> {
 /// Detect which known agent CLIs are installed on the system.
 pub fn detect_agents() -> Vec<AgentInfo> {
     let mut found = Vec::new();
-    for &(name, binary) in KNOWN_AGENTS {
+    for &(name, binary, _args) in KNOWN_AGENTS {
         if let Ok(path) = which::which(binary) {
             found.push(AgentInfo {
                 name: name.to_string(),
@@ -53,7 +62,6 @@ mod tests {
 
     #[test]
     fn detect_agents_returns_vec() {
-        // Should return a Vec (possibly empty if claude-agent-acp not installed)
         let agents = detect_agents();
         assert!(agents.len() <= KNOWN_AGENTS.len());
     }
@@ -74,16 +82,18 @@ mod tests {
         let agents = known_agents();
         assert_eq!(agents.len(), KNOWN_AGENTS.len());
         assert_eq!(agents[0].name, "Claude Code");
-        assert_eq!(agents[0].binary, "claude-agent-acp");
+        assert_eq!(agents[0].command, "claude-agent-acp");
         assert_eq!(agents[1].name, "Codex");
-        assert_eq!(agents[1].binary, "codex-acp");
+        assert_eq!(agents[1].command, "codex-acp");
+        assert_eq!(agents[2].name, "Gemini");
+        assert_eq!(agents[2].command, "gemini --experimental-acp");
     }
 
     #[test]
     fn known_agent_serializes() {
         let agent = KnownAgent {
             name: "Test".into(),
-            binary: "test-bin".into(),
+            command: "test-bin".into(),
             available: true,
         };
         let json = serde_json::to_string(&agent).unwrap();
