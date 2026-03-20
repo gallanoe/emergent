@@ -2,7 +2,14 @@
 <script lang="ts">
   import { ChevronRight, ChevronDown, Plus } from "@lucide/svelte";
   import AgentPickerPopover from "./AgentPickerPopover.svelte";
+  import claudeLogo from "../assets/claude.svg";
+  import openaiLogo from "../assets/openai.svg";
   import type { DisplaySwarm } from "../stores/types";
+
+  const AGENT_LOGOS: Record<string, string> = {
+    "claude-agent-acp": claudeLogo,
+    "codex-acp": openaiLogo,
+  };
 
   interface Props {
     swarms: DisplaySwarm[];
@@ -91,35 +98,44 @@
           {#each swarm.agents as agent (agent.id)}
             {@const isSelected = agent.id === selectedAgentId}
             <button
-              class="interactive flex flex-col gap-0.5 w-full py-1.5 pl-7 pr-4 text-left
+              class="interactive flex items-center w-full py-1.5 pl-5 pr-3 text-left
                 {isSelected
                 ? 'bg-bg-selected border-l-2 border-accent'
                 : 'border-l-2 border-transparent'}"
               onclick={() => onSelectAgent(agent.id)}
             >
-              <div class="flex items-center gap-1.5 w-full">
-                <span
-                  class="w-1.5 h-1.5 rounded-full shrink-0
-                    {agent.status === 'error'
-                    ? 'bg-error'
-                    : agent.status === 'working'
-                      ? 'bg-success'
-                      : 'bg-fg-muted'}"
-                ></span>
-                <span
-                  class="text-[12px] font-medium truncate {isSelected
-                    ? 'text-fg-heading'
-                    : 'text-fg-default'}"
-                >
-                  {agent.name}
-                </span>
-                <span class="text-[11px] text-fg-muted ml-auto shrink-0"
-                  >{agent.updatedAt}</span
-                >
+              <div class="flex flex-col gap-0.5 flex-1 min-w-0">
+                <div class="flex items-center gap-1.5 w-full">
+                  <span
+                    class="w-1.5 h-1.5 rounded-full shrink-0
+                      {agent.status === 'error'
+                      ? 'bg-error'
+                      : agent.status === 'working'
+                        ? 'bg-success'
+                        : 'bg-fg-muted'}"
+                  ></span>
+                  <span
+                    class="text-[12px] font-medium truncate {isSelected
+                      ? 'text-fg-heading'
+                      : 'text-fg-default'}"
+                  >
+                    {agent.name}
+                  </span>
+                  <span class="text-[11px] text-fg-muted ml-auto shrink-0"
+                    >{agent.updatedAt}</span
+                  >
+                </div>
+                <div class="text-[11px] text-fg-muted truncate pl-3">
+                  {agent.preview}
+                </div>
               </div>
-              <div class="text-[11px] text-fg-muted truncate pl-3">
-                {agent.preview}
-              </div>
+              {#if AGENT_LOGOS[agent.cli]}
+                <img
+                  src={AGENT_LOGOS[agent.cli]}
+                  alt=""
+                  class="w-3.5 h-3.5 shrink-0 ml-2 opacity-50"
+                />
+              {/if}
             </button>
           {/each}
         {/if}

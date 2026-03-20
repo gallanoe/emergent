@@ -21,6 +21,7 @@ export type AgentStatus = "idle" | "working" | "error";
 export interface DisplayAgent {
   id: string;
   swarmId: string;
+  cli: string;
   name: string;
   status: AgentStatus;
   preview: string;

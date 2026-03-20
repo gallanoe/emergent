@@ -1,5 +1,8 @@
 <!-- src/components/AgentPickerPopover.svelte -->
 <script lang="ts">
+  import claudeLogo from "../assets/claude.svg";
+  import openaiLogo from "../assets/openai.svg";
+
   interface KnownAgent {
     name: string;
     binary: string;
@@ -13,6 +16,11 @@
   }
 
   let { agents, onSelect, onClose }: Props = $props();
+
+  const AGENT_LOGOS: Record<string, string> = {
+    "claude-agent-acp": claudeLogo,
+    "codex-acp": openaiLogo,
+  };
 
   function handleClick(agent: KnownAgent) {
     if (!agent.available) return;
@@ -56,14 +64,7 @@
       data-available={String(agent.available)}
       onclick={() => handleClick(agent)}
     >
-      <div
-        class="flex items-center justify-center w-[22px] h-[22px] rounded-md text-[11px] font-semibold shrink-0
-          {agent.binary === 'claude-agent-acp'
-          ? 'bg-[#e8ddd0] text-accent'
-          : 'bg-[#d4e4d9] text-[#2d6e46]'}"
-      >
-        {agent.binary === "claude-agent-acp" ? "C" : "X"}
-      </div>
+      <img src={AGENT_LOGOS[agent.binary]} alt="" class="w-5 h-5 shrink-0" />
       <div class="min-w-0">
         <div class="text-[12px] font-medium text-fg-heading truncate">
           {agent.name}

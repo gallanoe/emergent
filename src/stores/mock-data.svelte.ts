@@ -11,6 +11,7 @@ const swarms: DisplaySwarm[] = [
       {
         id: "agent-1",
         swarmId: "swarm-1",
+        cli: "claude-agent-acp",
         name: "Refactoring the navigation component",
         status: "working",
         preview: "Refactoring the nav compo...",
@@ -82,6 +83,7 @@ const swarms: DisplaySwarm[] = [
       {
         id: "agent-2",
         swarmId: "swarm-1",
+        cli: "claude-agent-acp",
         name: "Set up Tailwind config",
         status: "idle",
         preview: "Set up Tailwind config wi...",
@@ -114,6 +116,7 @@ const swarms: DisplaySwarm[] = [
       {
         id: "agent-3",
         swarmId: "swarm-1",
+        cli: "codex-acp",
         name: "Fix broken image imports",
         status: "error",
         preview: "Build failed: missing dep...",
@@ -158,6 +161,7 @@ const swarms: DisplaySwarm[] = [
       {
         id: "agent-4",
         swarmId: "swarm-2",
+        cli: "claude-agent-acp",
         name: "Migrate auth endpoints to v2",
         status: "working",
         preview: "I want to moderniz...",
@@ -167,6 +171,7 @@ const swarms: DisplaySwarm[] = [
       {
         id: "agent-5",
         swarmId: "swarm-2",
+        cli: "codex-acp",
         name: "Update API documentation",
         status: "idle",
         preview: "How hard would ...",

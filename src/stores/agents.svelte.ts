@@ -303,6 +303,7 @@ function createAgentStore() {
     return {
       id: conn.id,
       swarmId: conn.swarmId,
+      cli: conn.cli,
       name: getAgentDisplayName(conn),
       status: statusMap[conn.status],
       preview: lastMsg?.content ? lastMsg.content.slice(0, 30) + "..." : "",

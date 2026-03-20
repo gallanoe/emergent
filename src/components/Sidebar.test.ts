@@ -12,6 +12,7 @@ function makeSwarm(overrides?: Partial<DisplaySwarm>): DisplaySwarm {
       {
         id: "agent-1",
         swarmId: "swarm-1",
+        cli: "claude-agent-acp",
         name: "Fix navigation bug",
         status: "working",
         preview: "Fixing the nav...",
@@ -21,6 +22,7 @@ function makeSwarm(overrides?: Partial<DisplaySwarm>): DisplaySwarm {
       {
         id: "agent-2",
         swarmId: "swarm-1",
+        cli: "codex-acp",
         name: "Update tests",
         status: "idle",
         preview: "Tests updated...",
