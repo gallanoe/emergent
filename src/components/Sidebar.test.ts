@@ -38,10 +38,11 @@ interface SidebarOverrides {
   swarms?: DisplaySwarm[];
   selectedAgentId?: string | null;
   demoMode?: boolean;
+  knownAgents?: { name: string; binary: string; available: boolean }[];
   onSelectAgent?: (id: string) => void;
   onToggleSwarm?: (id: string) => void;
   onNewSwarm?: () => void;
-  onAddAgent?: (swarmId: string) => void;
+  onAddAgent?: (swarmId: string, agentBinary: string) => void;
 }
 
 function renderSidebar(overrides: SidebarOverrides = {}) {
@@ -50,6 +51,10 @@ function renderSidebar(overrides: SidebarOverrides = {}) {
       swarms: overrides.swarms ?? [makeSwarm()],
       selectedAgentId: overrides.selectedAgentId ?? null,
       demoMode: overrides.demoMode ?? true,
+      knownAgents: overrides.knownAgents ?? [
+        { name: "Claude Code", binary: "claude-agent-acp", available: true },
+        { name: "Codex", binary: "codex-acp", available: true },
+      ],
       onSelectAgent: overrides.onSelectAgent ?? noop,
       onToggleSwarm: overrides.onToggleSwarm ?? noop,
       onNewSwarm: overrides.onNewSwarm ?? noop,
@@ -101,5 +106,14 @@ describe("Sidebar", () => {
   it("renders app title", () => {
     renderSidebar({ swarms: [] });
     expect(screen.getByText("emergent")).toBeTruthy();
+  });
+
+  it("shows agent picker popover when clicking add button", async () => {
+    renderSidebar({ demoMode: false });
+    const addButton = screen.getByTitle("Add agent");
+    await fireEvent.click(addButton);
+    expect(screen.getByText("Add agent")).toBeTruthy();
+    expect(screen.getByText("Claude Code")).toBeTruthy();
+    expect(screen.getByText("Codex")).toBeTruthy();
   });
 });

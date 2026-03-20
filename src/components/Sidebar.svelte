@@ -1,27 +1,32 @@
 <!-- src/components/Sidebar.svelte -->
 <script lang="ts">
   import { ChevronRight, ChevronDown, Plus } from "@lucide/svelte";
+  import AgentPickerPopover from "./AgentPickerPopover.svelte";
   import type { DisplaySwarm } from "../stores/types";
 
   interface Props {
     swarms: DisplaySwarm[];
     selectedAgentId: string | null;
     demoMode: boolean;
+    knownAgents: { name: string; binary: string; available: boolean }[];
     onSelectAgent: (id: string) => void;
     onToggleSwarm: (id: string) => void;
     onNewSwarm: () => void;
-    onAddAgent: (swarmId: string) => void;
+    onAddAgent: (swarmId: string, agentBinary: string) => void;
   }
 
   let {
     swarms,
     selectedAgentId,
     demoMode,
+    knownAgents,
     onSelectAgent,
     onToggleSwarm,
     onNewSwarm,
     onAddAgent,
   }: Props = $props();
+
+  let pickerSwarmId = $state<string | null>(null);
 </script>
 
 <aside
@@ -55,13 +60,29 @@
             {swarm.name}
           </button>
           {#if !demoMode}
-            <button
-              class="interactive flex items-center justify-center w-5 h-5 mr-2 text-fg-muted rounded hover:text-fg-default"
-              onclick={() => onAddAgent(swarm.id)}
-              title="Add agent"
-            >
-              <Plus size={10} />
-            </button>
+            <div class="relative">
+              <button
+                class="interactive flex items-center justify-center w-5 h-5 mr-2 text-fg-muted rounded hover:text-fg-default"
+                onclick={() => {
+                  pickerSwarmId = pickerSwarmId === swarm.id ? null : swarm.id;
+                }}
+                title="Add agent"
+              >
+                <Plus size={10} />
+              </button>
+              {#if pickerSwarmId === swarm.id}
+                <AgentPickerPopover
+                  agents={knownAgents}
+                  onSelect={(binary) => {
+                    onAddAgent(swarm.id, binary);
+                    pickerSwarmId = null;
+                  }}
+                  onClose={() => {
+                    pickerSwarmId = null;
+                  }}
+                />
+              {/if}
+            </div>
           {/if}
         </div>
 

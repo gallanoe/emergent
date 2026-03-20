@@ -272,6 +272,26 @@ function createAgentStore() {
     delete agents[agentId];
   }
 
+  const CLI_DISPLAY_NAMES: Record<string, string> = {
+    "claude-agent-acp": "Claude Code",
+    "codex-acp": "Codex",
+  };
+
+  function getAgentDisplayName(conn: AgentConnection): string {
+    const typeName = CLI_DISPLAY_NAMES[conn.cli] ?? conn.cli;
+
+    // Count how many agents of the same type exist in the same swarm
+    const siblings = Object.values(agents).filter(
+      (a) => a.swarmId === conn.swarmId && a.cli === conn.cli,
+    );
+
+    if (siblings.length <= 1) return typeName;
+
+    // Assign a stable sequential number based on insertion order
+    const index = siblings.findIndex((a) => a.id === conn.id);
+    return `${typeName} #${index + 1}`;
+  }
+
   function toDisplayAgent(conn: AgentConnection): DisplayAgent {
     const lastMsg = conn.messages.at(-1);
     const statusMap: Record<AgentConnection["status"], DisplayAgent["status"]> = {
@@ -283,7 +303,7 @@ function createAgentStore() {
     return {
       id: conn.id,
       swarmId: conn.swarmId,
-      name: conn.cli,
+      name: getAgentDisplayName(conn),
       status: statusMap[conn.status],
       preview: lastMsg?.content ? lastMsg.content.slice(0, 30) + "..." : "",
       updatedAt: "just now",
