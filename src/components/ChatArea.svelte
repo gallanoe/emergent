@@ -15,11 +15,49 @@
   // Track which process blocks are expanded (by message id)
   let expandedBlocks: Record<string, boolean> = $state({});
 
-  // Reset expansion state when switching agents
+  // ── Auto-scroll ────────────────────────────────────────────────
+  let scrollContainer: HTMLDivElement | undefined = $state();
+  // Plain let — not $state. Never affects template, and keeping it
+  // non-reactive avoids re-triggering the auto-scroll effect on scroll.
+  let userScrolledAway = false;
+
+  function isNearBottom(el: HTMLElement): boolean {
+    const threshold = 80;
+    return el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+  }
+
+  function onScroll() {
+    if (!scrollContainer) return;
+    userScrolledAway = !isNearBottom(scrollContainer);
+  }
+
+  function scrollToBottom() {
+    if (!scrollContainer) return;
+    scrollContainer.scrollTo({ top: scrollContainer.scrollHeight });
+  }
+
+  // Reset expansion + scroll state when switching agents
   let agentId = $derived(agent?.id);
   $effect(() => {
     agentId;
     expandedBlocks = {};
+    userScrolledAway = false;
+    requestAnimationFrame(() => scrollToBottom());
+  });
+
+  // Auto-scroll on content changes (DOM manipulation — legitimate $effect use)
+  $effect(() => {
+    const messages = agent?.messages;
+    const len = messages?.length ?? 0;
+    const lastContent = len > 0 ? messages![len - 1]!.content : "";
+    const lastRole = len > 0 ? messages![len - 1]!.role : "";
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const _status = agent?.status;
+
+    if (lastRole === "user") userScrolledAway = false;
+
+    if (!scrollContainer || userScrolledAway) return;
+    requestAnimationFrame(() => scrollToBottom());
   });
 
   function toggleBlock(messageId: string) {
@@ -44,7 +82,11 @@
   };
 </script>
 
-<div class="flex-1 overflow-y-auto px-5 py-4">
+<div
+  bind:this={scrollContainer}
+  onscroll={onScroll}
+  class="flex-1 overflow-y-auto px-5 py-4"
+>
   {#if agent}
     <div class="flex flex-col">
       {#each agent.messages as message, i (message.id)}
