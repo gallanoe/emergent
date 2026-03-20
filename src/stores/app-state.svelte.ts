@@ -1,9 +1,16 @@
+import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { agentStore } from "./agents.svelte";
 import type { DisplayAgent, DisplaySwarm } from "./types";
 
 // Import mock data for demo mode
 import { appState as mockState } from "./mock-data.svelte";
+
+interface KnownAgent {
+  name: string;
+  binary: string;
+  available: boolean;
+}
 
 interface Swarm {
   id: string;
@@ -18,6 +25,7 @@ function createAppState() {
   let swarms = $state<Swarm[]>([]);
   let selectedAgentId = $state<string | null>(null);
   let availableAgents = $state<{ name: string; binary: string; path: string }[]>([]);
+  let knownAgents = $state<KnownAgent[]>([]);
 
   // ── Initialization ────────────────────────────────────────────
 
@@ -26,6 +34,9 @@ function createAppState() {
 
     const detected = await agentStore.detectAgents();
     availableAgents = detected;
+
+    const known = await invoke<KnownAgent[]>("known_agents");
+    knownAgents = known;
 
     if (detected.length > 0) {
       demoMode = false;
@@ -56,17 +67,14 @@ function createAppState() {
   }
 
   async function newSwarm(): Promise<void> {
-    if (demoMode || availableAgents.length === 0) return;
+    if (demoMode) return;
 
     const selected = await open({ directory: true, multiple: false });
     if (!selected) return; // user cancelled
 
     const path = selected as string;
     const name = path.split("/").pop() || path;
-    const swarmId = createSwarm(name, path);
-
-    // Auto-spawn one agent using the first detected CLI
-    await addAgentToSwarm(swarmId, availableAgents[0]!.binary);
+    createSwarm(name, path);
   }
 
   function toggleSwarmCollapsed(swarmId: string) {
@@ -131,6 +139,9 @@ function createAppState() {
     },
     get availableAgents() {
       return availableAgents;
+    },
+    get knownAgents() {
+      return knownAgents;
     },
     initialize,
     createSwarm,
