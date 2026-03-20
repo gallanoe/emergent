@@ -47,18 +47,26 @@
         {#if message.role === "thinking"}
           <!-- Thinking block -->
           <div class={spacingClass(i)}>
-            <div class="bg-bg-elevated rounded px-2 py-1">
-              <button
-                class="interactive flex items-center gap-1 text-[11px] text-fg-muted rounded"
-                onclick={() => toggleBlock(message.id)}
-              >
+            <div
+              class="interactive bg-bg-elevated rounded px-2 py-1"
+              onclick={() => toggleBlock(message.id)}
+              role="button"
+              tabindex="0"
+              onkeydown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  toggleBlock(message.id);
+                }
+              }}
+            >
+              <div class="flex items-center gap-1 text-[11px] text-fg-muted">
                 {#if expandedBlocks[message.id]}
                   <ChevronDown size={10} />
                 {:else}
                   <ChevronRight size={10} />
                 {/if}
                 Thinking
-              </button>
+              </div>
               {#if expandedBlocks[message.id]}
                 <div
                   class="pl-3.5 text-[11px] text-fg-muted italic leading-relaxed whitespace-pre-wrap"
@@ -91,11 +99,19 @@
         {:else if message.role === "tool-group" && message.toolCalls}
           <!-- Tool call group -->
           <div class={spacingClass(i)}>
-            <div class="bg-bg-elevated rounded px-2 py-1">
-              <button
-                class="interactive flex items-center gap-1 text-[11px] text-fg-muted rounded"
-                onclick={() => toggleBlock(message.id)}
-              >
+            <div
+              class="interactive bg-bg-elevated rounded px-2 py-1"
+              onclick={() => toggleBlock(message.id)}
+              role="button"
+              tabindex="0"
+              onkeydown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  toggleBlock(message.id);
+                }
+              }}
+            >
+              <div class="flex items-center gap-1 text-[11px] text-fg-muted">
                 {#if expandedBlocks[message.id]}
                   <ChevronDown size={10} />
                 {:else}
@@ -105,7 +121,7 @@
                   .length !== 1
                   ? "s"
                   : ""}
-              </button>
+              </div>
               {#if expandedBlocks[message.id]}
                 {#each message.toolCalls as toolCall (toolCall.id)}
                   <div
