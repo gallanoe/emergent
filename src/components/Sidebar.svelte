@@ -56,9 +56,9 @@
     {#each swarms as swarm (swarm.id)}
       <div>
         <!-- Swarm header -->
-        <div class="flex items-center">
+        <div class="flex items-stretch">
           <button
-            class="interactive flex items-center gap-1 flex-1 px-4 py-1 text-[11px] font-semibold text-fg-muted"
+            class="interactive flex items-center gap-1 flex-1 pl-4 py-1 text-[11px] font-semibold text-fg-muted"
             onclick={() => onToggleSwarm(swarm.id)}
           >
             {#if swarm.collapsed}
@@ -69,9 +69,9 @@
             {swarm.name}
           </button>
           {#if !demoMode}
-            <div class="relative">
+            <div class="relative flex">
               <button
-                class="interactive flex items-center justify-center w-5 h-5 mr-2 text-fg-muted rounded hover:text-fg-default"
+                class="interactive flex items-center justify-center w-7 text-fg-muted hover:text-fg-default"
                 onclick={() => {
                   pickerSwarmId = pickerSwarmId === swarm.id ? null : swarm.id;
                 }}
