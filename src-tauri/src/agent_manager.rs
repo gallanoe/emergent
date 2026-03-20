@@ -21,12 +21,35 @@ pub struct MessageChunkPayload {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum ToolCallContentPayload {
+    Text {
+        text: String,
+    },
+    Diff {
+        path: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        old_text: Option<String>,
+        new_text: String,
+    },
+    Terminal {
+        terminal_id: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        output: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        exit_code: Option<i32>,
+    },
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ToolCallUpdatePayload {
     pub agent_id: String,
     pub tool_call_id: String,
     pub title: Option<String>,
+    pub kind: Option<String>,
     pub status: Option<String>,
-    pub content: Option<String>,
+    pub locations: Option<Vec<String>>,
+    pub content: Option<Vec<ToolCallContentPayload>>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -120,20 +143,56 @@ impl EmergentClient {
             .unwrap_or_else(|| format!("{:?}", status))
     }
 
-    fn extract_tool_call_content(content: &[acp::ToolCallContent]) -> Option<String> {
+    fn extract_tool_call_content(
+        content: &[acp::ToolCallContent],
+    ) -> Option<Vec<ToolCallContentPayload>> {
         if content.is_empty() {
             return None;
         }
-        let texts: Vec<String> = content
+        let items: Vec<ToolCallContentPayload> = content
             .iter()
             .map(|c| match c {
-                acp::ToolCallContent::Content(inner) => Self::extract_text(&inner.content),
-                acp::ToolCallContent::Diff(diff) => format!("[diff: {}]", diff.path.display()),
-                acp::ToolCallContent::Terminal(term) => format!("[terminal: {}]", term.terminal_id),
-                _ => "[unknown]".into(),
+                acp::ToolCallContent::Content(inner) => ToolCallContentPayload::Text {
+                    text: Self::extract_text(&inner.content),
+                },
+                acp::ToolCallContent::Diff(diff) => ToolCallContentPayload::Diff {
+                    path: diff.path.display().to_string(),
+                    old_text: diff.old_text.clone(),
+                    new_text: diff.new_text.clone(),
+                },
+                acp::ToolCallContent::Terminal(term) => ToolCallContentPayload::Terminal {
+                    terminal_id: term.terminal_id.to_string(),
+                    output: None,
+                    exit_code: None,
+                },
+                _ => {
+                    log::warn!("Unknown ToolCallContent variant encountered");
+                    ToolCallContentPayload::Text {
+                        text: "[unknown]".into(),
+                    }
+                }
             })
             .collect();
-        Some(texts.join(""))
+        Some(items)
+    }
+
+    fn extract_locations(locations: &[acp::ToolCallLocation]) -> Option<Vec<String>> {
+        if locations.is_empty() {
+            return None;
+        }
+        Some(
+            locations
+                .iter()
+                .map(|l| l.path.display().to_string())
+                .collect(),
+        )
+    }
+
+    fn tool_kind_str(kind: &acp::ToolKind) -> String {
+        serde_json::to_value(kind)
+            .ok()
+            .and_then(|v| v.as_str().map(String::from))
+            .unwrap_or_else(|| "other".into())
     }
 
     fn extract_text(content: &acp::ContentBlock) -> String {
@@ -187,7 +246,9 @@ impl acp::Client for EmergentClient {
                         agent_id: self.agent_id.clone(),
                         tool_call_id: tc.tool_call_id.to_string(),
                         title: Some(tc.title.clone()),
+                        kind: Some(Self::tool_kind_str(&tc.kind)),
                         status: Some(Self::tool_call_status_str(&tc.status)),
+                        locations: Self::extract_locations(&tc.locations),
                         content: Self::extract_tool_call_content(&tc.content),
                     },
                 );
@@ -199,7 +260,13 @@ impl acp::Client for EmergentClient {
                         agent_id: self.agent_id.clone(),
                         tool_call_id: tcu.tool_call_id.to_string(),
                         title: tcu.fields.title.clone(),
+                        kind: tcu.fields.kind.map(|k| Self::tool_kind_str(&k)),
                         status: tcu.fields.status.map(|s| Self::tool_call_status_str(&s)),
+                        locations: tcu
+                            .fields
+                            .locations
+                            .as_ref()
+                            .and_then(|l| Self::extract_locations(l)),
                         content: tcu
                             .fields
                             .content

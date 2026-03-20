@@ -1,11 +1,31 @@
 /** Shared display types used by all components.
  *  Both mock and real agent stores produce data in these shapes. */
 
+/** The kind of tool action, matching ACP ToolKind. */
+export type ToolKind =
+  | "read"
+  | "edit"
+  | "delete"
+  | "move"
+  | "search"
+  | "execute"
+  | "think"
+  | "fetch"
+  | "other";
+
+/** Structured content from a tool call. */
+export type ToolCallContentItem =
+  | { type: "text"; text: string }
+  | { type: "diff"; path: string; oldText: string | null; newText: string }
+  | { type: "terminal"; terminalId: string; output?: string; exitCode?: number | null };
+
 export interface DisplayToolCall {
   id: string;
   name: string;
+  kind: ToolKind;
   status: "pending" | "in_progress" | "completed" | "failed";
-  content?: string;
+  locations: string[];
+  content: ToolCallContentItem[];
 }
 
 export interface DisplayMessage {

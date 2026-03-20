@@ -50,46 +50,68 @@ describe("ChatArea", () => {
     expect(screen.getByText("Fix the bug")).toBeTruthy();
   });
 
-  it("renders tool call groups with count", () => {
+  it("renders tool call groups with verb and target", () => {
     const agent = makeAgent([
       msg("assistant", "Let me check", "1:00 PM"),
       msg("tool-group", "", "1:00 PM", {
         toolCalls: [
-          { id: "tc1", name: "Read file", status: "completed" },
-          { id: "tc2", name: "Write file", status: "completed" },
+          {
+            id: "tc1",
+            name: "Read file",
+            kind: "read",
+            status: "completed",
+            locations: ["src/foo.ts"],
+            content: [],
+          },
         ],
       }),
     ]);
     render(ChatArea, { props: { agent } });
-    expect(screen.getByText("2 tool calls")).toBeTruthy();
+    expect(screen.getByText("Read")).toBeTruthy();
+    expect(screen.getByText("src/foo.ts")).toBeTruthy();
   });
 
-  it("shows singular 'tool call' for single tool call", () => {
+  it("renders multiple tool calls open by default", () => {
     const agent = makeAgent([
       msg("assistant", "Checking...", "1:00 PM"),
       msg("tool-group", "", "1:00 PM", {
-        toolCalls: [{ id: "tc1", name: "Read file", status: "completed" }],
+        toolCalls: [
+          {
+            id: "tc1",
+            name: "Read file",
+            kind: "read",
+            status: "completed",
+            locations: ["src/foo.ts"],
+            content: [],
+          },
+          {
+            id: "tc2",
+            name: "Write file",
+            kind: "edit",
+            status: "completed",
+            locations: ["src/bar.ts"],
+            content: [],
+          },
+        ],
       }),
     ]);
     render(ChatArea, { props: { agent } });
-    expect(screen.getByText("1 tool call")).toBeTruthy();
+    expect(screen.getByText("src/foo.ts")).toBeTruthy();
+    expect(screen.getByText("src/bar.ts")).toBeTruthy();
   });
 
-  it("expands tool calls on click", async () => {
-    const agent = makeAgent([
-      msg("assistant", "Checking...", "1:00 PM"),
-      msg("tool-group", "", "1:00 PM", {
-        toolCalls: [{ id: "tc1", name: "Read file", status: "completed" }],
-      }),
-    ]);
+  it("renders thinking block collapsed by default", () => {
+    const agent = makeAgent([msg("thinking", "Let me analyze this...", "1:00 PM")]);
     render(ChatArea, { props: { agent } });
+    expect(screen.getByText("Thinking")).toBeTruthy();
+    expect(screen.queryByText("Let me analyze this...")).toBeNull();
+  });
 
-    // Tool name not visible initially
-    expect(screen.queryByText("Read file")).toBeNull();
-
-    // Click to expand
-    await fireEvent.click(screen.getByText("1 tool call"));
-    expect(screen.getByText("Read file")).toBeTruthy();
+  it("expands thinking block on click", async () => {
+    const agent = makeAgent([msg("thinking", "Let me analyze this...", "1:00 PM")]);
+    render(ChatArea, { props: { agent } });
+    await fireEvent.click(screen.getByText("Thinking"));
+    expect(screen.getByText("Let me analyze this...")).toBeTruthy();
   });
 
   it("shows working indicator when agent is working", () => {

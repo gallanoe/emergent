@@ -1,6 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { DisplayAgent, DisplayMessage, DisplayToolCall } from "./types";
+import type {
+  DisplayAgent,
+  DisplayMessage,
+  DisplayToolCall,
+  ToolCallContentItem,
+  ToolKind,
+} from "./types";
 
 // ── Internal state per agent ────────────────────────────────────
 
@@ -22,12 +28,25 @@ interface MessageChunkPayload {
   kind: "message" | "thinking";
 }
 
+interface ToolCallContentPayload {
+  type: string;
+  text?: string;
+  path?: string;
+  old_text?: string | null;
+  new_text?: string;
+  terminal_id?: string;
+  output?: string;
+  exit_code?: number | null;
+}
+
 interface ToolCallUpdatePayload {
   agent_id: string;
   tool_call_id: string;
   title: string;
+  kind?: string;
   status: string;
-  content?: string;
+  locations?: string[];
+  content?: ToolCallContentPayload[];
 }
 
 interface PromptCompletePayload {
@@ -133,16 +152,41 @@ function createAgentStore() {
     }
   }
 
+  function mapToolCallContent(items: ToolCallContentPayload[]): ToolCallContentItem[] {
+    return items.map((item): ToolCallContentItem => {
+      if (item.type === "diff") {
+        return {
+          type: "diff",
+          path: item.path ?? "",
+          oldText: item.old_text ?? null,
+          newText: item.new_text ?? "",
+        };
+      }
+      if (item.type === "terminal") {
+        const terminal: ToolCallContentItem = {
+          type: "terminal",
+          terminalId: item.terminal_id ?? "",
+        };
+        if (item.output != null) terminal.output = item.output;
+        if (item.exit_code != null) terminal.exitCode = item.exit_code;
+        return terminal;
+      }
+      return { type: "text", text: item.text ?? "" };
+    });
+  }
+
   function handleToolCallUpdate(payload: ToolCallUpdatePayload) {
     const agent = agents[payload.agent_id];
     if (!agent) return;
 
-    // Only store title and status — don't store full tool output (can be huge)
     const existing = agent.activeToolCalls[payload.tool_call_id];
     const tc: DisplayToolCall = {
       id: payload.tool_call_id,
       name: payload.title ?? existing?.name ?? "Tool call",
+      kind: (payload.kind ?? existing?.kind ?? "other") as ToolKind,
       status: (payload.status ?? existing?.status ?? "pending") as DisplayToolCall["status"],
+      locations: payload.locations ?? existing?.locations ?? [],
+      content: payload.content ? mapToolCallContent(payload.content) : (existing?.content ?? []),
     };
 
     agent.activeToolCalls[payload.tool_call_id] = tc;

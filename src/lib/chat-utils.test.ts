@@ -10,7 +10,16 @@ function msg(role: DisplayMessage["role"], timestamp: string, id?: string): Disp
     timestamp,
     ...(role === "tool-group"
       ? {
-          toolCalls: [{ id: "tc1", name: "Read file", status: "completed" as const }],
+          toolCalls: [
+            {
+              id: "tc1",
+              name: "Read file",
+              kind: "read" as const,
+              status: "completed" as const,
+              locations: [],
+              content: [],
+            },
+          ],
         }
       : {}),
   };
