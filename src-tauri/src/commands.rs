@@ -10,6 +10,11 @@ pub async fn detect_agents() -> Result<Vec<detect::AgentInfo>, String> {
 }
 
 #[tauri::command]
+pub async fn known_agents() -> Result<Vec<detect::KnownAgent>, String> {
+    Ok(detect::known_agents())
+}
+
+#[tauri::command]
 pub async fn spawn_agent(
     app: AppHandle,
     manager: State<'_, Arc<AgentManager>>,
