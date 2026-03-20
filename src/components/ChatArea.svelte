@@ -29,7 +29,11 @@
   function spacingClass(index: number): string {
     if (index === 0) return "";
     if (!agent) return "mt-[6px]";
-    return isNewTurn(agent.messages, index) ? "mt-[14px]" : "mt-[6px]";
+    // 14px gap only before user messages that start a new turn
+    const msg = agent.messages[index]!;
+    if (msg.role === "user" && isNewTurn(agent.messages, index))
+      return "mt-[14px]";
+    return "mt-[6px]";
   }
 
   const toolStatusColor: Record<DisplayToolCall["status"], string> = {
