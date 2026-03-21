@@ -8,11 +8,12 @@
   }
 
   let { toolCall }: Props = $props();
-  let expanded = $state(false);
+  let userToggled = $state<boolean | null>(null);
+  let expanded = $derived(userToggled ?? toolCall.kind === "edit");
 
   function toggle() {
     if (!hasPreview) return;
-    expanded = !expanded;
+    userToggled = !expanded;
   }
 
   function onKeydown(e: KeyboardEvent) {
