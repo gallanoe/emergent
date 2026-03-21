@@ -150,6 +150,8 @@ function createAppState() {
     toggleSwarmCollapsed,
     sendPrompt: agentStore.sendPrompt,
     cancelPrompt: agentStore.cancelPrompt,
+    editQueue: agentStore.editQueue,
+    registerQueueDumpHandler: agentStore.registerQueueDumpHandler,
   };
 }
 

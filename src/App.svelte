@@ -6,9 +6,34 @@
   import ChatInput from "./components/ChatInput.svelte";
   import { onMount } from "svelte";
 
+  let externalContent = $state<{ text: string; seq: number } | null>(null);
+  let seq = 0;
+
+  function pushToInput(text: string) {
+    externalContent = { text, seq: ++seq };
+  }
+
   onMount(() => {
     appState.initialize();
+
+    // Register handler for queue dump on error.
+    // Only dump if the errored agent is currently selected — otherwise
+    // the content would be sent to the wrong agent.
+    appState.registerQueueDumpHandler((agentId: string, content: string) => {
+      if (agentId === appState.selectedAgentId) {
+        pushToInput(content);
+      }
+    });
   });
+
+  function handleEditQueue() {
+    const agent = appState.selectedAgent;
+    if (!agent) return;
+    const content = appState.editQueue(agent.id);
+    if (content) {
+      pushToInput(content);
+    }
+  }
 </script>
 
 <!-- Drag region overlay for window dragging -->
@@ -32,13 +57,18 @@
   />
   <main class="flex flex-col min-h-0">
     <TopBar agent={appState.selectedAgent} />
-    <ChatArea agent={appState.selectedAgent} />
+    <ChatArea agent={appState.selectedAgent} onEditQueue={handleEditQueue} />
     <ChatInput
       agent={appState.selectedAgent}
       demoMode={appState.demoMode}
+      {externalContent}
       onSend={(text) => {
         const agent = appState.selectedAgent;
         if (agent) appState.sendPrompt(agent.id, text);
+      }}
+      onInterrupt={() => {
+        const agent = appState.selectedAgent;
+        if (agent) appState.cancelPrompt(agent.id);
       }}
     />
   </main>

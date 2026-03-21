@@ -1,5 +1,6 @@
 <!-- src/components/ChatArea.svelte -->
 <script lang="ts">
+  import { Pencil } from "@lucide/svelte";
   import StreamingText from "./StreamingText.svelte";
   import ToolCallGroup from "./ToolCallGroup.svelte";
   import ThinkingBlock from "./ThinkingBlock.svelte";
@@ -9,9 +10,10 @@
 
   interface Props {
     agent: DisplayAgent | undefined;
+    onEditQueue?: () => void;
   }
 
-  let { agent }: Props = $props();
+  let { agent, onEditQueue }: Props = $props();
 
   // ── Auto-scroll ────────────────────────────────────────────────
   let scrollContainer: HTMLDivElement | undefined = $state();
@@ -50,6 +52,8 @@
     const lastRole = len > 0 ? messages![len - 1]!.role : "";
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const _status = agent?.status;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const _queued = agent?.queuedMessage;
 
     if (lastRole === "user") userScrolledAway = false;
 
@@ -113,6 +117,30 @@
           <span class="w-1.5 h-1.5 rounded-full bg-success animate-pulse"
           ></span>
           <span class="tracking-widest">· · ·</span>
+        </div>
+      {/if}
+
+      <!-- Queued message bubble -->
+      {#if agent.queuedMessage}
+        <div class="mt-[14px] relative group">
+          <div class="bg-accent-soft rounded-lg px-3 py-2 opacity-55">
+            <div
+              class="text-[12px] leading-[1.55] text-fg-default whitespace-pre-wrap"
+            >
+              {agent.queuedMessage}
+            </div>
+          </div>
+          <button
+            class="interactive absolute top-2 right-2 flex items-center gap-1 text-[10px] text-fg-disabled opacity-0 group-hover:opacity-100 transition-opacity duration-150 rounded px-1"
+            onclick={() => onEditQueue?.()}
+          >
+            <Pencil size={10} />
+            Edit
+          </button>
+          <div class="flex items-center gap-1 mt-1">
+            <span class="w-1 h-1 rounded-full bg-warning"></span>
+            <span class="text-[10px] text-warning font-mono">Queued</span>
+          </div>
         </div>
       {/if}
     </div>

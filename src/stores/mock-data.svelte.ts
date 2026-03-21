@@ -109,6 +109,7 @@ const swarms: DisplaySwarm[] = [
             timestamp: "1:11 PM",
           },
         ],
+        queuedMessage: null,
       },
       {
         id: "agent-2",
@@ -163,6 +164,7 @@ const swarms: DisplaySwarm[] = [
             timestamp: "1:03 PM",
           },
         ],
+        queuedMessage: null,
       },
       {
         id: "agent-3",
@@ -203,6 +205,7 @@ const swarms: DisplaySwarm[] = [
             timestamp: "1:06 PM",
           },
         ],
+        queuedMessage: null,
       },
     ],
   },
@@ -220,6 +223,7 @@ const swarms: DisplaySwarm[] = [
         preview: "I want to moderniz...",
         updatedAt: "1m ago",
         messages: [],
+        queuedMessage: null,
       },
       {
         id: "agent-5",
@@ -230,6 +234,7 @@ const swarms: DisplaySwarm[] = [
         preview: "How hard would ...",
         updatedAt: "15m ago",
         messages: [],
+        queuedMessage: null,
       },
     ],
   },

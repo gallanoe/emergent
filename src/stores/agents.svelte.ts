@@ -18,6 +18,7 @@ interface AgentConnection {
   messages: DisplayMessage[];
   activeToolCalls: Record<string, DisplayToolCall>;
   stopReason: string | null;
+  queuedContent: string;
 }
 
 // ── Event payloads from Rust ────────────────────────────────────
@@ -84,6 +85,13 @@ function roleForKind(kind: "message" | "thinking"): "assistant" | "thinking" {
 function createAgentStore() {
   // Plain object instead of Map — Svelte 5 reliably deep-proxies plain objects
   let agents: Record<string, AgentConnection> = $state({});
+
+  // Callback for dumping queued content to the input on error
+  let onQueueDump: ((agentId: string, content: string) => void) | null = null;
+
+  function registerQueueDumpHandler(handler: (agentId: string, content: string) => void) {
+    onQueueDump = handler;
+  }
 
   function getAgent(agentId: string): AgentConnection | undefined {
     return agents[agentId];
@@ -225,6 +233,19 @@ function createAgentStore() {
     if (!agent) return;
 
     agent.stopReason = payload.stop_reason;
+
+    // Flush queue: if content is queued, submit it as the next prompt.
+    // Set status to "idle" first so sendPrompt takes the normal send path
+    // (it checks status !== "working"). This is synchronous — no visible
+    // flicker since Svelte batches reactive updates within the same microtask.
+    if (agent.queuedContent) {
+      const queued = agent.queuedContent;
+      agent.queuedContent = "";
+      agent.status = "idle";
+      sendPrompt(agent.id, queued);
+      return;
+    }
+
     if (agent.status === "working") {
       agent.status = "idle";
     }
@@ -233,6 +254,13 @@ function createAgentStore() {
   function handleError(payload: AgentErrorPayload) {
     const agent = agents[payload.agent_id];
     if (!agent) return;
+
+    if (agent.queuedContent && onQueueDump) {
+      const queued = agent.queuedContent;
+      agent.queuedContent = "";
+      onQueueDump(payload.agent_id, queued);
+    }
+
     agent.status = "error";
   }
 
@@ -280,6 +308,7 @@ function createAgentStore() {
       messages: [],
       activeToolCalls: {},
       stopReason: null,
+      queuedContent: "",
     };
 
     return agentId;
@@ -288,6 +317,12 @@ function createAgentStore() {
   async function sendPrompt(agentId: string, text: string): Promise<void> {
     const agent = agents[agentId];
     if (!agent) throw new Error(`Agent ${agentId} not found`);
+
+    // Queue path: agent is busy, accumulate content
+    if (agent.status === "working") {
+      agent.queuedContent = agent.queuedContent ? agent.queuedContent + "\n\n" + text : text;
+      return;
+    }
 
     agent.messages.push({
       id: crypto.randomUUID(),
@@ -309,6 +344,14 @@ function createAgentStore() {
 
   async function cancelPrompt(agentId: string): Promise<void> {
     await invoke("cancel_prompt", { agentId });
+  }
+
+  function editQueue(agentId: string): string {
+    const agent = agents[agentId];
+    if (!agent) return "";
+    const content = agent.queuedContent;
+    agent.queuedContent = "";
+    return content;
   }
 
   async function killAgent(agentId: string): Promise<void> {
@@ -354,6 +397,7 @@ function createAgentStore() {
       preview: lastMsg?.content ? lastMsg.content.slice(0, 30) + "..." : "",
       updatedAt: "just now",
       messages: conn.messages,
+      queuedMessage: conn.queuedContent || null,
     };
   }
 
@@ -369,6 +413,8 @@ function createAgentStore() {
     sendPrompt,
     cancelPrompt,
     killAgent,
+    editQueue,
+    registerQueueDumpHandler,
   };
 }
 

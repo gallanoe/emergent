@@ -13,6 +13,7 @@ function makeAgent(messages: DisplayMessage[], overrides?: Partial<DisplayAgent>
     preview: "test...",
     updatedAt: "1m ago",
     messages,
+    queuedMessage: null,
     ...overrides,
   };
 }
@@ -120,6 +121,53 @@ describe("ChatArea", () => {
     });
     render(ChatArea, { props: { agent } });
     expect(screen.getByText("· · ·")).toBeTruthy();
+  });
+
+  it("renders queued message bubble when queuedMessage exists", () => {
+    const agent = makeAgent([msg("user", "Do task A", "1:00 PM")], {
+      status: "working",
+      queuedMessage: "Do task B",
+    });
+    render(ChatArea, { props: { agent } });
+    expect(screen.getByText("Do task B")).toBeTruthy();
+    expect(screen.getByText("Queued")).toBeTruthy();
+  });
+
+  it("does not render queued bubble when queuedMessage is null", () => {
+    const agent = makeAgent([msg("user", "Do task A", "1:00 PM")], {
+      status: "working",
+      queuedMessage: null,
+    });
+    render(ChatArea, { props: { agent } });
+    expect(screen.queryByText("Queued")).toBeNull();
+  });
+
+  it("renders multiline queued message with whitespace preserved", () => {
+    const agent = makeAgent([], {
+      status: "working",
+      queuedMessage: "Do task B\nDo task C",
+    });
+    render(ChatArea, { props: { agent } });
+    expect(screen.getByText(/Do task B/)).toBeTruthy();
+    expect(screen.getByText(/Do task C/)).toBeTruthy();
+  });
+
+  it("calls onEditQueue when edit button is clicked", async () => {
+    let editCalled = false;
+    const agent = makeAgent([], {
+      status: "working",
+      queuedMessage: "Do task B",
+    });
+    render(ChatArea, {
+      props: {
+        agent,
+        onEditQueue: () => {
+          editCalled = true;
+        },
+      },
+    });
+    await fireEvent.click(screen.getByText("Edit"));
+    expect(editCalled).toBe(true);
   });
 
   it("hides working indicator when agent is idle", () => {

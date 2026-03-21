@@ -47,6 +47,7 @@ export interface DisplayAgent {
   preview: string;
   updatedAt: string;
   messages: DisplayMessage[];
+  queuedMessage: string | null;
 }
 
 export interface DisplaySwarm {
