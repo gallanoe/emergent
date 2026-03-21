@@ -122,41 +122,45 @@
   </div>
 
   {#if expanded}
-    {#each toolCall.content as item}
-      {#if item.type === "text"}
-        <div
-          class="mx-2.5 mb-1.5 ml-[30px] rounded bg-[rgba(0,0,0,0.03)] px-2 py-1.5 font-[family-name:var(--font-mono)] text-[10.5px] leading-normal text-fg-muted whitespace-pre-wrap"
-        >
-          {stripCodeFence(item.text)}
-        </div>
-      {:else if item.type === "diff"}
-        <div
-          class="mx-2.5 mb-1.5 ml-[30px] rounded bg-[rgba(0,0,0,0.03)] px-2 py-1.5 font-[family-name:var(--font-mono)] text-[10.5px] leading-normal"
-        >
-          {#if item.oldText != null}
-            {#each item.oldText.split("\n") as line}
-              <div class="rounded-sm bg-removed-bg text-removed-fg px-1 -mx-1">
-                {`- ${line}`}
+    <div class="flex flex-col gap-1.5 pb-1.5">
+      {#each toolCall.content as item}
+        {#if item.type === "text"}
+          <div
+            class="mx-2.5 ml-[30px] rounded bg-[rgba(0,0,0,0.03)] px-2 py-1.5 font-[family-name:var(--font-mono)] text-[10.5px] leading-normal text-fg-muted whitespace-pre-wrap"
+          >
+            {stripCodeFence(item.text)}
+          </div>
+        {:else if item.type === "diff"}
+          <div
+            class="mx-2.5 ml-[30px] rounded bg-[rgba(0,0,0,0.03)] px-2 py-1.5 font-[family-name:var(--font-mono)] text-[10.5px] leading-normal"
+          >
+            {#if item.oldText != null}
+              {#each item.oldText.split("\n") as line}
+                <div
+                  class="rounded-sm bg-removed-bg text-removed-fg px-1 -mx-1"
+                >
+                  {`- ${line}`}
+                </div>
+              {/each}
+            {/if}
+            {#each item.newText.split("\n") as line}
+              <div class="rounded-sm bg-added-bg text-added-fg px-1 -mx-1">
+                {`+ ${line}`}
               </div>
             {/each}
-          {/if}
-          {#each item.newText.split("\n") as line}
-            <div class="rounded-sm bg-added-bg text-added-fg px-1 -mx-1">
-              {`+ ${line}`}
-            </div>
-          {/each}
-        </div>
-      {:else if item.type === "terminal" && item.output}
-        {@const isFailed = toolCall.status === "failed"}
-        <div
-          class="mx-2.5 mb-1.5 ml-[30px] rounded px-2 py-1.5 font-[family-name:var(--font-mono)] text-[10.5px] leading-normal whitespace-pre-wrap
-          {isFailed
-            ? 'bg-[rgba(200,60,60,0.04)] text-removed-fg'
-            : 'bg-[rgba(0,0,0,0.03)] text-fg-muted'}"
-        >
-          {item.output}
-        </div>
-      {/if}
-    {/each}
+          </div>
+        {:else if item.type === "terminal" && item.output}
+          {@const isFailed = toolCall.status === "failed"}
+          <div
+            class="mx-2.5 ml-[30px] rounded px-2 py-1.5 font-[family-name:var(--font-mono)] text-[10.5px] leading-normal whitespace-pre-wrap
+            {isFailed
+              ? 'bg-[rgba(200,60,60,0.04)] text-removed-fg'
+              : 'bg-[rgba(0,0,0,0.03)] text-fg-muted'}"
+          >
+            {item.output}
+          </div>
+        {/if}
+      {/each}
+    </div>
   {/if}
 </div>
