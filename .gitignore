@@ -8,6 +8,7 @@ src-tauri/target/
 *.tsbuildinfo
 .DS_Store
 *.log
+docs/
 .superpowers/
 .worktrees/
 .screenshots/
