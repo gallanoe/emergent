@@ -54,6 +54,8 @@
     const _status = agent?.status;
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const _queued = agent?.queuedMessage;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const _activeTools = agent?.activeToolCalls.length;
 
     if (lastRole === "user") userScrolledAway = false;
 
@@ -108,6 +110,13 @@
           </div>
         {/if}
       {/each}
+
+      <!-- Active (in-progress) tool calls -->
+      {#if agent.activeToolCalls.length > 0}
+        <div class="mt-[6px]">
+          <ToolCallGroup toolCalls={agent.activeToolCalls} />
+        </div>
+      {/if}
 
       <!-- Working indicator -->
       {#if agent.status === "working"}

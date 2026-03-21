@@ -13,6 +13,7 @@ function makeAgent(messages: DisplayMessage[], overrides?: Partial<DisplayAgent>
     preview: "test...",
     updatedAt: "1m ago",
     messages,
+    activeToolCalls: [],
     queuedMessage: null,
     ...overrides,
   };
@@ -136,6 +137,7 @@ describe("ChatArea", () => {
   it("does not render queued bubble when queuedMessage is null", () => {
     const agent = makeAgent([msg("user", "Do task A", "1:00 PM")], {
       status: "working",
+      activeToolCalls: [],
       queuedMessage: null,
     });
     render(ChatArea, { props: { agent } });

@@ -397,6 +397,7 @@ function createAgentStore() {
       preview: lastMsg?.content ? lastMsg.content.slice(0, 30) + "..." : "",
       updatedAt: "just now",
       messages: conn.messages,
+      activeToolCalls: Object.values(conn.activeToolCalls),
       queuedMessage: conn.queuedContent || null,
     };
   }

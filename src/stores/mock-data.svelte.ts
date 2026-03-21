@@ -109,6 +109,7 @@ const swarms: DisplaySwarm[] = [
             timestamp: "1:11 PM",
           },
         ],
+        activeToolCalls: [],
         queuedMessage: null,
       },
       {
@@ -164,6 +165,7 @@ const swarms: DisplaySwarm[] = [
             timestamp: "1:03 PM",
           },
         ],
+        activeToolCalls: [],
         queuedMessage: null,
       },
       {
@@ -205,6 +207,7 @@ const swarms: DisplaySwarm[] = [
             timestamp: "1:06 PM",
           },
         ],
+        activeToolCalls: [],
         queuedMessage: null,
       },
     ],
@@ -223,6 +226,7 @@ const swarms: DisplaySwarm[] = [
         preview: "I want to moderniz...",
         updatedAt: "1m ago",
         messages: [],
+        activeToolCalls: [],
         queuedMessage: null,
       },
       {
@@ -234,6 +238,7 @@ const swarms: DisplaySwarm[] = [
         preview: "How hard would ...",
         updatedAt: "15m ago",
         messages: [],
+        activeToolCalls: [],
         queuedMessage: null,
       },
     ],

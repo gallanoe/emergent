@@ -18,6 +18,7 @@ function makeSwarm(overrides?: Partial<DisplaySwarm>): DisplaySwarm {
         preview: "Fixing the nav...",
         updatedAt: "2m ago",
         messages: [],
+        activeToolCalls: [],
         queuedMessage: null,
       },
       {
@@ -29,6 +30,7 @@ function makeSwarm(overrides?: Partial<DisplaySwarm>): DisplaySwarm {
         preview: "Tests updated...",
         updatedAt: "5m ago",
         messages: [],
+        activeToolCalls: [],
         queuedMessage: null,
       },
     ],

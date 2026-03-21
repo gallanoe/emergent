@@ -47,6 +47,7 @@ export interface DisplayAgent {
   preview: string;
   updatedAt: string;
   messages: DisplayMessage[];
+  activeToolCalls: DisplayToolCall[];
   queuedMessage: string | null;
 }
 
