@@ -36,19 +36,19 @@ function msg(
 
 describe("ChatArea", () => {
   it("shows placeholder when no agent is selected", () => {
-    render(ChatArea, { props: { agent: undefined } });
+    render(ChatArea, { props: { agent: undefined, daemonStatus: "connected" as const } });
     expect(screen.getByText("Select an agent to view its conversation")).toBeTruthy();
   });
 
   it("renders assistant messages", () => {
     const agent = makeAgent([msg("assistant", "Hello world", "1:00 PM")]);
-    render(ChatArea, { props: { agent } });
+    render(ChatArea, { props: { agent, daemonStatus: "connected" as const } });
     expect(screen.getByText("Hello world")).toBeTruthy();
   });
 
   it("renders user messages", () => {
     const agent = makeAgent([msg("user", "Fix the bug", "1:00 PM")]);
-    render(ChatArea, { props: { agent } });
+    render(ChatArea, { props: { agent, daemonStatus: "connected" as const } });
     expect(screen.getByText("Fix the bug")).toBeTruthy();
   });
 
@@ -68,7 +68,7 @@ describe("ChatArea", () => {
         ],
       }),
     ]);
-    render(ChatArea, { props: { agent } });
+    render(ChatArea, { props: { agent, daemonStatus: "connected" as const } });
     expect(screen.getByText("Read")).toBeTruthy();
     expect(screen.getByText("src/foo.ts")).toBeTruthy();
   });
@@ -97,21 +97,21 @@ describe("ChatArea", () => {
         ],
       }),
     ]);
-    render(ChatArea, { props: { agent } });
+    render(ChatArea, { props: { agent, daemonStatus: "connected" as const } });
     expect(screen.getByText("src/foo.ts")).toBeTruthy();
     expect(screen.getByText("src/bar.ts")).toBeTruthy();
   });
 
   it("renders thinking block collapsed by default", () => {
     const agent = makeAgent([msg("thinking", "Let me analyze this...", "1:00 PM")]);
-    render(ChatArea, { props: { agent } });
+    render(ChatArea, { props: { agent, daemonStatus: "connected" as const } });
     expect(screen.getByText("Thinking")).toBeTruthy();
     expect(screen.queryByText("Let me analyze this...")).toBeNull();
   });
 
   it("expands thinking block on click", async () => {
     const agent = makeAgent([msg("thinking", "Let me analyze this...", "1:00 PM")]);
-    render(ChatArea, { props: { agent } });
+    render(ChatArea, { props: { agent, daemonStatus: "connected" as const } });
     await fireEvent.click(screen.getByText("Thinking"));
     expect(screen.getByText("Let me analyze this...")).toBeTruthy();
   });
@@ -120,7 +120,7 @@ describe("ChatArea", () => {
     const agent = makeAgent([msg("assistant", "Working...", "1:00 PM")], {
       status: "working",
     });
-    render(ChatArea, { props: { agent } });
+    render(ChatArea, { props: { agent, daemonStatus: "connected" as const } });
     expect(screen.getByText("· · ·")).toBeTruthy();
   });
 
@@ -129,7 +129,7 @@ describe("ChatArea", () => {
       status: "working",
       queuedMessage: "Do task B",
     });
-    render(ChatArea, { props: { agent } });
+    render(ChatArea, { props: { agent, daemonStatus: "connected" as const } });
     expect(screen.getByText("Do task B")).toBeTruthy();
     expect(screen.getByText("Queued")).toBeTruthy();
   });
@@ -140,7 +140,7 @@ describe("ChatArea", () => {
       activeToolCalls: [],
       queuedMessage: null,
     });
-    render(ChatArea, { props: { agent } });
+    render(ChatArea, { props: { agent, daemonStatus: "connected" as const } });
     expect(screen.queryByText("Queued")).toBeNull();
   });
 
@@ -149,7 +149,7 @@ describe("ChatArea", () => {
       status: "working",
       queuedMessage: "Do task B\nDo task C",
     });
-    render(ChatArea, { props: { agent } });
+    render(ChatArea, { props: { agent, daemonStatus: "connected" as const } });
     expect(screen.getByText(/Do task B/)).toBeTruthy();
     expect(screen.getByText(/Do task C/)).toBeTruthy();
   });
@@ -163,6 +163,7 @@ describe("ChatArea", () => {
     render(ChatArea, {
       props: {
         agent,
+        daemonStatus: "connected" as const,
         onEditQueue: () => {
           editCalled = true;
         },
@@ -176,7 +177,7 @@ describe("ChatArea", () => {
     const agent = makeAgent([msg("assistant", "Done", "1:00 PM")], {
       status: "idle",
     });
-    render(ChatArea, { props: { agent } });
+    render(ChatArea, { props: { agent, daemonStatus: "connected" as const } });
     expect(screen.queryByText("· · ·")).toBeNull();
   });
 });

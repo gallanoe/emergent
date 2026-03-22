@@ -47,16 +47,13 @@ jobs:
         run: bun run test
 
       - name: Rust check
-        working-directory: src-tauri
-        run: cargo check
+        run: cargo check --workspace
 
       - name: Rust lint
-        working-directory: src-tauri
-        run: cargo clippy -- -D warnings
+        run: bun run lint:rust
 
       - name: Rust test
-        working-directory: src-tauri
-        run: cargo test
+        run: bun run test:rust
 
   build:
     needs: preflight

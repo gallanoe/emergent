@@ -402,6 +402,50 @@ function createAgentStore() {
     };
   }
 
+  function registerExistingAgent(agentId: string, swarmId: string, cli: string) {
+    agents[agentId] = {
+      id: agentId,
+      swarmId,
+      cli,
+      status: "idle",
+      messages: [],
+      activeToolCalls: {},
+      stopReason: null,
+      queuedContent: "",
+    };
+  }
+
+  type DaemonNotification =
+    | ({ type: "agent:message-chunk" } & MessageChunkPayload)
+    | ({ type: "agent:tool-call-update" } & ToolCallUpdatePayload)
+    | ({ type: "agent:prompt-complete" } & PromptCompletePayload)
+    | ({ type: "agent:status-change" } & StatusChangePayload)
+    | ({ type: "agent:error" } & AgentErrorPayload);
+
+  function replayNotifications(notifications: DaemonNotification[]) {
+    for (const n of notifications) {
+      switch (n.type) {
+        case "agent:message-chunk":
+          handleMessageChunk(n);
+          break;
+        case "agent:tool-call-update":
+          handleToolCallUpdate(n);
+          break;
+        case "agent:prompt-complete":
+          handlePromptComplete(n);
+          break;
+        case "agent:status-change":
+          handleStatusChange(n);
+          break;
+        case "agent:error":
+          handleError(n);
+          break;
+      }
+    }
+    // Force flush any buffered chunks after replay
+    flushChunkBuffers();
+  }
+
   return {
     get agents() {
       return agents;
@@ -416,6 +460,8 @@ function createAgentStore() {
     killAgent,
     editQueue,
     registerQueueDumpHandler,
+    registerExistingAgent,
+    replayNotifications,
   };
 }
 

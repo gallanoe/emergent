@@ -3,6 +3,7 @@ node_modules/
 .claude/*
 !.claude/skills/
 dist/
+target/
 src-tauri/target/
 .env*
 *.tsbuildinfo

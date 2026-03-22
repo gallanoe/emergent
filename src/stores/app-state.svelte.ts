@@ -20,27 +20,76 @@ interface Swarm {
   agentIds: string[];
 }
 
+type DaemonStatus = "disconnected" | "connecting" | "connected" | "reconnecting";
+
 function createAppState() {
-  let demoMode = $state(import.meta.env.VITE_DEMO_MODE === "true");
+  let demoMode = $state(
+    import.meta.env.VITE_DEMO_MODE === "true" ||
+      (globalThis as Record<string, unknown>).__EMERGENT_DEMO_MODE__ === true,
+  );
   let swarms = $state<Swarm[]>([]);
   let selectedAgentId = $state<string | null>(null);
   let availableAgents = $state<{ name: string; binary: string; path: string }[]>([]);
   let knownAgents = $state<KnownAgent[]>([]);
+  let daemonStatus = $state<DaemonStatus>(demoMode ? "connected" : "connecting");
 
   // ── Initialization ────────────────────────────────────────────
+
+  interface AgentSummary {
+    id: string;
+    cli: string;
+    status: string;
+    working_directory: string;
+  }
 
   async function initialize() {
     if (demoMode) return;
 
-    const detected = await agentStore.detectAgents();
-    availableAgents = detected;
+    try {
+      daemonStatus = "connecting";
+      const status = await invoke<string>("get_daemon_status");
+      daemonStatus = status as DaemonStatus;
 
-    const known = await invoke<KnownAgent[]>("known_agents");
-    knownAgents = known;
+      if (daemonStatus !== "connected") return;
 
-    if (detected.length > 0) {
-      demoMode = false;
+      const detected = await agentStore.detectAgents();
+      availableAgents = detected;
+
+      const known = await invoke<KnownAgent[]>("known_agents");
+      knownAgents = known;
+
       await agentStore.setupListeners();
+
+      // Reconnect to any existing agents from the daemon
+      await reconnectToExistingAgents();
+    } catch {
+      daemonStatus = "disconnected";
+    }
+  }
+
+  async function reconnectToExistingAgents() {
+    const agents = await invoke<AgentSummary[]>("list_agents");
+    for (const agent of agents) {
+      // Find or create swarm by working_directory
+      let swarm = swarms.find((s) => s.workingDirectory === agent.working_directory);
+      if (!swarm) {
+        const name = agent.working_directory.split("/").pop() || agent.working_directory;
+        const id = createSwarm(name, agent.working_directory);
+        swarm = swarms.find((s) => s.id === id)!;
+      }
+
+      // Register agent in store without spawning (it already exists on daemon)
+      agentStore.registerExistingAgent(agent.id, swarm.id, agent.cli);
+      swarm.agentIds.push(agent.id);
+
+      // Replay history — notifications are typed via DaemonNotification union in agent store
+      const history = await invoke<Parameters<typeof agentStore.replayNotifications>[0]>(
+        "get_history",
+        { agentId: agent.id },
+      );
+      agentStore.replayNotifications(history);
+
+      if (!selectedAgentId) selectedAgentId = agent.id;
     }
   }
 
@@ -142,6 +191,9 @@ function createAppState() {
     },
     get knownAgents() {
       return knownAgents;
+    },
+    get daemonStatus() {
+      return daemonStatus;
     },
     initialize,
     createSwarm,

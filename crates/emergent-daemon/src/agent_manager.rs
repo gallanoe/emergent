@@ -4,94 +4,12 @@ use std::sync::Arc;
 
 use acp::Agent as _;
 use agent_client_protocol as acp;
-use serde::{Deserialize, Serialize};
-use tokio::sync::{mpsc, oneshot, Mutex, RwLock};
+use emergent_protocol::{
+    AgentErrorPayload, AgentStatus, AgentSummary, MessageChunkPayload, Notification,
+    PromptCompletePayload, StatusChangePayload, ToolCallContentPayload, ToolCallUpdatePayload,
+};
+use tokio::sync::{broadcast, mpsc, oneshot, Mutex, RwLock};
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
-
-// ---------------------------------------------------------------------------
-// Event payload structs (emitted to frontend via Tauri events)
-// ---------------------------------------------------------------------------
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct MessageChunkPayload {
-    pub agent_id: String,
-    pub content: String,
-    /// "message" or "thinking"
-    pub kind: String,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase")]
-pub enum ToolCallContentPayload {
-    Text {
-        text: String,
-    },
-    Diff {
-        path: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        old_text: Option<String>,
-        new_text: String,
-    },
-    Terminal {
-        terminal_id: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        output: Option<String>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        exit_code: Option<i32>,
-    },
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ToolCallUpdatePayload {
-    pub agent_id: String,
-    pub tool_call_id: String,
-    pub title: Option<String>,
-    pub kind: Option<String>,
-    pub status: Option<String>,
-    pub locations: Option<Vec<String>>,
-    pub content: Option<Vec<ToolCallContentPayload>>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct PromptCompletePayload {
-    pub agent_id: String,
-    pub stop_reason: String,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct AgentErrorPayload {
-    pub agent_id: String,
-    pub message: String,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct StatusChangePayload {
-    pub agent_id: String,
-    pub status: String,
-}
-
-// ---------------------------------------------------------------------------
-// AgentStatus
-// ---------------------------------------------------------------------------
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub enum AgentStatus {
-    Initializing,
-    Idle,
-    Working,
-    Error,
-}
-
-impl std::fmt::Display for AgentStatus {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            AgentStatus::Initializing => write!(f, "initializing"),
-            AgentStatus::Idle => write!(f, "idle"),
-            AgentStatus::Working => write!(f, "working"),
-            AgentStatus::Error => write!(f, "error"),
-        }
-    }
-}
 
 // ---------------------------------------------------------------------------
 // Commands sent to the dedicated ACP thread
@@ -114,6 +32,8 @@ enum AgentCommand {
 
 struct AgentHandle {
     status: AgentStatus,
+    cli: String,
+    working_directory: PathBuf,
     command_tx: mpsc::UnboundedSender<AgentCommand>,
     /// Handle to the OS-level child process (for kill).
     child: tokio::process::Child,
@@ -127,16 +47,19 @@ struct AgentHandle {
 
 struct EmergentClient {
     agent_id: String,
-    app: tauri::AppHandle,
+    event_tx: broadcast::Sender<Notification>,
 }
 
 impl EmergentClient {
-    fn new(agent_id: String, app: tauri::AppHandle) -> Self {
-        Self { agent_id, app }
+    fn new(agent_id: String, event_tx: broadcast::Sender<Notification>) -> Self {
+        Self { agent_id, event_tx }
+    }
+
+    fn emit(&self, notification: Notification) {
+        let _ = self.event_tx.send(notification);
     }
 
     fn tool_call_status_str(status: &acp::ToolCallStatus) -> String {
-        // Use serde serialization to get the snake_case string that matches the ACP spec
         serde_json::to_value(status)
             .ok()
             .and_then(|v| v.as_str().map(String::from))
@@ -225,66 +148,52 @@ impl acp::Client for EmergentClient {
     }
 
     async fn session_notification(&self, args: acp::SessionNotification) -> acp::Result<()> {
-        use tauri::Emitter;
-
         match args.update {
             acp::SessionUpdate::AgentMessageChunk(chunk) => {
                 let text = Self::extract_text(&chunk.content);
-                let _ = self.app.emit(
-                    "agent:message-chunk",
-                    MessageChunkPayload {
-                        agent_id: self.agent_id.clone(),
-                        content: text,
-                        kind: "message".into(),
-                    },
-                );
+                self.emit(Notification::MessageChunk(MessageChunkPayload {
+                    agent_id: self.agent_id.clone(),
+                    content: text,
+                    kind: "message".into(),
+                }));
             }
             acp::SessionUpdate::ToolCall(tc) => {
-                let _ = self.app.emit(
-                    "agent:tool-call-update",
-                    ToolCallUpdatePayload {
-                        agent_id: self.agent_id.clone(),
-                        tool_call_id: tc.tool_call_id.to_string(),
-                        title: Some(tc.title.clone()),
-                        kind: Some(Self::tool_kind_str(&tc.kind)),
-                        status: Some(Self::tool_call_status_str(&tc.status)),
-                        locations: Self::extract_locations(&tc.locations),
-                        content: Self::extract_tool_call_content(&tc.content),
-                    },
-                );
+                self.emit(Notification::ToolCallUpdate(ToolCallUpdatePayload {
+                    agent_id: self.agent_id.clone(),
+                    tool_call_id: tc.tool_call_id.to_string(),
+                    title: Some(tc.title.clone()),
+                    kind: Some(Self::tool_kind_str(&tc.kind)),
+                    status: Some(Self::tool_call_status_str(&tc.status)),
+                    locations: Self::extract_locations(&tc.locations),
+                    content: Self::extract_tool_call_content(&tc.content),
+                }));
             }
             acp::SessionUpdate::ToolCallUpdate(tcu) => {
-                let _ = self.app.emit(
-                    "agent:tool-call-update",
-                    ToolCallUpdatePayload {
-                        agent_id: self.agent_id.clone(),
-                        tool_call_id: tcu.tool_call_id.to_string(),
-                        title: tcu.fields.title.clone(),
-                        kind: tcu.fields.kind.map(|k| Self::tool_kind_str(&k)),
-                        status: tcu.fields.status.map(|s| Self::tool_call_status_str(&s)),
-                        locations: tcu
-                            .fields
-                            .locations
-                            .as_ref()
-                            .and_then(|l| Self::extract_locations(l)),
-                        content: tcu
-                            .fields
-                            .content
-                            .as_ref()
-                            .and_then(|c| Self::extract_tool_call_content(c)),
-                    },
-                );
+                self.emit(Notification::ToolCallUpdate(ToolCallUpdatePayload {
+                    agent_id: self.agent_id.clone(),
+                    tool_call_id: tcu.tool_call_id.to_string(),
+                    title: tcu.fields.title.clone(),
+                    kind: tcu.fields.kind.map(|k| Self::tool_kind_str(&k)),
+                    status: tcu.fields.status.map(|s| Self::tool_call_status_str(&s)),
+                    locations: tcu
+                        .fields
+                        .locations
+                        .as_ref()
+                        .and_then(|l| Self::extract_locations(l)),
+                    content: tcu
+                        .fields
+                        .content
+                        .as_ref()
+                        .and_then(|c| Self::extract_tool_call_content(c)),
+                }));
             }
             acp::SessionUpdate::AgentThoughtChunk(chunk) => {
                 let text = Self::extract_text(&chunk.content);
-                let _ = self.app.emit(
-                    "agent:message-chunk",
-                    MessageChunkPayload {
-                        agent_id: self.agent_id.clone(),
-                        content: text,
-                        kind: "thinking".into(),
-                    },
-                );
+                self.emit(Notification::MessageChunk(MessageChunkPayload {
+                    agent_id: self.agent_id.clone(),
+                    content: text,
+                    kind: "thinking".into(),
+                }));
             }
             _ => {
                 // Plan, AvailableCommandsUpdate, usage_update, etc. — ignored for v1
@@ -301,35 +210,70 @@ impl acp::Client for EmergentClient {
 
 pub struct AgentManager {
     agents: RwLock<HashMap<String, Arc<Mutex<AgentHandle>>>>,
+    event_tx: broadcast::Sender<Notification>,
+    history: Arc<RwLock<HashMap<String, Vec<Notification>>>>,
+}
+
+impl Default for AgentManager {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl AgentManager {
     pub fn new() -> Self {
+        let (event_tx, _) = broadcast::channel(1024);
+        let history: Arc<RwLock<HashMap<String, Vec<Notification>>>> =
+            Arc::new(RwLock::new(HashMap::new()));
+
+        // Spawn background task to record all notifications into per-agent history
+        let history_clone = history.clone();
+        let mut recorder_rx: broadcast::Receiver<Notification> = event_tx.subscribe();
+        tokio::spawn(async move {
+            loop {
+                match recorder_rx.recv().await {
+                    Ok(notification) => {
+                        if let Some(agent_id) = notification.agent_id() {
+                            let mut h = history_clone.write().await;
+                            h.entry(agent_id.to_string())
+                                .or_default()
+                                .push(notification);
+                        }
+                    }
+                    Err(broadcast::error::RecvError::Lagged(n)) => {
+                        log::warn!("History recorder lagged, missed {} notifications", n);
+                    }
+                    Err(broadcast::error::RecvError::Closed) => break,
+                }
+            }
+        });
+
         Self {
             agents: RwLock::new(HashMap::new()),
+            event_tx,
+            history,
         }
+    }
+
+    /// Subscribe to the notification broadcast channel.
+    pub fn subscribe(&self) -> broadcast::Receiver<Notification> {
+        self.event_tx.subscribe()
     }
 
     /// Spawn an agent subprocess, perform ACP handshake, create a session,
     /// and store the connection handle.
     pub async fn spawn_agent(
         &self,
-        app: tauri::AppHandle,
         working_directory: PathBuf,
         agent_binary: String,
     ) -> Result<String, String> {
-        use tauri::Emitter;
-
         let agent_id = uuid::Uuid::new_v4().to_string();
 
         // Emit initializing status
-        let _ = app.emit(
-            "agent:status-change",
-            StatusChangePayload {
-                agent_id: agent_id.clone(),
-                status: AgentStatus::Initializing.to_string(),
-            },
-        );
+        let _ = self.event_tx.send(Notification::StatusChange(StatusChangePayload {
+            agent_id: agent_id.clone(),
+            status: AgentStatus::Initializing.to_string(),
+        }));
 
         // Parse command string into binary + args (e.g. "gemini --experimental-acp")
         let parts: Vec<&str> = agent_binary.split_whitespace().collect();
@@ -358,7 +302,7 @@ impl AgentManager {
         let (command_tx, command_rx) = mpsc::unbounded_channel::<AgentCommand>();
 
         let agent_id_for_thread = agent_id.clone();
-        let app_clone = app.clone();
+        let event_tx_clone = self.event_tx.clone();
         let wd = working_directory.clone();
 
         // Use a oneshot to receive the session_id (or error) from the LocalSet thread.
@@ -380,7 +324,8 @@ impl AgentManager {
                     let incoming = child_stdout.compat();
 
                     let aid = agent_id.clone();
-                    let client = EmergentClient::new(agent_id.clone(), app_clone.clone());
+                    let client =
+                        EmergentClient::new(agent_id.clone(), event_tx_clone.clone());
 
                     let (conn, handle_io) =
                         acp::ClientSideConnection::new(client, outgoing, incoming, |fut| {
@@ -425,8 +370,14 @@ impl AgentManager {
                     };
 
                     // Command loop: receive commands from the main thread
-                    Self::agent_command_loop(conn, session_id, command_rx, agent_id, app_clone)
-                        .await;
+                    Self::agent_command_loop(
+                        conn,
+                        session_id,
+                        command_rx,
+                        agent_id,
+                        event_tx_clone,
+                    )
+                    .await;
                 });
             })
             .map_err(|e| format!("Failed to spawn agent thread: {}", e))?;
@@ -436,35 +387,38 @@ impl AgentManager {
             .await
             .map_err(|_| "Agent thread terminated during initialization".to_string())?
             .inspect_err(|e| {
-                let _ = app.emit(
-                    "agent:error",
-                    AgentErrorPayload {
-                        agent_id: agent_id.clone(),
-                        message: e.clone(),
-                    },
-                );
+                let _ = self.event_tx.send(Notification::Error(AgentErrorPayload {
+                    agent_id: agent_id.clone(),
+                    message: e.clone(),
+                }));
             })?;
 
         // Store the handle
         let handle = AgentHandle {
             status: AgentStatus::Idle,
+            cli: agent_binary,
+            working_directory,
             command_tx,
             child,
             thread_handle: Some(thread_handle),
         };
 
-        let _ = app.emit(
-            "agent:status-change",
-            StatusChangePayload {
-                agent_id: agent_id.clone(),
-                status: AgentStatus::Idle.to_string(),
-            },
-        );
+        let _ = self.event_tx.send(Notification::StatusChange(StatusChangePayload {
+            agent_id: agent_id.clone(),
+            status: AgentStatus::Idle.to_string(),
+        }));
 
         self.agents
             .write()
             .await
             .insert(agent_id.clone(), Arc::new(Mutex::new(handle)));
+
+        // Initialize history for this agent
+        self.history
+            .write()
+            .await
+            .entry(agent_id.clone())
+            .or_default();
 
         Ok(agent_id)
     }
@@ -475,55 +429,42 @@ impl AgentManager {
         session_id: acp::SessionId,
         mut command_rx: mpsc::UnboundedReceiver<AgentCommand>,
         agent_id: String,
-        app: tauri::AppHandle,
+        event_tx: broadcast::Sender<Notification>,
     ) {
-        use tauri::Emitter;
-
         while let Some(cmd) = command_rx.recv().await {
             match cmd {
                 AgentCommand::Prompt { text, reply } => {
-                    let _ = app.emit(
-                        "agent:status-change",
-                        StatusChangePayload {
-                            agent_id: agent_id.clone(),
-                            status: AgentStatus::Working.to_string(),
-                        },
-                    );
+                    let _ = event_tx.send(Notification::StatusChange(StatusChangePayload {
+                        agent_id: agent_id.clone(),
+                        status: AgentStatus::Working.to_string(),
+                    }));
 
                     let prompt_req = acp::PromptRequest::new(session_id.clone(), vec![text.into()]);
 
                     match conn.prompt(prompt_req).await {
                         Ok(resp) => {
                             let stop_reason = format!("{:?}", resp.stop_reason);
-                            let _ = app.emit(
-                                "agent:prompt-complete",
-                                PromptCompletePayload {
+                            let _ =
+                                event_tx.send(Notification::PromptComplete(PromptCompletePayload {
                                     agent_id: agent_id.clone(),
                                     stop_reason,
-                                },
-                            );
+                                }));
                             let _ = reply.send(Ok(()));
                         }
                         Err(e) => {
                             let msg = format!("Prompt failed: {}", e);
-                            let _ = app.emit(
-                                "agent:error",
-                                AgentErrorPayload {
-                                    agent_id: agent_id.clone(),
-                                    message: msg.clone(),
-                                },
-                            );
+                            let _ = event_tx.send(Notification::Error(AgentErrorPayload {
+                                agent_id: agent_id.clone(),
+                                message: msg.clone(),
+                            }));
                             let _ = reply.send(Err(msg));
                         }
                     }
 
-                    let _ = app.emit(
-                        "agent:status-change",
-                        StatusChangePayload {
-                            agent_id: agent_id.clone(),
-                            status: AgentStatus::Idle.to_string(),
-                        },
-                    );
+                    let _ = event_tx.send(Notification::StatusChange(StatusChangePayload {
+                        agent_id: agent_id.clone(),
+                        status: AgentStatus::Idle.to_string(),
+                    }));
                 }
                 AgentCommand::Cancel { reply } => {
                     let cancel = acp::CancelNotification::new(session_id.clone());
@@ -544,13 +485,7 @@ impl AgentManager {
     }
 
     /// Send a prompt to a running agent.
-    pub async fn send_prompt(
-        &self,
-        app: tauri::AppHandle,
-        agent_id: &str,
-        text: String,
-    ) -> Result<(), String> {
-        // Extract the Arc'd handle, then immediately drop the map lock.
+    pub async fn send_prompt(&self, agent_id: &str, text: String) -> Result<(), String> {
         let handle_arc = {
             let agents = self.agents.read().await;
             agents
@@ -559,7 +494,6 @@ impl AgentManager {
                 .ok_or_else(|| format!("Agent '{}' not found", agent_id))?
         };
 
-        // Lock individual agent — does not block other agents or kill_agent on the map.
         let mut handle = handle_arc.lock().await;
 
         if handle.status != AgentStatus::Idle {
@@ -595,14 +529,10 @@ impl AgentManager {
             }
             Err(_) => {
                 handle.status = AgentStatus::Error;
-                use tauri::Emitter;
-                let _ = app.emit(
-                    "agent:status-change",
-                    StatusChangePayload {
-                        agent_id: agent_id.to_string(),
-                        status: AgentStatus::Error.to_string(),
-                    },
-                );
+                let _ = self.event_tx.send(Notification::StatusChange(StatusChangePayload {
+                    agent_id: agent_id.to_string(),
+                    status: AgentStatus::Error.to_string(),
+                }));
             }
         }
 
@@ -661,5 +591,30 @@ impl AgentManager {
         drop(handle.thread_handle.take());
 
         Ok(())
+    }
+
+    /// List all running agents.
+    pub async fn list_agents(&self) -> Vec<AgentSummary> {
+        let agents = self.agents.read().await;
+        let mut result = Vec::new();
+        for (id, handle_arc) in agents.iter() {
+            let handle = handle_arc.lock().await;
+            result.push(AgentSummary {
+                id: id.clone(),
+                cli: handle.cli.clone(),
+                status: handle.status.to_string(),
+                working_directory: handle.working_directory.display().to_string(),
+            });
+        }
+        result
+    }
+
+    /// Get notification history for an agent.
+    pub async fn get_history(&self, agent_id: &str) -> Result<Vec<Notification>, String> {
+        let history = self.history.read().await;
+        history
+            .get(agent_id)
+            .cloned()
+            .ok_or_else(|| format!("Agent '{}' not found", agent_id))
     }
 }

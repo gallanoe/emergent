@@ -9,11 +9,22 @@ export default defineConfig({
     viewport: { width: 1024, height: 700 },
     screenshot: "only-on-failure",
   },
+  projects: [
+    {
+      name: "demo",
+      testMatch: "smoke.spec.ts",
+      use: {},
+    },
+    {
+      name: "daemon",
+      testMatch: "daemon-connection.spec.ts",
+      use: {},
+    },
+  ],
   webServer: {
     command: "bunx vite",
     url: "http://localhost:1420",
     reuseExistingServer: true,
     timeout: 10000,
-    env: { VITE_DEMO_MODE: "true" },
   },
 });

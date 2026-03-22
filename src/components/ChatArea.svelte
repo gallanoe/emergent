@@ -1,6 +1,6 @@
 <!-- src/components/ChatArea.svelte -->
 <script lang="ts">
-  import { Pencil } from "@lucide/svelte";
+  import { Pencil, WifiOff } from "@lucide/svelte";
   import StreamingText from "./StreamingText.svelte";
   import ToolCallGroup from "./ToolCallGroup.svelte";
   import ThinkingBlock from "./ThinkingBlock.svelte";
@@ -8,12 +8,19 @@
   import { isNewTurn } from "../lib/chat-utils";
   import { renderMarkdown } from "../lib/render-markdown";
 
+  type DaemonStatus =
+    | "disconnected"
+    | "connecting"
+    | "connected"
+    | "reconnecting";
+
   interface Props {
     agent: DisplayAgent | undefined;
+    daemonStatus: DaemonStatus;
     onEditQueue?: () => void;
   }
 
-  let { agent, onEditQueue }: Props = $props();
+  let { agent, daemonStatus, onEditQueue }: Props = $props();
 
   // ── Auto-scroll ────────────────────────────────────────────────
   let scrollContainer: HTMLDivElement | undefined = $state();
@@ -79,7 +86,45 @@
   onscroll={onScroll}
   class="flex-1 overflow-y-auto px-5 py-4"
 >
-  {#if agent}
+  {#if daemonStatus === "disconnected" || daemonStatus === "connecting"}
+    <!-- Daemon not connected — centered banner -->
+    <div class="flex items-center justify-center h-full">
+      <div class="flex flex-col items-center gap-3 max-w-[280px] text-center">
+        <div
+          class="w-8 h-8 rounded-full flex items-center justify-center
+            {daemonStatus === 'disconnected'
+            ? 'bg-[rgba(200,60,60,0.08)] text-error'
+            : 'bg-[rgba(196,138,26,0.08)] text-warning'}"
+        >
+          <WifiOff size={16} />
+        </div>
+        <div class="text-[13px] font-medium text-fg-heading">
+          {daemonStatus === "disconnected"
+            ? "Daemon not running"
+            : "Connecting to daemon…"}
+        </div>
+        {#if daemonStatus === "disconnected"}
+          <div class="text-[12px] text-fg-muted leading-relaxed">
+            Start the daemon to manage agents.
+          </div>
+          <code
+            class="text-[11px] text-fg-muted bg-bg-hover px-2 py-0.5 rounded font-[family-name:var(--font-mono)]"
+            >emergentd</code
+          >
+        {/if}
+      </div>
+    </div>
+  {:else if agent}
+    <!-- Reconnecting bar -->
+    {#if daemonStatus === "reconnecting"}
+      <div
+        class="px-4 py-2 bg-[rgba(196,138,26,0.06)] border-b border-[rgba(196,138,26,0.15)] flex items-center gap-2 text-[12px] text-warning"
+      >
+        <span class="w-[5px] h-[5px] rounded-full bg-warning animate-pulse"
+        ></span>
+        Connection lost — reconnecting to daemon…
+      </div>
+    {/if}
     <div class="flex flex-col">
       {#each agent.messages as message, i (message.id)}
         {#if message.role === "thinking"}
