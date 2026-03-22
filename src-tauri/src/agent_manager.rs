@@ -4,94 +4,12 @@ use std::sync::Arc;
 
 use acp::Agent as _;
 use agent_client_protocol as acp;
-use serde::{Deserialize, Serialize};
+use emergent_protocol::{
+    AgentErrorPayload, AgentStatus, MessageChunkPayload, PromptCompletePayload,
+    StatusChangePayload, ToolCallContentPayload, ToolCallUpdatePayload,
+};
 use tokio::sync::{mpsc, oneshot, Mutex, RwLock};
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
-
-// ---------------------------------------------------------------------------
-// Event payload structs (emitted to frontend via Tauri events)
-// ---------------------------------------------------------------------------
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct MessageChunkPayload {
-    pub agent_id: String,
-    pub content: String,
-    /// "message" or "thinking"
-    pub kind: String,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase")]
-pub enum ToolCallContentPayload {
-    Text {
-        text: String,
-    },
-    Diff {
-        path: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        old_text: Option<String>,
-        new_text: String,
-    },
-    Terminal {
-        terminal_id: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        output: Option<String>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        exit_code: Option<i32>,
-    },
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ToolCallUpdatePayload {
-    pub agent_id: String,
-    pub tool_call_id: String,
-    pub title: Option<String>,
-    pub kind: Option<String>,
-    pub status: Option<String>,
-    pub locations: Option<Vec<String>>,
-    pub content: Option<Vec<ToolCallContentPayload>>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct PromptCompletePayload {
-    pub agent_id: String,
-    pub stop_reason: String,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct AgentErrorPayload {
-    pub agent_id: String,
-    pub message: String,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct StatusChangePayload {
-    pub agent_id: String,
-    pub status: String,
-}
-
-// ---------------------------------------------------------------------------
-// AgentStatus
-// ---------------------------------------------------------------------------
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub enum AgentStatus {
-    Initializing,
-    Idle,
-    Working,
-    Error,
-}
-
-impl std::fmt::Display for AgentStatus {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            AgentStatus::Initializing => write!(f, "initializing"),
-            AgentStatus::Idle => write!(f, "idle"),
-            AgentStatus::Working => write!(f, "working"),
-            AgentStatus::Error => write!(f, "error"),
-        }
-    }
-}
 
 // ---------------------------------------------------------------------------
 // Commands sent to the dedicated ACP thread

@@ -1,11 +1,4 @@
-use serde::Serialize;
-
-#[derive(Debug, Clone, Serialize)]
-pub struct AgentInfo {
-    pub name: String,
-    pub binary: String,
-    pub path: String,
-}
+pub use emergent_protocol::{AgentInfo, KnownAgent};
 
 /// Known agent CLIs: (display name, binary, extra args).
 const KNOWN_AGENTS: &[(&str, &str, &[&str])] = &[
@@ -13,14 +6,6 @@ const KNOWN_AGENTS: &[(&str, &str, &[&str])] = &[
     ("Codex", "codex-acp", &[]),
     ("Gemini", "gemini", &["--experimental-acp"]),
 ];
-
-#[derive(Debug, Clone, Serialize)]
-pub struct KnownAgent {
-    pub name: String,
-    /// The full command string used to spawn the agent (e.g. "gemini --experimental-acp").
-    pub command: String,
-    pub available: bool,
-}
 
 /// Return all known agent types, marking which are installed.
 pub fn known_agents() -> Vec<KnownAgent> {

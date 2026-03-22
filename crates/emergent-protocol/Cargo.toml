@@ -1,0 +1,10 @@
+[package]
+name = "emergent-protocol"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+dirs = { workspace = true }
+libc = { workspace = true }
