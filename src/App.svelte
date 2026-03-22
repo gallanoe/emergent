@@ -47,6 +47,7 @@
     swarms={appState.swarms}
     selectedAgentId={appState.selectedAgentId}
     demoMode={appState.demoMode}
+    daemonStatus={appState.daemonStatus}
     knownAgents={appState.knownAgents}
     onSelectAgent={(id) => (appState.selectedAgentId = id)}
     onToggleSwarm={(id) => appState.toggleSwarmCollapsed(id)}
@@ -57,7 +58,11 @@
   />
   <main class="flex flex-col min-h-0">
     <TopBar agent={appState.selectedAgent} />
-    <ChatArea agent={appState.selectedAgent} onEditQueue={handleEditQueue} />
+    <ChatArea
+      agent={appState.selectedAgent}
+      daemonStatus={appState.daemonStatus}
+      onEditQueue={handleEditQueue}
+    />
     <ChatInput
       agent={appState.selectedAgent}
       demoMode={appState.demoMode}

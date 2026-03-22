@@ -20,27 +20,37 @@ interface Swarm {
   agentIds: string[];
 }
 
+type DaemonStatus = "disconnected" | "connecting" | "connected" | "reconnecting";
+
 function createAppState() {
   let demoMode = $state(import.meta.env.VITE_DEMO_MODE === "true");
   let swarms = $state<Swarm[]>([]);
   let selectedAgentId = $state<string | null>(null);
   let availableAgents = $state<{ name: string; binary: string; path: string }[]>([]);
   let knownAgents = $state<KnownAgent[]>([]);
+  let daemonStatus = $state<DaemonStatus>("connecting");
 
   // ── Initialization ────────────────────────────────────────────
 
   async function initialize() {
     if (demoMode) return;
 
-    const detected = await agentStore.detectAgents();
-    availableAgents = detected;
+    try {
+      daemonStatus = "connecting";
+      const status = await invoke<string>("get_daemon_status");
+      daemonStatus = status as DaemonStatus;
 
-    const known = await invoke<KnownAgent[]>("known_agents");
-    knownAgents = known;
+      if (daemonStatus !== "connected") return;
 
-    if (detected.length > 0) {
-      demoMode = false;
+      const detected = await agentStore.detectAgents();
+      availableAgents = detected;
+
+      const known = await invoke<KnownAgent[]>("known_agents");
+      knownAgents = known;
+
       await agentStore.setupListeners();
+    } catch {
+      daemonStatus = "disconnected";
     }
   }
 
@@ -142,6 +152,9 @@ function createAppState() {
     },
     get knownAgents() {
       return knownAgents;
+    },
+    get daemonStatus() {
+      return daemonStatus;
     },
     initialize,
     createSwarm,

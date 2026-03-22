@@ -13,10 +13,17 @@
     "gemini --experimental-acp": geminiLogo,
   };
 
+  type DaemonStatus =
+    | "disconnected"
+    | "connecting"
+    | "connected"
+    | "reconnecting";
+
   interface Props {
     swarms: DisplaySwarm[];
     selectedAgentId: string | null;
     demoMode: boolean;
+    daemonStatus: DaemonStatus;
     knownAgents: { name: string; command: string; available: boolean }[];
     onSelectAgent: (id: string) => void;
     onToggleSwarm: (id: string) => void;
@@ -28,12 +35,15 @@
     swarms,
     selectedAgentId,
     demoMode,
+    daemonStatus,
     knownAgents,
     onSelectAgent,
     onToggleSwarm,
     onNewSwarm,
     onAddAgent,
   }: Props = $props();
+
+  let isDaemonConnected = $derived(daemonStatus === "connected");
 
   let pickerSwarmId = $state<string | null>(null);
 </script>
@@ -68,7 +78,7 @@
             {/if}
             {swarm.name}
           </button>
-          {#if !demoMode}
+          {#if !demoMode && isDaemonConnected}
             <div class="relative flex">
               <button
                 class="interactive flex items-center justify-center w-7 text-fg-muted hover:text-fg-default"
@@ -145,14 +155,47 @@
     {/each}
   </div>
 
-  <!-- New swarm button -->
+  <!-- Footer: New swarm button + daemon status -->
   {#if !demoMode}
-    <button
-      class="interactive flex items-center gap-1.5 px-4 py-3 border-t border-border-default text-[11px] text-fg-muted"
-      onclick={onNewSwarm}
-    >
-      <Plus size={12} />
-      New swarm
-    </button>
+    <div class="border-t border-border-default flex flex-col">
+      <button
+        class="interactive flex items-center gap-1.5 px-4 py-2.5 text-[11px] text-fg-muted
+          {isDaemonConnected ? '' : 'opacity-45 pointer-events-none'}"
+        onclick={onNewSwarm}
+        disabled={!isDaemonConnected}
+      >
+        <Plus size={12} />
+        New swarm
+      </button>
+      <div
+        class="flex items-center gap-1.5 px-4 py-2 border-t border-border-default text-[11px]"
+      >
+        <span
+          class="w-[5px] h-[5px] rounded-full shrink-0
+            {daemonStatus === 'connected'
+            ? 'bg-success'
+            : daemonStatus === 'disconnected'
+              ? 'bg-error'
+              : 'bg-warning animate-pulse'}"
+        ></span>
+        <span
+          class={daemonStatus === "connected"
+            ? "text-fg-muted"
+            : daemonStatus === "disconnected"
+              ? "text-error"
+              : "text-warning"}
+        >
+          {#if daemonStatus === "connected"}
+            Daemon connected
+          {:else if daemonStatus === "disconnected"}
+            Daemon offline
+          {:else if daemonStatus === "connecting"}
+            Connecting…
+          {:else}
+            Reconnecting…
+          {/if}
+        </span>
+      </div>
+    </div>
   {/if}
 </aside>
