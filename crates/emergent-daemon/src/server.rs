@@ -1,6 +1,5 @@
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter};
-use tokio::net::UnixStream;
 use tokio::sync::broadcast;
 
 use crate::agent_manager::AgentManager;
@@ -8,7 +7,7 @@ use crate::detect;
 use emergent_protocol::*;
 
 /// Handle a single client connection.
-pub async fn handle_client(stream: UnixStream, manager: Arc<AgentManager>) {
+pub async fn handle_client(stream: TransportStream, manager: Arc<AgentManager>) {
     log::info!("New client connected");
     let (reader, writer) = stream.into_split();
     let mut reader = BufReader::new(reader);
@@ -50,7 +49,9 @@ pub async fn handle_client(stream: UnixStream, manager: Arc<AgentManager>) {
         }
     });
 
-    // Read request loop
+    // Read request loop — each request is dispatched concurrently so that
+    // long-running methods (e.g. send_prompt) don't block other requests
+    // (e.g. cancel_prompt) from being processed.
     let mut line_buf = String::new();
     loop {
         line_buf.clear();
@@ -58,18 +59,21 @@ pub async fn handle_client(stream: UnixStream, manager: Arc<AgentManager>) {
             Ok(0) => break, // EOF
             Ok(_) => {
                 log::debug!("Received request: {}", line_buf.trim());
-                let response = dispatch_request(&line_buf, &manager).await;
-                let mut w = writer.lock().await;
-                let resp_line = serde_json::to_string(&response).unwrap();
-                if w.write_all(resp_line.as_bytes()).await.is_err() {
-                    break;
-                }
-                if w.write_all(b"\n").await.is_err() {
-                    break;
-                }
-                if w.flush().await.is_err() {
-                    break;
-                }
+                let req_line = line_buf.clone();
+                let mgr = manager.clone();
+                let w = writer.clone();
+                tokio::spawn(async move {
+                    let response = dispatch_request(&req_line, &mgr).await;
+                    let mut w = w.lock().await;
+                    let resp_line = serde_json::to_string(&response).unwrap();
+                    if w.write_all(resp_line.as_bytes()).await.is_err() {
+                        return;
+                    }
+                    if w.write_all(b"\n").await.is_err() {
+                        return;
+                    }
+                    let _ = w.flush().await;
+                });
             }
             Err(_) => break,
         }

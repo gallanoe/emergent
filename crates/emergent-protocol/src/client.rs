@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter};
-use tokio::net::UnixStream;
 use tokio::sync::{mpsc, Mutex, oneshot};
 
+use crate::transport::{self, WriteHalf};
 use crate::types::*;
 
 pub struct DaemonClient {
-    writer: Arc<Mutex<BufWriter<tokio::net::unix::OwnedWriteHalf>>>,
+    writer: Arc<Mutex<BufWriter<WriteHalf>>>,
     next_id: Arc<Mutex<u64>>,
     pending: Arc<Mutex<HashMap<u64, oneshot::Sender<JsonRpcResponse>>>>,
 }
@@ -17,7 +17,7 @@ impl DaemonClient {
     pub async fn connect(
         socket_path: &std::path::Path,
     ) -> Result<(Self, mpsc::UnboundedReceiver<Notification>), String> {
-        let stream = UnixStream::connect(socket_path)
+        let stream = transport::connect(socket_path)
             .await
             .map_err(|e| format!("Failed to connect to daemon: {}", e))?;
 

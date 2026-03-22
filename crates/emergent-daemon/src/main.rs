@@ -1,5 +1,6 @@
 use emergent_daemon::agent_manager::AgentManager;
 use emergent_daemon::socket;
+use emergent_protocol::TransportListener;
 use std::sync::Arc;
 
 #[tokio::main]
@@ -18,10 +19,12 @@ async fn main() {
         std::process::exit(1);
     }
 
-    // Clean up stale socket
+    // Clean up stale socket (unix only — named pipes are kernel-managed)
+    #[cfg(unix)]
     socket::remove_stale_socket(&sock_path).expect("Failed to remove stale socket");
 
-    // Ensure parent directory exists
+    // Ensure parent directory exists (unix only — pipe paths are virtual)
+    #[cfg(unix)]
     if let Some(parent) = sock_path.parent() {
         std::fs::create_dir_all(parent).expect("Failed to create socket directory");
     }
@@ -29,8 +32,7 @@ async fn main() {
     // Write PID file
     let _pid_path = socket::write_pid_file(&sock_path).expect("Failed to write PID file");
 
-    let listener =
-        tokio::net::UnixListener::bind(&sock_path).expect("Failed to bind Unix socket");
+    let listener = TransportListener::bind(&sock_path).expect("Failed to bind listener");
 
     log::info!("emergentd listening on {}", sock_path.display());
 
@@ -55,6 +57,7 @@ async fn main() {
         let _ = manager.kill_agent(&agent.id).await;
     }
 
+    #[cfg(unix)]
     socket::remove_stale_socket(&sock_path_clone).ok();
     socket::remove_pid_file(&sock_path_clone);
     log::info!("emergentd stopped");

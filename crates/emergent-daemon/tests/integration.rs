@@ -1,8 +1,8 @@
 use emergent_daemon::agent_manager::AgentManager;
+use emergent_protocol::transport::{self, TransportListener};
 use emergent_protocol::*;
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::net::UnixStream;
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -21,7 +21,7 @@ impl TestDaemon {
         let socket_path = tempdir.path().join("test.sock");
 
         let manager = Arc::new(AgentManager::new());
-        let listener = tokio::net::UnixListener::bind(&socket_path).unwrap();
+        let listener = TransportListener::bind(&socket_path).unwrap();
         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
 
         let handle = tokio::spawn(async move {
@@ -40,7 +40,7 @@ impl TestDaemon {
     }
 
     async fn connect(&self) -> TestClient {
-        let stream = UnixStream::connect(&self.socket_path).await.unwrap();
+        let stream = transport::connect(&self.socket_path).await.unwrap();
         TestClient::new(stream)
     }
 
@@ -53,13 +53,13 @@ impl TestDaemon {
 }
 
 struct TestClient {
-    reader: BufReader<tokio::net::unix::OwnedReadHalf>,
-    writer: tokio::net::unix::OwnedWriteHalf,
+    reader: BufReader<transport::ReadHalf>,
+    writer: transport::WriteHalf,
     next_id: u64,
 }
 
 impl TestClient {
-    fn new(stream: UnixStream) -> Self {
+    fn new(stream: TransportStream) -> Self {
         let (reader, writer) = stream.into_split();
         Self {
             reader: BufReader::new(reader),
