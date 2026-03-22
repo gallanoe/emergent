@@ -415,15 +415,32 @@ function createAgentStore() {
     };
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function replayNotifications(notifications: any[]) {
+  type DaemonNotification =
+    | ({ type: "agent:message-chunk" } & MessageChunkPayload)
+    | ({ type: "agent:tool-call-update" } & ToolCallUpdatePayload)
+    | ({ type: "agent:prompt-complete" } & PromptCompletePayload)
+    | ({ type: "agent:status-change" } & StatusChangePayload)
+    | ({ type: "agent:error" } & AgentErrorPayload);
+
+  function replayNotifications(notifications: DaemonNotification[]) {
     for (const n of notifications) {
-      const t = n.type;
-      if (t === "agent:message-chunk") handleMessageChunk(n);
-      else if (t === "agent:tool-call-update") handleToolCallUpdate(n);
-      else if (t === "agent:prompt-complete") handlePromptComplete(n);
-      else if (t === "agent:status-change") handleStatusChange(n);
-      else if (t === "agent:error") handleError(n);
+      switch (n.type) {
+        case "agent:message-chunk":
+          handleMessageChunk(n);
+          break;
+        case "agent:tool-call-update":
+          handleToolCallUpdate(n);
+          break;
+        case "agent:prompt-complete":
+          handlePromptComplete(n);
+          break;
+        case "agent:status-change":
+          handleStatusChange(n);
+          break;
+        case "agent:error":
+          handleError(n);
+          break;
+      }
     }
     // Force flush any buffered chunks after replay
     flushChunkBuffers();

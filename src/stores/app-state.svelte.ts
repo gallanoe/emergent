@@ -79,9 +79,11 @@ function createAppState() {
       agentStore.registerExistingAgent(agent.id, swarm.id, agent.cli);
       swarm.agentIds.push(agent.id);
 
-      // Replay history
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const history = await invoke<any[]>("get_history", { agentId: agent.id });
+      // Replay history — notifications are typed via DaemonNotification union in agent store
+      const history = await invoke<Parameters<typeof agentStore.replayNotifications>[0]>(
+        "get_history",
+        { agentId: agent.id },
+      );
       agentStore.replayNotifications(history);
 
       if (!selectedAgentId) selectedAgentId = agent.id;
