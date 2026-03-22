@@ -34,8 +34,8 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            src-tauri/target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
 
@@ -69,13 +69,10 @@ jobs:
         run: bun run test:e2e
 
       - name: Rust check
-        working-directory: src-tauri
-        run: cargo check
+        run: cargo check --workspace
 
       - name: Rust lint
-        working-directory: src-tauri
-        run: cargo clippy -- -D warnings
+        run: bun run lint:rust
 
       - name: Rust test
-        working-directory: src-tauri
-        run: cargo test
+        run: bun run test:rust
