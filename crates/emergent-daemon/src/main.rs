@@ -1,3 +1,7 @@
+#[allow(dead_code)] // Used by server module added in next task
+mod agent_manager;
+#[allow(dead_code)]
+mod detect;
 mod socket;
 
 #[tokio::main]
