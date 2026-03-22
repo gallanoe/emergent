@@ -23,12 +23,15 @@ interface Swarm {
 type DaemonStatus = "disconnected" | "connecting" | "connected" | "reconnecting";
 
 function createAppState() {
-  let demoMode = $state(import.meta.env.VITE_DEMO_MODE === "true");
+  let demoMode = $state(
+    import.meta.env.VITE_DEMO_MODE === "true" ||
+      (globalThis as Record<string, unknown>).__EMERGENT_DEMO_MODE__ === true,
+  );
   let swarms = $state<Swarm[]>([]);
   let selectedAgentId = $state<string | null>(null);
   let availableAgents = $state<{ name: string; binary: string; path: string }[]>([]);
   let knownAgents = $state<KnownAgent[]>([]);
-  let daemonStatus = $state<DaemonStatus>("connecting");
+  let daemonStatus = $state<DaemonStatus>(demoMode ? "connected" : "connecting");
 
   // ── Initialization ────────────────────────────────────────────
 

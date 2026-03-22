@@ -5,11 +5,15 @@
  */
 export const tauriMockScript = `
 (function() {
+  // Enable demo mode at runtime (replaces compile-time VITE_DEMO_MODE)
+  window.__EMERGENT_DEMO_MODE__ = true;
+
   let callbackId = 0;
   const callbacks = {};
 
   window.__TAURI_INTERNALS__ = {
     invoke: function(cmd, args) {
+      if (cmd.startsWith("plugin:event|")) return Promise.resolve(args && args.handler);
       const responses = {
         detect_agents: [],
       };
