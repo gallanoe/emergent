@@ -214,6 +214,12 @@ pub struct AgentManager {
     history: Arc<RwLock<HashMap<String, Vec<Notification>>>>,
 }
 
+impl Default for AgentManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AgentManager {
     pub fn new() -> Self {
         let (event_tx, _) = broadcast::channel(1024);

@@ -1,34 +1,6 @@
-mod agent_manager;
-mod detect;
-pub mod server;
-mod socket;
-
-use agent_manager::AgentManager;
+use emergent_daemon::agent_manager::AgentManager;
+use emergent_daemon::socket;
 use std::sync::Arc;
-
-/// Run the server accept loop. Extracted for testability.
-pub async fn run_server(
-    listener: tokio::net::UnixListener,
-    manager: Arc<AgentManager>,
-    mut shutdown_rx: tokio::sync::oneshot::Receiver<()>,
-) {
-    loop {
-        tokio::select! {
-            accept = listener.accept() => {
-                match accept {
-                    Ok((stream, _)) => {
-                        let mgr = manager.clone();
-                        tokio::spawn(async move {
-                            server::handle_client(stream, mgr).await;
-                        });
-                    }
-                    Err(e) => log::error!("Accept error: {}", e),
-                }
-            }
-            _ = &mut shutdown_rx => break,
-        }
-    }
-}
 
 #[tokio::main]
 async fn main() {
@@ -69,7 +41,7 @@ async fn main() {
     let sock_path_clone = sock_path.clone();
 
     tokio::select! {
-        _ = run_server(listener, manager.clone(), shutdown_rx) => {}
+        _ = emergent_daemon::run_server(listener, manager.clone(), shutdown_rx) => {}
         _ = tokio::signal::ctrl_c() => {
             log::info!("Received shutdown signal");
             let _ = shutdown_tx.send(());
