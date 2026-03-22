@@ -79,6 +79,8 @@ pub fn run() {
             commands::cancel_prompt,
             commands::kill_agent,
             commands::get_daemon_status,
+            commands::list_agents,
+            commands::get_history,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

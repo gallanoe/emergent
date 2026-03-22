@@ -402,6 +402,33 @@ function createAgentStore() {
     };
   }
 
+  function registerExistingAgent(agentId: string, swarmId: string, cli: string) {
+    agents[agentId] = {
+      id: agentId,
+      swarmId,
+      cli,
+      status: "idle",
+      messages: [],
+      activeToolCalls: {},
+      stopReason: null,
+      queuedContent: "",
+    };
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function replayNotifications(notifications: any[]) {
+    for (const n of notifications) {
+      const t = n.type;
+      if (t === "agent:message-chunk") handleMessageChunk(n);
+      else if (t === "agent:tool-call-update") handleToolCallUpdate(n);
+      else if (t === "agent:prompt-complete") handlePromptComplete(n);
+      else if (t === "agent:status-change") handleStatusChange(n);
+      else if (t === "agent:error") handleError(n);
+    }
+    // Force flush any buffered chunks after replay
+    flushChunkBuffers();
+  }
+
   return {
     get agents() {
       return agents;
@@ -416,6 +443,8 @@ function createAgentStore() {
     killAgent,
     editQueue,
     registerQueueDumpHandler,
+    registerExistingAgent,
+    replayNotifications,
   };
 }
 

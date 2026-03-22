@@ -32,6 +32,13 @@ function createAppState() {
 
   // ── Initialization ────────────────────────────────────────────
 
+  interface AgentSummary {
+    id: string;
+    cli: string;
+    status: string;
+    working_directory: string;
+  }
+
   async function initialize() {
     if (demoMode) return;
 
@@ -49,8 +56,35 @@ function createAppState() {
       knownAgents = known;
 
       await agentStore.setupListeners();
+
+      // Reconnect to any existing agents from the daemon
+      await reconnectToExistingAgents();
     } catch {
       daemonStatus = "disconnected";
+    }
+  }
+
+  async function reconnectToExistingAgents() {
+    const agents = await invoke<AgentSummary[]>("list_agents");
+    for (const agent of agents) {
+      // Find or create swarm by working_directory
+      let swarm = swarms.find((s) => s.workingDirectory === agent.working_directory);
+      if (!swarm) {
+        const name = agent.working_directory.split("/").pop() || agent.working_directory;
+        const id = createSwarm(name, agent.working_directory);
+        swarm = swarms.find((s) => s.id === id)!;
+      }
+
+      // Register agent in store without spawning (it already exists on daemon)
+      agentStore.registerExistingAgent(agent.id, swarm.id, agent.cli);
+      swarm.agentIds.push(agent.id);
+
+      // Replay history
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const history = await invoke<any[]>("get_history", { agentId: agent.id });
+      agentStore.replayNotifications(history);
+
+      if (!selectedAgentId) selectedAgentId = agent.id;
     }
   }
 
