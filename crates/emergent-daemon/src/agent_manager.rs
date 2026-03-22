@@ -56,6 +56,11 @@ impl EmergentClient {
     }
 
     fn emit(&self, notification: Notification) {
+        log::trace!(
+            "Agent {} ACP notification: {}",
+            &self.agent_id[..8],
+            notification.event_name()
+        );
         let _ = self.event_tx.send(notification);
     }
 
@@ -148,6 +153,11 @@ impl acp::Client for EmergentClient {
     }
 
     async fn session_notification(&self, args: acp::SessionNotification) -> acp::Result<()> {
+        log::trace!(
+            "Agent {} received ACP session update: {:?}",
+            &self.agent_id[..8],
+            std::mem::discriminant(&args.update)
+        );
         match args.update {
             acp::SessionUpdate::AgentMessageChunk(chunk) => {
                 let text = Self::extract_text(&chunk.content);
@@ -158,6 +168,13 @@ impl acp::Client for EmergentClient {
                 }));
             }
             acp::SessionUpdate::ToolCall(tc) => {
+                log::debug!(
+                    "Agent {} tool call: {} (id: {}, status: {:?})",
+                    &self.agent_id[..8],
+                    tc.title,
+                    tc.tool_call_id,
+                    tc.status
+                );
                 self.emit(Notification::ToolCallUpdate(ToolCallUpdatePayload {
                     agent_id: self.agent_id.clone(),
                     tool_call_id: tc.tool_call_id.to_string(),
@@ -195,8 +212,20 @@ impl acp::Client for EmergentClient {
                     kind: "thinking".into(),
                 }));
             }
+            acp::SessionUpdate::Plan(plan) => {
+                for (i, entry) in plan.entries.iter().enumerate() {
+                    log::debug!(
+                        "Agent {} plan[{}]: [{:?}] {:?} — {}",
+                        &self.agent_id[..8],
+                        i,
+                        entry.status,
+                        entry.priority,
+                        entry.content
+                    );
+                }
+            }
             _ => {
-                // Plan, AvailableCommandsUpdate, usage_update, etc. — ignored for v1
+                // AvailableCommandsUpdate, usage_update, etc. — ignored for v1
             }
         }
 
@@ -269,6 +298,13 @@ impl AgentManager {
     ) -> Result<String, String> {
         let agent_id = uuid::Uuid::new_v4().to_string();
 
+        log::info!(
+            "Spawning agent {} (cli: {}, wd: {})",
+            &agent_id[..8],
+            agent_binary,
+            working_directory.display()
+        );
+
         // Emit initializing status
         let _ = self.event_tx.send(Notification::StatusChange(StatusChangePayload {
             agent_id: agent_id.clone(),
@@ -340,6 +376,7 @@ impl AgentManager {
                     });
 
                     // Initialize + create session
+                    log::debug!("Agent {} starting ACP handshake", &agent_id[..8]);
                     let init_result = async {
                         conn.initialize(
                             acp::InitializeRequest::new(acp::ProtocolVersion::V1).client_info(
@@ -360,10 +397,12 @@ impl AgentManager {
 
                     let session_id = match init_result {
                         Ok(sid) => {
+                            log::debug!("Agent {} ACP session established: {:?}", &agent_id[..8], sid);
                             let _ = init_tx.send(Ok(sid.clone()));
                             sid
                         }
                         Err(e) => {
+                            log::error!("Agent {} ACP handshake failed: {}", &agent_id[..8], e);
                             let _ = init_tx.send(Err(e));
                             return;
                         }
@@ -413,6 +452,8 @@ impl AgentManager {
             .await
             .insert(agent_id.clone(), Arc::new(Mutex::new(handle)));
 
+        log::info!("Agent {} spawned successfully", &agent_id[..8]);
+
         // Initialize history for this agent
         self.history
             .write()
@@ -434,6 +475,11 @@ impl AgentManager {
         while let Some(cmd) = command_rx.recv().await {
             match cmd {
                 AgentCommand::Prompt { text, reply } => {
+                    log::debug!(
+                        "Agent {} prompt: {}",
+                        &agent_id[..8],
+                        if text.len() > 100 { &text[..100] } else { &text }
+                    );
                     let _ = event_tx.send(Notification::StatusChange(StatusChangePayload {
                         agent_id: agent_id.clone(),
                         status: AgentStatus::Working.to_string(),
@@ -441,9 +487,54 @@ impl AgentManager {
 
                     let prompt_req = acp::PromptRequest::new(session_id.clone(), vec![text.into()]);
 
-                    match conn.prompt(prompt_req).await {
+                    // Use select! so cancel commands are handled immediately
+                    // while the prompt is in-flight.
+                    let prompt_fut = conn.prompt(prompt_req);
+                    tokio::pin!(prompt_fut);
+
+                    let prompt_result;
+                    loop {
+                        tokio::select! {
+                            result = &mut prompt_fut => {
+                                prompt_result = result;
+                                break;
+                            }
+                            cmd = command_rx.recv() => {
+                                match cmd {
+                                    Some(AgentCommand::Cancel { reply: cancel_reply }) => {
+                                        log::debug!("Agent {} cancel requested (during prompt)", &agent_id[..8]);
+                                        let cancel = acp::CancelNotification::new(session_id.clone());
+                                        match conn.cancel(cancel).await {
+                                            Ok(()) => { let _ = cancel_reply.send(Ok(())); }
+                                            Err(e) => { let _ = cancel_reply.send(Err(format!("Cancel failed: {}", e))); }
+                                        }
+                                        // Continue waiting for prompt to finish after cancel
+                                    }
+                                    Some(AgentCommand::Shutdown) => {
+                                        log::debug!("Agent {} shutdown during prompt", &agent_id[..8]);
+                                        let _ = reply.send(Err("Agent shut down".to_string()));
+                                        return;
+                                    }
+                                    Some(AgentCommand::Prompt { reply: dup_reply, .. }) => {
+                                        let _ = dup_reply.send(Err("Agent is already working".to_string()));
+                                    }
+                                    None => {
+                                        let _ = reply.send(Err("Command channel closed".to_string()));
+                                        return;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    match prompt_result {
                         Ok(resp) => {
                             let stop_reason = format!("{:?}", resp.stop_reason);
+                            log::debug!(
+                                "Agent {} prompt complete (stop_reason: {})",
+                                &agent_id[..8],
+                                stop_reason
+                            );
                             let _ =
                                 event_tx.send(Notification::PromptComplete(PromptCompletePayload {
                                     agent_id: agent_id.clone(),
@@ -452,6 +543,7 @@ impl AgentManager {
                             let _ = reply.send(Ok(()));
                         }
                         Err(e) => {
+                            log::error!("Agent {} prompt failed: {}", &agent_id[..8], e);
                             let msg = format!("Prompt failed: {}", e);
                             let _ = event_tx.send(Notification::Error(AgentErrorPayload {
                                 agent_id: agent_id.clone(),
@@ -467,6 +559,7 @@ impl AgentManager {
                     }));
                 }
                 AgentCommand::Cancel { reply } => {
+                    log::debug!("Agent {} cancel requested", &agent_id[..8]);
                     let cancel = acp::CancelNotification::new(session_id.clone());
                     match conn.cancel(cancel).await {
                         Ok(()) => {
@@ -478,6 +571,7 @@ impl AgentManager {
                     }
                 }
                 AgentCommand::Shutdown => {
+                    log::debug!("Agent {} shutting down", &agent_id[..8]);
                     break;
                 }
             }
@@ -571,6 +665,8 @@ impl AgentManager {
 
     /// Kill an agent, removing it from the map and terminating the subprocess.
     pub async fn kill_agent(&self, agent_id: &str) -> Result<(), String> {
+        log::info!("Killing agent {}", &agent_id[..8.min(agent_id.len())]);
+
         let handle_arc = {
             let mut agents = self.agents.write().await;
             match agents.remove(agent_id) {

@@ -9,6 +9,7 @@ use emergent_protocol::*;
 
 /// Handle a single client connection.
 pub async fn handle_client(stream: UnixStream, manager: Arc<AgentManager>) {
+    log::info!("New client connected");
     let (reader, writer) = stream.into_split();
     let mut reader = BufReader::new(reader);
     let writer = Arc::new(tokio::sync::Mutex::new(BufWriter::new(writer)));
@@ -22,6 +23,7 @@ pub async fn handle_client(stream: UnixStream, manager: Arc<AgentManager>) {
         loop {
             match event_rx.recv().await {
                 Ok(notification) => {
+                    log::trace!("Sending notification to client: {}", notification.event_name());
                     let json_notif = JsonRpcNotification {
                         jsonrpc: "2.0".into(),
                         method: notification.event_name().into(),
@@ -55,6 +57,7 @@ pub async fn handle_client(stream: UnixStream, manager: Arc<AgentManager>) {
         match reader.read_line(&mut line_buf).await {
             Ok(0) => break, // EOF
             Ok(_) => {
+                log::debug!("Received request: {}", line_buf.trim());
                 let response = dispatch_request(&line_buf, &manager).await;
                 let mut w = writer.lock().await;
                 let resp_line = serde_json::to_string(&response).unwrap();
@@ -81,6 +84,7 @@ async fn dispatch_request(line: &str, manager: &AgentManager) -> JsonRpcResponse
         Err(e) => return error_response(0, -32700, &format!("Parse error: {}", e)),
     };
 
+    log::debug!("Dispatching method: {} (id: {})", req.method, req.id);
     let result = match req.method.as_str() {
         "spawn_agent" => handle_spawn_agent(&req, manager).await,
         "send_prompt" => handle_send_prompt(&req, manager).await,
@@ -94,13 +98,18 @@ async fn dispatch_request(line: &str, manager: &AgentManager) -> JsonRpcResponse
     };
 
     match result {
-        Ok(value) => JsonRpcResponse {
+        Ok(value) => {
+            log::debug!("Method {} succeeded (id: {})", req.method, req.id);
+            JsonRpcResponse {
             jsonrpc: "2.0".into(),
             id: req.id,
             result: Some(value),
             error: None,
-        },
-        Err((code, msg)) => error_response(req.id, code, &msg),
+        }}
+        Err((code, msg)) => {
+            log::warn!("Method {} failed (id: {}): {}", req.method, req.id, msg);
+            error_response(req.id, code, &msg)
+        }
     }
 }
 
