@@ -52,6 +52,7 @@ interface SidebarOverrides {
   onToggleSwarm?: (id: string) => void;
   onNewSwarm?: () => void;
   onAddAgent?: (swarmId: string, agentCommand: string) => void;
+  onKillAgent?: (id: string) => void;
 }
 
 function renderSidebar(overrides: SidebarOverrides = {}) {
@@ -69,6 +70,7 @@ function renderSidebar(overrides: SidebarOverrides = {}) {
       onToggleSwarm: overrides.onToggleSwarm ?? noop,
       onNewSwarm: overrides.onNewSwarm ?? noop,
       onAddAgent: overrides.onAddAgent ?? noop,
+      onKillAgent: overrides.onKillAgent ?? noop,
     },
   });
 }
@@ -148,5 +150,21 @@ describe("Sidebar", () => {
     expect(screen.getByText("Add agent")).toBeTruthy();
     expect(screen.getByText("Claude Code")).toBeTruthy();
     expect(screen.getByText("Codex")).toBeTruthy();
+  });
+
+  it("shows context menu on right-click of agent row", async () => {
+    renderSidebar({ onKillAgent: vi.fn() });
+    const agentRow = screen.getByText("Fix navigation bug").closest("button")!;
+    await fireEvent.contextMenu(agentRow);
+    expect(screen.getByText("Shutdown")).toBeTruthy();
+  });
+
+  it("calls onKillAgent when Shutdown is selected from context menu", async () => {
+    const onKillAgent = vi.fn();
+    renderSidebar({ onKillAgent });
+    const agentRow = screen.getByText("Fix navigation bug").closest("button")!;
+    await fireEvent.contextMenu(agentRow);
+    await fireEvent.click(screen.getByText("Shutdown"));
+    expect(onKillAgent).toHaveBeenCalledWith("agent-1");
   });
 });

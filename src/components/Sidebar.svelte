@@ -2,6 +2,7 @@
 <script lang="ts">
   import { ChevronRight, ChevronDown, Plus } from "@lucide/svelte";
   import AgentPickerPopover from "./AgentPickerPopover.svelte";
+  import ContextMenu from "./ContextMenu.svelte";
   import claudeLogo from "../assets/claude.svg";
   import openaiLogo from "../assets/openai.svg";
   import geminiLogo from "../assets/gemini.svg";
@@ -29,6 +30,7 @@
     onToggleSwarm: (id: string) => void;
     onNewSwarm: () => void;
     onAddAgent: (swarmId: string, agentCommand: string) => void;
+    onKillAgent?: (agentId: string) => void;
   }
 
   let {
@@ -41,11 +43,17 @@
     onToggleSwarm,
     onNewSwarm,
     onAddAgent,
+    onKillAgent,
   }: Props = $props();
 
   let isDaemonConnected = $derived(daemonStatus === "connected");
 
   let pickerSwarmId = $state<string | null>(null);
+  let contextMenu = $state<{
+    x: number;
+    y: number;
+    agentId: string;
+  } | null>(null);
 </script>
 
 <aside
@@ -115,6 +123,14 @@
                 ? 'bg-bg-selected border-l-2 border-accent'
                 : 'border-l-2 border-transparent'}"
               onclick={() => onSelectAgent(agent.id)}
+              oncontextmenu={(e) => {
+                e.preventDefault();
+                contextMenu = {
+                  x: e.clientX,
+                  y: e.clientY,
+                  agentId: agent.id,
+                };
+              }}
             >
               <div class="flex flex-col gap-0.5 flex-1 min-w-0">
                 <div class="flex items-center gap-1.5 w-full">
@@ -155,6 +171,32 @@
         {/if}
       </div>
     {/each}
+
+    {#if contextMenu}
+      <ContextMenu
+        x={contextMenu.x}
+        y={contextMenu.y}
+        items={[
+          { id: "rename", label: "Rename", disabled: true },
+          { id: "sep", label: "", separator: true },
+          {
+            id: "shutdown",
+            label: "Shutdown",
+            danger: true,
+            shortcut: "⌫",
+          },
+        ]}
+        onSelect={(id) => {
+          if (id === "shutdown" && contextMenu) {
+            onKillAgent?.(contextMenu.agentId);
+          }
+          contextMenu = null;
+        }}
+        onClose={() => {
+          contextMenu = null;
+        }}
+      />
+    {/if}
   </div>
 
   <!-- Footer: New swarm button + daemon status -->
