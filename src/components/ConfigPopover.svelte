@@ -20,7 +20,8 @@
     );
   }
 
-  function handleSelect(value: string) {
+  function handleSelect(value: string, e: MouseEvent) {
+    e.stopPropagation();
     onSelect(value);
     onClose();
   }
@@ -49,10 +50,8 @@
   });
 </script>
 
-<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
 <div
   bind:this={popoverEl}
-  onclick={(e) => e.stopPropagation()}
   class="absolute bottom-full mb-1.5 left-0 bg-bg-base border border-border-strong rounded-md shadow-sm py-1 min-w-[140px] z-10"
 >
   <div
@@ -75,7 +74,7 @@
             {opt.value === configOption.current_value
             ? 'text-accent-text font-medium bg-accent-soft'
             : 'text-fg-default'}"
-          onclick={() => handleSelect(opt.value)}
+          onclick={(e) => handleSelect(opt.value, e)}
         >
           <span class="w-3.5 text-center shrink-0 mt-px">
             {#if opt.value === configOption.current_value}
@@ -93,7 +92,7 @@
           {opt.value === configOption.current_value
           ? 'text-accent-text font-medium bg-accent-soft'
           : 'text-fg-default'}"
-        onclick={() => handleSelect(opt.value)}
+        onclick={(e) => handleSelect(opt.value, e)}
       >
         <span class="w-3.5 text-center shrink-0">
           {#if opt.value === configOption.current_value}

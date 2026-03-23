@@ -1,5 +1,12 @@
 <script lang="ts">
-  import { Sparkles, Lightbulb, Wand, ArrowUp, Square } from "@lucide/svelte";
+  import {
+    Sparkles,
+    Lightbulb,
+    Wand,
+    ChevronDown,
+    ArrowUp,
+    Square,
+  } from "@lucide/svelte";
   import ConfigPopover from "./ConfigPopover.svelte";
   import type { ConfigOption, DisplayAgent } from "../stores/types";
 
@@ -127,7 +134,13 @@
                 <Icon size={12} />
               {/if}
               {currentValueName(opt)}
-              <span class="text-[9px] opacity-60">▾</span>
+              <ChevronDown
+                size={10}
+                class="opacity-50 transition-transform duration-150 {openConfigId ===
+                opt.id
+                  ? ''
+                  : 'rotate-180'}"
+              />
             </button>
             {#if openConfigId === opt.id}
               <ConfigPopover
