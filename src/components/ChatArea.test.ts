@@ -174,6 +174,39 @@ describe("ChatArea", () => {
     expect(editCalled).toBe(true);
   });
 
+  it("shows connecting banner when agent is initializing", () => {
+    const agent = makeAgent([], { status: "initializing" });
+    render(ChatArea, { props: { agent, daemonStatus: "connected" as const } });
+    expect(screen.getByText(/Connecting to/)).toBeTruthy();
+    expect(screen.getByText("Waiting for the agent to start up")).toBeTruthy();
+  });
+
+  it("shows ready banner when agent is idle with no messages", () => {
+    const agent = makeAgent([], { status: "idle" });
+    render(ChatArea, { props: { agent, daemonStatus: "connected" as const } });
+    expect(screen.getByText("Ready")).toBeTruthy();
+    expect(screen.getByText("Test Agent")).toBeTruthy();
+  });
+
+  it("does not show ready banner when agent has messages", () => {
+    const agent = makeAgent([msg("assistant", "Hello", "1:00 PM")], {
+      status: "idle",
+    });
+    render(ChatArea, { props: { agent, daemonStatus: "connected" as const } });
+    expect(screen.queryByText("Ready")).toBeNull();
+  });
+
+  it("shows error banner with error message when agent has init error", () => {
+    const agent = makeAgent([], {
+      status: "error",
+      errorMessage: "Connection refused: binary not found",
+    });
+    render(ChatArea, { props: { agent, daemonStatus: "connected" as const } });
+    expect(screen.getByText("Failed to connect")).toBeTruthy();
+    expect(screen.getByText("Could not start the agent")).toBeTruthy();
+    expect(screen.getByText("Connection refused: binary not found")).toBeTruthy();
+  });
+
   it("hides working indicator when agent is idle", () => {
     const agent = makeAgent([msg("assistant", "Done", "1:00 PM")], {
       status: "idle",
