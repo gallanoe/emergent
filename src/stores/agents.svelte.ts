@@ -57,6 +57,11 @@ interface PromptCompletePayload {
   stop_reason: string;
 }
 
+interface UserMessagePayload {
+  agent_id: string;
+  content: string;
+}
+
 interface AgentErrorPayload {
   agent_id: string;
   message: string;
@@ -270,6 +275,21 @@ function createAgentStore() {
     }
 
     agent.status = "error";
+  }
+
+  function handleUserMessage(payload: UserMessagePayload) {
+    const agent = agents[payload.agent_id];
+    if (!agent) return;
+
+    agent.messages.push({
+      id: crypto.randomUUID(),
+      role: "user",
+      content: payload.content,
+      timestamp: new Date().toLocaleTimeString([], {
+        hour: "numeric",
+        minute: "2-digit",
+      }),
+    });
   }
 
   function handleStatusChange(payload: StatusChangePayload) {
@@ -489,6 +509,7 @@ function createAgentStore() {
     | ({ type: "agent:prompt-complete" } & PromptCompletePayload)
     | ({ type: "agent:status-change" } & StatusChangePayload)
     | ({ type: "agent:config-update" } & ConfigUpdatePayload)
+    | ({ type: "agent:user-message" } & UserMessagePayload)
     | ({ type: "agent:error" } & AgentErrorPayload);
 
   function replayNotifications(notifications: DaemonNotification[]) {
@@ -508,6 +529,9 @@ function createAgentStore() {
           break;
         case "agent:config-update":
           handleConfigUpdate(n);
+          break;
+        case "agent:user-message":
+          handleUserMessage(n);
           break;
         case "agent:error":
           handleError(n);

@@ -51,6 +51,12 @@ pub struct PromptCompletePayload {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct UserMessagePayload {
+    pub agent_id: String,
+    pub content: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AgentErrorPayload {
     pub agent_id: String,
     pub message: String,
@@ -219,6 +225,8 @@ pub enum Notification {
     StatusChange(StatusChangePayload),
     #[serde(rename = "agent:config-update")]
     ConfigUpdate(ConfigUpdatePayload),
+    #[serde(rename = "agent:user-message")]
+    UserMessage(UserMessagePayload),
     #[serde(rename = "agent:error")]
     Error(AgentErrorPayload),
 }
@@ -231,6 +239,7 @@ impl Notification {
             Notification::PromptComplete(_) => "agent:prompt-complete",
             Notification::StatusChange(_) => "agent:status-change",
             Notification::ConfigUpdate(_) => "agent:config-update",
+            Notification::UserMessage(_) => "agent:user-message",
             Notification::Error(_) => "agent:error",
         }
     }
@@ -242,6 +251,7 @@ impl Notification {
             Notification::PromptComplete(p) => Some(&p.agent_id),
             Notification::StatusChange(p) => Some(&p.agent_id),
             Notification::ConfigUpdate(p) => Some(&p.agent_id),
+            Notification::UserMessage(p) => Some(&p.agent_id),
             Notification::Error(p) => Some(&p.agent_id),
         }
     }

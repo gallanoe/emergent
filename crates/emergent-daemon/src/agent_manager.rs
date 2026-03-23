@@ -7,7 +7,7 @@ use agent_client_protocol as acp;
 use emergent_protocol::{
     AgentErrorPayload, AgentStatus, AgentSummary, ConfigOption, ConfigUpdatePayload,
     MessageChunkPayload, Notification, PromptCompletePayload, StatusChangePayload,
-    ToolCallContentPayload, ToolCallUpdatePayload,
+    ToolCallContentPayload, ToolCallUpdatePayload, UserMessagePayload,
 };
 use tokio::sync::{broadcast, mpsc, oneshot, Mutex, RwLock};
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
@@ -698,6 +698,12 @@ impl AgentManager {
         }
 
         handle.status = AgentStatus::Working;
+
+        // Record the user message so it appears in history
+        let _ = self.event_tx.send(Notification::UserMessage(UserMessagePayload {
+            agent_id: agent_id.to_string(),
+            content: text.clone(),
+        }));
 
         let (reply_tx, reply_rx) = oneshot::channel();
         handle

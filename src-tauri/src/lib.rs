@@ -49,6 +49,9 @@ pub fn run() {
                                     Notification::ConfigUpdate(p) => {
                                         let _ = handle.emit(event_name, p);
                                     }
+                                    Notification::UserMessage(p) => {
+                                        let _ = handle.emit(event_name, p);
+                                    }
                                     Notification::Error(p) => {
                                         let _ = handle.emit(event_name, p);
                                     }
