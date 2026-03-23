@@ -269,7 +269,7 @@ impl acp::Client for EmergentClient {
 // ---------------------------------------------------------------------------
 
 pub struct AgentManager {
-    agents: RwLock<HashMap<String, Arc<Mutex<AgentHandle>>>>,
+    agents: Arc<RwLock<HashMap<String, Arc<Mutex<AgentHandle>>>>>,
     event_tx: broadcast::Sender<Notification>,
     history: Arc<RwLock<HashMap<String, Vec<Notification>>>>,
 }
@@ -309,7 +309,7 @@ impl AgentManager {
         });
 
         Self {
-            agents: RwLock::new(HashMap::new()),
+            agents: Arc::new(RwLock::new(HashMap::new())),
             event_tx,
             history,
         }
@@ -320,8 +320,10 @@ impl AgentManager {
         self.event_tx.subscribe()
     }
 
-    /// Spawn an agent subprocess, perform ACP handshake, create a session,
-    /// and store the connection handle.
+    /// Spawn an agent subprocess asynchronously.
+    ///
+    /// Returns the agent ID immediately. The ACP handshake runs in a background
+    /// task and emits `StatusChange(Idle)` or `Error` notifications on completion.
     pub async fn spawn_agent(
         &self,
         working_directory: PathBuf,
@@ -336,12 +338,50 @@ impl AgentManager {
             working_directory.display()
         );
 
-        // Emit initializing status
-        let _ = self.event_tx.send(Notification::StatusChange(StatusChangePayload {
-            agent_id: agent_id.clone(),
-            status: AgentStatus::Initializing.to_string(),
-        }));
+        // Return ID immediately — the frontend sets "initializing" status locally.
+        // Initialization (process spawn + ACP handshake) runs asynchronously.
+        let agents = self.agents.clone();
+        let event_tx = self.event_tx.clone();
+        let history = self.history.clone();
+        let id = agent_id.clone();
 
+        tokio::spawn(async move {
+            match Self::initialize_agent(
+                id.clone(),
+                working_directory,
+                agent_binary,
+                agents,
+                event_tx.clone(),
+                history,
+            )
+            .await
+            {
+                Ok(()) => {
+                    log::info!("Agent {} spawned successfully", &id[..8]);
+                }
+                Err(e) => {
+                    log::error!("Agent {} failed to initialize: {}", &id[..8], e);
+                    let _ = event_tx.send(Notification::Error(AgentErrorPayload {
+                        agent_id: id,
+                        message: e,
+                    }));
+                }
+            }
+        });
+
+        Ok(agent_id)
+    }
+
+    /// Perform the full agent initialization: spawn process, ACP handshake,
+    /// store handle, and emit notifications.
+    async fn initialize_agent(
+        agent_id: String,
+        working_directory: PathBuf,
+        agent_binary: String,
+        agents: Arc<RwLock<HashMap<String, Arc<Mutex<AgentHandle>>>>>,
+        event_tx: broadcast::Sender<Notification>,
+        history: Arc<RwLock<HashMap<String, Vec<Notification>>>>,
+    ) -> Result<(), String> {
         // Parse command string into binary + args (e.g. "gemini --experimental-acp")
         let parts: Vec<&str> = agent_binary.split_whitespace().collect();
         let binary = parts
@@ -369,7 +409,7 @@ impl AgentManager {
         let (command_tx, command_rx) = mpsc::unbounded_channel::<AgentCommand>();
 
         let agent_id_for_thread = agent_id.clone();
-        let event_tx_clone = self.event_tx.clone();
+        let event_tx_clone = event_tx.clone();
         let wd = working_directory.clone();
 
         // Use a oneshot to receive the session_id + initial config (or error) from the LocalSet thread.
@@ -470,13 +510,7 @@ impl AgentManager {
         // Wait for initialization to complete
         let (_session_id, initial_config) = init_rx
             .await
-            .map_err(|_| "Agent thread terminated during initialization".to_string())?
-            .inspect_err(|e| {
-                let _ = self.event_tx.send(Notification::Error(AgentErrorPayload {
-                    agent_id: agent_id.clone(),
-                    message: e.clone(),
-                }));
-            })?;
+            .map_err(|_| "Agent thread terminated during initialization".to_string())??;
 
         // Store the handle
         let handle = AgentHandle {
@@ -489,35 +523,33 @@ impl AgentManager {
             config_options: initial_config.clone(),
         };
 
-        let _ = self.event_tx.send(Notification::StatusChange(StatusChangePayload {
+        let _ = event_tx.send(Notification::StatusChange(StatusChangePayload {
             agent_id: agent_id.clone(),
             status: AgentStatus::Idle.to_string(),
         }));
 
         // Emit initial config if the agent advertised any
         if !initial_config.is_empty() {
-            let _ = self.event_tx.send(Notification::ConfigUpdate(ConfigUpdatePayload {
+            let _ = event_tx.send(Notification::ConfigUpdate(ConfigUpdatePayload {
                 agent_id: agent_id.clone(),
                 config_options: initial_config,
                 changes: vec![],
             }));
         }
 
-        self.agents
+        agents
             .write()
             .await
             .insert(agent_id.clone(), Arc::new(Mutex::new(handle)));
 
-        log::info!("Agent {} spawned successfully", &agent_id[..8]);
-
         // Initialize history for this agent
-        self.history
+        history
             .write()
             .await
-            .entry(agent_id.clone())
+            .entry(agent_id)
             .or_default();
 
-        Ok(agent_id)
+        Ok(())
     }
 
     /// The command loop runs on the LocalSet thread, processing prompt/cancel/shutdown.

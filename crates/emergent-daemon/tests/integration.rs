@@ -150,10 +150,11 @@ async fn test_detect_agents_returns_array() {
 }
 
 #[tokio::test]
-async fn test_spawn_nonexistent_agent_fails() {
+async fn test_spawn_nonexistent_agent_returns_id_then_fails_async() {
     let daemon = TestDaemon::start().await;
     let mut client = daemon.connect().await;
 
+    // spawn_agent now returns immediately with an agent_id
     let resp = client
         .call(
             "spawn_agent",
@@ -163,7 +164,18 @@ async fn test_spawn_nonexistent_agent_fails() {
             }),
         )
         .await;
-    assert!(resp.error.is_some());
+    // Should succeed — returns agent_id immediately
+    assert!(resp.error.is_none());
+    let result = resp.result.unwrap();
+    assert!(result["agent_id"].as_str().is_some());
+
+    // Give the async initialization task time to fail
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+    // Verify the agent is NOT in the agents list (initialization failed)
+    let list_resp = client.call("list_agents", serde_json::json!({})).await;
+    let agents = list_resp.result.unwrap()["agents"].as_array().unwrap().clone();
+    assert!(agents.is_empty());
 
     daemon.shutdown().await;
 }
