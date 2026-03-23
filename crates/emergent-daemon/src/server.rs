@@ -98,6 +98,8 @@ async fn dispatch_request(line: &str, manager: &AgentManager) -> JsonRpcResponse
         "get_history" => handle_get_history(&req, manager).await,
         "detect_agents" => handle_detect_agents(),
         "known_agents" => handle_known_agents(),
+        "get_agent_config" => handle_get_agent_config(&req, manager).await,
+        "set_agent_config" => handle_set_agent_config(&req, manager).await,
         _ => Err((-32601, format!("Method not found: {}", req.method))),
     };
 
@@ -217,4 +219,30 @@ fn handle_detect_agents() -> Result<serde_json::Value, (i32, String)> {
 
 fn handle_known_agents() -> Result<serde_json::Value, (i32, String)> {
     Ok(serde_json::json!({ "agents": detect::known_agents() }))
+}
+
+async fn handle_get_agent_config(
+    req: &JsonRpcRequest,
+    manager: &AgentManager,
+) -> Result<serde_json::Value, (i32, String)> {
+    let agent_id: String = get_param(req, "agent_id")?;
+    manager
+        .get_config(&agent_id)
+        .await
+        .map(|c| serde_json::json!({ "config_options": c }))
+        .map_err(|e| (-32000, e))
+}
+
+async fn handle_set_agent_config(
+    req: &JsonRpcRequest,
+    manager: &AgentManager,
+) -> Result<serde_json::Value, (i32, String)> {
+    let agent_id: String = get_param(req, "agent_id")?;
+    let config_id: String = get_param(req, "config_id")?;
+    let value: String = get_param(req, "value")?;
+    manager
+        .set_config(&agent_id, config_id, value)
+        .await
+        .map(|c| serde_json::json!({ "config_options": c }))
+        .map_err(|e| (-32000, e))
 }

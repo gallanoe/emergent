@@ -15,6 +15,7 @@ function makeAgent(messages: DisplayMessage[], overrides?: Partial<DisplayAgent>
     messages,
     activeToolCalls: [],
     queuedMessage: null,
+    configOptions: [],
     ...overrides,
   };
 }

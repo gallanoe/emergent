@@ -197,4 +197,38 @@ impl DaemonClient {
         serde_json::from_value(result["agents"].clone())
             .map_err(|e| format!("Invalid response: {}", e))
     }
+
+    pub async fn get_agent_config(
+        &self,
+        agent_id: &str,
+    ) -> Result<Vec<ConfigOption>, String> {
+        let result = self
+            .call(
+                "get_agent_config",
+                serde_json::json!({ "agent_id": agent_id }),
+            )
+            .await?;
+        serde_json::from_value(result["config_options"].clone())
+            .map_err(|e| format!("Invalid response: {}", e))
+    }
+
+    pub async fn set_agent_config(
+        &self,
+        agent_id: &str,
+        config_id: &str,
+        value: &str,
+    ) -> Result<Vec<ConfigOption>, String> {
+        let result = self
+            .call(
+                "set_agent_config",
+                serde_json::json!({
+                    "agent_id": agent_id,
+                    "config_id": config_id,
+                    "value": value,
+                }),
+            )
+            .await?;
+        serde_json::from_value(result["config_options"].clone())
+            .map_err(|e| format!("Invalid response: {}", e))
+    }
 }

@@ -28,9 +28,28 @@ export interface DisplayToolCall {
   content: ToolCallContentItem[];
 }
 
+export interface ConfigSelectOption {
+  value: string;
+  name: string;
+}
+
+export interface ConfigSelectGroup {
+  label: string;
+  options: ConfigSelectOption[];
+}
+
+export interface ConfigOption {
+  id: string;
+  name: string;
+  description?: string;
+  category?: string;
+  current_value: string;
+  options: ConfigSelectOption[] | ConfigSelectGroup[];
+}
+
 export interface DisplayMessage {
   id: string;
-  role: "assistant" | "thinking" | "user" | "tool-group";
+  role: "assistant" | "thinking" | "user" | "tool-group" | "system";
   content: string;
   toolCalls?: DisplayToolCall[];
   timestamp: string;
@@ -49,6 +68,7 @@ export interface DisplayAgent {
   messages: DisplayMessage[];
   activeToolCalls: DisplayToolCall[];
   queuedMessage: string | null;
+  configOptions: ConfigOption[];
 }
 
 export interface DisplaySwarm {

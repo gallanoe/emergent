@@ -8,7 +8,7 @@
 //! - "long response": streams many chunks
 //! - "request permission": triggers a permission request callback
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 
 use agent_client_protocol::{self as acp, Client as _};
 use tokio::sync::{mpsc, oneshot};
@@ -17,6 +17,8 @@ use tokio_util::compat::{TokioAsyncReadCompatExt as _, TokioAsyncWriteCompatExt 
 struct MockAgent {
     notify_tx: mpsc::UnboundedSender<(acp::SessionNotification, oneshot::Sender<()>)>,
     next_session_id: Cell<u64>,
+    model: RefCell<String>,
+    thinking: RefCell<String>,
 }
 
 impl MockAgent {
@@ -26,7 +28,38 @@ impl MockAgent {
         Self {
             notify_tx,
             next_session_id: Cell::new(0),
+            model: RefCell::new("sonnet-4".into()),
+            thinking: RefCell::new("high".into()),
         }
+    }
+
+    fn build_config_options(&self) -> Vec<acp::SessionConfigOption> {
+        let model = self.model.borrow().clone();
+        let thinking = self.thinking.borrow().clone();
+        vec![
+            acp::SessionConfigOption::select(
+                "model",
+                "Model",
+                model,
+                vec![
+                    acp::SessionConfigSelectOption::new("opus-4", "Opus 4"),
+                    acp::SessionConfigSelectOption::new("sonnet-4", "Sonnet 4"),
+                    acp::SessionConfigSelectOption::new("haiku-3.5", "Haiku 3.5"),
+                ],
+            )
+            .category(acp::SessionConfigOptionCategory::Model),
+            acp::SessionConfigOption::select(
+                "thinking",
+                "Thinking",
+                thinking,
+                vec![
+                    acp::SessionConfigSelectOption::new("off", "Off"),
+                    acp::SessionConfigSelectOption::new("low", "Low"),
+                    acp::SessionConfigSelectOption::new("high", "High"),
+                ],
+            )
+            .category(acp::SessionConfigOptionCategory::ThoughtLevel),
+        ]
     }
 
     fn send_notification(
@@ -89,7 +122,26 @@ impl acp::Agent for MockAgent {
     ) -> Result<acp::NewSessionResponse, acp::Error> {
         let id = self.next_session_id.get();
         self.next_session_id.set(id + 1);
-        Ok(acp::NewSessionResponse::new(id.to_string()))
+        Ok(acp::NewSessionResponse::new(id.to_string())
+            .config_options(self.build_config_options()))
+    }
+
+    async fn set_session_config_option(
+        &self,
+        args: acp::SetSessionConfigOptionRequest,
+    ) -> Result<acp::SetSessionConfigOptionResponse, acp::Error> {
+        let config_id = args.config_id.to_string();
+        let value = args.value.to_string();
+
+        match config_id.as_str() {
+            "model" => *self.model.borrow_mut() = value,
+            "thinking" => *self.thinking.borrow_mut() = value,
+            _ => return Err(acp::Error::invalid_params()),
+        }
+
+        Ok(acp::SetSessionConfigOptionResponse::new(
+            self.build_config_options(),
+        ))
     }
 
     async fn prompt(

@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type {
+  ConfigOption,
   DisplayAgent,
   DisplayMessage,
   DisplayToolCall,
@@ -19,6 +20,7 @@ interface AgentConnection {
   activeToolCalls: Record<string, DisplayToolCall>;
   stopReason: string | null;
   queuedContent: string;
+  configOptions: ConfigOption[];
 }
 
 // ── Event payloads from Rust ────────────────────────────────────
@@ -63,6 +65,12 @@ interface AgentErrorPayload {
 interface StatusChangePayload {
   agent_id: string;
   status: string;
+}
+
+interface ConfigUpdatePayload {
+  agent_id: string;
+  config_options: ConfigOption[];
+  changes: { option_name: string; new_value_name: string }[];
 }
 
 interface AgentInfo {
@@ -270,6 +278,29 @@ function createAgentStore() {
     agent.status = payload.status as AgentConnection["status"];
   }
 
+  function handleConfigUpdate(payload: ConfigUpdatePayload) {
+    const agent = agents[payload.agent_id];
+    if (!agent) return;
+
+    agent.configOptions = payload.config_options;
+
+    // Insert system message for agent-initiated changes (non-empty changes)
+    if (payload.changes.length > 0) {
+      const text = payload.changes
+        .map((c) => `${c.option_name} changed to ${c.new_value_name}`)
+        .join(", ");
+      agent.messages.push({
+        id: crypto.randomUUID(),
+        role: "system",
+        content: text,
+        timestamp: new Date().toLocaleTimeString([], {
+          hour: "numeric",
+          minute: "2-digit",
+        }),
+      });
+    }
+  }
+
   // ── Event listener setup ──────────────────────────────────────
 
   async function setupListeners() {
@@ -282,6 +313,7 @@ function createAgentStore() {
     );
     await listen<AgentErrorPayload>("agent:error", (e) => handleError(e.payload));
     await listen<StatusChangePayload>("agent:status-change", (e) => handleStatusChange(e.payload));
+    await listen<ConfigUpdatePayload>("agent:config-update", (e) => handleConfigUpdate(e.payload));
   }
 
   // ── Public API ────────────────────────────────────────────────
@@ -309,7 +341,19 @@ function createAgentStore() {
       activeToolCalls: {},
       stopReason: null,
       queuedContent: "",
+      configOptions: [],
     };
+
+    // Fetch config after agent is registered — the initial ConfigUpdate
+    // notification races with spawn_agent returning, so we fetch explicitly.
+    invoke<ConfigOption[]>("get_agent_config", { agentId })
+      .then((config) => {
+        const agent = agents[agentId];
+        if (agent && config.length > 0) {
+          agent.configOptions = config;
+        }
+      })
+      .catch(() => {});
 
     return agentId;
   }
@@ -352,6 +396,28 @@ function createAgentStore() {
     const content = agent.queuedContent;
     agent.queuedContent = "";
     return content;
+  }
+
+  async function setConfig(agentId: string, configId: string, value: string): Promise<void> {
+    const agent = agents[agentId];
+    if (!agent) throw new Error(`Agent ${agentId} not found`);
+
+    // Optimistic update — use $state.snapshot to clone the reactive proxy
+    const previousConfig = $state.snapshot(agent.configOptions);
+    const opt = agent.configOptions.find((o) => o.id === configId);
+    if (opt) opt.current_value = value;
+
+    try {
+      await invoke<ConfigOption[]>("set_agent_config", {
+        agentId,
+        configId,
+        value,
+      });
+    } catch (err) {
+      // Revert on error
+      agent.configOptions = previousConfig;
+      console.error("set_agent_config failed:", err);
+    }
   }
 
   async function killAgent(agentId: string): Promise<void> {
@@ -399,6 +465,7 @@ function createAgentStore() {
       messages: conn.messages,
       activeToolCalls: Object.values(conn.activeToolCalls),
       queuedMessage: conn.queuedContent || null,
+      configOptions: conn.configOptions,
     };
   }
 
@@ -412,6 +479,7 @@ function createAgentStore() {
       activeToolCalls: {},
       stopReason: null,
       queuedContent: "",
+      configOptions: [],
     };
   }
 
@@ -420,6 +488,7 @@ function createAgentStore() {
     | ({ type: "agent:tool-call-update" } & ToolCallUpdatePayload)
     | ({ type: "agent:prompt-complete" } & PromptCompletePayload)
     | ({ type: "agent:status-change" } & StatusChangePayload)
+    | ({ type: "agent:config-update" } & ConfigUpdatePayload)
     | ({ type: "agent:error" } & AgentErrorPayload);
 
   function replayNotifications(notifications: DaemonNotification[]) {
@@ -436,6 +505,9 @@ function createAgentStore() {
           break;
         case "agent:status-change":
           handleStatusChange(n);
+          break;
+        case "agent:config-update":
+          handleConfigUpdate(n);
           break;
         case "agent:error":
           handleError(n);
@@ -458,6 +530,7 @@ function createAgentStore() {
     sendPrompt,
     cancelPrompt,
     killAgent,
+    setConfig,
     editQueue,
     registerQueueDumpHandler,
     registerExistingAgent,

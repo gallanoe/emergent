@@ -2,7 +2,7 @@ use std::sync::Arc;
 use tauri::State;
 
 use crate::DaemonConnection;
-use emergent_protocol::{AgentInfo, AgentSummary, KnownAgent, Notification};
+use emergent_protocol::{AgentInfo, AgentSummary, ConfigOption, KnownAgent, Notification};
 
 fn get_client(
     conn: &DaemonConnection,
@@ -82,4 +82,24 @@ pub async fn get_history(
     agent_id: String,
 ) -> Result<Vec<Notification>, String> {
     get_client(&conn)?.get_history(&agent_id).await
+}
+
+#[tauri::command]
+pub async fn get_agent_config(
+    conn: State<'_, Arc<DaemonConnection>>,
+    agent_id: String,
+) -> Result<Vec<ConfigOption>, String> {
+    get_client(&conn)?.get_agent_config(&agent_id).await
+}
+
+#[tauri::command]
+pub async fn set_agent_config(
+    conn: State<'_, Arc<DaemonConnection>>,
+    agent_id: String,
+    config_id: String,
+    value: String,
+) -> Result<Vec<ConfigOption>, String> {
+    get_client(&conn)?
+        .set_agent_config(&agent_id, &config_id, &value)
+        .await
 }

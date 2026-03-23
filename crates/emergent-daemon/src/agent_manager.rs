@@ -5,8 +5,9 @@ use std::sync::Arc;
 use acp::Agent as _;
 use agent_client_protocol as acp;
 use emergent_protocol::{
-    AgentErrorPayload, AgentStatus, AgentSummary, MessageChunkPayload, Notification,
-    PromptCompletePayload, StatusChangePayload, ToolCallContentPayload, ToolCallUpdatePayload,
+    AgentErrorPayload, AgentStatus, AgentSummary, ConfigOption, ConfigUpdatePayload,
+    MessageChunkPayload, Notification, PromptCompletePayload, StatusChangePayload,
+    ToolCallContentPayload, ToolCallUpdatePayload,
 };
 use tokio::sync::{broadcast, mpsc, oneshot, Mutex, RwLock};
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
@@ -22,6 +23,11 @@ enum AgentCommand {
     },
     Cancel {
         reply: oneshot::Sender<Result<(), String>>,
+    },
+    SetConfig {
+        config_id: String,
+        value: String,
+        reply: oneshot::Sender<Result<Vec<ConfigOption>, String>>,
     },
     Shutdown,
 }
@@ -39,6 +45,7 @@ struct AgentHandle {
     child: tokio::process::Child,
     /// Handle to the dedicated ACP thread (kept for ownership; not joined).
     thread_handle: Option<std::thread::JoinHandle<()>>,
+    config_options: Vec<ConfigOption>,
 }
 
 // ---------------------------------------------------------------------------
@@ -48,11 +55,20 @@ struct AgentHandle {
 struct EmergentClient {
     agent_id: String,
     event_tx: broadcast::Sender<Notification>,
+    config: std::sync::Arc<std::sync::Mutex<Vec<ConfigOption>>>,
 }
 
 impl EmergentClient {
-    fn new(agent_id: String, event_tx: broadcast::Sender<Notification>) -> Self {
-        Self { agent_id, event_tx }
+    fn new(
+        agent_id: String,
+        event_tx: broadcast::Sender<Notification>,
+        config: std::sync::Arc<std::sync::Mutex<Vec<ConfigOption>>>,
+    ) -> Self {
+        Self {
+            agent_id,
+            event_tx,
+            config,
+        }
     }
 
     fn emit(&self, notification: Notification) {
@@ -224,6 +240,21 @@ impl acp::Client for EmergentClient {
                     );
                 }
             }
+            acp::SessionUpdate::ConfigOptionUpdate(update) => {
+                let new_config = crate::config::convert_config_options(&update.config_options);
+                let old_config = {
+                    let mut guard = self.config.lock().unwrap();
+                    let old = guard.clone();
+                    *guard = new_config.clone();
+                    old
+                };
+                let changes = crate::config::diff_config(&old_config, &new_config);
+                self.emit(Notification::ConfigUpdate(ConfigUpdatePayload {
+                    agent_id: self.agent_id.clone(),
+                    config_options: new_config,
+                    changes,
+                }));
+            }
             _ => {
                 // AvailableCommandsUpdate, usage_update, etc. — ignored for v1
             }
@@ -341,8 +372,9 @@ impl AgentManager {
         let event_tx_clone = self.event_tx.clone();
         let wd = working_directory.clone();
 
-        // Use a oneshot to receive the session_id (or error) from the LocalSet thread.
-        let (init_tx, init_rx) = oneshot::channel::<Result<acp::SessionId, String>>();
+        // Use a oneshot to receive the session_id + initial config (or error) from the LocalSet thread.
+        let (init_tx, init_rx) =
+            oneshot::channel::<Result<(acp::SessionId, Vec<ConfigOption>), String>>();
 
         // Spawn a dedicated thread running a LocalSet for the !Send ACP connection.
         let thread_handle = std::thread::Builder::new()
@@ -360,8 +392,13 @@ impl AgentManager {
                     let incoming = child_stdout.compat();
 
                     let aid = agent_id.clone();
-                    let client =
-                        EmergentClient::new(agent_id.clone(), event_tx_clone.clone());
+                    let config_state =
+                        std::sync::Arc::new(std::sync::Mutex::new(Vec::<ConfigOption>::new()));
+                    let client = EmergentClient::new(
+                        agent_id.clone(),
+                        event_tx_clone.clone(),
+                        config_state.clone(),
+                    );
 
                     let (conn, handle_io) =
                         acp::ClientSideConnection::new(client, outgoing, incoming, |fut| {
@@ -391,14 +428,23 @@ impl AgentManager {
                             .await
                             .map_err(|e| format!("ACP new_session failed: {}", e))?;
 
-                        Ok::<_, String>(session_resp.session_id)
+                        let initial_config = session_resp
+                            .config_options
+                            .as_deref()
+                            .map(crate::config::convert_config_options)
+                            .unwrap_or_default();
+
+                        // Store initial config in the EmergentClient for diffing
+                        *config_state.lock().unwrap() = initial_config.clone();
+
+                        Ok::<_, String>((session_resp.session_id, initial_config))
                     }
                     .await;
 
                     let session_id = match init_result {
-                        Ok(sid) => {
+                        Ok((sid, config)) => {
                             log::debug!("Agent {} ACP session established: {:?}", &agent_id[..8], sid);
-                            let _ = init_tx.send(Ok(sid.clone()));
+                            let _ = init_tx.send(Ok((sid.clone(), config)));
                             sid
                         }
                         Err(e) => {
@@ -422,7 +468,7 @@ impl AgentManager {
             .map_err(|e| format!("Failed to spawn agent thread: {}", e))?;
 
         // Wait for initialization to complete
-        let _session_id = init_rx
+        let (_session_id, initial_config) = init_rx
             .await
             .map_err(|_| "Agent thread terminated during initialization".to_string())?
             .inspect_err(|e| {
@@ -440,12 +486,22 @@ impl AgentManager {
             command_tx,
             child,
             thread_handle: Some(thread_handle),
+            config_options: initial_config.clone(),
         };
 
         let _ = self.event_tx.send(Notification::StatusChange(StatusChangePayload {
             agent_id: agent_id.clone(),
             status: AgentStatus::Idle.to_string(),
         }));
+
+        // Emit initial config if the agent advertised any
+        if !initial_config.is_empty() {
+            let _ = self.event_tx.send(Notification::ConfigUpdate(ConfigUpdatePayload {
+                agent_id: agent_id.clone(),
+                config_options: initial_config,
+                changes: vec![],
+            }));
+        }
 
         self.agents
             .write()
@@ -518,6 +574,23 @@ impl AgentManager {
                                     Some(AgentCommand::Prompt { reply: dup_reply, .. }) => {
                                         let _ = dup_reply.send(Err("Agent is already working".to_string()));
                                     }
+                                    Some(AgentCommand::SetConfig { config_id, value, reply: cfg_reply }) => {
+                                        log::debug!("Agent {} set_config during prompt: {} = {}", &agent_id[..8], config_id, value);
+                                        let req = acp::SetSessionConfigOptionRequest::new(
+                                            session_id.clone(),
+                                            config_id,
+                                            value,
+                                        );
+                                        match conn.set_session_config_option(req).await {
+                                            Ok(resp) => {
+                                                let new_config = crate::config::convert_config_options(&resp.config_options);
+                                                let _ = cfg_reply.send(Ok(new_config));
+                                            }
+                                            Err(e) => {
+                                                let _ = cfg_reply.send(Err(format!("set_config failed: {}", e)));
+                                            }
+                                        }
+                                    }
                                     None => {
                                         let _ = reply.send(Err("Command channel closed".to_string()));
                                         return;
@@ -567,6 +640,33 @@ impl AgentManager {
                         }
                         Err(e) => {
                             let _ = reply.send(Err(format!("Cancel failed: {}", e)));
+                        }
+                    }
+                }
+                AgentCommand::SetConfig {
+                    config_id,
+                    value,
+                    reply,
+                } => {
+                    log::debug!(
+                        "Agent {} set_config: {} = {}",
+                        &agent_id[..8],
+                        config_id,
+                        value
+                    );
+                    let req = acp::SetSessionConfigOptionRequest::new(
+                        session_id.clone(),
+                        config_id,
+                        value,
+                    );
+                    match conn.set_session_config_option(req).await {
+                        Ok(resp) => {
+                            let new_config =
+                                crate::config::convert_config_options(&resp.config_options);
+                            let _ = reply.send(Ok(new_config));
+                        }
+                        Err(e) => {
+                            let _ = reply.send(Err(format!("set_config failed: {}", e)));
                         }
                     }
                 }
@@ -703,6 +803,68 @@ impl AgentManager {
             });
         }
         result
+    }
+
+    /// Get the current config options for an agent.
+    pub async fn get_config(&self, agent_id: &str) -> Result<Vec<ConfigOption>, String> {
+        let handle_arc = {
+            let agents = self.agents.read().await;
+            agents
+                .get(agent_id)
+                .cloned()
+                .ok_or_else(|| format!("Agent '{}' not found", agent_id))?
+        };
+        let handle = handle_arc.lock().await;
+        Ok(handle.config_options.clone())
+    }
+
+    /// Set a config option on an agent via ACP.
+    pub async fn set_config(
+        &self,
+        agent_id: &str,
+        config_id: String,
+        value: String,
+    ) -> Result<Vec<ConfigOption>, String> {
+        let handle_arc = {
+            let agents = self.agents.read().await;
+            agents
+                .get(agent_id)
+                .cloned()
+                .ok_or_else(|| format!("Agent '{}' not found", agent_id))?
+        };
+
+        let (reply_tx, reply_rx) = oneshot::channel();
+        {
+            let handle = handle_arc.lock().await;
+            handle
+                .command_tx
+                .send(AgentCommand::SetConfig {
+                    config_id,
+                    value,
+                    reply: reply_tx,
+                })
+                .map_err(|_| "Agent thread has terminated".to_string())?;
+        }
+
+        let new_config = reply_rx
+            .await
+            .map_err(|_| "Agent thread terminated during set_config".to_string())??;
+
+        // Update stored config and emit notification with diff.
+        {
+            let mut handle = handle_arc.lock().await;
+            let old_config = std::mem::replace(&mut handle.config_options, new_config.clone());
+            let changes = crate::config::diff_config(&old_config, &new_config);
+            if !changes.is_empty() {
+                let _ = self.event_tx.send(Notification::ConfigUpdate(ConfigUpdatePayload {
+                    agent_id: agent_id.to_string(),
+                    config_options: new_config.clone(),
+                    changes,
+                }));
+            }
+        }
+
+        Ok(new_config)
     }
 
     /// Get notification history for an agent.

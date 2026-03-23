@@ -117,6 +117,56 @@ pub struct AgentSummary {
 }
 
 // ---------------------------------------------------------------------------
+// Config option types (ACP session config → daemon-to-client)
+// ---------------------------------------------------------------------------
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ConfigSelectOption {
+    pub value: String,
+    pub name: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ConfigSelectGroup {
+    pub label: String,
+    pub options: Vec<ConfigSelectOption>,
+}
+
+// Untagged deserialization works because ConfigSelectGroup has `label` + `options`
+// while ConfigSelectOption has `value` + `name` — structurally distinct.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ConfigSelectOptions {
+    Ungrouped(Vec<ConfigSelectOption>),
+    Grouped(Vec<ConfigSelectGroup>),
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ConfigOption {
+    pub id: String,
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub category: Option<String>,
+    pub current_value: String,
+    pub options: ConfigSelectOptions,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ConfigChangeEntry {
+    pub option_name: String,
+    pub new_value_name: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ConfigUpdatePayload {
+    pub agent_id: String,
+    pub config_options: Vec<ConfigOption>,
+    pub changes: Vec<ConfigChangeEntry>,
+}
+
+// ---------------------------------------------------------------------------
 // JSON-RPC envelope types
 // ---------------------------------------------------------------------------
 
@@ -167,6 +217,8 @@ pub enum Notification {
     PromptComplete(PromptCompletePayload),
     #[serde(rename = "agent:status-change")]
     StatusChange(StatusChangePayload),
+    #[serde(rename = "agent:config-update")]
+    ConfigUpdate(ConfigUpdatePayload),
     #[serde(rename = "agent:error")]
     Error(AgentErrorPayload),
 }
@@ -178,6 +230,7 @@ impl Notification {
             Notification::ToolCallUpdate(_) => "agent:tool-call-update",
             Notification::PromptComplete(_) => "agent:prompt-complete",
             Notification::StatusChange(_) => "agent:status-change",
+            Notification::ConfigUpdate(_) => "agent:config-update",
             Notification::Error(_) => "agent:error",
         }
     }
@@ -188,6 +241,7 @@ impl Notification {
             Notification::ToolCallUpdate(p) => Some(&p.agent_id),
             Notification::PromptComplete(p) => Some(&p.agent_id),
             Notification::StatusChange(p) => Some(&p.agent_id),
+            Notification::ConfigUpdate(p) => Some(&p.agent_id),
             Notification::Error(p) => Some(&p.agent_id),
         }
     }
@@ -264,6 +318,41 @@ mod tests {
             Notification::MessageChunk(p) => {
                 assert_eq!(p.agent_id, "abc");
                 assert_eq!(p.content, "hello");
+            }
+            _ => panic!("Wrong variant"),
+        }
+    }
+
+    #[test]
+    fn config_update_notification_roundtrips() {
+        let n = Notification::ConfigUpdate(ConfigUpdatePayload {
+            agent_id: "abc".into(),
+            config_options: vec![ConfigOption {
+                id: "model".into(),
+                name: "Model".into(),
+                description: None,
+                category: Some("model".into()),
+                current_value: "opus-4".into(),
+                options: ConfigSelectOptions::Ungrouped(vec![
+                    ConfigSelectOption {
+                        value: "opus-4".into(),
+                        name: "Opus 4".into(),
+                    },
+                    ConfigSelectOption {
+                        value: "sonnet-4".into(),
+                        name: "Sonnet 4".into(),
+                    },
+                ]),
+            }],
+            changes: vec![],
+        });
+        let json = serde_json::to_string(&n).unwrap();
+        assert!(json.contains("agent:config-update"));
+        let restored: Notification = serde_json::from_str(&json).unwrap();
+        match restored {
+            Notification::ConfigUpdate(p) => {
+                assert_eq!(p.config_options.len(), 1);
+                assert_eq!(p.config_options[0].id, "model");
             }
             _ => panic!("Wrong variant"),
         }

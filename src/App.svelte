@@ -75,6 +75,10 @@
         const agent = appState.selectedAgent;
         if (agent) appState.cancelPrompt(agent.id);
       }}
+      onSetConfig={(configId, value) => {
+        const agent = appState.selectedAgent;
+        if (agent) appState.setConfig(agent.id, configId, value);
+      }}
     />
   </main>
 </div>

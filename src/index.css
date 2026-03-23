@@ -91,11 +91,6 @@ input,
   user-select: text;
 }
 
-:focus-visible {
-  outline: 2px solid var(--color-border-focus);
-  outline-offset: 1px;
-}
-
 @keyframes fade-in {
   from {
     opacity: 0;

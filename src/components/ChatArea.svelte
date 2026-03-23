@@ -153,6 +153,14 @@
           <div class={spacingClass(i)}>
             <ToolCallGroup toolCalls={message.toolCalls} />
           </div>
+        {:else if message.role === "system"}
+          <div class="{spacingClass(i)} flex items-center gap-2 py-1">
+            <div class="flex-1 h-px bg-border-default"></div>
+            <span class="text-[10px] text-fg-muted whitespace-nowrap shrink-0">
+              {message.content}
+            </span>
+            <div class="flex-1 h-px bg-border-default"></div>
+          </div>
         {/if}
       {/each}
 

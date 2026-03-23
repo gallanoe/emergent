@@ -20,6 +20,7 @@ function makeSwarm(overrides?: Partial<DisplaySwarm>): DisplaySwarm {
         messages: [],
         activeToolCalls: [],
         queuedMessage: null,
+        configOptions: [],
       },
       {
         id: "agent-2",
@@ -32,6 +33,7 @@ function makeSwarm(overrides?: Partial<DisplaySwarm>): DisplaySwarm {
         messages: [],
         activeToolCalls: [],
         queuedMessage: null,
+        configOptions: [],
       },
     ],
     ...overrides,

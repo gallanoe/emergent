@@ -1,4 +1,5 @@
 pub mod agent_manager;
+pub mod config;
 pub mod detect;
 pub mod server;
 pub mod socket;

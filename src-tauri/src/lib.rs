@@ -46,6 +46,9 @@ pub fn run() {
                                     Notification::StatusChange(p) => {
                                         let _ = handle.emit(event_name, p);
                                     }
+                                    Notification::ConfigUpdate(p) => {
+                                        let _ = handle.emit(event_name, p);
+                                    }
                                     Notification::Error(p) => {
                                         let _ = handle.emit(event_name, p);
                                     }
@@ -81,6 +84,8 @@ pub fn run() {
             commands::get_daemon_status,
             commands::list_agents,
             commands::get_history,
+            commands::get_agent_config,
+            commands::set_agent_config,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
