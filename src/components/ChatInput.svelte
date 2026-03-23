@@ -45,6 +45,21 @@
   let hasText = $derived(message.trim().length > 0);
   let openConfigId = $state<string | null>(null);
 
+  let isDisabled = $derived(
+    demoMode ||
+      !agent ||
+      agent.status === "initializing" ||
+      agent.status === "error",
+  );
+
+  let placeholderText = $derived.by(() => {
+    if (demoMode) return "Demo mode — input disabled";
+    if (!agent) return "Select an agent...";
+    if (agent.status === "initializing") return "Connecting to agent…";
+    if (agent.status === "error") return "Agent unavailable";
+    return `Message ${agent.name}…`;
+  });
+
   const CATEGORY_ICONS: Record<string, typeof Sparkles> = {
     model: Sparkles,
     thought_level: Lightbulb,
@@ -103,11 +118,9 @@
     <textarea
       bind:this={textareaEl}
       class="w-full px-3 py-2.5 text-[12px] text-fg-default bg-transparent resize-none leading-relaxed placeholder:text-fg-disabled outline-none"
-      placeholder={demoMode
-        ? "Demo mode — input disabled"
-        : "Message this agent..."}
+      placeholder={placeholderText}
       rows="1"
-      disabled={demoMode || !agent}
+      disabled={isDisabled}
       bind:value={message}
       onkeydown={handleKeydown}
     ></textarea>
@@ -127,7 +140,7 @@
               onclick={() => {
                 openConfigId = openConfigId === opt.id ? null : opt.id;
               }}
-              disabled={demoMode || !agent}
+              disabled={isDisabled}
             >
               {#if opt.category && CATEGORY_ICONS[opt.category]}
                 {@const Icon = CATEGORY_ICONS[opt.category]}
@@ -174,7 +187,7 @@
               ? 'bg-accent text-white'
               : 'bg-fg-disabled text-white'}"
             onclick={handleSend}
-            disabled={demoMode || !agent || !hasText}
+            disabled={isDisabled || !hasText}
           >
             <ArrowUp size={12} />
           </button>
