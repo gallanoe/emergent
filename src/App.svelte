@@ -56,7 +56,7 @@
       appState.addAgentToSwarm(swarmId, agentCommand);
     }}
   />
-  <main class="flex flex-col min-h-0">
+  <main class="flex flex-col min-h-0 min-w-0">
     <TopBar agent={appState.selectedAgent} />
     <ChatArea
       agent={appState.selectedAgent}

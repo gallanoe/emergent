@@ -84,7 +84,7 @@
 <div
   bind:this={scrollContainer}
   onscroll={onScroll}
-  class="flex-1 overflow-y-auto px-5 py-4"
+  class="flex-1 overflow-y-auto min-w-0 px-5 py-4"
 >
   {#if daemonStatus === "disconnected" || daemonStatus === "connecting"}
     <!-- Daemon not connected — centered banner -->
