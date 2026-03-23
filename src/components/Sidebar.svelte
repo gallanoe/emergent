@@ -122,9 +122,11 @@
                     class="w-1.5 h-1.5 rounded-full shrink-0
                       {agent.status === 'error'
                       ? 'bg-error'
-                      : agent.status === 'working'
-                        ? 'bg-success'
-                        : 'bg-fg-muted'}"
+                      : agent.status === 'initializing'
+                        ? 'bg-warning animate-pulse'
+                        : agent.status === 'working'
+                          ? 'bg-success'
+                          : 'bg-fg-muted'}"
                   ></span>
                   <span
                     class="text-[12px] font-medium truncate {isSelected

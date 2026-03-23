@@ -118,6 +118,29 @@ describe("Sidebar", () => {
     expect(screen.getByText("emergent")).toBeTruthy();
   });
 
+  it("renders pulsing amber dot for initializing agent", () => {
+    const swarm = makeSwarm({
+      agents: [
+        {
+          id: "agent-init",
+          swarmId: "swarm-1",
+          cli: "claude-agent-acp",
+          name: "Claude",
+          status: "initializing",
+          preview: "",
+          updatedAt: "just now",
+          messages: [],
+          activeToolCalls: [],
+          queuedMessage: null,
+          configOptions: [],
+        },
+      ],
+    });
+    renderSidebar({ swarms: [swarm] });
+    const dot = document.querySelector(".bg-warning.animate-pulse");
+    expect(dot).toBeTruthy();
+  });
+
   it("shows agent picker popover when clicking add button", async () => {
     renderSidebar({ demoMode: false });
     const addButton = screen.getByTitle("Add agent");
