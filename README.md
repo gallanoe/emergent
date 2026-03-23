@@ -7,7 +7,7 @@ A desktop application for running LLM agents in parallel. Spawn multiple AI agen
 ## Features
 
 - **Agent Swarms** — Run multiple LLM agents side-by-side, each working independently on tasks
-- **Multi-Provider Support** — Works with Claude Code, Gemini CLI, Codex, and other ACP-compatible agents
+- **Multi-Provider Support** — Works with Claude Code, Gemini CLI, Codex, Kiro, OpenCode, and other ACP-compatible agents
 - **Real-Time Streaming** — Watch agent responses stream in with markdown rendering and thinking block display
 - **Native Desktop App** — Built with Tauri 2 for a fast, lightweight experience on macOS, Windows, and Linux
 - **Daemon Architecture** — Agents survive UI restarts and multiple clients can connect simultaneously
@@ -34,7 +34,7 @@ Agents keep running even when the UI is closed. Reopening the app reconnects to 
 
 - [Rust](https://rustup.rs/) (1.77.2+)
 - [Bun](https://bun.sh/)
-- At least one supported agent CLI installed (e.g. Claude Code, Gemini CLI, Codex)
+- At least one supported agent CLI installed (e.g. Claude Code, Gemini CLI, Codex, Kiro, OpenCode)
 
 ### Development
 
@@ -88,6 +88,8 @@ bun run build                              # Tauri desktop app
 | Claude Code | `claude-agent-acp`          |
 | Codex       | `codex-acp`                 |
 | Gemini      | `gemini --experimental-acp` |
+| Kiro        | `kiro-cli acp`              |
+| OpenCode    | `opencode acp`              |
 
 ## License
 
