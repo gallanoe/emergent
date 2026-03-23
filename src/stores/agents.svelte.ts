@@ -435,7 +435,11 @@ function createAgentStore() {
   }
 
   async function killAgent(agentId: string): Promise<void> {
-    await invoke("kill_agent", { agentId });
+    try {
+      await invoke("kill_agent", { agentId });
+    } catch (err) {
+      console.error("kill_agent RPC failed (cleaning up anyway):", err);
+    }
     delete agents[agentId];
   }
 

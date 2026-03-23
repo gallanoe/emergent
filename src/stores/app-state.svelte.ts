@@ -115,6 +115,36 @@ function createAppState() {
     return agentId;
   }
 
+  async function killAgent(agentId: string): Promise<void> {
+    // Find the agent's position before removing it (for selection logic)
+    let nextSelection: string | null = null;
+    for (const swarm of swarms) {
+      const idx = swarm.agentIds.indexOf(agentId);
+      if (idx === -1) continue;
+
+      // Determine next selection: prefer above, then below, then other swarms
+      if (idx > 0) {
+        nextSelection = swarm.agentIds[idx - 1] ?? null;
+      } else if (swarm.agentIds.length > 1) {
+        nextSelection = swarm.agentIds[idx + 1] ?? null;
+      } else {
+        // Swarm will be empty — find first agent in any other swarm
+        const otherAgent = swarms.filter((s) => s.id !== swarm.id).flatMap((s) => s.agentIds)[0];
+        nextSelection = otherAgent ?? null;
+      }
+
+      // Remove from swarm
+      swarm.agentIds.splice(idx, 1);
+      break;
+    }
+
+    await agentStore.killAgent(agentId);
+
+    if (selectedAgentId === agentId) {
+      selectedAgentId = nextSelection;
+    }
+  }
+
   async function newSwarm(): Promise<void> {
     if (demoMode) return;
 
@@ -200,6 +230,7 @@ function createAppState() {
     addAgentToSwarm,
     newSwarm,
     toggleSwarmCollapsed,
+    killAgent,
     sendPrompt: agentStore.sendPrompt,
     cancelPrompt: agentStore.cancelPrompt,
     setConfig: agentStore.setConfig,
