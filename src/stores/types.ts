@@ -78,3 +78,12 @@ export interface DisplaySwarm {
   collapsed: boolean;
   agents: DisplayAgent[];
 }
+
+export interface MenuItem {
+  id: string;
+  label: string;
+  danger?: boolean;
+  disabled?: boolean;
+  shortcut?: string;
+  separator?: boolean;
+}
