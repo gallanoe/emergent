@@ -447,6 +447,7 @@ function createAgentStore() {
     "claude-agent-acp": "Claude Code",
     "codex-acp": "Codex",
     "gemini --experimental-acp": "Gemini",
+    "kiro-cli acp": "Kiro",
   };
 
   function getAgentDisplayName(conn: AgentConnection): string {

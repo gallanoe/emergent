@@ -5,6 +5,7 @@ const KNOWN_AGENTS: &[(&str, &str, &[&str])] = &[
     ("Claude Code", "claude-agent-acp", &[]),
     ("Codex", "codex-acp", &[]),
     ("Gemini", "gemini", &["--experimental-acp"]),
+    ("Kiro", "kiro-cli", &["acp"]),
 ];
 
 /// Return all known agent types, marking which are installed.
@@ -72,6 +73,8 @@ mod tests {
         assert_eq!(agents[1].command, "codex-acp");
         assert_eq!(agents[2].name, "Gemini");
         assert_eq!(agents[2].command, "gemini --experimental-acp");
+        assert_eq!(agents[3].name, "Kiro");
+        assert_eq!(agents[3].command, "kiro-cli acp");
     }
 
     #[test]

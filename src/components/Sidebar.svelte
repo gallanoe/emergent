@@ -6,12 +6,14 @@
   import claudeLogo from "../assets/claude.svg";
   import openaiLogo from "../assets/openai.svg";
   import geminiLogo from "../assets/gemini.svg";
+  import kiroLogo from "../assets/kiro.svg";
   import type { DisplaySwarm } from "../stores/types";
 
   const AGENT_LOGOS: Record<string, string> = {
     "claude-agent-acp": claudeLogo,
     "codex-acp": openaiLogo,
     "gemini --experimental-acp": geminiLogo,
+    "kiro-cli acp": kiroLogo,
   };
 
   type DaemonStatus =

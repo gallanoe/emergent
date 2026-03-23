@@ -3,6 +3,7 @@
   import claudeLogo from "../assets/claude.svg";
   import openaiLogo from "../assets/openai.svg";
   import geminiLogo from "../assets/gemini.svg";
+  import kiroLogo from "../assets/kiro.svg";
 
   interface KnownAgent {
     name: string;
@@ -22,6 +23,7 @@
     "claude-agent-acp": claudeLogo,
     "codex-acp": openaiLogo,
     "gemini --experimental-acp": geminiLogo,
+    "kiro-cli acp": kiroLogo,
   };
 
   function handleClick(agent: KnownAgent) {
