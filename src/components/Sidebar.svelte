@@ -7,6 +7,7 @@
   import openaiLogo from "../assets/openai.svg";
   import geminiLogo from "../assets/gemini.svg";
   import kiroLogo from "../assets/kiro.svg";
+  import opencodeLogo from "../assets/opencode.svg";
   import type { DisplaySwarm } from "../stores/types";
 
   const AGENT_LOGOS: Record<string, string> = {
@@ -14,6 +15,7 @@
     "codex-acp": openaiLogo,
     "gemini --experimental-acp": geminiLogo,
     "kiro-cli acp": kiroLogo,
+    "opencode acp": opencodeLogo,
   };
 
   type DaemonStatus =

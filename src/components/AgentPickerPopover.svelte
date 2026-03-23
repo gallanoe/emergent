@@ -4,6 +4,7 @@
   import openaiLogo from "../assets/openai.svg";
   import geminiLogo from "../assets/gemini.svg";
   import kiroLogo from "../assets/kiro.svg";
+  import opencodeLogo from "../assets/opencode.svg";
 
   interface KnownAgent {
     name: string;
@@ -24,6 +25,7 @@
     "codex-acp": openaiLogo,
     "gemini --experimental-acp": geminiLogo,
     "kiro-cli acp": kiroLogo,
+    "opencode acp": opencodeLogo,
   };
 
   function handleClick(agent: KnownAgent) {

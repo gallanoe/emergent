@@ -448,6 +448,7 @@ function createAgentStore() {
     "codex-acp": "Codex",
     "gemini --experimental-acp": "Gemini",
     "kiro-cli acp": "Kiro",
+    "opencode acp": "OpenCode",
   };
 
   function getAgentDisplayName(conn: AgentConnection): string {
