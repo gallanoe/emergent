@@ -21,6 +21,7 @@ interface AgentConnection {
   stopReason: string | null;
   queuedContent: string;
   configOptions: ConfigOption[];
+  errorMessage?: string;
 }
 
 // ── Event payloads from Rust ────────────────────────────────────
@@ -275,6 +276,7 @@ function createAgentStore() {
     }
 
     agent.status = "error";
+    agent.errorMessage = payload.message;
   }
 
   function handleUserMessage(payload: UserMessagePayload) {
@@ -356,7 +358,7 @@ function createAgentStore() {
       id: agentId,
       swarmId,
       cli: agentCli,
-      status: "idle",
+      status: "initializing",
       messages: [],
       activeToolCalls: {},
       stopReason: null,
@@ -364,16 +366,8 @@ function createAgentStore() {
       configOptions: [],
     };
 
-    // Fetch config after agent is registered — the initial ConfigUpdate
-    // notification races with spawn_agent returning, so we fetch explicitly.
-    invoke<ConfigOption[]>("get_agent_config", { agentId })
-      .then((config) => {
-        const agent = agents[agentId];
-        if (agent && config.length > 0) {
-          agent.configOptions = config;
-        }
-      })
-      .catch(() => {});
+    // No explicit config fetch needed — config arrives via ConfigUpdate
+    // notification after the daemon completes the async ACP handshake.
 
     return agentId;
   }
@@ -469,7 +463,7 @@ function createAgentStore() {
   function toDisplayAgent(conn: AgentConnection): DisplayAgent {
     const lastMsg = conn.messages.at(-1);
     const statusMap: Record<AgentConnection["status"], DisplayAgent["status"]> = {
-      initializing: "working",
+      initializing: "initializing",
       idle: "idle",
       working: "working",
       error: "error",
@@ -486,6 +480,7 @@ function createAgentStore() {
       activeToolCalls: Object.values(conn.activeToolCalls),
       queuedMessage: conn.queuedContent || null,
       configOptions: conn.configOptions,
+      ...(conn.errorMessage !== undefined && { errorMessage: conn.errorMessage }),
     };
   }
 

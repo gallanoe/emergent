@@ -55,7 +55,7 @@ export interface DisplayMessage {
   timestamp: string;
 }
 
-export type AgentStatus = "idle" | "working" | "error";
+export type AgentStatus = "initializing" | "idle" | "working" | "error";
 
 export interface DisplayAgent {
   id: string;
@@ -69,6 +69,7 @@ export interface DisplayAgent {
   activeToolCalls: DisplayToolCall[];
   queuedMessage: string | null;
   configOptions: ConfigOption[];
+  errorMessage?: string;
 }
 
 export interface DisplaySwarm {
