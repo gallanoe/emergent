@@ -29,7 +29,7 @@
     {/if}
   </div>
   {#if agent}
-    <div class="flex items-center gap-0.5 shrink-0">
+    <div class="relative z-[60] flex items-center gap-0.5 shrink-0">
       <button
         class="interactive flex items-center gap-[5px] h-[26px] px-2 rounded text-[11px] font-medium text-fg-disabled opacity-45 pointer-events-none"
         title="Coming soon"
