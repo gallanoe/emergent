@@ -4,13 +4,26 @@
   import TopBar from "./components/TopBar.svelte";
   import ChatArea from "./components/ChatArea.svelte";
   import ChatInput from "./components/ChatInput.svelte";
+  import ConfirmDialog from "./components/ConfirmDialog.svelte";
   import { onMount } from "svelte";
 
   let externalContent = $state<{ text: string; seq: number } | null>(null);
   let seq = 0;
+  let shutdownTarget = $state<{ id: string; name: string } | null>(null);
 
   function pushToInput(text: string) {
     externalContent = { text, seq: ++seq };
+  }
+
+  function requestShutdown(agentId: string, agentName: string) {
+    shutdownTarget = { id: agentId, name: agentName };
+  }
+
+  async function confirmShutdown() {
+    if (!shutdownTarget) return;
+    const id = shutdownTarget.id;
+    shutdownTarget = null;
+    await appState.killAgent(id);
   }
 
   onMount(() => {
@@ -55,9 +68,22 @@
     onAddAgent={(swarmId, agentCommand) => {
       appState.addAgentToSwarm(swarmId, agentCommand);
     }}
+    onKillAgent={(agentId) => {
+      const swarms = appState.swarms;
+      const agent = swarms
+        .flatMap((s) => s.agents)
+        .find((a) => a.id === agentId);
+      if (agent) requestShutdown(agent.id, agent.name);
+    }}
   />
   <main class="flex flex-col min-h-0 min-w-0">
-    <TopBar agent={appState.selectedAgent} />
+    <TopBar
+      agent={appState.selectedAgent}
+      onShutdown={() => {
+        const agent = appState.selectedAgent;
+        if (agent) requestShutdown(agent.id, agent.name);
+      }}
+    />
     <ChatArea
       agent={appState.selectedAgent}
       daemonStatus={appState.daemonStatus}
@@ -82,3 +108,15 @@
     />
   </main>
 </div>
+
+{#if shutdownTarget}
+  <ConfirmDialog
+    title="Shutdown {shutdownTarget.name}?"
+    description="Any in-progress work will be stopped immediately. This cannot be undone."
+    confirmLabel="Shutdown"
+    onConfirm={confirmShutdown}
+    onCancel={() => {
+      shutdownTarget = null;
+    }}
+  />
+{/if}
