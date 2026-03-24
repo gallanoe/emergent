@@ -133,6 +133,7 @@
       agents={appState.swarms.flatMap((s) => s.agents)}
       selectedAgentId={appState.selectedAgentId}
       agentConnections={appState.agentConnections}
+      messageLog={appState.swarmMessageLog}
       onClose={() => appState.toggleSwarmPanel()}
     />
   {/if}

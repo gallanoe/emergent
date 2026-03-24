@@ -58,6 +58,9 @@ pub fn run() {
                                     Notification::NudgeDelivered(p) => {
                                         let _ = handle.emit(event_name, p);
                                     }
+                                    Notification::SwarmMessage(p) => {
+                                        let _ = handle.emit(event_name, p);
+                                    }
                                 }
                             }
                         });

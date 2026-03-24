@@ -74,6 +74,16 @@ pub struct NudgeDeliveredPayload {
     pub count: usize,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SwarmMessagePayload {
+    pub from_agent_id: String,
+    pub from_agent_name: String,
+    pub to_agent_id: String,
+    pub to_agent_name: String,
+    pub body: String,
+    pub timestamp: String,
+}
+
 // ---------------------------------------------------------------------------
 // AgentStatus
 // ---------------------------------------------------------------------------
@@ -237,6 +247,8 @@ pub enum Notification {
     Error(AgentErrorPayload),
     #[serde(rename = "agent:nudge-delivered")]
     NudgeDelivered(NudgeDeliveredPayload),
+    #[serde(rename = "swarm:message")]
+    SwarmMessage(SwarmMessagePayload),
 }
 
 impl Notification {
@@ -250,6 +262,7 @@ impl Notification {
             Notification::UserMessage(_) => "agent:user-message",
             Notification::Error(_) => "agent:error",
             Notification::NudgeDelivered(_) => "agent:nudge-delivered",
+            Notification::SwarmMessage(_) => "swarm:message",
         }
     }
 
@@ -263,6 +276,7 @@ impl Notification {
             Notification::UserMessage(p) => Some(&p.agent_id),
             Notification::Error(p) => Some(&p.agent_id),
             Notification::NudgeDelivered(p) => Some(&p.agent_id),
+            Notification::SwarmMessage(_) => None, // not agent-specific
         }
     }
 }

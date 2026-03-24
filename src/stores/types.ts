@@ -67,6 +67,23 @@ export interface MailboxMessage {
   body: string;
 }
 
+export interface SwarmMessagePayload {
+  from_agent_id: string;
+  from_agent_name: string;
+  to_agent_id: string;
+  to_agent_name: string;
+  body: string;
+  timestamp: string;
+}
+
+export interface SwarmMessageLogEntry {
+  id: string;
+  fromName: string;
+  toName: string;
+  preview: string;
+  timestamp: string;
+}
+
 export type AgentStatus = "initializing" | "idle" | "working" | "error";
 
 export interface DisplayAgent {

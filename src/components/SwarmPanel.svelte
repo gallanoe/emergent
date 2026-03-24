@@ -1,15 +1,22 @@
 <script lang="ts">
-  import type { DisplayAgent } from "../stores/types";
+  import type { DisplayAgent, SwarmMessageLogEntry } from "../stores/types";
   import AgentCard from "./AgentCard.svelte";
 
   interface Props {
     agents: DisplayAgent[];
     selectedAgentId: string | null;
     agentConnections: Record<string, string[]>;
+    messageLog: SwarmMessageLogEntry[];
     onClose: () => void;
   }
 
-  let { agents, selectedAgentId, agentConnections, onClose }: Props = $props();
+  let {
+    agents,
+    selectedAgentId,
+    agentConnections,
+    messageLog,
+    onClose,
+  }: Props = $props();
 </script>
 
 <div
@@ -35,4 +42,33 @@
       />
     {/each}
   </div>
+
+  <!-- Recent Messages log -->
+  {#if messageLog.length > 0}
+    <div
+      class="border-t border-border-default shrink-0 overflow-y-auto max-h-[160px] px-3 py-2"
+    >
+      <div
+        class="text-[10px] font-semibold text-fg-muted uppercase tracking-[0.03em] mb-1.5"
+      >
+        Recent Messages
+      </div>
+      {#each messageLog.toReversed() as entry (entry.id)}
+        <div
+          class="flex items-baseline gap-[5px] text-[10px] py-0.5 leading-[1.4]"
+        >
+          <span
+            class="text-fg-disabled text-[9px] shrink-0 font-[family-name:var(--font-mono)]"
+            >{entry.timestamp}</span
+          >
+          <span class="text-success font-semibold shrink-0"
+            >{entry.fromName}</span
+          >
+          <span class="text-fg-disabled shrink-0">→</span>
+          <span class="text-fg-muted font-medium shrink-0">{entry.toName}</span>
+          <span class="text-fg-muted truncate">{entry.preview}</span>
+        </div>
+      {/each}
+    </div>
+  {/if}
 </div>

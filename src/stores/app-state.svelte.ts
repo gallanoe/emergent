@@ -1,7 +1,13 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { agentStore } from "./agents.svelte";
-import type { DisplayAgent, DisplaySwarm } from "./types";
+import type {
+  DisplayAgent,
+  DisplaySwarm,
+  SwarmMessageLogEntry,
+  SwarmMessagePayload,
+} from "./types";
 
 // Import mock data for demo mode
 import { appState as mockState } from "./mock-data.svelte";
@@ -34,6 +40,7 @@ function createAppState() {
   let daemonStatus = $state<DaemonStatus>(demoMode ? "connected" : "connecting");
   let swarmPanelOpen = $state(true);
   let agentConnections = $state<Record<string, string[]>>({});
+  let swarmMessageLog = $state<SwarmMessageLogEntry[]>([]);
 
   // ── Initialization ────────────────────────────────────────────
 
@@ -61,6 +68,25 @@ function createAppState() {
       knownAgents = known;
 
       await agentStore.setupListeners();
+
+      // Listen for swarm messages (global, not per-agent)
+      await listen<SwarmMessagePayload>("swarm:message", (e) => {
+        const p = e.payload;
+        swarmMessageLog.push({
+          id: crypto.randomUUID(),
+          fromName: p.from_agent_name,
+          toName: p.to_agent_name,
+          preview: p.body.length > 40 ? p.body.slice(0, 40) + "…" : p.body,
+          timestamp: new Date(p.timestamp).toLocaleTimeString([], {
+            hour: "numeric",
+            minute: "2-digit",
+          }),
+        });
+        // Keep last 50 entries
+        if (swarmMessageLog.length > 50) {
+          swarmMessageLog.splice(0, swarmMessageLog.length - 50);
+        }
+      });
 
       // Reconnect to any existing agents from the daemon
       await reconnectToExistingAgents();
@@ -263,6 +289,9 @@ function createAppState() {
     },
     get agentConnections() {
       return agentConnections;
+    },
+    get swarmMessageLog() {
+      return swarmMessageLog;
     },
     initialize,
     createSwarm,
