@@ -7,7 +7,8 @@ use agent_client_protocol as acp;
 use emergent_protocol::{
     AgentErrorPayload, AgentStatus, AgentSummary, ConfigOption, ConfigUpdatePayload,
     MessageChunkPayload, Notification, NudgeDeliveredPayload, PromptCompletePayload,
-    StatusChangePayload, ToolCallContentPayload, ToolCallUpdatePayload, UserMessagePayload,
+    StatusChangePayload, SwarmMessagePayload, ToolCallContentPayload, ToolCallUpdatePayload,
+    UserMessagePayload,
 };
 use tokio::sync::{broadcast, mpsc, oneshot, Mutex, RwLock};
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
@@ -75,7 +76,7 @@ impl EmergentClient {
     fn emit(&self, notification: Notification) {
         log::trace!(
             "Agent {} ACP notification: {}",
-            &self.agent_id[..8],
+            &self.agent_id,
             notification.event_name()
         );
         let _ = self.event_tx.send(notification);
@@ -172,7 +173,7 @@ impl acp::Client for EmergentClient {
     async fn session_notification(&self, args: acp::SessionNotification) -> acp::Result<()> {
         log::trace!(
             "Agent {} received ACP session update: {:?}",
-            &self.agent_id[..8],
+            &self.agent_id,
             std::mem::discriminant(&args.update)
         );
         match args.update {
@@ -187,7 +188,7 @@ impl acp::Client for EmergentClient {
             acp::SessionUpdate::ToolCall(tc) => {
                 log::debug!(
                     "Agent {} tool call: {} (id: {}, status: {:?})",
-                    &self.agent_id[..8],
+                    &self.agent_id,
                     tc.title,
                     tc.tool_call_id,
                     tc.status
@@ -233,7 +234,7 @@ impl acp::Client for EmergentClient {
                 for (i, entry) in plan.entries.iter().enumerate() {
                     log::debug!(
                         "Agent {} plan[{}]: [{:?}] {:?} — {}",
-                        &self.agent_id[..8],
+                        &self.agent_id,
                         i,
                         entry.status,
                         entry.priority,
@@ -284,6 +285,18 @@ impl Default for AgentManager {
 }
 
 impl AgentManager {
+    /// Generate a short 8-character hex ID from random bytes.
+    fn generate_short_id() -> String {
+        use std::fmt::Write;
+        let mut buf = [0u8; 4];
+        getrandom::fill(&mut buf).expect("Failed to generate random bytes");
+        let mut id = String::with_capacity(8);
+        for byte in &buf {
+            write!(id, "{:02x}", byte).unwrap();
+        }
+        id
+    }
+
     pub fn new() -> Self {
         let (event_tx, _) = broadcast::channel(1024);
         let history: Arc<RwLock<HashMap<String, Vec<Notification>>>> =
@@ -334,11 +347,11 @@ impl AgentManager {
         working_directory: PathBuf,
         agent_binary: String,
     ) -> Result<String, String> {
-        let agent_id = uuid::Uuid::new_v4().to_string();
+        let agent_id = Self::generate_short_id();
 
         log::info!(
             "Spawning agent {} (cli: {}, wd: {})",
-            &agent_id[..8],
+            &agent_id,
             agent_binary,
             working_directory.display()
         );
@@ -367,10 +380,10 @@ impl AgentManager {
             .await
             {
                 Ok(()) => {
-                    log::info!("Agent {} spawned successfully", &id[..8]);
+                    log::info!("Agent {} spawned successfully", &id);
                 }
                 Err(e) => {
-                    log::error!("Agent {} failed to initialize: {}", &id[..8], e);
+                    log::error!("Agent {} failed to initialize: {}", &id, e);
                     let _ = event_tx.send(Notification::Error(AgentErrorPayload {
                         agent_id: id,
                         message: e,
@@ -431,7 +444,7 @@ impl AgentManager {
 
         // Spawn a dedicated thread running a LocalSet for the !Send ACP connection.
         let thread_handle = std::thread::Builder::new()
-            .name(format!("acp-agent-{}", &agent_id[..8]))
+            .name(format!("acp-agent-{}", &agent_id))
             .spawn(move || {
                 let rt = tokio::runtime::Builder::new_current_thread()
                     .enable_all()
@@ -466,7 +479,7 @@ impl AgentManager {
                     });
 
                     // Initialize + create session
-                    log::debug!("Agent {} starting ACP handshake", &agent_id[..8]);
+                    log::debug!("Agent {} starting ACP handshake", &agent_id);
                     let init_result = async {
                         conn.initialize(
                             acp::InitializeRequest::new(acp::ProtocolVersion::V1).client_info(
@@ -506,12 +519,12 @@ impl AgentManager {
 
                     let session_id = match init_result {
                         Ok((sid, config)) => {
-                            log::debug!("Agent {} ACP session established: {:?}", &agent_id[..8], sid);
+                            log::debug!("Agent {} ACP session established: {:?}", &agent_id, sid);
                             let _ = init_tx.send(Ok((sid.clone(), config)));
                             sid
                         }
                         Err(e) => {
-                            log::error!("Agent {} ACP handshake failed: {}", &agent_id[..8], e);
+                            log::error!("Agent {} ACP handshake failed: {}", &agent_id, e);
                             let _ = init_tx.send(Err(e));
                             return;
                         }
@@ -595,7 +608,7 @@ impl AgentManager {
                 AgentCommand::Prompt { text, reply } => {
                     log::debug!(
                         "Agent {} prompt: {}",
-                        &agent_id[..8],
+                        &agent_id,
                         if text.len() > 100 { &text[..100] } else { &text }
                     );
                     let _ = event_tx.send(Notification::StatusChange(StatusChangePayload {
@@ -620,7 +633,7 @@ impl AgentManager {
                             cmd = command_rx.recv() => {
                                 match cmd {
                                     Some(AgentCommand::Cancel { reply: cancel_reply }) => {
-                                        log::debug!("Agent {} cancel requested (during prompt)", &agent_id[..8]);
+                                        log::debug!("Agent {} cancel requested (during prompt)", &agent_id);
                                         let cancel = acp::CancelNotification::new(session_id.clone());
                                         match conn.cancel(cancel).await {
                                             Ok(()) => { let _ = cancel_reply.send(Ok(())); }
@@ -629,7 +642,7 @@ impl AgentManager {
                                         // Continue waiting for prompt to finish after cancel
                                     }
                                     Some(AgentCommand::Shutdown) => {
-                                        log::debug!("Agent {} shutdown during prompt", &agent_id[..8]);
+                                        log::debug!("Agent {} shutdown during prompt", &agent_id);
                                         let _ = reply.send(Err("Agent shut down".to_string()));
                                         return;
                                     }
@@ -637,7 +650,7 @@ impl AgentManager {
                                         let _ = dup_reply.send(Err("Agent is already working".to_string()));
                                     }
                                     Some(AgentCommand::SetConfig { config_id, value, reply: cfg_reply }) => {
-                                        log::debug!("Agent {} set_config during prompt: {} = {}", &agent_id[..8], config_id, value);
+                                        log::debug!("Agent {} set_config during prompt: {} = {}", &agent_id, config_id, value);
                                         let req = acp::SetSessionConfigOptionRequest::new(
                                             session_id.clone(),
                                             config_id,
@@ -667,7 +680,7 @@ impl AgentManager {
                             let stop_reason = format!("{:?}", resp.stop_reason);
                             log::debug!(
                                 "Agent {} prompt complete (stop_reason: {})",
-                                &agent_id[..8],
+                                &agent_id,
                                 stop_reason
                             );
                             let _ =
@@ -678,7 +691,7 @@ impl AgentManager {
                             let _ = reply.send(Ok(()));
                         }
                         Err(e) => {
-                            log::error!("Agent {} prompt failed: {}", &agent_id[..8], e);
+                            log::error!("Agent {} prompt failed: {}", &agent_id, e);
                             let msg = format!("Prompt failed: {}", e);
                             let _ = event_tx.send(Notification::Error(AgentErrorPayload {
                                 agent_id: agent_id.clone(),
@@ -694,7 +707,7 @@ impl AgentManager {
                     }));
                 }
                 AgentCommand::Cancel { reply } => {
-                    log::debug!("Agent {} cancel requested", &agent_id[..8]);
+                    log::debug!("Agent {} cancel requested", &agent_id);
                     let cancel = acp::CancelNotification::new(session_id.clone());
                     match conn.cancel(cancel).await {
                         Ok(()) => {
@@ -712,7 +725,7 @@ impl AgentManager {
                 } => {
                     log::debug!(
                         "Agent {} set_config: {} = {}",
-                        &agent_id[..8],
+                        &agent_id,
                         config_id,
                         value
                     );
@@ -733,7 +746,7 @@ impl AgentManager {
                     }
                 }
                 AgentCommand::Shutdown => {
-                    log::debug!("Agent {} shutting down", &agent_id[..8]);
+                    log::debug!("Agent {} shutting down", &agent_id);
                     break;
                 }
             }
@@ -863,7 +876,7 @@ impl AgentManager {
 
     /// Kill an agent, removing it from the map and terminating the subprocess.
     pub async fn kill_agent(&self, agent_id: &str) -> Result<(), String> {
-        log::info!("Killing agent {}", &agent_id[..8.min(agent_id.len())]);
+        log::info!("Killing agent {}", agent_id);
 
         let handle_arc = {
             let mut agents = self.agents.write().await;
@@ -1051,6 +1064,22 @@ impl AgentManager {
         if !self.agents.read().await.contains_key(to) {
             return Err(format!("Agent not found: {}", to));
         }
+        // Look up agent names for the notification
+        let (from_name, to_name) = {
+            let agents = self.agents.read().await;
+            let f = match agents.get(from) {
+                Some(h) => h.lock().await.cli.clone(),
+                None => from.to_string(),
+            };
+            let t = match agents.get(to) {
+                Some(h) => h.lock().await.cli.clone(),
+                None => to.to_string(),
+            };
+            (f, t)
+        };
+
+        let timestamp = chrono::Utc::now().to_rfc3339();
+
         // Deliver
         let mut mailboxes = self.mailboxes.write().await;
         let mailbox = mailboxes
@@ -1058,9 +1087,21 @@ impl AgentManager {
             .or_insert_with(crate::mailbox::Mailbox::new);
         mailbox.deliver(crate::mailbox::MailboxMessage {
             sender: from.to_string(),
-            timestamp: chrono::Utc::now().to_rfc3339(),
-            body,
+            timestamp: timestamp.clone(),
+            body: body.clone(),
         });
+        drop(mailboxes);
+
+        // Emit swarm message notification for the communication log
+        let _ = self.event_tx.send(Notification::SwarmMessage(SwarmMessagePayload {
+            from_agent_id: from.to_string(),
+            from_agent_name: from_name,
+            to_agent_id: to.to_string(),
+            to_agent_name: to_name,
+            body,
+            timestamp,
+        }));
+
         Ok(())
     }
 

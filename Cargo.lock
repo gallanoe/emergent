@@ -969,6 +969,7 @@ dependencies = [
  "chrono",
  "emergent-protocol",
  "env_logger",
+ "getrandom 0.3.4",
  "log",
  "rmcp",
  "schemars 1.2.1",
@@ -977,7 +978,6 @@ dependencies = [
  "tempfile",
  "tokio",
  "tokio-util",
- "uuid",
  "which",
 ]
 
