@@ -82,7 +82,7 @@ pub async fn handle_client(stream: TransportStream, manager: Arc<AgentManager>) 
     notify_task.abort();
 }
 
-async fn dispatch_request(line: &str, manager: &Arc<AgentManager>) -> JsonRpcResponse {
+async fn dispatch_request(line: &str, manager: &AgentManager) -> JsonRpcResponse {
     let req: JsonRpcRequest = match serde_json::from_str(line) {
         Ok(r) => r,
         Err(e) => return error_response(0, -32700, &format!("Parse error: {}", e)),
@@ -166,22 +166,15 @@ async fn handle_spawn_agent(
 
 async fn handle_send_prompt(
     req: &JsonRpcRequest,
-    manager: &Arc<AgentManager>,
+    manager: &AgentManager,
 ) -> Result<serde_json::Value, (i32, String)> {
     let agent_id: String = get_param(req, "agent_id")?;
     let text: String = get_param(req, "text")?;
-    let result = manager
+    manager
         .send_prompt(&agent_id, text)
         .await
         .map(|()| serde_json::json!({}))
-        .map_err(|e| (-32000, e));
-
-    // After successful prompt completion, auto-send nudge if mailbox has messages
-    if result.is_ok() {
-        manager.maybe_auto_nudge(&agent_id).await;
-    }
-
-    result
+        .map_err(|e| (-32000, e))
 }
 
 async fn handle_cancel_prompt(
