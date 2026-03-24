@@ -776,10 +776,13 @@ impl AgentManager {
 
         // Record the user message so it appears in history
         // (emitted before NudgeDelivered so replay attaches nudge to user message)
-        let _ = self.event_tx.send(Notification::UserMessage(UserMessagePayload {
-            agent_id: agent_id.to_string(),
-            content: text.clone(),
-        }));
+        // Skip for empty text (nudge-only auto-prompts)
+        if !text.is_empty() {
+            let _ = self.event_tx.send(Notification::UserMessage(UserMessagePayload {
+                agent_id: agent_id.to_string(),
+                content: text.clone(),
+            }));
+        }
 
         // Check mailbox and coalesce nudge into the prompt text
         let mailbox_count = self.mailbox_len(agent_id).await;
@@ -840,8 +843,23 @@ impl AgentManager {
                 }));
             }
         }
+        drop(handle);
 
         result
+    }
+
+    /// Check mailbox after prompt completion and auto-send a nudge if needed.
+    /// Must be called with an Arc reference since it spawns a background task.
+    pub async fn maybe_auto_nudge(self: &Arc<Self>, agent_id: &str) {
+        if self.mailbox_len(agent_id).await > 0 {
+            let mgr = self.clone();
+            let agent_id_owned = agent_id.to_string();
+            tokio::spawn(async move {
+                if let Err(e) = mgr.send_prompt(&agent_id_owned, String::new()).await {
+                    log::warn!("Auto-nudge for agent {} failed: {}", agent_id_owned, e);
+                }
+            });
+        }
     }
 
     /// Cancel the current prompt on an agent.
