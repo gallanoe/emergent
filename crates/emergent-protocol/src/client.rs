@@ -289,6 +289,16 @@ impl DaemonClient {
         Ok(())
     }
 
+    pub async fn has_management_permissions(&self, agent_id: &str) -> Result<bool, String> {
+        let result = self
+            .call(
+                "get_agent_permissions",
+                serde_json::json!({ "agent_id": agent_id }),
+            )
+            .await?;
+        Ok(result["has_management"].as_bool().unwrap_or(false))
+    }
+
     pub async fn send_swarm_message(
         &self,
         from_agent_id: &str,

@@ -106,6 +106,7 @@ async fn dispatch_request(line: &str, manager: &AgentManager) -> JsonRpcResponse
         "set_agent_permissions" => handle_set_agent_permissions(&req, manager).await,
         "send_swarm_message" => handle_send_swarm_message(&req, manager).await,
         "read_mailbox" => handle_read_mailbox(&req, manager).await,
+        "get_agent_permissions" => handle_get_agent_permissions(&req, manager).await,
         _ => Err((-32601, format!("Method not found: {}", req.method))),
     };
 
@@ -316,4 +317,13 @@ async fn handle_read_mailbox(
     let agent_id: String = get_param(req, "agent_id")?;
     let messages = manager.read_mailbox(&agent_id).await;
     Ok(serde_json::json!({"messages": messages}))
+}
+
+async fn handle_get_agent_permissions(
+    req: &JsonRpcRequest,
+    manager: &AgentManager,
+) -> Result<serde_json::Value, (i32, String)> {
+    let agent_id: String = get_param(req, "agent_id")?;
+    let has_management = manager.has_management_permissions(&agent_id).await;
+    Ok(serde_json::json!({"has_management": has_management}))
 }

@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{ServerCapabilities, ServerInfo};
-use rmcp::{schemars, tool, tool_handler, tool_router, ServerHandler};
+use rmcp::{schemars, tool, tool_router, ServerHandler};
 use serde::{Deserialize, Serialize};
 
 const MANAGEMENT_TOOLS: &[&str] = &[
@@ -501,10 +501,60 @@ impl McpStdioProxy {
     }
 }
 
-#[tool_handler]
 impl ServerHandler for McpStdioProxy {
     fn get_info(&self) -> ServerInfo {
         ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
             .with_instructions("Emergent swarm communication tools for inter-agent collaboration")
+    }
+
+    fn list_tools(
+        &self,
+        _request: Option<rmcp::model::PaginatedRequestParams>,
+        _context: rmcp::service::RequestContext<rmcp::RoleServer>,
+    ) -> impl Future<Output = Result<rmcp::model::ListToolsResult, rmcp::model::ErrorData>>
+           + Send
+           + '_ {
+        let client = self.client.clone();
+        let agent_id = self.agent_id.clone();
+        let all_tools = self.tool_router.list_all();
+        async move {
+            let has_perms = client
+                .has_management_permissions(&agent_id)
+                .await
+                .unwrap_or(false);
+            let tools = if has_perms {
+                all_tools
+            } else {
+                all_tools
+                    .into_iter()
+                    .filter(|t| !MANAGEMENT_TOOLS.contains(&t.name.as_ref()))
+                    .collect()
+            };
+            Ok(rmcp::model::ListToolsResult {
+                tools,
+                next_cursor: None,
+                meta: None,
+            })
+        }
+    }
+
+    fn call_tool(
+        &self,
+        request: rmcp::model::CallToolRequestParams,
+        context: rmcp::service::RequestContext<rmcp::RoleServer>,
+    ) -> impl Future<Output = Result<rmcp::model::CallToolResult, rmcp::model::ErrorData>>
+           + Send
+           + '_ {
+        self.tool_router
+            .call(rmcp::handler::server::tool::ToolCallContext::new(
+                self, request, context,
+            ))
+    }
+
+    fn get_tool(&self, name: &str) -> Option<rmcp::model::Tool> {
+        self.tool_router
+            .list_all()
+            .into_iter()
+            .find(|t| t.name == name)
     }
 }
