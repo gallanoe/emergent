@@ -66,11 +66,14 @@
   );
   let target = $derived.by(() => {
     if (isMailboxTool) {
-      // Parse message count from content
+      // Parse message count from content — handles both [...] and {"messages": [...]}
       try {
         const text = toolCall.content.find((c) => c.type === "text");
         if (text?.type === "text") {
-          const msgs: MailboxMessage[] = JSON.parse(text.text);
+          const parsed = JSON.parse(text.text);
+          const msgs: MailboxMessage[] = Array.isArray(parsed)
+            ? parsed
+            : (parsed.messages ?? []);
           return `${msgs.length} message${msgs.length === 1 ? "" : "s"}`;
         }
       } catch {
@@ -173,12 +176,14 @@
     {@const mailboxMessages = (() => {
       try {
         const text = toolCall.content.find((c) => c.type === "text");
-        if (text?.type === "text")
-          return JSON.parse(text.text) as MailboxMessage[];
+        if (text?.type === "text") {
+          const parsed = JSON.parse(text.text);
+          return Array.isArray(parsed) ? parsed : (parsed.messages ?? []);
+        }
       } catch {
         /* */
       }
-      return [];
+      return [] as MailboxMessage[];
     })()}
     <MailboxToolRender messages={mailboxMessages} />
   {:else if expanded && isSendTool}
