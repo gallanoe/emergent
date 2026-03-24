@@ -46,7 +46,7 @@
   <!-- Recent Messages log -->
   {#if messageLog.length > 0}
     <div
-      class="border-t border-border-default shrink-0 overflow-y-auto max-h-[160px] px-3 py-2"
+      class="border-t border-border-default h-[160px] shrink-0 overflow-y-auto px-3 py-2"
     >
       <div
         class="text-[10px] font-semibold text-fg-muted uppercase tracking-[0.03em] mb-1.5"
