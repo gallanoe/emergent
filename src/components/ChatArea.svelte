@@ -206,6 +206,40 @@
               <div class="markdown">
                 {@html renderMarkdown(message.content)}
               </div>
+              {#if message.nudgeCount}
+                <div class="h-px bg-[rgba(124,106,78,0.15)] my-1.5"></div>
+                <div
+                  class="flex items-center gap-1.5 text-[11px] text-fg-muted"
+                >
+                  <span
+                    class="w-4 h-4 rounded-full bg-[rgba(45,140,80,0.1)] flex items-center justify-center text-[9px] text-success shrink-0"
+                    >✉</span
+                  >
+                  You have
+                  <span class="font-semibold text-success"
+                    >{message.nudgeCount} unread {message.nudgeCount === 1
+                      ? "message"
+                      : "messages"}</span
+                  > in your mailbox
+                </div>
+              {/if}
+            </div>
+          {:else if message.role === "nudge"}
+            <div
+              class="{spacingClass(
+                i,
+              )} flex items-center gap-1.5 text-[11px] text-fg-muted py-1"
+            >
+              <span
+                class="w-4 h-4 rounded-full bg-[rgba(45,140,80,0.1)] flex items-center justify-center text-[9px] text-success shrink-0"
+                >✉</span
+              >
+              You have
+              <span class="font-semibold text-success"
+                >{message.nudgeCount} unread {message.nudgeCount === 1
+                  ? "message"
+                  : "messages"}</span
+              > in your mailbox
             </div>
           {:else if message.role === "tool-group" && message.toolCalls}
             <div class={spacingClass(i)}>

@@ -55,6 +55,9 @@ pub fn run() {
                                     Notification::Error(p) => {
                                         let _ = handle.emit(event_name, p);
                                     }
+                                    Notification::NudgeDelivered(p) => {
+                                        let _ = handle.emit(event_name, p);
+                                    }
                                 }
                             }
                         });
@@ -89,6 +92,10 @@ pub fn run() {
             commands::get_history,
             commands::get_agent_config,
             commands::set_agent_config,
+            commands::connect_agents,
+            commands::disconnect_agents,
+            commands::set_agent_permissions,
+            commands::get_agent_connections,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

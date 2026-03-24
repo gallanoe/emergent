@@ -1,7 +1,13 @@
 <!-- src/components/ToolCallRow.svelte -->
 <script lang="ts">
   import { ChevronRight, ChevronDown } from "@lucide/svelte";
-  import type { DisplayToolCall, ToolKind } from "../stores/types";
+  import type {
+    DisplayToolCall,
+    MailboxMessage,
+    ToolKind,
+  } from "../stores/types";
+  import MailboxToolRender from "./MailboxToolRender.svelte";
+  import SendToolRender from "./SendToolRender.svelte";
 
   interface Props {
     toolCall: DisplayToolCall;
@@ -47,12 +53,50 @@
     return text.replace(/^```\w*\n?/, "").replace(/\n?```\s*$/, "");
   }
 
-  let verb = $derived(kindVerb[toolCall.kind] ?? "Tool");
-  let target = $derived(
-    toolCall.locations[0] ??
-      toolCall.name.replace(/^(Read|Write|Edit|Bash|Search)\s*/i, "") ??
-      "",
+  let isMailboxTool = $derived(toolCall.name.endsWith("read_mailbox"));
+  let isSendTool = $derived(toolCall.name.endsWith("send_message"));
+  let isSwarmTool = $derived(isMailboxTool || isSendTool);
+
+  let verb = $derived(
+    isMailboxTool
+      ? "Inbox"
+      : isSendTool
+        ? "Send"
+        : (kindVerb[toolCall.kind] ?? "Tool"),
   );
+  let target = $derived.by(() => {
+    if (isMailboxTool) {
+      // Parse message count from content
+      try {
+        const text = toolCall.content.find((c) => c.type === "text");
+        if (text?.type === "text") {
+          const msgs: MailboxMessage[] = JSON.parse(text.text);
+          return `${msgs.length} message${msgs.length === 1 ? "" : "s"}`;
+        }
+      } catch {
+        /* fall through */
+      }
+      return "";
+    }
+    if (isSendTool) {
+      // Parse target name from response JSON: {"status":"delivered","target":"...","body":"..."}
+      const text = toolCall.content.find((c) => c.type === "text");
+      if (text?.type === "text") {
+        try {
+          const parsed = JSON.parse(text.text);
+          if (parsed.target) return parsed.target;
+        } catch {
+          /* fall through */
+        }
+      }
+      return toolCall.locations[0] ?? "";
+    }
+    return (
+      toolCall.locations[0] ??
+      toolCall.name.replace(/^(Read|Write|Edit|Bash|Search)\s*/i, "") ??
+      ""
+    );
+  });
 
   let statusLabel = $derived.by(() => {
     if (toolCall.status === "failed") {
@@ -64,6 +108,9 @@
     }
     if (toolCall.status === "in_progress") return "running";
     if (toolCall.status === "pending") return "pending";
+    // Mockup shows "completed" for Inbox, "delivered" for Send
+    if (isSendTool && toolCall.status === "completed") return "delivered";
+    if (isMailboxTool && toolCall.status === "completed") return "completed";
     return null;
   });
 
@@ -76,10 +123,11 @@
   );
 
   let hasPreview = $derived(
-    toolCall.content.length > 0 &&
-      toolCall.kind !== "read" &&
-      toolCall.status !== "pending" &&
-      toolCall.status !== "in_progress",
+    isSwarmTool ||
+      (toolCall.content.length > 0 &&
+        toolCall.kind !== "read" &&
+        toolCall.status !== "pending" &&
+        toolCall.status !== "in_progress"),
   );
 </script>
 
@@ -121,7 +169,34 @@
     {/if}
   </div>
 
-  {#if expanded}
+  {#if expanded && isMailboxTool}
+    {@const mailboxMessages = (() => {
+      try {
+        const text = toolCall.content.find((c) => c.type === "text");
+        if (text?.type === "text")
+          return JSON.parse(text.text) as MailboxMessage[];
+      } catch {
+        /* */
+      }
+      return [];
+    })()}
+    <MailboxToolRender messages={mailboxMessages} />
+  {:else if expanded && isSendTool}
+    {@const sendBody = (() => {
+      const text = toolCall.content.find((c) => c.type === "text");
+      if (text?.type === "text") {
+        try {
+          const parsed = JSON.parse(text.text);
+          if (parsed.body) return parsed.body;
+        } catch {
+          /* */
+        }
+        return text.text;
+      }
+      return "";
+    })()}
+    <SendToolRender body={sendBody} />
+  {:else if expanded}
     <div class="flex flex-col gap-1.5 pb-1.5">
       {#each toolCall.content as item}
         {#if item.type === "text"}

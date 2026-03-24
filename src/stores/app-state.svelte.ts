@@ -32,6 +32,8 @@ function createAppState() {
   let availableAgents = $state<{ name: string; binary: string; path: string }[]>([]);
   let knownAgents = $state<KnownAgent[]>([]);
   let daemonStatus = $state<DaemonStatus>(demoMode ? "connected" : "connecting");
+  let swarmPanelOpen = $state(true);
+  let agentConnections = $state<Record<string, string[]>>({});
 
   // ── Initialization ────────────────────────────────────────────
 
@@ -182,6 +184,37 @@ function createAppState() {
     }));
   }
 
+  // ── Swarm connection management ──────────────────────────────
+
+  async function refreshConnections(agentId: string) {
+    try {
+      const connections = await invoke<string[]>("get_agent_connections", { agentId });
+      agentConnections[agentId] = connections;
+    } catch {
+      // Agent may have been killed
+    }
+  }
+
+  async function connectAgents(agentIdA: string, agentIdB: string) {
+    await invoke("connect_agents", { agentIdA, agentIdB });
+    await refreshConnections(agentIdA);
+    await refreshConnections(agentIdB);
+  }
+
+  async function disconnectAgents(agentIdA: string, agentIdB: string) {
+    await invoke("disconnect_agents", { agentIdA, agentIdB });
+    await refreshConnections(agentIdA);
+    await refreshConnections(agentIdB);
+  }
+
+  async function setAgentPermissions(agentId: string, enabled: boolean) {
+    await invoke("set_agent_permissions", { agentId, enabled });
+  }
+
+  function toggleSwarmPanel() {
+    swarmPanelOpen = !swarmPanelOpen;
+  }
+
   function getSelectedAgent(): DisplayAgent | undefined {
     if (demoMode) {
       return mockState.selectedAgent;
@@ -225,6 +258,12 @@ function createAppState() {
     get daemonStatus() {
       return daemonStatus;
     },
+    get swarmPanelOpen() {
+      return swarmPanelOpen;
+    },
+    get agentConnections() {
+      return agentConnections;
+    },
     initialize,
     createSwarm,
     addAgentToSwarm,
@@ -236,6 +275,11 @@ function createAppState() {
     setConfig: agentStore.setConfig,
     editQueue: agentStore.editQueue,
     registerQueueDumpHandler: agentStore.registerQueueDumpHandler,
+    connectAgents,
+    disconnectAgents,
+    setAgentPermissions,
+    toggleSwarmPanel,
+    refreshConnections,
   };
 }
 

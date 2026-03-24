@@ -103,3 +103,48 @@ pub async fn set_agent_config(
         .set_agent_config(&agent_id, &config_id, &value)
         .await
 }
+
+// ── Swarm management commands ──────────────────────────────
+
+#[tauri::command]
+pub async fn connect_agents(
+    conn: State<'_, Arc<DaemonConnection>>,
+    agent_id_a: String,
+    agent_id_b: String,
+) -> Result<(), String> {
+    get_client(&conn)?
+        .connect_agents(&agent_id_a, &agent_id_b)
+        .await
+}
+
+#[tauri::command]
+pub async fn disconnect_agents(
+    conn: State<'_, Arc<DaemonConnection>>,
+    agent_id_a: String,
+    agent_id_b: String,
+) -> Result<(), String> {
+    get_client(&conn)?
+        .disconnect_agents(&agent_id_a, &agent_id_b)
+        .await
+}
+
+#[tauri::command]
+pub async fn set_agent_permissions(
+    conn: State<'_, Arc<DaemonConnection>>,
+    agent_id: String,
+    enabled: bool,
+) -> Result<(), String> {
+    get_client(&conn)?
+        .set_agent_permissions(&agent_id, enabled)
+        .await
+}
+
+#[tauri::command]
+pub async fn get_agent_connections(
+    conn: State<'_, Arc<DaemonConnection>>,
+    agent_id: String,
+) -> Result<Vec<String>, String> {
+    get_client(&conn)?
+        .get_agent_connections(&agent_id)
+        .await
+}

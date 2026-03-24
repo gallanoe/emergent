@@ -5,6 +5,7 @@ import type {
   DisplayAgent,
   DisplayMessage,
   DisplayToolCall,
+  NudgeDeliveredPayload,
   ToolCallContentItem,
   ToolKind,
 } from "./types";
@@ -300,6 +301,29 @@ function createAgentStore() {
     agent.status = payload.status as AgentConnection["status"];
   }
 
+  function handleNudgeDelivered(payload: NudgeDeliveredPayload) {
+    const agent = agents[payload.agent_id];
+    if (!agent) return;
+
+    // Check if the most recent message is a user message (coalesced case)
+    const lastMsg = agent.messages.at(-1);
+    if (lastMsg?.role === "user") {
+      lastMsg.nudgeCount = payload.count;
+    } else {
+      // Standalone nudge — add as its own message
+      agent.messages.push({
+        id: crypto.randomUUID(),
+        role: "nudge",
+        content: "",
+        nudgeCount: payload.count,
+        timestamp: new Date().toLocaleTimeString([], {
+          hour: "numeric",
+          minute: "2-digit",
+        }),
+      });
+    }
+  }
+
   function handleConfigUpdate(payload: ConfigUpdatePayload) {
     const agent = agents[payload.agent_id];
     if (!agent) return;
@@ -336,6 +360,9 @@ function createAgentStore() {
     await listen<AgentErrorPayload>("agent:error", (e) => handleError(e.payload));
     await listen<StatusChangePayload>("agent:status-change", (e) => handleStatusChange(e.payload));
     await listen<ConfigUpdatePayload>("agent:config-update", (e) => handleConfigUpdate(e.payload));
+    await listen<NudgeDeliveredPayload>("agent:nudge-delivered", (e) =>
+      handleNudgeDelivered(e.payload),
+    );
   }
 
   // ── Public API ────────────────────────────────────────────────
@@ -511,7 +538,8 @@ function createAgentStore() {
     | ({ type: "agent:status-change" } & StatusChangePayload)
     | ({ type: "agent:config-update" } & ConfigUpdatePayload)
     | ({ type: "agent:user-message" } & UserMessagePayload)
-    | ({ type: "agent:error" } & AgentErrorPayload);
+    | ({ type: "agent:error" } & AgentErrorPayload)
+    | ({ type: "agent:nudge-delivered" } & NudgeDeliveredPayload);
 
   function replayNotifications(notifications: DaemonNotification[]) {
     for (const n of notifications) {
@@ -536,6 +564,9 @@ function createAgentStore() {
           break;
         case "agent:error":
           handleError(n);
+          break;
+        case "agent:nudge-delivered":
+          handleNudgeDelivered(n);
           break;
       }
     }

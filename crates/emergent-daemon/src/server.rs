@@ -100,6 +100,12 @@ async fn dispatch_request(line: &str, manager: &AgentManager) -> JsonRpcResponse
         "known_agents" => handle_known_agents(),
         "get_agent_config" => handle_get_agent_config(&req, manager).await,
         "set_agent_config" => handle_set_agent_config(&req, manager).await,
+        "connect_agents" => handle_connect_agents(&req, manager).await,
+        "disconnect_agents" => handle_disconnect_agents(&req, manager).await,
+        "get_agent_connections" => handle_get_agent_connections(&req, manager).await,
+        "set_agent_permissions" => handle_set_agent_permissions(&req, manager).await,
+        "send_swarm_message" => handle_send_swarm_message(&req, manager).await,
+        "read_mailbox" => handle_read_mailbox(&req, manager).await,
         _ => Err((-32601, format!("Method not found: {}", req.method))),
     };
 
@@ -245,4 +251,69 @@ async fn handle_set_agent_config(
         .await
         .map(|c| serde_json::json!({ "config_options": c }))
         .map_err(|e| (-32000, e))
+}
+
+async fn handle_connect_agents(
+    req: &JsonRpcRequest,
+    manager: &AgentManager,
+) -> Result<serde_json::Value, (i32, String)> {
+    let agent_id_a: String = get_param(req, "agent_id_a")?;
+    let agent_id_b: String = get_param(req, "agent_id_b")?;
+    manager.connect_agents(&agent_id_a, &agent_id_b).await;
+    Ok(serde_json::json!({"ok": true}))
+}
+
+async fn handle_disconnect_agents(
+    req: &JsonRpcRequest,
+    manager: &AgentManager,
+) -> Result<serde_json::Value, (i32, String)> {
+    let agent_id_a: String = get_param(req, "agent_id_a")?;
+    let agent_id_b: String = get_param(req, "agent_id_b")?;
+    manager.disconnect_agents(&agent_id_a, &agent_id_b).await;
+    Ok(serde_json::json!({"ok": true}))
+}
+
+async fn handle_get_agent_connections(
+    req: &JsonRpcRequest,
+    manager: &AgentManager,
+) -> Result<serde_json::Value, (i32, String)> {
+    let agent_id: String = get_param(req, "agent_id")?;
+    let connections = manager.get_connections(&agent_id).await;
+    Ok(serde_json::json!({"connections": connections}))
+}
+
+async fn handle_set_agent_permissions(
+    req: &JsonRpcRequest,
+    manager: &AgentManager,
+) -> Result<serde_json::Value, (i32, String)> {
+    let agent_id: String = get_param(req, "agent_id")?;
+    let enabled: bool = get_param(req, "enabled")?;
+    manager
+        .set_management_permissions(&agent_id, enabled)
+        .await
+        .map_err(|e| (-32000, e))?;
+    Ok(serde_json::json!({"ok": true}))
+}
+
+async fn handle_send_swarm_message(
+    req: &JsonRpcRequest,
+    manager: &AgentManager,
+) -> Result<serde_json::Value, (i32, String)> {
+    let from_agent_id: String = get_param(req, "from_agent_id")?;
+    let to_agent_id: String = get_param(req, "to_agent_id")?;
+    let body: String = get_param(req, "body")?;
+    manager
+        .deliver_message(&from_agent_id, &to_agent_id, body)
+        .await
+        .map_err(|e| (-32000, e))?;
+    Ok(serde_json::json!({"ok": true}))
+}
+
+async fn handle_read_mailbox(
+    req: &JsonRpcRequest,
+    manager: &AgentManager,
+) -> Result<serde_json::Value, (i32, String)> {
+    let agent_id: String = get_param(req, "agent_id")?;
+    let messages = manager.read_mailbox(&agent_id).await;
+    Ok(serde_json::json!({"messages": messages}))
 }

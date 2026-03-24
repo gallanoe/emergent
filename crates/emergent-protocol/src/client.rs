@@ -231,4 +231,87 @@ impl DaemonClient {
         serde_json::from_value(result["config_options"].clone())
             .map_err(|e| format!("Invalid response: {}", e))
     }
+
+    // ── Swarm management methods ─────────────────────────────────
+
+    pub async fn connect_agents(&self, agent_id_a: &str, agent_id_b: &str) -> Result<(), String> {
+        self.call(
+            "connect_agents",
+            serde_json::json!({
+                "agent_id_a": agent_id_a,
+                "agent_id_b": agent_id_b,
+            }),
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub async fn disconnect_agents(
+        &self,
+        agent_id_a: &str,
+        agent_id_b: &str,
+    ) -> Result<(), String> {
+        self.call(
+            "disconnect_agents",
+            serde_json::json!({
+                "agent_id_a": agent_id_a,
+                "agent_id_b": agent_id_b,
+            }),
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub async fn get_agent_connections(&self, agent_id: &str) -> Result<Vec<String>, String> {
+        let result = self
+            .call(
+                "get_agent_connections",
+                serde_json::json!({ "agent_id": agent_id }),
+            )
+            .await?;
+        serde_json::from_value(result["connections"].clone())
+            .map_err(|e| format!("Invalid response: {}", e))
+    }
+
+    pub async fn set_agent_permissions(
+        &self,
+        agent_id: &str,
+        enabled: bool,
+    ) -> Result<(), String> {
+        self.call(
+            "set_agent_permissions",
+            serde_json::json!({
+                "agent_id": agent_id,
+                "enabled": enabled,
+            }),
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub async fn send_swarm_message(
+        &self,
+        from_agent_id: &str,
+        to_agent_id: &str,
+        body: &str,
+    ) -> Result<(), String> {
+        self.call(
+            "send_swarm_message",
+            serde_json::json!({
+                "from_agent_id": from_agent_id,
+                "to_agent_id": to_agent_id,
+                "body": body,
+            }),
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub async fn read_mailbox(&self, agent_id: &str) -> Result<serde_json::Value, String> {
+        self.call(
+            "read_mailbox",
+            serde_json::json!({ "agent_id": agent_id }),
+        )
+        .await
+    }
 }

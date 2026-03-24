@@ -31,6 +31,8 @@ function renderTopBar(
   return render(TopBar, {
     props: {
       agent: "agent" in overrides ? overrides.agent : makeAgent(),
+      allAgents: [],
+      connections: [],
       onShutdown: overrides.onShutdown ?? noop,
     },
   });
@@ -52,10 +54,9 @@ describe("TopBar", () => {
     expect(screen.getByText("Shutdown")).toBeTruthy();
   });
 
-  it("renders Settings button as disabled", () => {
+  it("renders Settings button", () => {
     renderTopBar();
-    const btn = screen.getByTitle("Coming soon");
-    expect(btn).toBeTruthy();
+    expect(screen.getByText("Settings")).toBeTruthy();
   });
 
   it("calls onShutdown when Shutdown is clicked", async () => {

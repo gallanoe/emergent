@@ -6,8 +6,8 @@ use acp::Agent as _;
 use agent_client_protocol as acp;
 use emergent_protocol::{
     AgentErrorPayload, AgentStatus, AgentSummary, ConfigOption, ConfigUpdatePayload,
-    MessageChunkPayload, Notification, PromptCompletePayload, StatusChangePayload,
-    ToolCallContentPayload, ToolCallUpdatePayload, UserMessagePayload,
+    MessageChunkPayload, Notification, NudgeDeliveredPayload, PromptCompletePayload,
+    StatusChangePayload, ToolCallContentPayload, ToolCallUpdatePayload, UserMessagePayload,
 };
 use tokio::sync::{broadcast, mpsc, oneshot, Mutex, RwLock};
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
@@ -46,6 +46,7 @@ struct AgentHandle {
     /// Handle to the dedicated ACP thread (kept for ownership; not joined).
     thread_handle: Option<std::thread::JoinHandle<()>>,
     config_options: Vec<ConfigOption>,
+    has_management_permissions: bool,
 }
 
 // ---------------------------------------------------------------------------
@@ -272,6 +273,8 @@ pub struct AgentManager {
     agents: Arc<RwLock<HashMap<String, Arc<Mutex<AgentHandle>>>>>,
     event_tx: broadcast::Sender<Notification>,
     history: Arc<RwLock<HashMap<String, Vec<Notification>>>>,
+    mailboxes: Arc<RwLock<HashMap<String, crate::mailbox::Mailbox>>>,
+    topology: Arc<RwLock<crate::topology::Topology>>,
 }
 
 impl Default for AgentManager {
@@ -312,6 +315,8 @@ impl AgentManager {
             agents: Arc::new(RwLock::new(HashMap::new())),
             event_tx,
             history,
+            mailboxes: Arc::new(RwLock::new(HashMap::new())),
+            topology: Arc::new(RwLock::new(crate::topology::Topology::new())),
         }
     }
 
@@ -343,7 +348,10 @@ impl AgentManager {
         let agents = self.agents.clone();
         let event_tx = self.event_tx.clone();
         let history = self.history.clone();
+        let mailboxes = self.mailboxes.clone();
         let id = agent_id.clone();
+
+        let socket_path = crate::socket::socket_path();
 
         tokio::spawn(async move {
             match Self::initialize_agent(
@@ -353,6 +361,8 @@ impl AgentManager {
                 agents,
                 event_tx.clone(),
                 history,
+                mailboxes,
+                socket_path,
             )
             .await
             {
@@ -374,6 +384,7 @@ impl AgentManager {
 
     /// Perform the full agent initialization: spawn process, ACP handshake,
     /// store handle, and emit notifications.
+    #[allow(clippy::too_many_arguments)]
     async fn initialize_agent(
         agent_id: String,
         working_directory: PathBuf,
@@ -381,6 +392,8 @@ impl AgentManager {
         agents: Arc<RwLock<HashMap<String, Arc<Mutex<AgentHandle>>>>>,
         event_tx: broadcast::Sender<Notification>,
         history: Arc<RwLock<HashMap<String, Vec<Notification>>>>,
+        mailboxes: Arc<RwLock<HashMap<String, crate::mailbox::Mailbox>>>,
+        socket_path: PathBuf,
     ) -> Result<(), String> {
         // Parse command string into binary + args (e.g. "gemini --experimental-acp")
         let parts: Vec<&str> = agent_binary.split_whitespace().collect();
@@ -463,8 +476,18 @@ impl AgentManager {
                         .await
                         .map_err(|e| format!("ACP initialize failed: {}", e))?;
 
+                        // Build MCP server config for swarm communication
+                        let mcp_config =
+                            crate::mcp::SwarmMcpServer::mcp_config_for_agent(
+                                &agent_id, &socket_path,
+                            )
+                            .map_err(|e| format!("MCP config failed: {}", e))?;
+
                         let session_resp = conn
-                            .new_session(acp::NewSessionRequest::new(&wd))
+                            .new_session(
+                                acp::NewSessionRequest::new(&wd)
+                                    .mcp_servers(vec![mcp_config]),
+                            )
                             .await
                             .map_err(|e| format!("ACP new_session failed: {}", e))?;
 
@@ -521,6 +544,7 @@ impl AgentManager {
             child,
             thread_handle: Some(thread_handle),
             config_options: initial_config.clone(),
+            has_management_permissions: false,
         };
 
         let _ = event_tx.send(Notification::StatusChange(StatusChangePayload {
@@ -541,6 +565,12 @@ impl AgentManager {
             .write()
             .await
             .insert(agent_id.clone(), Arc::new(Mutex::new(handle)));
+
+        // Initialize mailbox for this agent
+        mailboxes
+            .write()
+            .await
+            .insert(agent_id.clone(), crate::mailbox::Mailbox::new());
 
         // Initialize history for this agent
         history
@@ -732,16 +762,46 @@ impl AgentManager {
         handle.status = AgentStatus::Working;
 
         // Record the user message so it appears in history
+        // (emitted before NudgeDelivered so replay attaches nudge to user message)
         let _ = self.event_tx.send(Notification::UserMessage(UserMessagePayload {
             agent_id: agent_id.to_string(),
             content: text.clone(),
         }));
 
+        // Check mailbox and coalesce nudge into the prompt text
+        let mailbox_count = self.mailbox_len(agent_id).await;
+        let prompt_text = if mailbox_count > 0 {
+            let nudge = if mailbox_count == 1 {
+                "You have 1 unread message in your mailbox.".to_string()
+            } else {
+                format!(
+                    "You have {} unread messages in your mailbox.",
+                    mailbox_count
+                )
+            };
+
+            // Emit NudgeDelivered after UserMessage so replay can attach it
+            let _ = self.event_tx.send(Notification::NudgeDelivered(
+                NudgeDeliveredPayload {
+                    agent_id: agent_id.to_string(),
+                    count: mailbox_count,
+                },
+            ));
+
+            if text.is_empty() {
+                nudge
+            } else {
+                format!("{}\n\n{}", text, nudge)
+            }
+        } else {
+            text
+        };
+
         let (reply_tx, reply_rx) = oneshot::channel();
         handle
             .command_tx
             .send(AgentCommand::Prompt {
-                text,
+                text: prompt_text,
                 reply: reply_tx,
             })
             .map_err(|_| "Agent thread has terminated".to_string())?;
@@ -823,6 +883,24 @@ impl AgentManager {
 
         // Drop the thread handle (do not join — just release ownership)
         drop(handle.thread_handle.take());
+
+        // Notify connected peers of death before cleanup
+        let peers = self.topology.read().await.peers(agent_id);
+        let agent_name = &handle.cli;
+        for peer_id in &peers {
+            let mut mailboxes = self.mailboxes.write().await;
+            if let Some(mailbox) = mailboxes.get_mut(peer_id) {
+                mailbox.deliver(crate::mailbox::MailboxMessage {
+                    sender: "system".to_string(),
+                    timestamp: chrono::Utc::now().to_rfc3339(),
+                    body: format!("Agent {} ({}) has disconnected.", agent_id, agent_name),
+                });
+            }
+        }
+
+        // Clean up mailbox and topology
+        self.mailboxes.write().await.remove(agent_id);
+        self.topology.write().await.remove_agent(agent_id);
 
         Ok(())
     }
@@ -912,5 +990,90 @@ impl AgentManager {
             .get(agent_id)
             .cloned()
             .ok_or_else(|| format!("Agent '{}' not found", agent_id))
+    }
+
+    // -----------------------------------------------------------------------
+    // Swarm: topology management
+    // -----------------------------------------------------------------------
+
+    pub async fn connect_agents(&self, a: &str, b: &str) {
+        self.topology.write().await.connect(a, b);
+    }
+
+    pub async fn disconnect_agents(&self, a: &str, b: &str) {
+        self.topology.write().await.disconnect(a, b);
+    }
+
+    pub async fn get_connections(&self, agent_id: &str) -> Vec<String> {
+        self.topology.read().await.peers(agent_id)
+    }
+
+    // -----------------------------------------------------------------------
+    // Swarm: permissions
+    // -----------------------------------------------------------------------
+
+    pub async fn set_management_permissions(
+        &self,
+        agent_id: &str,
+        enabled: bool,
+    ) -> Result<(), String> {
+        let agents = self.agents.read().await;
+        let handle_arc = agents
+            .get(agent_id)
+            .ok_or_else(|| format!("Agent not found: {}", agent_id))?;
+        handle_arc.lock().await.has_management_permissions = enabled;
+        Ok(())
+    }
+
+    pub async fn has_management_permissions(&self, agent_id: &str) -> bool {
+        let agents = self.agents.read().await;
+        match agents.get(agent_id) {
+            Some(handle_arc) => handle_arc.lock().await.has_management_permissions,
+            None => false,
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Swarm: mailbox
+    // -----------------------------------------------------------------------
+
+    pub async fn deliver_message(
+        &self,
+        from: &str,
+        to: &str,
+        body: String,
+    ) -> Result<(), String> {
+        // Check topology
+        if !self.topology.read().await.is_connected(from, to) {
+            return Err(format!("Agents {} and {} are not connected", from, to));
+        }
+        // Check target exists
+        if !self.agents.read().await.contains_key(to) {
+            return Err(format!("Agent not found: {}", to));
+        }
+        // Deliver
+        let mut mailboxes = self.mailboxes.write().await;
+        let mailbox = mailboxes
+            .entry(to.to_string())
+            .or_insert_with(crate::mailbox::Mailbox::new);
+        mailbox.deliver(crate::mailbox::MailboxMessage {
+            sender: from.to_string(),
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            body,
+        });
+        Ok(())
+    }
+
+    pub async fn read_mailbox(&self, agent_id: &str) -> Vec<crate::mailbox::MailboxMessage> {
+        let mut mailboxes = self.mailboxes.write().await;
+        match mailboxes.get_mut(agent_id) {
+            Some(mailbox) => mailbox.read_and_clear(),
+            None => vec![],
+        }
+    }
+
+    pub async fn mailbox_len(&self, agent_id: &str) -> usize {
+        let mailboxes = self.mailboxes.read().await;
+        mailboxes.get(agent_id).map_or(0, |m| m.len())
     }
 }

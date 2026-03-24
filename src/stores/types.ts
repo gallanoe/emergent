@@ -49,10 +49,22 @@ export interface ConfigOption {
 
 export interface DisplayMessage {
   id: string;
-  role: "assistant" | "thinking" | "user" | "tool-group" | "system";
+  role: "assistant" | "thinking" | "user" | "tool-group" | "system" | "nudge";
   content: string;
   toolCalls?: DisplayToolCall[];
   timestamp: string;
+  nudgeCount?: number;
+}
+
+export interface NudgeDeliveredPayload {
+  agent_id: string;
+  count: number;
+}
+
+export interface MailboxMessage {
+  sender: string;
+  timestamp: string;
+  body: string;
 }
 
 export type AgentStatus = "initializing" | "idle" | "working" | "error";

@@ -7,6 +7,25 @@ use std::sync::Arc;
 async fn main() {
     env_logger::init();
 
+    let args: Vec<String> = std::env::args().collect();
+
+    // Check for --mcp-stdio mode
+    if args.iter().any(|a| a == "--mcp-stdio") {
+        let agent_id = args
+            .iter()
+            .find_map(|a| a.strip_prefix("--agent-id="))
+            .expect("--mcp-stdio requires --agent-id=<id>")
+            .to_string();
+        let socket_path = args
+            .iter()
+            .find_map(|a| a.strip_prefix("--socket="))
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(socket::socket_path);
+
+        emergent_daemon::mcp::run_mcp_stdio(agent_id, socket_path).await;
+        return;
+    }
+
     let sock_path = socket::socket_path();
     log::info!("Socket path: {}", sock_path.display());
 

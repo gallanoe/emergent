@@ -68,6 +68,12 @@ pub struct StatusChangePayload {
     pub status: String,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct NudgeDeliveredPayload {
+    pub agent_id: String,
+    pub count: usize,
+}
+
 // ---------------------------------------------------------------------------
 // AgentStatus
 // ---------------------------------------------------------------------------
@@ -229,6 +235,8 @@ pub enum Notification {
     UserMessage(UserMessagePayload),
     #[serde(rename = "agent:error")]
     Error(AgentErrorPayload),
+    #[serde(rename = "agent:nudge-delivered")]
+    NudgeDelivered(NudgeDeliveredPayload),
 }
 
 impl Notification {
@@ -241,6 +249,7 @@ impl Notification {
             Notification::ConfigUpdate(_) => "agent:config-update",
             Notification::UserMessage(_) => "agent:user-message",
             Notification::Error(_) => "agent:error",
+            Notification::NudgeDelivered(_) => "agent:nudge-delivered",
         }
     }
 
@@ -253,6 +262,7 @@ impl Notification {
             Notification::ConfigUpdate(p) => Some(&p.agent_id),
             Notification::UserMessage(p) => Some(&p.agent_id),
             Notification::Error(p) => Some(&p.agent_id),
+            Notification::NudgeDelivered(p) => Some(&p.agent_id),
         }
     }
 }

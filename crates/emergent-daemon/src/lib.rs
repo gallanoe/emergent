@@ -1,8 +1,11 @@
 pub mod agent_manager;
 pub mod config;
 pub mod detect;
+pub mod mailbox;
+pub mod mcp;
 pub mod server;
 pub mod socket;
+pub mod topology;
 
 use agent_manager::AgentManager;
 use emergent_protocol::TransportListener;
