@@ -305,7 +305,7 @@ async fn handle_set_agent_permissions(
 
 async fn handle_send_swarm_message(
     req: &JsonRpcRequest,
-    manager: &AgentManager,
+    manager: &Arc<AgentManager>,
 ) -> Result<serde_json::Value, (i32, String)> {
     let from_agent_id: String = get_param(req, "from_agent_id")?;
     let to_agent_id: String = get_param(req, "to_agent_id")?;
@@ -314,6 +314,10 @@ async fn handle_send_swarm_message(
         .deliver_message(&from_agent_id, &to_agent_id, body)
         .await
         .map_err(|e| (-32000, e))?;
+
+    // Auto-nudge the target agent if it's idle
+    manager.maybe_auto_nudge(&to_agent_id).await;
+
     Ok(serde_json::json!({"ok": true}))
 }
 

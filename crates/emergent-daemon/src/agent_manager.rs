@@ -1122,6 +1122,14 @@ impl AgentManager {
         Ok(())
     }
 
+    pub async fn is_agent_idle(&self, agent_id: &str) -> bool {
+        let agents = self.agents.read().await;
+        match agents.get(agent_id) {
+            Some(h) => h.lock().await.status == AgentStatus::Idle,
+            None => false,
+        }
+    }
+
     pub async fn read_mailbox(&self, agent_id: &str) -> Vec<crate::mailbox::MailboxMessage> {
         let mut mailboxes = self.mailboxes.write().await;
         match mailboxes.get_mut(agent_id) {
