@@ -1,9 +1,17 @@
+use std::future::Future;
 use std::sync::Arc;
 
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{ServerCapabilities, ServerInfo};
 use rmcp::{schemars, tool, tool_handler, tool_router, ServerHandler};
 use serde::{Deserialize, Serialize};
+
+const MANAGEMENT_TOOLS: &[&str] = &[
+    "spawn_agent",
+    "kill_agent",
+    "connect_agents",
+    "disconnect_agents",
+];
 
 use crate::agent_manager::AgentManager;
 
@@ -13,7 +21,7 @@ use crate::agent_manager::AgentManager;
 
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema)]
 pub struct SendMessageParams {
-    #[schemars(description = "The name or ID of the connected peer agent to send the message to")]
+    #[schemars(description = "The agent ID of the connected peer to send the message to. Use list_peers to find agent IDs.")]
     pub target: String,
     #[schemars(description = "The message text to send")]
     pub body: String,
@@ -132,7 +140,7 @@ impl SwarmMcpServer {
     /// an error if the target is not connected or doesn't exist.
     #[tool(
         name = "send_message",
-        description = "Send a message to a connected peer agent. The message will be queued in their mailbox and they'll be notified on their next turn. Use this to share information, request help, or coordinate work."
+        description = "Send a message to a connected peer agent by their agent ID (from list_peers). The message will be queued in their mailbox and they'll be notified on their next turn."
     )]
     async fn send_message(
         &self,
@@ -246,11 +254,58 @@ impl SwarmMcpServer {
     }
 }
 
-#[tool_handler]
 impl ServerHandler for SwarmMcpServer {
     fn get_info(&self) -> ServerInfo {
         ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
             .with_instructions("Emergent swarm communication tools for inter-agent collaboration")
+    }
+
+    fn list_tools(
+        &self,
+        _request: Option<rmcp::model::PaginatedRequestParams>,
+        _context: rmcp::service::RequestContext<rmcp::RoleServer>,
+    ) -> impl Future<Output = Result<rmcp::model::ListToolsResult, rmcp::model::ErrorData>>
+           + Send
+           + '_ {
+        let manager = self.manager.clone();
+        let agent_id = self.agent_id.clone();
+        let all_tools = self.tool_router.list_all();
+        async move {
+            let has_perms = manager.has_management_permissions(&agent_id).await;
+            let tools = if has_perms {
+                all_tools
+            } else {
+                all_tools
+                    .into_iter()
+                    .filter(|t| !MANAGEMENT_TOOLS.contains(&t.name.as_ref()))
+                    .collect()
+            };
+            Ok(rmcp::model::ListToolsResult {
+                tools,
+                next_cursor: None,
+                meta: None,
+            })
+        }
+    }
+
+    fn call_tool(
+        &self,
+        request: rmcp::model::CallToolRequestParams,
+        context: rmcp::service::RequestContext<rmcp::RoleServer>,
+    ) -> impl Future<Output = Result<rmcp::model::CallToolResult, rmcp::model::ErrorData>>
+           + Send
+           + '_ {
+        self.tool_router
+            .call(rmcp::handler::server::tool::ToolCallContext::new(
+                self, request, context,
+            ))
+    }
+
+    fn get_tool(&self, name: &str) -> Option<rmcp::model::Tool> {
+        self.tool_router
+            .list_all()
+            .into_iter()
+            .find(|t| t.name == name)
     }
 }
 
@@ -350,7 +405,7 @@ impl McpStdioProxy {
 
     #[tool(
         name = "send_message",
-        description = "Send a message to a connected peer agent. The message will be queued in their mailbox and they'll be notified on their next turn. Use this to share information, request help, or coordinate work."
+        description = "Send a message to a connected peer agent by their agent ID (from list_peers). The message will be queued in their mailbox and they'll be notified on their next turn."
     )]
     async fn send_message(
         &self,
