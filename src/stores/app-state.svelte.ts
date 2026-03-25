@@ -44,7 +44,9 @@ function createAppState() {
   let selectedAgentId = $state<string | null>(null);
   let availableAgents = $state<{ name: string; binary: string; path: string }[]>([]);
   let knownAgents = $state<KnownAgent[]>([]);
-  let daemonStatus = $state<DaemonStatus>(demoMode ? "connected" : "connecting");
+  let daemonStatus = $state<DaemonStatus>("starting");
+  // In demo mode, skip daemon launch entirely
+  if (demoMode) daemonStatus = "connected";
   let launchError = $state<string | null>(null);
   let retrying = $state(false);
   let swarmPanelOpen = $state(true);

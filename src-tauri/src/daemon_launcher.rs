@@ -27,7 +27,8 @@ impl std::fmt::Display for LaunchError {
 }
 
 /// Find the `emergentd` binary.
-/// 1. Sibling of the current executable (dev: target/debug/, release: bundled)
+/// 1. Sibling of the current executable (dev: target/debug/, release: Tauri strips
+///    the target-triple suffix so the bundled sidecar is just `emergentd`)
 /// 2. Fall back to PATH lookup
 pub fn find_daemon_binary() -> Option<PathBuf> {
     if let Ok(exe) = std::env::current_exe() {

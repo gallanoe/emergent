@@ -19,5 +19,5 @@ echo "Copied to src-tauri/binaries/emergentd-${TARGET_TRIPLE}"
 
 if [[ "${1:-}" == "--build" ]]; then
   echo "Running tauri build with externalBin..."
-  TAURI_CONFIG='{"bundle":{"externalBin":["binaries/emergentd"]}}' bunx tauri build
+  bunx tauri build --config '{"bundle":{"externalBin":["binaries/emergentd"]}}'
 fi
