@@ -1,4 +1,6 @@
 mod commands;
+#[allow(dead_code)] // Wired in the next commit
+mod daemon_launcher;
 
 use emergent_protocol::{DaemonClient, Notification};
 use tauri::Manager;

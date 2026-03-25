@@ -317,6 +317,12 @@ impl DaemonClient {
         Ok(())
     }
 
+    pub async fn shutdown(&self) -> Result<(), String> {
+        self.call("shutdown", serde_json::json!({}))
+            .await
+            .map(|_| ())
+    }
+
     pub async fn read_mailbox(&self, agent_id: &str) -> Result<serde_json::Value, String> {
         self.call(
             "read_mailbox",
