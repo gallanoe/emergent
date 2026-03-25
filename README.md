@@ -21,6 +21,54 @@ Emergent uses a daemon + client architecture:
 
 Agents keep running even when the UI is closed. Reopening the app reconnects to existing agents and replays conversation history.
 
+```mermaid
+graph TD
+    subgraph Desktop App
+        UI[Svelte 5 Frontend]
+        TR[Tauri Rust Backend]
+    end
+
+    UI -- "Tauri IPC<br/>(invoke commands)" --> TR
+
+    TR -- "JSON-RPC<br/>(Unix socket)" --> D
+
+    subgraph emergentd [Daemon - emergentd]
+        D[Server]
+        AM[Agent Manager]
+        D --> AM
+    end
+
+    AM -- "ACP<br/>(stdio)" --> A1[Agent Process 1]
+    AM -- "ACP<br/>(stdio)" --> A2[Agent Process 2]
+    AM -- "ACP<br/>(stdio)" --> AN[Agent Process N]
+
+    D -. "notifications<br/>(status, messages)" .-> TR
+    TR -. "Tauri events" .-> UI
+
+    subgraph Swarm MCP
+        MCP1[MCP Server<br/>emergentd --mcp-stdio]
+        MCP2[MCP Server<br/>emergentd --mcp-stdio]
+        MCPN[MCP Server<br/>emergentd --mcp-stdio]
+    end
+
+    A1 -- "MCP tools<br/>(list_peers, send_message, ...)" --> MCP1
+    A2 -- "MCP tools" --> MCP2
+    AN -- "MCP tools" --> MCPN
+
+    MCP1 -- "JSON-RPC<br/>(Unix socket)" --> D
+    MCP2 -- "JSON-RPC<br/>(Unix socket)" --> D
+    MCPN -- "JSON-RPC<br/>(Unix socket)" --> D
+```
+
+**How it works:**
+
+1. The **Svelte frontend** communicates with the **Tauri backend** via IPC commands
+2. Tauri forwards all requests to the **daemon** over a JSON-RPC Unix socket — it's a thin passthrough
+3. The daemon's **agent manager** spawns agent processes (Claude Code, Gemini CLI, etc.) and communicates with them over **ACP** (stdio)
+4. Each agent is injected with an **MCP server** (the daemon itself in `--mcp-stdio` mode) that provides swarm tools — `list_peers`, `send_message`, `read_mailbox`, `spawn_agent`, etc.
+5. MCP tool calls route back to the daemon over JSON-RPC, enabling agents to discover and message each other
+6. The daemon pushes **notifications** (status changes, messages) back through Tauri events to the UI
+
 ## Tech Stack
 
 - **Frontend:** Svelte 5, TypeScript, Tailwind CSS 4
