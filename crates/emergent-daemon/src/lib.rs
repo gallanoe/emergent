@@ -24,8 +24,9 @@ pub async fn run_server(
                 match accept {
                     Ok(stream) => {
                         let mgr = manager.clone();
+                        let sd = shutdown.clone();
                         tokio::spawn(async move {
-                            server::handle_client(stream, mgr).await;
+                            server::handle_client(stream, mgr, sd).await;
                         });
                     }
                     Err(e) => log::error!("Accept error: {}", e),

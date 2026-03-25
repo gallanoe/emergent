@@ -7,7 +7,11 @@ use crate::detect;
 use emergent_protocol::*;
 
 /// Handle a single client connection.
-pub async fn handle_client(stream: TransportStream, manager: Arc<AgentManager>) {
+pub async fn handle_client(
+    stream: TransportStream,
+    manager: Arc<AgentManager>,
+    shutdown: Arc<tokio::sync::Notify>,
+) {
     log::info!("New client connected");
     let (reader, writer) = stream.into_split();
     let mut reader = BufReader::new(reader);
@@ -62,8 +66,9 @@ pub async fn handle_client(stream: TransportStream, manager: Arc<AgentManager>) 
                 let req_line = line_buf.clone();
                 let mgr = manager.clone();
                 let w = writer.clone();
+                let sd = shutdown.clone();
                 tokio::spawn(async move {
-                    let response = dispatch_request(&req_line, &mgr).await;
+                    let response = dispatch_request(&req_line, &mgr, &sd).await;
                     let mut w = w.lock().await;
                     let resp_line = serde_json::to_string(&response).unwrap();
                     if w.write_all(resp_line.as_bytes()).await.is_err() {
@@ -82,7 +87,11 @@ pub async fn handle_client(stream: TransportStream, manager: Arc<AgentManager>) 
     notify_task.abort();
 }
 
-async fn dispatch_request(line: &str, manager: &Arc<AgentManager>) -> JsonRpcResponse {
+async fn dispatch_request(
+    line: &str,
+    manager: &Arc<AgentManager>,
+    shutdown: &Arc<tokio::sync::Notify>,
+) -> JsonRpcResponse {
     let req: JsonRpcRequest = match serde_json::from_str(line) {
         Ok(r) => r,
         Err(e) => return error_response(0, -32700, &format!("Parse error: {}", e)),
@@ -107,6 +116,10 @@ async fn dispatch_request(line: &str, manager: &Arc<AgentManager>) -> JsonRpcRes
         "send_swarm_message" => handle_send_swarm_message(&req, manager).await,
         "read_mailbox" => handle_read_mailbox(&req, manager).await,
         "get_agent_permissions" => handle_get_agent_permissions(&req, manager).await,
+        "shutdown" => {
+            shutdown.notify_one();
+            Ok(serde_json::json!(null))
+        }
         _ => Err((-32601, format!("Method not found: {}", req.method))),
     };
 

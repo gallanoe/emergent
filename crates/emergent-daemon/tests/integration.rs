@@ -245,3 +245,19 @@ async fn test_missing_params_returns_error() {
 
     daemon.shutdown().await;
 }
+
+#[tokio::test]
+async fn test_shutdown_rpc() {
+    let daemon = TestDaemon::start().await;
+    let mut client = daemon.connect().await;
+
+    let response = client.call("shutdown", serde_json::json!({})).await;
+    assert!(response.error.is_none(), "shutdown should succeed");
+
+    // Daemon should exit — the handle should complete
+    let handle = daemon.into_handle();
+    tokio::time::timeout(std::time::Duration::from_secs(2), handle)
+        .await
+        .expect("daemon should exit within 2 seconds")
+        .expect("daemon task should not panic");
+}
