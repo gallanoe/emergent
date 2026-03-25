@@ -237,6 +237,7 @@ function createAppState() {
   }
 
   async function setAgentPermissions(agentId: string, enabled: boolean) {
+    agentStore.setManagementPermissions(agentId, enabled);
     await invoke("set_agent_permissions", { agentId, enabled });
   }
 

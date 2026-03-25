@@ -98,6 +98,7 @@ export interface DisplayAgent {
   activeToolCalls: DisplayToolCall[];
   queuedMessage: string | null;
   configOptions: ConfigOption[];
+  hasManagementPermissions: boolean;
   errorMessage?: string;
 }
 

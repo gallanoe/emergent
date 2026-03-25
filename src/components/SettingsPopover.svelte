@@ -21,7 +21,7 @@
     onClose,
   }: Props = $props();
 
-  let managementEnabled = $state(false);
+  let managementEnabled = $derived(agent.hasManagementPermissions);
   let showConnectDropdown = $state(false);
 
   let unconnectedAgents = $derived(
@@ -65,8 +65,7 @@
           ? 'bg-success'
           : 'bg-bg-active'}"
         onclick={() => {
-          managementEnabled = !managementEnabled;
-          onSetPermissions(managementEnabled);
+          onSetPermissions(!managementEnabled);
         }}
       >
         <div

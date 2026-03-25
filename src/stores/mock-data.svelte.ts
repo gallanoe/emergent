@@ -112,6 +112,7 @@ const swarms: DisplaySwarm[] = [
         activeToolCalls: [],
         queuedMessage: null,
         configOptions: [],
+        hasManagementPermissions: false,
       },
       {
         id: "agent-2",
@@ -169,6 +170,7 @@ const swarms: DisplaySwarm[] = [
         activeToolCalls: [],
         queuedMessage: null,
         configOptions: [],
+        hasManagementPermissions: false,
       },
       {
         id: "agent-3",
@@ -212,6 +214,7 @@ const swarms: DisplaySwarm[] = [
         activeToolCalls: [],
         queuedMessage: null,
         configOptions: [],
+        hasManagementPermissions: false,
       },
     ],
   },
@@ -232,6 +235,7 @@ const swarms: DisplaySwarm[] = [
         activeToolCalls: [],
         queuedMessage: null,
         configOptions: [],
+        hasManagementPermissions: false,
       },
       {
         id: "agent-5",
@@ -245,6 +249,7 @@ const swarms: DisplaySwarm[] = [
         activeToolCalls: [],
         queuedMessage: null,
         configOptions: [],
+        hasManagementPermissions: false,
       },
     ],
   },

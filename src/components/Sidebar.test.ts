@@ -21,6 +21,7 @@ function makeSwarm(overrides?: Partial<DisplaySwarm>): DisplaySwarm {
         activeToolCalls: [],
         queuedMessage: null,
         configOptions: [],
+        hasManagementPermissions: false,
       },
       {
         id: "agent-2",
@@ -34,6 +35,7 @@ function makeSwarm(overrides?: Partial<DisplaySwarm>): DisplaySwarm {
         activeToolCalls: [],
         queuedMessage: null,
         configOptions: [],
+        hasManagementPermissions: false,
       },
     ],
     ...overrides,
@@ -135,6 +137,7 @@ describe("Sidebar", () => {
           activeToolCalls: [],
           queuedMessage: null,
           configOptions: [],
+          hasManagementPermissions: false,
         },
       ],
     });

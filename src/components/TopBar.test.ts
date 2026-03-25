@@ -16,6 +16,7 @@ function makeAgent(overrides?: Partial<DisplayAgent>): DisplayAgent {
     activeToolCalls: [],
     queuedMessage: null,
     configOptions: [],
+    hasManagementPermissions: false,
     ...overrides,
   };
 }

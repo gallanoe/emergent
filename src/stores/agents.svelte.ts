@@ -22,6 +22,7 @@ interface AgentConnection {
   stopReason: string | null;
   queuedContent: string;
   configOptions: ConfigOption[];
+  hasManagementPermissions: boolean;
   errorMessage?: string;
 }
 
@@ -391,6 +392,7 @@ function createAgentStore() {
       stopReason: null,
       queuedContent: "",
       configOptions: [],
+      hasManagementPermissions: false,
     };
 
     // No explicit config fetch needed — config arrives via ConfigUpdate
@@ -470,6 +472,13 @@ function createAgentStore() {
     delete agents[agentId];
   }
 
+  function setManagementPermissions(agentId: string, enabled: boolean) {
+    const agent = agents[agentId];
+    if (agent) {
+      agent.hasManagementPermissions = enabled;
+    }
+  }
+
   const CLI_DISPLAY_NAMES: Record<string, string> = {
     "claude-agent-acp": "Claude Code",
     "codex-acp": "Codex",
@@ -513,6 +522,7 @@ function createAgentStore() {
       activeToolCalls: Object.values(conn.activeToolCalls),
       queuedMessage: conn.queuedContent || null,
       configOptions: conn.configOptions,
+      hasManagementPermissions: conn.hasManagementPermissions,
       ...(conn.errorMessage !== undefined && { errorMessage: conn.errorMessage }),
     };
   }
@@ -528,6 +538,7 @@ function createAgentStore() {
       stopReason: null,
       queuedContent: "",
       configOptions: [],
+      hasManagementPermissions: false,
     };
   }
 
@@ -591,6 +602,7 @@ function createAgentStore() {
     registerQueueDumpHandler,
     registerExistingAgent,
     replayNotifications,
+    setManagementPermissions,
   };
 }
 
