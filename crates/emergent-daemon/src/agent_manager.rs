@@ -849,6 +849,13 @@ impl AgentManager {
     pub async fn kill_agent(&self, agent_id: &str) -> Result<(), String> {
         log::info!("Killing agent {}", agent_id);
 
+        // Emit the dead status notification *before* removing from the map,
+        // so the history recorder still has an entry for this agent_id.
+        let _ = self.event_tx.send(Notification::StatusChange(StatusChangePayload {
+            agent_id: agent_id.to_string(),
+            status: AgentStatus::Dead.to_string(),
+        }));
+
         let handle_arc = {
             let mut agents = self.agents.write().await;
             match agents.remove(agent_id) {

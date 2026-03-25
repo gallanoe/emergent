@@ -100,6 +100,7 @@ pub enum AgentStatus {
     Idle,
     Working,
     Error,
+    Dead,
 }
 
 impl std::fmt::Display for AgentStatus {
@@ -109,6 +110,7 @@ impl std::fmt::Display for AgentStatus {
             AgentStatus::Idle => write!(f, "idle"),
             AgentStatus::Working => write!(f, "working"),
             AgentStatus::Error => write!(f, "error"),
+            AgentStatus::Dead => write!(f, "dead"),
         }
     }
 }

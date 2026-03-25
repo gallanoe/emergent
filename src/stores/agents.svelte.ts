@@ -16,7 +16,7 @@ interface AgentConnection {
   id: string;
   swarmId: string;
   cli: string;
-  status: "initializing" | "idle" | "working" | "error";
+  status: "initializing" | "idle" | "working" | "error" | "dead";
   messages: DisplayMessage[];
   activeToolCalls: Record<string, DisplayToolCall>;
   stopReason: string | null;
@@ -304,6 +304,10 @@ function createAgentStore() {
   }
 
   function handleStatusChange(payload: StatusChangePayload) {
+    if (payload.status === "dead") {
+      delete agents[payload.agent_id];
+      return;
+    }
     const agent = agents[payload.agent_id];
     if (!agent) {
       onUnknownAgent?.();
@@ -519,6 +523,7 @@ function createAgentStore() {
       idle: "idle",
       working: "working",
       error: "error",
+      dead: "error", // dead agents are removed from the store; this is a fallback
     };
     return {
       id: conn.id,
