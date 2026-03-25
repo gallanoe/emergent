@@ -871,11 +871,20 @@ impl AgentManager {
             loop_handle.abort();
         }
 
-        // Signal the command loop to exit
+        // Signal the command loop to exit — this drops the ACP connection,
+        // which closes stdin to the agent, giving it a chance to shut down
+        // its MCP children gracefully per the MCP spec.
         let _ = handle.command_tx.send(AgentCommand::Shutdown);
 
-        // Kill the child process
-        let _ = handle.child.kill().await;
+        // Wait briefly for the agent to exit gracefully, then force kill.
+        let exited = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            handle.child.wait(),
+        )
+        .await;
+        if exited.is_err() {
+            let _ = handle.child.kill().await;
+        }
 
         // Drop the thread handle (do not join — just release ownership)
         drop(handle.thread_handle.take());
