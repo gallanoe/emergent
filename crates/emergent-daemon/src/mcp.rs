@@ -38,17 +38,17 @@ pub struct KillAgentParams {
 
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema)]
 pub struct ConnectAgentsParams {
-    #[schemars(description = "First agent name or ID")]
+    #[schemars(description = "First agent ID, or \"self\" to refer to yourself")]
     pub agent_a: String,
-    #[schemars(description = "Second agent name or ID")]
+    #[schemars(description = "Second agent ID, or \"self\" to refer to yourself")]
     pub agent_b: String,
 }
 
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema)]
 pub struct DisconnectAgentsParams {
-    #[schemars(description = "First agent name or ID")]
+    #[schemars(description = "First agent ID, or \"self\" to refer to yourself")]
     pub agent_a: String,
-    #[schemars(description = "Second agent name or ID")]
+    #[schemars(description = "Second agent ID, or \"self\" to refer to yourself")]
     pub agent_b: String,
 }
 
@@ -135,6 +135,15 @@ impl McpStdioProxy {
         self.client
             .has_management_permissions(&self.agent_id)
             .await
+    }
+
+    /// Resolve "self" to this agent's ID.
+    fn resolve_agent_id(&self, id: &str) -> String {
+        if id.eq_ignore_ascii_case("self") {
+            self.agent_id.clone()
+        } else {
+            id.to_string()
+        }
     }
 }
 
@@ -279,8 +288,10 @@ impl McpStdioProxy {
         if !self.check_management_permissions().await? {
             return Err("Permission denied: management permissions required".to_string());
         }
+        let a = self.resolve_agent_id(&params.agent_a);
+        let b = self.resolve_agent_id(&params.agent_b);
         self.client
-            .connect_agents(&params.agent_a, &params.agent_b)
+            .connect_agents(&a, &b)
             .await
             .map_err(|e| e.to_string())?;
         Ok(r#"{"status": "connected"}"#.to_string())
@@ -297,8 +308,10 @@ impl McpStdioProxy {
         if !self.check_management_permissions().await? {
             return Err("Permission denied: management permissions required".to_string());
         }
+        let a = self.resolve_agent_id(&params.agent_a);
+        let b = self.resolve_agent_id(&params.agent_b);
         self.client
-            .disconnect_agents(&params.agent_a, &params.agent_b)
+            .disconnect_agents(&a, &b)
             .await
             .map_err(|e| e.to_string())?;
         Ok(r#"{"status": "disconnected"}"#.to_string())

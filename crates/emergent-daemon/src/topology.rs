@@ -20,7 +20,9 @@ impl Topology {
     }
 
     pub fn connect(&mut self, a: &str, b: &str) {
-        self.edges.insert(Self::canonical(a, b));
+        if a != b {
+            self.edges.insert(Self::canonical(a, b));
+        }
     }
 
     pub fn disconnect(&mut self, a: &str, b: &str) {

@@ -1028,10 +1028,22 @@ impl AgentManager {
 
     pub async fn connect_agents(&self, a: &str, b: &str) {
         self.topology.write().await.connect(a, b);
+        let _ = self.event_tx.send(Notification::TopologyChanged(
+            emergent_protocol::TopologyChangedPayload {
+                agent_id_a: a.to_string(),
+                agent_id_b: b.to_string(),
+            },
+        ));
     }
 
     pub async fn disconnect_agents(&self, a: &str, b: &str) {
         self.topology.write().await.disconnect(a, b);
+        let _ = self.event_tx.send(Notification::TopologyChanged(
+            emergent_protocol::TopologyChangedPayload {
+                agent_id_a: a.to_string(),
+                agent_id_b: b.to_string(),
+            },
+        ));
     }
 
     pub async fn get_connections(&self, agent_id: &str) -> Vec<String> {

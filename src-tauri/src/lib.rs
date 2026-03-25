@@ -61,6 +61,9 @@ pub fn run() {
                                     Notification::SwarmMessage(p) => {
                                         let _ = handle.emit(event_name, p);
                                     }
+                                    Notification::TopologyChanged(p) => {
+                                        let _ = handle.emit(event_name, p);
+                                    }
                                 }
                             }
                         });

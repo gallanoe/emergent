@@ -7,6 +7,7 @@ import type {
   DisplaySwarm,
   SwarmMessageLogEntry,
   SwarmMessagePayload,
+  TopologyChangedPayload,
 } from "./types";
 
 // Import mock data for demo mode
@@ -88,6 +89,12 @@ function createAppState() {
         }
       });
 
+      // Listen for topology changes (connections created/removed externally)
+      await listen<TopologyChangedPayload>("swarm:topology-changed", (e) => {
+        refreshConnections(e.payload.agent_id_a);
+        refreshConnections(e.payload.agent_id_b);
+      });
+
       // When an agent is spawned externally (e.g. via MCP tool), pick it up
       agentStore.registerUnknownAgentHandler(() => reconnectToExistingAgents());
 
@@ -128,8 +135,9 @@ function createAppState() {
       newAgents.push(agent);
     }
 
-    // Restore peer connection state for new agents
-    await Promise.all(newAgents.map((agent) => refreshConnections(agent.id)));
+    // Refresh connections for all agents (new agents need initial state,
+    // existing agents may have gained peers from external connect calls)
+    await Promise.all(agents.map((agent) => refreshConnections(agent.id)));
   }
 
   // ── Swarm management ──────────────────────────────────────────

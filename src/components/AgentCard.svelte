@@ -10,6 +10,10 @@
 
   let { agent, connections, allAgents, isCurrent }: Props = $props();
   let connectionsExpanded = $state(false);
+  // Only count connections that resolve to known agents
+  let resolvedConnections = $derived(
+    connections.filter((id) => allAgents.some((a) => a.id === id)),
+  );
 </script>
 
 <div
@@ -41,10 +45,10 @@
 
   <!-- Connection count + collapsible list -->
   <div class="flex items-center gap-1.5 text-[10px]">
-    {#if connections.length > 0}
+    {#if resolvedConnections.length > 0}
       <span
         class="px-[7px] py-0.5 rounded-[3px] bg-[rgba(45,140,80,0.08)] text-success font-semibold"
-        >{connections.length}</span
+        >{resolvedConnections.length}</span
       >
       <button
         class="text-fg-muted flex items-center gap-0.5 cursor-default hover:text-fg-default"
@@ -70,7 +74,7 @@
 
   {#if connectionsExpanded}
     <div class="mt-1.5 flex flex-col gap-0.5 pl-0.5">
-      {#each connections as connId}
+      {#each resolvedConnections as connId}
         {@const peer = allAgents.find((a) => a.id === connId)}
         {#if peer}
           <div

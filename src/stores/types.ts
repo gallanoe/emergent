@@ -84,6 +84,11 @@ export interface SwarmMessageLogEntry {
   timestamp: string;
 }
 
+export interface TopologyChangedPayload {
+  agent_id_a: string;
+  agent_id_b: string;
+}
+
 export type AgentStatus = "initializing" | "idle" | "working" | "error";
 
 export interface DisplayAgent {
