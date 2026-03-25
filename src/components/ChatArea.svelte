@@ -16,6 +16,8 @@
   import { renderMarkdown } from "../lib/render-markdown";
 
   type DaemonStatus =
+    | "starting"
+    | "launch_error"
     | "disconnected"
     | "connecting"
     | "connected"

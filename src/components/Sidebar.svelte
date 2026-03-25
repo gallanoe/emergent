@@ -19,6 +19,8 @@
   };
 
   type DaemonStatus =
+    | "starting"
+    | "launch_error"
     | "disconnected"
     | "connecting"
     | "connected"

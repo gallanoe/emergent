@@ -27,7 +27,13 @@ interface Swarm {
   agentIds: string[];
 }
 
-type DaemonStatus = "disconnected" | "connecting" | "connected" | "reconnecting";
+type DaemonStatus =
+  | "starting"
+  | "launch_error"
+  | "disconnected"
+  | "connecting"
+  | "connected"
+  | "reconnecting";
 
 function createAppState() {
   let demoMode = $state(
@@ -39,6 +45,8 @@ function createAppState() {
   let availableAgents = $state<{ name: string; binary: string; path: string }[]>([]);
   let knownAgents = $state<KnownAgent[]>([]);
   let daemonStatus = $state<DaemonStatus>(demoMode ? "connected" : "connecting");
+  let launchError = $state<string | null>(null);
+  let retrying = $state(false);
   let swarmPanelOpen = $state(true);
   let agentConnections = $state<Record<string, string[]>>({});
   let swarmMessageLog = $state<SwarmMessageLogEntry[]>([]);
@@ -52,56 +60,97 @@ function createAppState() {
     working_directory: string;
   }
 
+  async function waitForDaemon(): Promise<void> {
+    const maxAttempts = 60; // 6 seconds at 100ms intervals
+    for (let i = 0; i < maxAttempts; i++) {
+      const result = await invoke<{ status: string; error: string | null }>(
+        "get_daemon_launch_status",
+      );
+      daemonStatus = result.status as DaemonStatus;
+      launchError = result.error;
+
+      if (daemonStatus === "connected" || daemonStatus === "launch_error") {
+        return;
+      }
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    daemonStatus = "launch_error";
+    launchError = "Timed out waiting for daemon";
+  }
+
+  async function setupAfterConnect() {
+    const detected = await agentStore.detectAgents();
+    availableAgents = detected;
+
+    const known = await invoke<KnownAgent[]>("known_agents");
+    knownAgents = known;
+
+    await agentStore.setupListeners();
+
+    // Listen for swarm messages (global, not per-agent)
+    await listen<SwarmMessagePayload>("swarm:message", (e) => {
+      const p = e.payload;
+      swarmMessageLog.push({
+        id: crypto.randomUUID(),
+        fromName: p.from_agent_name,
+        toName: p.to_agent_name,
+        preview: p.body.length > 40 ? p.body.slice(0, 40) + "…" : p.body,
+        timestamp: new Date(p.timestamp).toLocaleTimeString([], {
+          hour: "numeric",
+          minute: "2-digit",
+        }),
+      });
+      // Keep last 50 entries
+      if (swarmMessageLog.length > 50) {
+        swarmMessageLog.splice(0, swarmMessageLog.length - 50);
+      }
+    });
+
+    // Listen for topology changes (connections created/removed externally)
+    await listen<TopologyChangedPayload>("swarm:topology-changed", (e) => {
+      refreshConnections(e.payload.agent_id_a);
+      refreshConnections(e.payload.agent_id_b);
+    });
+
+    // When an agent is spawned externally (e.g. via MCP tool), pick it up
+    agentStore.registerUnknownAgentHandler(() => reconnectToExistingAgents());
+
+    // Reconnect to any existing agents from the daemon
+    await reconnectToExistingAgents();
+  }
+
   async function initialize() {
     if (demoMode) return;
 
     try {
-      daemonStatus = "connecting";
-      const status = await invoke<string>("get_daemon_status");
-      daemonStatus = status as DaemonStatus;
+      daemonStatus = "starting";
+      await waitForDaemon();
 
-      if (daemonStatus !== "connected") return;
+      if ((daemonStatus as DaemonStatus) !== "connected") return;
 
-      const detected = await agentStore.detectAgents();
-      availableAgents = detected;
-
-      const known = await invoke<KnownAgent[]>("known_agents");
-      knownAgents = known;
-
-      await agentStore.setupListeners();
-
-      // Listen for swarm messages (global, not per-agent)
-      await listen<SwarmMessagePayload>("swarm:message", (e) => {
-        const p = e.payload;
-        swarmMessageLog.push({
-          id: crypto.randomUUID(),
-          fromName: p.from_agent_name,
-          toName: p.to_agent_name,
-          preview: p.body.length > 40 ? p.body.slice(0, 40) + "…" : p.body,
-          timestamp: new Date(p.timestamp).toLocaleTimeString([], {
-            hour: "numeric",
-            minute: "2-digit",
-          }),
-        });
-        // Keep last 50 entries
-        if (swarmMessageLog.length > 50) {
-          swarmMessageLog.splice(0, swarmMessageLog.length - 50);
-        }
-      });
-
-      // Listen for topology changes (connections created/removed externally)
-      await listen<TopologyChangedPayload>("swarm:topology-changed", (e) => {
-        refreshConnections(e.payload.agent_id_a);
-        refreshConnections(e.payload.agent_id_b);
-      });
-
-      // When an agent is spawned externally (e.g. via MCP tool), pick it up
-      agentStore.registerUnknownAgentHandler(() => reconnectToExistingAgents());
-
-      // Reconnect to any existing agents from the daemon
-      await reconnectToExistingAgents();
+      await setupAfterConnect();
     } catch {
       daemonStatus = "disconnected";
+    }
+  }
+
+  async function retryLaunch() {
+    retrying = true;
+    daemonStatus = "starting";
+    launchError = null;
+
+    try {
+      await invoke("retry_daemon_launch");
+      await waitForDaemon();
+
+      if ((daemonStatus as DaemonStatus) === "connected") {
+        await setupAfterConnect();
+      }
+    } catch (e) {
+      daemonStatus = "launch_error";
+      launchError = String(e);
+    } finally {
+      retrying = false;
     }
   }
 
@@ -304,6 +353,12 @@ function createAppState() {
     get daemonStatus() {
       return daemonStatus;
     },
+    get launchError() {
+      return launchError;
+    },
+    get retrying() {
+      return retrying;
+    },
     get swarmPanelOpen() {
       return swarmPanelOpen;
     },
@@ -314,6 +369,7 @@ function createAppState() {
       return swarmMessageLog;
     },
     initialize,
+    retryLaunch,
     createSwarm,
     addAgentToSwarm,
     newSwarm,
