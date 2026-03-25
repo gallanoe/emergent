@@ -859,6 +859,11 @@ impl AgentManager {
 
         let mut handle = handle_arc.lock().await;
 
+        // Abort the prompt loop task.
+        if let Some(loop_handle) = handle.prompt_loop_handle.take() {
+            loop_handle.abort();
+        }
+
         // Signal the command loop to exit
         let _ = handle.command_tx.send(AgentCommand::Shutdown);
 
