@@ -13,6 +13,7 @@ const disconnectedMock = `
   window.__TAURI_INTERNALS__ = {
     invoke: function(cmd, args) {
       if (cmd === "get_daemon_status") return Promise.resolve("disconnected");
+      if (cmd === "get_daemon_launch_status") return Promise.resolve({ status: "disconnected", error: null });
       if (cmd.startsWith("plugin:event|")) return Promise.resolve(args && args.handler);
       return Promise.reject("Daemon not connected");
     },
@@ -50,6 +51,7 @@ const connectedMock = `
 
       const responses = {
         get_daemon_status: "connected",
+        get_daemon_launch_status: { status: "connected", error: null },
         detect_agents: [],
         known_agents: [
           { name: "Claude Code", command: "claude-agent-acp", available: false },
