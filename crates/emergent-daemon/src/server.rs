@@ -166,22 +166,21 @@ async fn handle_spawn_agent(
 
 async fn handle_send_prompt(
     req: &JsonRpcRequest,
-    manager: &Arc<AgentManager>,
+    manager: &AgentManager,
 ) -> Result<serde_json::Value, (i32, String)> {
     let agent_id: String = get_param(req, "agent_id")?;
     let text: String = get_param(req, "text")?;
-    let result = manager
-        .send_prompt(&agent_id, text)
+    let reply_rx = manager
+        .queue_prompt(&agent_id, text)
         .await
+        .map_err(|e| (-32000, e))?;
+
+    // Wait for the prompt loop to process the prompt and return the result.
+    reply_rx
+        .await
+        .map_err(|_| (-32000, "Agent prompt loop terminated".to_string()))?
         .map(|()| serde_json::json!({}))
-        .map_err(|e| (-32000, e));
-
-    // After prompt completes, auto-nudge if mailbox has pending messages
-    if result.is_ok() {
-        manager.maybe_auto_nudge(&agent_id).await;
-    }
-
-    result
+        .map_err(|e| (-32000, e))
 }
 
 async fn handle_cancel_prompt(
@@ -305,7 +304,7 @@ async fn handle_set_agent_permissions(
 
 async fn handle_send_swarm_message(
     req: &JsonRpcRequest,
-    manager: &Arc<AgentManager>,
+    manager: &AgentManager,
 ) -> Result<serde_json::Value, (i32, String)> {
     let from_agent_id: String = get_param(req, "from_agent_id")?;
     let to_agent_id: String = get_param(req, "to_agent_id")?;
@@ -315,8 +314,8 @@ async fn handle_send_swarm_message(
         .await
         .map_err(|e| (-32000, e))?;
 
-    // Auto-nudge the target agent if it's idle
-    manager.maybe_auto_nudge(&to_agent_id).await;
+    // Wake the target agent's prompt loop to process the mailbox message.
+    manager.notify_prompt_loop(&to_agent_id).await;
 
     Ok(serde_json::json!({"ok": true}))
 }

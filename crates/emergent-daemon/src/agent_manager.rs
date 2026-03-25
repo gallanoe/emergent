@@ -48,6 +48,12 @@ struct AgentHandle {
     thread_handle: Option<std::thread::JoinHandle<()>>,
     config_options: Vec<ConfigOption>,
     has_management_permissions: bool,
+    /// Wakes the prompt loop when work is available (user prompt or mailbox message).
+    prompt_notify: Arc<tokio::sync::Notify>,
+    /// Queued user prompt + reply channel. At most one pending at a time.
+    pending_prompt: Option<(String, oneshot::Sender<Result<(), String>>)>,
+    /// Handle to the prompt loop task (aborted on kill).
+    prompt_loop_handle: Option<tokio::task::JoinHandle<()>>,
 }
 
 // ---------------------------------------------------------------------------
@@ -549,6 +555,7 @@ impl AgentManager {
             .map_err(|_| "Agent thread terminated during initialization".to_string())??;
 
         // Store the handle
+        let prompt_notify = Arc::new(tokio::sync::Notify::new());
         let handle = AgentHandle {
             status: AgentStatus::Idle,
             cli: agent_binary,
@@ -558,6 +565,9 @@ impl AgentManager {
             thread_handle: Some(thread_handle),
             config_options: initial_config.clone(),
             has_management_permissions: false,
+            prompt_notify,
+            pending_prompt: None,
+            prompt_loop_handle: None,
         };
 
         let _ = event_tx.send(Notification::StatusChange(StatusChangePayload {
@@ -574,10 +584,12 @@ impl AgentManager {
             }));
         }
 
+        let handle_arc = Arc::new(Mutex::new(handle));
+
         agents
             .write()
             .await
-            .insert(agent_id.clone(), Arc::new(Mutex::new(handle)));
+            .insert(agent_id.clone(), handle_arc.clone());
 
         // Initialize mailbox for this agent
         mailboxes
@@ -589,8 +601,19 @@ impl AgentManager {
         history
             .write()
             .await
-            .entry(agent_id)
+            .entry(agent_id.clone())
             .or_default();
+
+        // Spawn the prompt loop for this agent.
+        let loop_handle = tokio::spawn(prompt_loop(
+            agent_id,
+            handle_arc.clone(),
+            mailboxes,
+            event_tx.clone(),
+        ));
+
+        // Store the loop handle so kill_agent can abort it.
+        handle_arc.lock().await.prompt_loop_handle = Some(loop_handle);
 
         Ok(())
     }
@@ -611,10 +634,6 @@ impl AgentManager {
                         &agent_id,
                         if text.len() > 100 { &text[..100] } else { &text }
                     );
-                    let _ = event_tx.send(Notification::StatusChange(StatusChangePayload {
-                        agent_id: agent_id.clone(),
-                        status: AgentStatus::Working.to_string(),
-                    }));
 
                     let prompt_req = acp::PromptRequest::new(session_id.clone(), vec![text.into()]);
 
@@ -701,10 +720,6 @@ impl AgentManager {
                         }
                     }
 
-                    let _ = event_tx.send(Notification::StatusChange(StatusChangePayload {
-                        agent_id: agent_id.clone(),
-                        status: AgentStatus::Idle.to_string(),
-                    }));
                 }
                 AgentCommand::Cancel { reply } => {
                     log::debug!("Agent {} cancel requested", &agent_id);
@@ -753,8 +768,13 @@ impl AgentManager {
         }
     }
 
-    /// Send a prompt to a running agent.
-    pub async fn send_prompt(&self, agent_id: &str, text: String) -> Result<(), String> {
+    /// Queue a user prompt for an agent. The prompt loop will pick it up.
+    /// Returns a receiver that resolves when the prompt completes.
+    pub async fn queue_prompt(
+        &self,
+        agent_id: &str,
+        text: String,
+    ) -> Result<oneshot::Receiver<Result<(), String>>, String> {
         let handle_arc = {
             let agents = self.agents.read().await;
             agents
@@ -765,6 +785,13 @@ impl AgentManager {
 
         let mut handle = handle_arc.lock().await;
 
+        // Reject if a prompt is already queued or agent is working.
+        if handle.pending_prompt.is_some() {
+            return Err(format!(
+                "Agent '{}' already has a pending prompt",
+                agent_id
+            ));
+        }
         if handle.status != AgentStatus::Idle {
             return Err(format!(
                 "Agent '{}' is not idle (current status: {})",
@@ -772,92 +799,19 @@ impl AgentManager {
             ));
         }
 
-        handle.status = AgentStatus::Working;
-
-        // Record the user message so it appears in history
-        // (emitted before NudgeDelivered so replay attaches nudge to user message)
-        // Skip for empty text (nudge-only auto-prompts from maybe_auto_nudge)
-        if !text.is_empty() {
-            let _ = self.event_tx.send(Notification::UserMessage(UserMessagePayload {
-                agent_id: agent_id.to_string(),
-                content: text.clone(),
-            }));
-        }
-
-        // Check mailbox and coalesce nudge into the prompt text
-        let mailbox_count = self.mailbox_len(agent_id).await;
-        let prompt_text = if mailbox_count > 0 {
-            let nudge = if mailbox_count == 1 {
-                "You have 1 unread message in your mailbox.".to_string()
-            } else {
-                format!(
-                    "You have {} unread messages in your mailbox.",
-                    mailbox_count
-                )
-            };
-
-            // Emit NudgeDelivered after UserMessage so replay can attach it
-            let _ = self.event_tx.send(Notification::NudgeDelivered(
-                NudgeDeliveredPayload {
-                    agent_id: agent_id.to_string(),
-                    count: mailbox_count,
-                },
-            ));
-
-            if text.is_empty() {
-                nudge
-            } else {
-                format!("{}\n\n{}", text, nudge)
-            }
-        } else {
-            text
-        };
-
         let (reply_tx, reply_rx) = oneshot::channel();
-        handle
-            .command_tx
-            .send(AgentCommand::Prompt {
-                text: prompt_text,
-                reply: reply_tx,
-            })
-            .map_err(|_| "Agent thread has terminated".to_string())?;
+        handle.pending_prompt = Some((text, reply_tx));
+        handle.prompt_notify.notify_one();
 
-        // Drop the handle lock before waiting for the prompt to complete.
-        drop(handle);
-
-        let result = reply_rx
-            .await
-            .map_err(|_| "Agent thread terminated during prompt".to_string())?;
-
-        // Update status back to Idle (or Error).
-        let mut handle = handle_arc.lock().await;
-        match &result {
-            Ok(()) => {
-                handle.status = AgentStatus::Idle;
-            }
-            Err(_) => {
-                handle.status = AgentStatus::Error;
-                let _ = self.event_tx.send(Notification::StatusChange(StatusChangePayload {
-                    agent_id: agent_id.to_string(),
-                    status: AgentStatus::Error.to_string(),
-                }));
-            }
-        }
-
-        result
+        Ok(reply_rx)
     }
 
-    /// Check mailbox after prompt completion and auto-send a nudge if needed.
-    /// Spawns a background task so the caller isn't blocked.
-    pub async fn maybe_auto_nudge(self: &Arc<Self>, agent_id: &str) {
-        if self.mailbox_len(agent_id).await > 0 {
-            let mgr = self.clone();
-            let id = agent_id.to_string();
-            tokio::spawn(async move {
-                if let Err(e) = mgr.send_prompt(&id, String::new()).await {
-                    log::warn!("Auto-nudge for agent {} failed: {}", id, e);
-                }
-            });
+    /// Wake an agent's prompt loop (e.g., after delivering a mailbox message).
+    pub async fn notify_prompt_loop(&self, agent_id: &str) {
+        let agents = self.agents.read().await;
+        if let Some(handle_arc) = agents.get(agent_id) {
+            let handle = handle_arc.lock().await;
+            handle.prompt_notify.notify_one();
         }
     }
 
@@ -1153,5 +1107,143 @@ impl AgentManager {
     pub async fn mailbox_len(&self, agent_id: &str) -> usize {
         let mailboxes = self.mailboxes.read().await;
         mailboxes.get(agent_id).map_or(0, |m| m.len())
+    }
+}
+
+/// Per-agent prompt loop. Owns the prompt lifecycle for a single agent.
+/// Wakes on `Notify`, checks for a queued user prompt or pending mailbox
+/// messages, constructs the prompt, and sends it to the ACP command loop.
+async fn prompt_loop(
+    agent_id: String,
+    handle_arc: Arc<Mutex<AgentHandle>>,
+    mailboxes: Arc<RwLock<HashMap<String, crate::mailbox::Mailbox>>>,
+    event_tx: broadcast::Sender<Notification>,
+) {
+    // Grab the Notify from the handle (it's Arc-wrapped, so clone is cheap).
+    let notify = handle_arc.lock().await.prompt_notify.clone();
+
+    loop {
+        // Phase 1: Check for work — take pending prompt and/or check mailbox.
+        let pending = {
+            let mut handle = handle_arc.lock().await;
+            handle.pending_prompt.take()
+        };
+
+        let mailbox_count = {
+            let mboxes = mailboxes.read().await;
+            mboxes.get(&agent_id).map_or(0, |m| m.len())
+        };
+
+        // If no work, wait for a notification.
+        if pending.is_none() && mailbox_count == 0 {
+            notify.notified().await;
+            continue; // Re-check after waking.
+        }
+
+        // Phase 2: Build prompt text.
+        let (user_text, reply_tx) = match pending {
+            Some((text, reply)) => (text, Some(reply)),
+            None => (String::new(), None),
+        };
+
+        // Re-read mailbox count (may have changed since we took the pending prompt).
+        let mailbox_count = {
+            let mboxes = mailboxes.read().await;
+            mboxes.get(&agent_id).map_or(0, |m| m.len())
+        };
+
+        let prompt_text = if mailbox_count > 0 {
+            let nudge = if mailbox_count == 1 {
+                "You have 1 unread message in your mailbox.".to_string()
+            } else {
+                format!(
+                    "You have {} unread messages in your mailbox.",
+                    mailbox_count
+                )
+            };
+
+            let _ = event_tx.send(Notification::NudgeDelivered(NudgeDeliveredPayload {
+                agent_id: agent_id.clone(),
+                count: mailbox_count,
+            }));
+
+            if user_text.is_empty() {
+                nudge
+            } else {
+                format!("{}\n\n{}", user_text, nudge)
+            }
+        } else {
+            user_text.clone()
+        };
+
+        // Edge case: no user text and mailbox was drained between check and here.
+        if prompt_text.is_empty() {
+            if let Some(reply) = reply_tx {
+                let _ = reply.send(Err("Empty prompt with no mailbox messages".to_string()));
+            }
+            continue;
+        }
+
+        // Phase 3: Set status to Working and send the prompt.
+        let send_result = {
+            let mut handle = handle_arc.lock().await;
+            if handle.status != AgentStatus::Idle {
+                Err(format!(
+                    "Agent '{}' is not idle (current status: {})",
+                    agent_id, handle.status
+                ))
+            } else {
+                handle.status = AgentStatus::Working;
+
+                // Emit UserMessage for non-empty user text.
+                if !user_text.is_empty() {
+                    let _ = event_tx.send(Notification::UserMessage(UserMessagePayload {
+                        agent_id: agent_id.clone(),
+                        content: user_text.clone(),
+                    }));
+                }
+
+                let (prompt_reply_tx, prompt_reply_rx) = oneshot::channel();
+                let cmd_result = handle.command_tx.send(AgentCommand::Prompt {
+                    text: prompt_text,
+                    reply: prompt_reply_tx,
+                });
+
+                match cmd_result {
+                    Ok(()) => {
+                        drop(handle); // Release lock while waiting.
+                        prompt_reply_rx
+                            .await
+                            .unwrap_or(Err("Agent thread terminated during prompt".to_string()))
+                    }
+                    Err(_) => Err("Agent thread has terminated".to_string()),
+                }
+            }
+        };
+
+        // Phase 4: Update status based on result.
+        {
+            let mut handle = handle_arc.lock().await;
+            match &send_result {
+                Ok(()) => {
+                    handle.status = AgentStatus::Idle;
+                }
+                Err(_) => {
+                    handle.status = AgentStatus::Error;
+                    let _ = event_tx.send(Notification::StatusChange(StatusChangePayload {
+                        agent_id: agent_id.clone(),
+                        status: AgentStatus::Error.to_string(),
+                    }));
+                }
+            }
+        }
+
+        // Phase 5: Send result back to caller (if this was a user-initiated prompt).
+        if let Some(reply) = reply_tx {
+            let _ = reply.send(send_result);
+        }
+
+        // Loop back — immediately re-check for more work (mailbox may have
+        // received new messages during the prompt execution).
     }
 }
