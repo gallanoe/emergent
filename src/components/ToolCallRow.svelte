@@ -7,6 +7,7 @@
     ToolKind,
   } from "../stores/types";
   import MailboxToolRender from "./MailboxToolRender.svelte";
+  import PeersToolRender from "./PeersToolRender.svelte";
   import SendToolRender from "./SendToolRender.svelte";
 
   interface Props {
@@ -55,44 +56,79 @@
 
   let isMailboxTool = $derived(toolCall.name.endsWith("read_mailbox"));
   let isSendTool = $derived(toolCall.name.endsWith("send_message"));
-  let isSwarmTool = $derived(isMailboxTool || isSendTool);
+  let isPeersTool = $derived(toolCall.name.endsWith("list_peers"));
+  let isSpawnTool = $derived(toolCall.name.endsWith("spawn_agent"));
+  let isKillTool = $derived(toolCall.name.endsWith("kill_agent"));
+  let isConnectTool = $derived(toolCall.name.endsWith("connect_agents"));
+  let isDisconnectTool = $derived(toolCall.name.endsWith("disconnect_agents"));
+  let isSwarmTool = $derived(
+    isMailboxTool ||
+      isSendTool ||
+      isPeersTool ||
+      isSpawnTool ||
+      isKillTool ||
+      isConnectTool ||
+      isDisconnectTool,
+  );
+
+  /** Try to parse JSON from the first text content item. */
+  function parseTextContent(): unknown {
+    try {
+      const text = toolCall.content.find((c) => c.type === "text");
+      if (text?.type === "text") return JSON.parse(text.text);
+    } catch {
+      /* */
+    }
+    return null;
+  }
 
   let verb = $derived(
     isMailboxTool
       ? "Inbox"
       : isSendTool
         ? "Send"
-        : (kindVerb[toolCall.kind] ?? "Tool"),
+        : isPeersTool
+          ? "Peers"
+          : isSpawnTool
+            ? "Spawn"
+            : isKillTool
+              ? "Kill"
+              : isConnectTool
+                ? "Connect"
+                : isDisconnectTool
+                  ? "Disconnect"
+                  : (kindVerb[toolCall.kind] ?? "Tool"),
   );
+
   let target = $derived.by(() => {
     if (isMailboxTool) {
-      // Parse message count from content — handles both [...] and {"messages": [...]}
-      try {
-        const text = toolCall.content.find((c) => c.type === "text");
-        if (text?.type === "text") {
-          const parsed = JSON.parse(text.text);
-          const msgs: MailboxMessage[] = Array.isArray(parsed)
-            ? parsed
-            : (parsed.messages ?? []);
-          return `${msgs.length} message${msgs.length === 1 ? "" : "s"}`;
-        }
-      } catch {
-        /* fall through */
-      }
-      return "";
+      const parsed = parseTextContent();
+      const msgs: MailboxMessage[] = Array.isArray(parsed)
+        ? parsed
+        : (((parsed as Record<string, unknown>)
+            ?.messages as MailboxMessage[]) ?? []);
+      return `${msgs.length} message${msgs.length === 1 ? "" : "s"}`;
     }
     if (isSendTool) {
-      // Parse target name from response JSON: {"status":"delivered","target":"...","body":"..."}
-      const text = toolCall.content.find((c) => c.type === "text");
-      if (text?.type === "text") {
-        try {
-          const parsed = JSON.parse(text.text);
-          if (parsed.target) return parsed.target;
-        } catch {
-          /* fall through */
-        }
-      }
-      return toolCall.locations[0] ?? "";
+      const parsed = parseTextContent() as Record<string, string> | null;
+      return parsed?.target ?? toolCall.locations[0] ?? "";
+    }
+    if (isPeersTool) {
+      const parsed = parseTextContent();
+      const peers = Array.isArray(parsed) ? parsed : [];
+      return `${peers.length} agent${peers.length === 1 ? "" : "s"}`;
+    }
+    if (isSpawnTool) {
+      const parsed = parseTextContent() as Record<string, string> | null;
+      return parsed?.agent_id ?? "";
+    }
+    if (isKillTool) {
+      const parsed = parseTextContent() as Record<string, string> | null;
+      return parsed?.status === "killed" ? "terminated" : "";
+    }
+    if (isConnectTool || isDisconnectTool) {
+      const parsed = parseTextContent() as Record<string, string> | null;
+      return parsed?.status ?? "";
     }
     return (
       toolCall.locations[0] ??
@@ -126,7 +162,9 @@
   );
 
   let hasPreview = $derived(
-    isSwarmTool ||
+    isMailboxTool ||
+      isSendTool ||
+      isPeersTool ||
       (toolCall.content.length > 0 &&
         toolCall.kind !== "read" &&
         toolCall.status !== "pending" &&
@@ -201,6 +239,12 @@
       return "";
     })()}
     <SendToolRender body={sendBody} />
+  {:else if expanded && isPeersTool}
+    {@const peers = (() => {
+      const parsed = parseTextContent();
+      return Array.isArray(parsed) ? parsed : [];
+    })()}
+    <PeersToolRender {peers} />
   {:else if expanded}
     <div class="flex flex-col gap-1.5 pb-1.5">
       {#each toolCall.content as item}
