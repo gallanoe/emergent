@@ -88,6 +88,9 @@ function createAppState() {
         }
       });
 
+      // When an agent is spawned externally (e.g. via MCP tool), pick it up
+      agentStore.registerUnknownAgentHandler(() => reconnectToExistingAgents());
+
       // Reconnect to any existing agents from the daemon
       await reconnectToExistingAgents();
     } catch {
@@ -97,7 +100,11 @@ function createAppState() {
 
   async function reconnectToExistingAgents() {
     const agents = await invoke<AgentSummary[]>("list_agents");
+    const newAgents = [];
     for (const agent of agents) {
+      // Skip agents already in the local store
+      if (agentStore.getAgent(agent.id)) continue;
+
       // Find or create swarm by working_directory
       let swarm = swarms.find((s) => s.workingDirectory === agent.working_directory);
       if (!swarm) {
@@ -118,10 +125,11 @@ function createAppState() {
       agentStore.replayNotifications(history);
 
       if (!selectedAgentId) selectedAgentId = agent.id;
+      newAgents.push(agent);
     }
 
-    // Restore peer connection state for all reconnected agents
-    await Promise.all(agents.map((agent) => refreshConnections(agent.id)));
+    // Restore peer connection state for new agents
+    await Promise.all(newAgents.map((agent) => refreshConnections(agent.id)));
   }
 
   // ── Swarm management ──────────────────────────────────────────

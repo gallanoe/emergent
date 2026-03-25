@@ -20,8 +20,10 @@ pub struct SendMessageParams {
 
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema)]
 pub struct SpawnAgentParams {
-    #[schemars(description = "CLI command for the agent binary (e.g. 'claude-code')")]
-    pub agent_cli: String,
+    #[schemars(
+        description = "Name of the agent to spawn. Supported: Claude Code, Codex, Gemini, Kiro, OpenCode"
+    )]
+    pub agent_name: String,
     #[schemars(
         description = "Working directory for the new agent. Defaults to the spawning agent's directory if not specified."
     )]
@@ -210,12 +212,39 @@ impl McpStdioProxy {
         if !self.check_management_permissions().await? {
             return Err("Permission denied: management permissions required".to_string());
         }
-        let wd = params
-            .working_directory
-            .unwrap_or_else(|| ".".to_string());
+        // Resolve display name to CLI command
+        let known = self.client.known_agents().await.unwrap_or_default();
+        let agent = known.iter().find(|a| a.name.eq_ignore_ascii_case(&params.agent_name));
+        let agent = match agent {
+            Some(a) => a,
+            None => {
+                let names: Vec<&str> = known.iter().map(|a| a.name.as_str()).collect();
+                return Err(format!(
+                    "Unknown agent '{}'. Supported agents: {}",
+                    params.agent_name,
+                    if names.is_empty() {
+                        "none".to_string()
+                    } else {
+                        names.join(", ")
+                    }
+                ));
+            }
+        };
+        // Default to spawning agent's working directory
+        let wd = match params.working_directory {
+            Some(wd) => wd,
+            None => {
+                let agents = self.client.list_agents().await.unwrap_or_default();
+                agents
+                    .iter()
+                    .find(|a| a.id == self.agent_id)
+                    .map(|a| a.working_directory.clone())
+                    .unwrap_or_else(|| ".".to_string())
+            }
+        };
         let agent_id = self
             .client
-            .spawn_agent(wd, params.agent_cli)
+            .spawn_agent(wd, agent.command.clone())
             .await
             .map_err(|e| e.to_string())?;
         Ok(serde_json::json!({"agent_id": agent_id}).to_string())

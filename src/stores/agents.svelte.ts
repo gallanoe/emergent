@@ -105,8 +105,15 @@ function createAgentStore() {
   // Callback for dumping queued content to the input on error
   let onQueueDump: ((agentId: string, content: string) => void) | null = null;
 
+  // Callback when a notification arrives for an agent not in the local store
+  let onUnknownAgent: (() => void) | null = null;
+
   function registerQueueDumpHandler(handler: (agentId: string, content: string) => void) {
     onQueueDump = handler;
+  }
+
+  function registerUnknownAgentHandler(handler: () => void) {
+    onUnknownAgent = handler;
   }
 
   function getAgent(agentId: string): AgentConnection | undefined {
@@ -298,7 +305,10 @@ function createAgentStore() {
 
   function handleStatusChange(payload: StatusChangePayload) {
     const agent = agents[payload.agent_id];
-    if (!agent) return;
+    if (!agent) {
+      onUnknownAgent?.();
+      return;
+    }
     agent.status = payload.status as AgentConnection["status"];
   }
 
@@ -600,6 +610,7 @@ function createAgentStore() {
     setConfig,
     editQueue,
     registerQueueDumpHandler,
+    registerUnknownAgentHandler,
     registerExistingAgent,
     replayNotifications,
     setManagementPermissions,
