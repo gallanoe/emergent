@@ -10,12 +10,13 @@ pub mod topology;
 use agent_manager::AgentManager;
 use emergent_protocol::TransportListener;
 use std::sync::Arc;
+use tokio::sync::Notify;
 
 /// Run the server accept loop. Used by both main() and integration tests.
 pub async fn run_server(
     listener: TransportListener,
     manager: Arc<AgentManager>,
-    mut shutdown_rx: tokio::sync::oneshot::Receiver<()>,
+    shutdown: Arc<Notify>,
 ) {
     loop {
         tokio::select! {
@@ -30,7 +31,7 @@ pub async fn run_server(
                     Err(e) => log::error!("Accept error: {}", e),
                 }
             }
-            _ = &mut shutdown_rx => break,
+            _ = shutdown.notified() => break,
         }
     }
 }

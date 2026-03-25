@@ -10,7 +10,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
 struct TestDaemon {
     socket_path: std::path::PathBuf,
-    shutdown_tx: Option<tokio::sync::oneshot::Sender<()>>,
+    shutdown: Arc<tokio::sync::Notify>,
     handle: tokio::task::JoinHandle<()>,
     _tempdir: tempfile::TempDir,
 }
@@ -22,10 +22,11 @@ impl TestDaemon {
 
         let manager = Arc::new(AgentManager::new());
         let listener = TransportListener::bind(&socket_path).unwrap();
-        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let shutdown = Arc::new(tokio::sync::Notify::new());
+        let shutdown_for_server = shutdown.clone();
 
         let handle = tokio::spawn(async move {
-            emergent_daemon::run_server(listener, manager, shutdown_rx).await;
+            emergent_daemon::run_server(listener, manager, shutdown_for_server).await;
         });
 
         // Small delay to let the listener start
@@ -33,7 +34,7 @@ impl TestDaemon {
 
         Self {
             socket_path,
-            shutdown_tx: Some(shutdown_tx),
+            shutdown,
             handle,
             _tempdir: tempdir,
         }
@@ -44,10 +45,13 @@ impl TestDaemon {
         TestClient::new(stream)
     }
 
-    async fn shutdown(mut self) {
-        if let Some(tx) = self.shutdown_tx.take() {
-            let _ = tx.send(());
-        }
+    /// Consume the daemon and return its join handle (for tests that trigger shutdown via RPC).
+    fn into_handle(self) -> tokio::task::JoinHandle<()> {
+        self.handle
+    }
+
+    async fn shutdown(self) {
+        self.shutdown.notify_one();
         let _ = self.handle.await;
     }
 }

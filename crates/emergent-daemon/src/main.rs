@@ -2,6 +2,7 @@ use emergent_daemon::agent_manager::AgentManager;
 use emergent_daemon::socket;
 use emergent_protocol::TransportListener;
 use std::sync::Arc;
+use tokio::sync::Notify;
 
 #[tokio::main]
 async fn main() {
@@ -58,14 +59,15 @@ async fn main() {
     let manager = Arc::new(AgentManager::new());
 
     // Accept connections until shutdown signal
-    let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+    let shutdown = Arc::new(Notify::new());
+    let shutdown_for_server = shutdown.clone();
     let sock_path_clone = sock_path.clone();
 
     tokio::select! {
-        _ = emergent_daemon::run_server(listener, manager.clone(), shutdown_rx) => {}
+        _ = emergent_daemon::run_server(listener, manager.clone(), shutdown_for_server) => {}
         _ = tokio::signal::ctrl_c() => {
             log::info!("Received shutdown signal");
-            let _ = shutdown_tx.send(());
+            shutdown.notify_one();
         }
     }
 
