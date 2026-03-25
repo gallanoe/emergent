@@ -119,6 +119,9 @@ function createAppState() {
 
       if (!selectedAgentId) selectedAgentId = agent.id;
     }
+
+    // Restore peer connection state for all reconnected agents
+    await Promise.all(agents.map((agent) => refreshConnections(agent.id)));
   }
 
   // ── Swarm management ──────────────────────────────────────────
