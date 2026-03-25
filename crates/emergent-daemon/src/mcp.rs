@@ -87,7 +87,7 @@ pub async fn run_mcp_stdio(agent_id: String, socket_path: std::path::PathBuf) {
     use rmcp::ServiceExt;
 
     // Connect to the main daemon
-    let (client, _notification_rx) = match DaemonClient::connect(&socket_path).await {
+    let (client, mut notification_rx) = match DaemonClient::connect(&socket_path).await {
         Ok(conn) => conn,
         Err(e) => {
             eprintln!("Failed to connect to daemon: {}", e);
@@ -100,13 +100,29 @@ pub async fn run_mcp_stdio(agent_id: String, socket_path: std::path::PathBuf) {
     let (stdin, stdout) = rmcp::transport::stdio();
     match server.serve((stdin, stdout)).await {
         Ok(service) => {
-            let _ = service.waiting().await;
+            // Exit if either the MCP service ends OR the daemon connection drops.
+            // This prevents orphaned MCP processes when the daemon shuts down.
+            tokio::select! {
+                _ = service.waiting() => {}
+                _ = daemon_connection_closed(&mut notification_rx) => {
+                    log::info!("Daemon connection lost, exiting MCP stdio server");
+                }
+            }
         }
         Err(e) => {
             eprintln!("MCP server error: {}", e);
             std::process::exit(1);
         }
     }
+}
+
+/// Wait until the daemon notification channel closes (meaning the daemon connection dropped).
+async fn daemon_connection_closed(
+    rx: &mut tokio::sync::mpsc::UnboundedReceiver<emergent_protocol::Notification>,
+) {
+    // When the daemon dies, the reader task in DaemonClient exits,
+    // which drops the notification sender, causing recv() to return None.
+    while rx.recv().await.is_some() {}
 }
 
 // ---------------------------------------------------------------------------
