@@ -491,7 +491,7 @@ impl AgentManager {
 
                         // Build MCP server config for swarm communication
                         let mcp_config =
-                            crate::mcp::SwarmMcpServer::mcp_config_for_agent(
+                            crate::mcp::mcp_config_for_agent(
                                 &agent_id, &socket_path,
                             )
                             .map_err(|e| format!("MCP config failed: {}", e))?;
