@@ -1,6 +1,13 @@
 <!-- src/components/ChatArea.svelte -->
 <script lang="ts">
-  import { Pencil, WifiOff, Loader, Check, XCircle } from "@lucide/svelte";
+  import {
+    Pencil,
+    WifiOff,
+    Loader,
+    Check,
+    XCircle,
+    Mail,
+  } from "@lucide/svelte";
   import StreamingText from "./StreamingText.svelte";
   import ToolCallGroup from "./ToolCallGroup.svelte";
   import ThinkingBlock from "./ThinkingBlock.svelte";
@@ -80,6 +87,18 @@
     return "mt-[6px]";
   }
 </script>
+
+{#snippet nudgeBadge(count: number)}
+  <span
+    class="w-5 h-5 rounded-full bg-[rgba(45,140,80,0.1)] flex items-center justify-center text-success shrink-0"
+    ><Mail size={11} /></span
+  >
+  You have
+  <span class="font-semibold text-success"
+    >{count} unread {count === 1 ? "message" : "messages"}</span
+  >
+  in your mailbox
+{/snippet}
 
 <div
   bind:this={scrollContainer}
@@ -211,16 +230,7 @@
                 <div
                   class="flex items-center gap-1.5 text-[11px] text-fg-muted"
                 >
-                  <span
-                    class="w-4 h-4 rounded-full bg-[rgba(45,140,80,0.1)] flex items-center justify-center text-[9px] text-success shrink-0"
-                    >✉</span
-                  >
-                  You have
-                  <span class="font-semibold text-success"
-                    >{message.nudgeCount} unread {message.nudgeCount === 1
-                      ? "message"
-                      : "messages"}</span
-                  > in your mailbox
+                  {@render nudgeBadge(message.nudgeCount ?? 0)}
                 </div>
               {/if}
             </div>
@@ -230,16 +240,7 @@
                 i,
               )} flex items-center gap-1.5 text-[11px] text-fg-muted py-1"
             >
-              <span
-                class="w-4 h-4 rounded-full bg-[rgba(45,140,80,0.1)] flex items-center justify-center text-[9px] text-success shrink-0"
-                >✉</span
-              >
-              You have
-              <span class="font-semibold text-success"
-                >{message.nudgeCount} unread {message.nudgeCount === 1
-                  ? "message"
-                  : "messages"}</span
-              > in your mailbox
+              {@render nudgeBadge(message.nudgeCount ?? 0)}
             </div>
           {:else if message.role === "tool-group" && message.toolCalls}
             <div class={spacingClass(i)}>
