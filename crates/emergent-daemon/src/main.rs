@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use emergent_daemon::agent_manager::AgentManager;
 use emergent_daemon::socket;
 use emergent_protocol::TransportListener;
@@ -7,6 +9,7 @@ use tokio::sync::Notify;
 #[tokio::main]
 async fn main() {
     env_logger::init();
+    enrich_path();
 
     let args: Vec<String> = std::env::args().collect();
 
@@ -82,4 +85,38 @@ async fn main() {
     socket::remove_stale_socket(&sock_path_clone).ok();
     socket::remove_pid_file(&sock_path_clone);
     log::info!("emergentd stopped");
+}
+
+/// Enrich PATH with common CLI install locations.
+/// macOS bundled apps launch with a minimal PATH (/usr/bin:/bin:/usr/sbin:/sbin),
+/// so tools installed via npm, bun, cargo, etc. won't be found without this.
+fn enrich_path() {
+    let home = match std::env::var("HOME") {
+        Ok(h) => PathBuf::from(h),
+        Err(_) => return,
+    };
+
+    let extra_dirs: Vec<PathBuf> = vec![
+        home.join(".local/bin"),
+        home.join(".cargo/bin"),
+        home.join(".bun/bin"),
+        // npm/node global installs (nvm, fnm, Homebrew node)
+        home.join(".nvm/current/bin"),
+        home.join(".local/share/fnm/aliases/default/bin"),
+        PathBuf::from("/usr/local/bin"),
+        PathBuf::from("/opt/homebrew/bin"),
+    ];
+
+    let current_path = std::env::var("PATH").unwrap_or_default();
+    let mut dirs: Vec<PathBuf> = std::env::split_paths(&current_path).collect();
+
+    for dir in extra_dirs {
+        if dir.is_dir() && !dirs.contains(&dir) {
+            dirs.push(dir);
+        }
+    }
+
+    if let Ok(new_path) = std::env::join_paths(&dirs) {
+        std::env::set_var("PATH", &new_path);
+    }
 }
