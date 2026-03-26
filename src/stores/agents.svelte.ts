@@ -6,6 +6,7 @@ import type {
   DisplayMessage,
   DisplayToolCall,
   NudgeDeliveredPayload,
+  SystemMessagePayload,
   ToolCallContentItem,
   ToolKind,
 } from "./types";
@@ -24,6 +25,8 @@ interface AgentConnection {
   configOptions: ConfigOption[];
   hasManagementPermissions: boolean;
   errorMessage?: string;
+  role?: string;
+  hasPrompted?: boolean;
 }
 
 // ── Event payloads from Rust ────────────────────────────────────
@@ -339,6 +342,20 @@ function createAgentStore() {
     }
   }
 
+  function handleSystemMessage(payload: SystemMessagePayload) {
+    const agent = agents[payload.agent_id];
+    if (!agent) return;
+    agent.messages.push({
+      id: crypto.randomUUID(),
+      role: "system",
+      content: payload.content,
+      timestamp: new Date().toLocaleTimeString([], {
+        hour: "numeric",
+        minute: "2-digit",
+      }),
+    });
+  }
+
   function handleConfigUpdate(payload: ConfigUpdatePayload) {
     const agent = agents[payload.agent_id];
     if (!agent) return;
@@ -377,6 +394,9 @@ function createAgentStore() {
     await listen<ConfigUpdatePayload>("agent:config-update", (e) => handleConfigUpdate(e.payload));
     await listen<NudgeDeliveredPayload>("agent:nudge-delivered", (e) =>
       handleNudgeDelivered(e.payload),
+    );
+    await listen<SystemMessagePayload>("agent:system-message", (e) =>
+      handleSystemMessage(e.payload),
     );
   }
 
@@ -425,6 +445,10 @@ function createAgentStore() {
       return;
     }
 
+    // Pass role on first prompt only
+    const role = !agent.hasPrompted ? agent.role : undefined;
+    agent.hasPrompted = true;
+
     agent.messages.push({
       id: crypto.randomUUID(),
       role: "user",
@@ -437,7 +461,7 @@ function createAgentStore() {
 
     agent.status = "working";
 
-    invoke("send_prompt", { agentId, text }).catch((err) => {
+    invoke("send_prompt", { agentId, text, role }).catch((err) => {
       agent.status = "error";
       console.error("send_prompt failed:", err);
     });
@@ -484,6 +508,16 @@ function createAgentStore() {
       console.error("kill_agent RPC failed (cleaning up anyway):", err);
     }
     delete agents[agentId];
+  }
+
+  function setRole(agentId: string, role: string): void {
+    const agent = agents[agentId];
+    if (!agent || agent.hasPrompted) return;
+    if (role) {
+      agent.role = role;
+    } else {
+      delete agent.role;
+    }
   }
 
   function setManagementPermissions(agentId: string, enabled: boolean) {
@@ -539,6 +573,7 @@ function createAgentStore() {
       configOptions: conn.configOptions,
       hasManagementPermissions: conn.hasManagementPermissions,
       ...(conn.errorMessage !== undefined && { errorMessage: conn.errorMessage }),
+      ...(conn.role !== undefined && { role: conn.role }),
     };
   }
 
@@ -565,7 +600,8 @@ function createAgentStore() {
     | ({ type: "agent:config-update" } & ConfigUpdatePayload)
     | ({ type: "agent:user-message" } & UserMessagePayload)
     | ({ type: "agent:error" } & AgentErrorPayload)
-    | ({ type: "agent:nudge-delivered" } & NudgeDeliveredPayload);
+    | ({ type: "agent:nudge-delivered" } & NudgeDeliveredPayload)
+    | ({ type: "agent:system-message" } & SystemMessagePayload);
 
   function replayNotifications(notifications: DaemonNotification[]) {
     for (const n of notifications) {
@@ -594,6 +630,9 @@ function createAgentStore() {
         case "agent:nudge-delivered":
           handleNudgeDelivered(n);
           break;
+        case "agent:system-message":
+          handleSystemMessage(n);
+          break;
       }
     }
     // Force flush any buffered chunks after replay
@@ -619,6 +658,7 @@ function createAgentStore() {
     registerExistingAgent,
     replayNotifications,
     setManagementPermissions,
+    setRole,
   };
 }
 
