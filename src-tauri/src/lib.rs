@@ -15,7 +15,10 @@ pub fn run() {
         .plugin(tauri_plugin_log::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            // Create the agent manager (replaces the separate daemon process)
+            // Create the agent manager (replaces the separate daemon process).
+            // AgentManager::new() calls tokio::spawn internally, so we need
+            // to enter the async runtime context first.
+            let _rt_guard = tauri::async_runtime::handle().inner().enter();
             let manager = Arc::new(AgentManager::new());
             app.manage(manager.clone());
 
