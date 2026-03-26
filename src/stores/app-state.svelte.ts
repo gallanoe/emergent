@@ -47,6 +47,7 @@ function createAppState() {
     cli: string;
     status: string;
     working_directory: string;
+    role?: string;
   }
 
   async function setupAfterConnect() {
@@ -116,7 +117,7 @@ function createAppState() {
       }
 
       // Register agent in store without spawning (it already exists on daemon)
-      agentStore.registerExistingAgent(agent.id, swarm.id, agent.cli);
+      agentStore.registerExistingAgent(agent.id, swarm.id, agent.cli, agent.role);
       swarm.agentIds.push(agent.id);
 
       // Replay history — notifications are typed via DaemonNotification union in agent store

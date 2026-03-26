@@ -577,7 +577,7 @@ function createAgentStore() {
     };
   }
 
-  function registerExistingAgent(agentId: string, swarmId: string, cli: string) {
+  function registerExistingAgent(agentId: string, swarmId: string, cli: string, role?: string) {
     agents[agentId] = {
       id: agentId,
       swarmId,
@@ -589,6 +589,7 @@ function createAgentStore() {
       queuedContent: "",
       configOptions: [],
       hasManagementPermissions: false,
+      ...(role !== undefined && { role }),
     };
   }
 

@@ -149,9 +149,12 @@
           <div class="text-[12px] text-fg-muted leading-relaxed">Ready</div>
           <!-- Role pill (editable) -->
           <div
-            class="inline-flex items-center gap-1.5 px-3 py-1 bg-accent-soft border border-[rgba(124,106,78,0.12)] rounded-full cursor-text"
+            class="relative inline-flex items-center px-3 py-1 bg-accent-soft border border-[rgba(124,106,78,0.12)] rounded-full cursor-text"
           >
-            <Pencil size={11} class="text-fg-disabled shrink-0" />
+            <Pencil
+              size={11}
+              class="absolute left-2.5 text-fg-disabled shrink-0 pointer-events-none"
+            />
             <input
               type="text"
               value={agent.role ?? ""}
