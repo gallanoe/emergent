@@ -64,8 +64,8 @@ pub fn mcp_config_for_agent(
     agent_id: &str,
     socket_path: &std::path::Path,
 ) -> Result<agent_client_protocol::McpServer, String> {
-    let daemon_path = std::env::current_exe()
-        .map_err(|e| format!("Failed to get daemon executable path: {}", e))?;
+    let daemon_path = find_emergentd_binary()
+        .ok_or_else(|| "Could not find emergentd binary".to_string())?;
 
     Ok(agent_client_protocol::McpServer::Stdio(
         agent_client_protocol::McpServerStdio::new("emergent-swarm", daemon_path).args(vec![
@@ -74,6 +74,21 @@ pub fn mcp_config_for_agent(
             format!("--socket={}", socket_path.display()),
         ]),
     ))
+}
+
+/// Find the `emergentd` binary. Checks as a sibling of the current executable
+/// first (for bundled apps), then falls back to PATH lookup.
+fn find_emergentd_binary() -> Option<std::path::PathBuf> {
+    // Check sibling of current executable (covers bundled macOS .app)
+    if let Ok(current) = std::env::current_exe() {
+        let sibling = current.with_file_name("emergentd");
+        if sibling.exists() {
+            return Some(sibling);
+        }
+    }
+
+    // Fall back to PATH lookup
+    which::which("emergentd").ok()
 }
 
 // ---------------------------------------------------------------------------
