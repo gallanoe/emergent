@@ -182,7 +182,7 @@ impl McpStdioProxy {
 impl McpStdioProxy {
     #[tool(
         name = "list_peers",
-        description = "List agents you're connected to in the swarm. Returns each peer's name and current status (idle or working). Use this to discover who you can collaborate with and what they're doing."
+        description = "List all agents in the swarm. Returns each agent's name, current status, and whether you're connected to them. Connected agents can exchange messages; use connect_agents to connect to unconnected peers."
     )]
     async fn list_peers(&self) -> Result<String, String> {
         let connections = self
@@ -191,18 +191,20 @@ impl McpStdioProxy {
             .await
             .map_err(|e| e.to_string())?;
 
-        // Get full agent list for status info
         let agents = self.client.list_agents().await.map_err(|e| e.to_string())?;
 
         let mut result = Vec::new();
-        for peer_id in &connections {
-            if let Some(agent) = agents.iter().find(|a| &a.id == peer_id) {
-                result.push(serde_json::json!({
-                    "id": agent.id,
-                    "name": agent.cli,
-                    "status": agent.status,
-                }));
+        for agent in &agents {
+            // Skip self
+            if agent.id == self.agent_id {
+                continue;
             }
+            result.push(serde_json::json!({
+                "id": agent.id,
+                "name": agent.cli,
+                "status": agent.status,
+                "connected": connections.contains(&agent.id),
+            }));
         }
 
         serde_json::to_string_pretty(&result).map_err(|e| e.to_string())
