@@ -261,3 +261,47 @@ async fn test_shutdown_rpc() {
         .expect("daemon should exit within 2 seconds")
         .expect("daemon task should not panic");
 }
+
+#[tokio::test]
+async fn test_spawn_agent_with_role() {
+    let daemon = TestDaemon::start().await;
+    let mut client = daemon.connect().await;
+
+    let resp = client
+        .call(
+            "spawn_agent",
+            serde_json::json!({
+                "working_directory": "/tmp",
+                "agent_cli": "nonexistent-agent",
+                "role": "Test writer"
+            }),
+        )
+        .await;
+
+    assert!(resp.error.is_none());
+    let agent_id = resp.result.unwrap()["agent_id"].as_str().unwrap().to_string();
+    assert!(!agent_id.is_empty());
+
+    daemon.shutdown().await;
+}
+
+#[tokio::test]
+async fn test_send_prompt_with_role_nonexistent_agent() {
+    let daemon = TestDaemon::start().await;
+    let mut client = daemon.connect().await;
+
+    let resp = client
+        .call(
+            "send_prompt",
+            serde_json::json!({
+                "agent_id": "nonexistent",
+                "text": "hello",
+                "role": "Reviewer"
+            }),
+        )
+        .await;
+
+    assert!(resp.error.is_some());
+
+    daemon.shutdown().await;
+}
