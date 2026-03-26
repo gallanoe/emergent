@@ -1,12 +1,6 @@
 <!-- src/components/ChatArea.svelte -->
 <script lang="ts">
-  import {
-    Pencil,
-    Loader,
-    Check,
-    XCircle,
-    Mail,
-  } from "@lucide/svelte";
+  import { Pencil, Loader, Check, XCircle, Mail } from "@lucide/svelte";
   import StreamingText from "./StreamingText.svelte";
   import ToolCallGroup from "./ToolCallGroup.svelte";
   import ThinkingBlock from "./ThinkingBlock.svelte";
