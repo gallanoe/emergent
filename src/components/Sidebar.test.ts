@@ -48,7 +48,6 @@ interface SidebarOverrides {
   swarms?: DisplaySwarm[];
   selectedAgentId?: string | null;
   demoMode?: boolean;
-  daemonStatus?: "disconnected" | "connecting" | "connected" | "reconnecting";
   knownAgents?: { name: string; command: string; available: boolean }[];
   onSelectAgent?: (id: string) => void;
   onToggleSwarm?: (id: string) => void;
@@ -63,7 +62,6 @@ function renderSidebar(overrides: SidebarOverrides = {}) {
       swarms: overrides.swarms ?? [makeSwarm()],
       selectedAgentId: overrides.selectedAgentId ?? null,
       demoMode: overrides.demoMode ?? true,
-      daemonStatus: overrides.daemonStatus ?? "connected",
       knownAgents: overrides.knownAgents ?? [
         { name: "Claude Code", command: "claude-agent-acp", available: true },
         { name: "Codex", command: "codex-acp", available: true },
