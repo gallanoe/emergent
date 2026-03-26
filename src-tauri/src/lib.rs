@@ -64,9 +64,9 @@ pub fn run() {
                     let _ = std::fs::remove_file(&socket_path);
                 }
 
-                match emergent_protocol::TransportListener::bind(&socket_path).await {
+                match emergent_protocol::TransportListener::bind(&socket_path) {
                     Ok(listener) => {
-                        log::info!("Socket server listening on {}", socket_path);
+                        log::info!("Socket server listening on {}", socket_path.display());
                         emergent_daemon::run_server(listener, server_manager, shutdown).await;
                     }
                     Err(e) => {
