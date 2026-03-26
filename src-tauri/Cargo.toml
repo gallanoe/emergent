@@ -18,6 +18,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2.5.6", features = [] }
 
 [dependencies]
+emergent-daemon = { path = "../crates/emergent-daemon" }
 emergent-protocol = { path = "../crates/emergent-protocol" }
 serde = { workspace = true }
 serde_json = { workspace = true }
