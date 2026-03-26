@@ -105,6 +105,7 @@ export interface DisplayAgent {
   configOptions: ConfigOption[];
   hasManagementPermissions: boolean;
   errorMessage?: string;
+  role?: string;
 }
 
 export interface DisplaySwarm {
@@ -112,6 +113,11 @@ export interface DisplaySwarm {
   name: string;
   collapsed: boolean;
   agents: DisplayAgent[];
+}
+
+export interface SystemMessagePayload {
+  agent_id: string;
+  content: string;
 }
 
 export interface MenuItem {
