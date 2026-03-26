@@ -921,6 +921,7 @@ impl AgentManager {
                 cli: handle.cli.clone(),
                 status: handle.status.to_string(),
                 working_directory: handle.working_directory.display().to_string(),
+                role: None,
             });
         }
         result

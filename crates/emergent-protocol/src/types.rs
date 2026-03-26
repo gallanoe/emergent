@@ -57,6 +57,12 @@ pub struct UserMessagePayload {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SystemMessagePayload {
+    pub agent_id: String,
+    pub content: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AgentErrorPayload {
     pub agent_id: String,
     pub message: String,
@@ -144,6 +150,8 @@ pub struct AgentSummary {
     pub cli: String,
     pub status: String,
     pub working_directory: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -255,6 +263,8 @@ pub enum Notification {
     Error(AgentErrorPayload),
     #[serde(rename = "agent:nudge-delivered")]
     NudgeDelivered(NudgeDeliveredPayload),
+    #[serde(rename = "agent:system-message")]
+    SystemMessage(SystemMessagePayload),
     #[serde(rename = "swarm:message")]
     SwarmMessage(SwarmMessagePayload),
     #[serde(rename = "swarm:topology-changed")]
@@ -272,6 +282,7 @@ impl Notification {
             Notification::UserMessage(_) => "agent:user-message",
             Notification::Error(_) => "agent:error",
             Notification::NudgeDelivered(_) => "agent:nudge-delivered",
+            Notification::SystemMessage(_) => "agent:system-message",
             Notification::SwarmMessage(_) => "swarm:message",
             Notification::TopologyChanged(_) => "swarm:topology-changed",
         }
@@ -287,6 +298,7 @@ impl Notification {
             Notification::UserMessage(p) => Some(&p.agent_id),
             Notification::Error(p) => Some(&p.agent_id),
             Notification::NudgeDelivered(p) => Some(&p.agent_id),
+            Notification::SystemMessage(p) => Some(&p.agent_id),
             Notification::SwarmMessage(_) => None, // not agent-specific
             Notification::TopologyChanged(_) => None, // not agent-specific
         }
@@ -405,12 +417,31 @@ mod tests {
     }
 
     #[test]
+    fn system_message_notification_roundtrips() {
+        let n = Notification::SystemMessage(SystemMessagePayload {
+            agent_id: "abc".into(),
+            content: "Management permissions have been granted.".into(),
+        });
+        let json = serde_json::to_string(&n).unwrap();
+        assert!(json.contains("agent:system-message"));
+        let restored: Notification = serde_json::from_str(&json).unwrap();
+        match restored {
+            Notification::SystemMessage(p) => {
+                assert_eq!(p.agent_id, "abc");
+                assert!(p.content.contains("Management permissions"));
+            }
+            _ => panic!("Wrong variant"),
+        }
+    }
+
+    #[test]
     fn agent_summary_serializes() {
         let s = AgentSummary {
             id: "abc".into(),
             cli: "mock-agent".into(),
             status: "idle".into(),
             working_directory: "/tmp".into(),
+            role: None,
         };
         let json = serde_json::to_string(&s).unwrap();
         assert!(json.contains("working_directory"));

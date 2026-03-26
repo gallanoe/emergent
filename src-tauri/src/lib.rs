@@ -43,6 +43,7 @@ pub fn run() {
                                 Notification::UserMessage(p) => { let _ = bridge_handle.emit(event_name, p); }
                                 Notification::Error(p) => { let _ = bridge_handle.emit(event_name, p); }
                                 Notification::NudgeDelivered(p) => { let _ = bridge_handle.emit(event_name, p); }
+                                Notification::SystemMessage(p) => { let _ = bridge_handle.emit(event_name, p); }
                                 Notification::SwarmMessage(p) => { let _ = bridge_handle.emit(event_name, p); }
                                 Notification::TopologyChanged(p) => { let _ = bridge_handle.emit(event_name, p); }
                             }
