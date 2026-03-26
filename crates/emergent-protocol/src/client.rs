@@ -117,15 +117,17 @@ impl DaemonClient {
         &self,
         working_directory: String,
         agent_cli: String,
+        role: Option<String>,
     ) -> Result<String, String> {
+        let mut params = serde_json::json!({
+            "working_directory": working_directory,
+            "agent_cli": agent_cli,
+        });
+        if let Some(r) = role {
+            params["role"] = serde_json::json!(r);
+        }
         let result = self
-            .call(
-                "spawn_agent",
-                serde_json::json!({
-                    "working_directory": working_directory,
-                    "agent_cli": agent_cli,
-                }),
-            )
+            .call("spawn_agent", params)
             .await?;
         result["agent_id"]
             .as_str()
@@ -133,15 +135,20 @@ impl DaemonClient {
             .ok_or_else(|| "Invalid response".into())
     }
 
-    pub async fn send_prompt(&self, agent_id: &str, text: String) -> Result<(), String> {
-        self.call(
-            "send_prompt",
-            serde_json::json!({
-                "agent_id": agent_id,
-                "text": text,
-            }),
-        )
-        .await?;
+    pub async fn send_prompt(
+        &self,
+        agent_id: &str,
+        text: String,
+        role: Option<String>,
+    ) -> Result<(), String> {
+        let mut params = serde_json::json!({
+            "agent_id": agent_id,
+            "text": text,
+        });
+        if let Some(r) = role {
+            params["role"] = serde_json::json!(r);
+        }
+        self.call("send_prompt", params).await?;
         Ok(())
     }
 

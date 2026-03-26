@@ -20,9 +20,10 @@ pub async fn spawn_agent(
     manager: State<'_, Arc<AgentManager>>,
     working_directory: String,
     agent_cli: String,
+    role: Option<String>,
 ) -> Result<String, String> {
     manager
-        .spawn_agent(working_directory.into(), agent_cli)
+        .spawn_agent(working_directory.into(), agent_cli, role)
         .await
 }
 
@@ -31,8 +32,9 @@ pub async fn send_prompt(
     manager: State<'_, Arc<AgentManager>>,
     agent_id: String,
     text: String,
+    role: Option<String>,
 ) -> Result<(), String> {
-    let reply_rx = manager.queue_prompt(&agent_id, text).await?;
+    let reply_rx = manager.queue_prompt(&agent_id, text, role).await?;
     reply_rx
         .await
         .map_err(|_| "Agent prompt loop terminated".to_string())?

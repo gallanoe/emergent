@@ -48,6 +48,13 @@ struct AgentHandle {
     thread_handle: Option<std::thread::JoinHandle<()>>,
     config_options: Vec<ConfigOption>,
     has_management_permissions: bool,
+    /// Whether the agent has received at least one prompt (gates first-turn injection).
+    has_prompted: bool,
+    /// Optional role for this agent. Set at spawn (MCP) or first prompt (user).
+    role: Option<String>,
+    /// Permission state at time of last prompt — used to detect changes.
+    #[allow(dead_code)]
+    last_prompted_permissions: bool,
     /// Wakes the prompt loop when work is available (user prompt or mailbox message).
     prompt_notify: Arc<tokio::sync::Notify>,
     /// Queued user prompt + reply channel. At most one pending at a time.
@@ -352,6 +359,7 @@ impl AgentManager {
         &self,
         working_directory: PathBuf,
         agent_binary: String,
+        role: Option<String>,
     ) -> Result<String, String> {
         let agent_id = Self::generate_short_id();
 
@@ -371,12 +379,14 @@ impl AgentManager {
         let id = agent_id.clone();
 
         let socket_path = crate::socket::socket_path();
+        let role_clone = role.clone();
 
         tokio::spawn(async move {
             match Self::initialize_agent(
                 id.clone(),
                 working_directory,
                 agent_binary,
+                role_clone,
                 agents,
                 event_tx.clone(),
                 history,
@@ -408,6 +418,7 @@ impl AgentManager {
         agent_id: String,
         working_directory: PathBuf,
         agent_binary: String,
+        role: Option<String>,
         agents: Arc<RwLock<HashMap<String, Arc<Mutex<AgentHandle>>>>>,
         event_tx: broadcast::Sender<Notification>,
         history: Arc<RwLock<HashMap<String, Vec<Notification>>>>,
@@ -565,6 +576,9 @@ impl AgentManager {
             thread_handle: Some(thread_handle),
             config_options: initial_config.clone(),
             has_management_permissions: false,
+            has_prompted: false,
+            role,
+            last_prompted_permissions: false,
             prompt_notify,
             pending_prompt: None,
             prompt_loop_handle: None,
@@ -774,6 +788,7 @@ impl AgentManager {
         &self,
         agent_id: &str,
         text: String,
+        role: Option<String>,
     ) -> Result<oneshot::Receiver<Result<(), String>>, String> {
         let handle_arc = {
             let agents = self.agents.read().await;
@@ -797,6 +812,13 @@ impl AgentManager {
                 "Agent '{}' is not idle (current status: {})",
                 agent_id, handle.status
             ));
+        }
+
+        // Set role on first prompt if provided.
+        if !handle.has_prompted {
+            if let Some(r) = role {
+                handle.role = Some(r);
+            }
         }
 
         let (reply_tx, reply_rx) = oneshot::channel();
@@ -921,7 +943,7 @@ impl AgentManager {
                 cli: handle.cli.clone(),
                 status: handle.status.to_string(),
                 working_directory: handle.working_directory.display().to_string(),
-                role: None,
+                role: handle.role.clone(),
             });
         }
         result

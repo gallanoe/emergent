@@ -28,6 +28,10 @@ pub struct SpawnAgentParams {
         description = "Working directory for the new agent. Defaults to the spawning agent's directory if not specified."
     )]
     pub working_directory: Option<String>,
+    #[schemars(
+        description = "Optional role for the agent (e.g. 'Code reviewer', 'Test writer'). Shapes the agent's behavior."
+    )]
+    pub role: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema)]
@@ -286,7 +290,7 @@ impl McpStdioProxy {
         };
         let agent_id = self
             .client
-            .spawn_agent(wd, agent.command.clone())
+            .spawn_agent(wd, agent.command.clone(), params.role)
             .await
             .map_err(|e| e.to_string())?;
         Ok(serde_json::json!({"agent_id": agent_id}).to_string())

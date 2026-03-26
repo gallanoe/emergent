@@ -164,14 +164,25 @@ fn get_param<T: serde::de::DeserializeOwned>(
         .ok_or_else(|| (-32602, format!("Missing or invalid param: {}", field)))
 }
 
+fn get_optional_param<T: serde::de::DeserializeOwned>(
+    req: &JsonRpcRequest,
+    field: &str,
+) -> Option<T> {
+    req.params
+        .as_ref()
+        .and_then(|p| p.get(field))
+        .and_then(|v| serde_json::from_value(v.clone()).ok())
+}
+
 async fn handle_spawn_agent(
     req: &JsonRpcRequest,
     manager: &AgentManager,
 ) -> Result<serde_json::Value, (i32, String)> {
     let wd: String = get_param(req, "working_directory")?;
     let cli: String = get_param(req, "agent_cli")?;
+    let role: Option<String> = get_optional_param(req, "role");
     manager
-        .spawn_agent(wd.into(), cli)
+        .spawn_agent(wd.into(), cli, role)
         .await
         .map(|id| serde_json::json!({ "agent_id": id }))
         .map_err(|e| (-32000, e))
@@ -183,8 +194,9 @@ async fn handle_send_prompt(
 ) -> Result<serde_json::Value, (i32, String)> {
     let agent_id: String = get_param(req, "agent_id")?;
     let text: String = get_param(req, "text")?;
+    let role: Option<String> = get_optional_param(req, "role");
     let reply_rx = manager
-        .queue_prompt(&agent_id, text)
+        .queue_prompt(&agent_id, text, role)
         .await
         .map_err(|e| (-32000, e))?;
 
