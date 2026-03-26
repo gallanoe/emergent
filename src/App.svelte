@@ -1,6 +1,5 @@
 <script lang="ts">
   import { appState } from "./stores/app-state.svelte";
-  import DaemonSplash from "./components/DaemonSplash.svelte";
   import Sidebar from "./components/Sidebar.svelte";
   import TopBar from "./components/TopBar.svelte";
   import ChatArea from "./components/ChatArea.svelte";
@@ -51,15 +50,7 @@
   }
 </script>
 
-{#if !appState.demoMode && (appState.daemonStatus === "starting" || appState.daemonStatus === "launch_error")}
-  <DaemonSplash
-    status={appState.daemonStatus}
-    error={appState.launchError}
-    retrying={appState.retrying}
-    onRetry={() => appState.retryLaunch()}
-  />
-{:else}
-  <!-- Drag region overlay for window dragging -->
+<!-- Drag region overlay for window dragging -->
   <div
     class="fixed top-0 left-0 right-0 h-[38px] z-50"
     data-tauri-drag-region
@@ -74,7 +65,6 @@
       swarms={appState.swarms}
       selectedAgentId={appState.selectedAgentId}
       demoMode={appState.demoMode}
-      daemonStatus={appState.daemonStatus}
       knownAgents={appState.knownAgents}
       onSelectAgent={(id) => (appState.selectedAgentId = id)}
       onToggleSwarm={(id) => appState.toggleSwarmCollapsed(id)}
@@ -116,7 +106,6 @@
       />
       <ChatArea
         agent={appState.selectedAgent}
-        daemonStatus={appState.daemonStatus}
         onEditQueue={handleEditQueue}
       />
       <ChatInput
@@ -159,4 +148,3 @@
       }}
     />
   {/if}
-{/if}
