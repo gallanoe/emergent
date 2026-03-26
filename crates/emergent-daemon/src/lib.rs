@@ -5,6 +5,7 @@ pub mod mailbox;
 pub mod mcp;
 pub mod server;
 pub mod socket;
+pub mod system_prompt;
 pub mod topology;
 
 use agent_manager::AgentManager;
