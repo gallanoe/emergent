@@ -1,5 +1,6 @@
 mod commands;
 mod daemon_launcher;
+mod tray;
 
 use emergent_protocol::{DaemonClient, Notification};
 use std::sync::Arc;
@@ -29,6 +30,9 @@ pub fn run() {
             });
 
             app.manage(connection.clone());
+
+            // Set up system tray icon
+            tray::setup_tray(app).expect("failed to build system tray");
 
             // Launch daemon and connect in background
             let conn = connection.clone();
