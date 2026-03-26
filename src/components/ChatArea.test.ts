@@ -214,4 +214,37 @@ describe("ChatArea", () => {
     render(ChatArea, { props: { agent } });
     expect(screen.queryByText("· · ·")).toBeNull();
   });
+
+  it("renders editable role pill when idle with no messages", () => {
+    const agent = makeAgent([], { status: "idle" });
+    render(ChatArea, { props: { agent } });
+    expect(screen.getByPlaceholderText("Role...")).toBeTruthy();
+  });
+
+  it("renders locked role pill when agent has role and messages", () => {
+    const agent = makeAgent([msg("user", "Hello", "1:00 PM")], {
+      status: "idle",
+      role: "Code reviewer",
+    });
+    render(ChatArea, { props: { agent } });
+    expect(screen.getByText("Code reviewer")).toBeTruthy();
+    expect(screen.queryByPlaceholderText("Role...")).toBeNull();
+  });
+
+  it("does not render role pill when no role is set and messages exist", () => {
+    const agent = makeAgent([msg("user", "Hello", "1:00 PM")], {
+      status: "idle",
+    });
+    render(ChatArea, { props: { agent } });
+    expect(screen.queryByText("Code reviewer")).toBeNull();
+  });
+
+  it("renders system message as divider", () => {
+    const agent = makeAgent(
+      [msg("system", "Management permissions have been granted.", "1:00 PM")],
+      { status: "idle" },
+    );
+    render(ChatArea, { props: { agent } });
+    expect(screen.getByText("Management permissions have been granted.")).toBeTruthy();
+  });
 });
