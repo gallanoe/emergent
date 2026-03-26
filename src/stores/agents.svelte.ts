@@ -565,7 +565,7 @@ function createAgentStore() {
       cli: conn.cli,
       name: getAgentDisplayName(conn),
       status: statusMap[conn.status],
-      preview: lastMsg?.content ? lastMsg.content.slice(0, 30) + "..." : "",
+      preview: conn.role ?? (lastMsg?.content ? lastMsg.content.slice(0, 30) + "..." : ""),
       updatedAt: "just now",
       messages: conn.messages,
       activeToolCalls: Object.values(conn.activeToolCalls),
