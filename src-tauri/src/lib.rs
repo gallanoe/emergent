@@ -16,7 +16,7 @@ pub struct DaemonConnection {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_log::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
@@ -42,6 +42,12 @@ pub fn run() {
 
             Ok(())
         })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                let _ = window.hide();
+                api.prevent_close();
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             commands::detect_agents,
             commands::known_agents,
@@ -61,8 +67,14 @@ pub fn run() {
             commands::get_agent_connections,
             commands::retry_daemon_launch,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    app.run(|_app_handle, event| {
+        if let tauri::RunEvent::ExitRequested { api, .. } = &event {
+            api.prevent_exit();
+        }
+    });
 }
 
 pub async fn launch_and_connect(app_handle: tauri::AppHandle, conn: Arc<DaemonConnection>) {
