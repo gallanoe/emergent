@@ -27,14 +27,6 @@ interface Swarm {
   agentIds: string[];
 }
 
-type DaemonStatus =
-  | "starting"
-  | "launch_error"
-  | "disconnected"
-  | "connecting"
-  | "connected"
-  | "reconnecting";
-
 function createAppState() {
   let demoMode = $state(
     import.meta.env.VITE_DEMO_MODE === "true" ||
@@ -44,11 +36,6 @@ function createAppState() {
   let selectedAgentId = $state<string | null>(null);
   let availableAgents = $state<{ name: string; binary: string; path: string }[]>([]);
   let knownAgents = $state<KnownAgent[]>([]);
-  let daemonStatus = $state<DaemonStatus>("starting");
-  // In demo mode, skip daemon launch entirely
-  if (demoMode) daemonStatus = "connected";
-  let launchError = $state<string | null>(null);
-  let retrying = $state(false);
   let swarmPanelOpen = $state(true);
   let agentConnections = $state<Record<string, string[]>>({});
   let swarmMessageLog = $state<SwarmMessageLogEntry[]>([]);
@@ -60,24 +47,6 @@ function createAppState() {
     cli: string;
     status: string;
     working_directory: string;
-  }
-
-  async function waitForDaemon(): Promise<void> {
-    const maxAttempts = 60; // 6 seconds at 100ms intervals
-    for (let i = 0; i < maxAttempts; i++) {
-      const result = await invoke<{ status: string; error: string | null }>(
-        "get_daemon_launch_status",
-      );
-      daemonStatus = result.status as DaemonStatus;
-      launchError = result.error;
-
-      if (daemonStatus === "connected" || daemonStatus === "launch_error") {
-        return;
-      }
-      await new Promise((r) => setTimeout(r, 100));
-    }
-    daemonStatus = "launch_error";
-    launchError = "Timed out waiting for daemon";
   }
 
   async function setupAfterConnect() {
@@ -125,34 +94,9 @@ function createAppState() {
     if (demoMode) return;
 
     try {
-      daemonStatus = "starting";
-      await waitForDaemon();
-
-      if ((daemonStatus as DaemonStatus) !== "connected") return;
-
       await setupAfterConnect();
-    } catch {
-      daemonStatus = "disconnected";
-    }
-  }
-
-  async function retryLaunch() {
-    retrying = true;
-    daemonStatus = "starting";
-    launchError = null;
-
-    try {
-      await invoke("retry_daemon_launch");
-      await waitForDaemon();
-
-      if ((daemonStatus as DaemonStatus) === "connected") {
-        await setupAfterConnect();
-      }
     } catch (e) {
-      daemonStatus = "launch_error";
-      launchError = String(e);
-    } finally {
-      retrying = false;
+      console.error("Failed to initialize:", e);
     }
   }
 
@@ -352,15 +296,6 @@ function createAppState() {
     get knownAgents() {
       return knownAgents;
     },
-    get daemonStatus() {
-      return daemonStatus;
-    },
-    get launchError() {
-      return launchError;
-    },
-    get retrying() {
-      return retrying;
-    },
     get swarmPanelOpen() {
       return swarmPanelOpen;
     },
@@ -371,7 +306,6 @@ function createAppState() {
       return swarmMessageLog;
     },
     initialize,
-    retryLaunch,
     createSwarm,
     addAgentToSwarm,
     newSwarm,
