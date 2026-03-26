@@ -7,8 +7,8 @@ use agent_client_protocol as acp;
 use emergent_protocol::{
     AgentErrorPayload, AgentStatus, AgentSummary, ConfigOption, ConfigUpdatePayload,
     MessageChunkPayload, Notification, NudgeDeliveredPayload, PromptCompletePayload,
-    StatusChangePayload, SwarmMessagePayload, ToolCallContentPayload, ToolCallUpdatePayload,
-    UserMessagePayload,
+    StatusChangePayload, SwarmMessagePayload, SystemMessagePayload, ToolCallContentPayload,
+    ToolCallUpdatePayload, UserMessagePayload,
 };
 use tokio::sync::{broadcast, mpsc, oneshot, Mutex, RwLock};
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
@@ -53,7 +53,6 @@ struct AgentHandle {
     /// Optional role for this agent. Set at spawn (MCP) or first prompt (user).
     role: Option<String>,
     /// Permission state at time of last prompt — used to detect changes.
-    #[allow(dead_code)]
     last_prompted_permissions: bool,
     /// Wakes the prompt loop when work is available (user prompt or mailbox message).
     prompt_notify: Arc<tokio::sync::Notify>,
@@ -1196,28 +1195,55 @@ async fn prompt_loop(
             mboxes.get(&agent_id).map_or(0, |m| m.len())
         };
 
-        let prompt_text = if mailbox_count > 0 {
-            let nudge = if mailbox_count == 1 {
-                "You have 1 unread message in your mailbox.".to_string()
-            } else {
-                format!(
-                    "You have {} unread messages in your mailbox.",
-                    mailbox_count
-                )
-            };
+        // Determine injection parameters
+        let (is_first_turn, role, permission_change) = {
+            let handle = handle_arc.lock().await;
+            let first = !handle.has_prompted;
+            let role_ref = if first { handle.role.clone() } else { None };
+            let perm_change =
+                if handle.has_management_permissions != handle.last_prompted_permissions {
+                    let msg = if handle.has_management_permissions {
+                        "Management permissions have been granted."
+                    } else {
+                        "Management permissions have been revoked."
+                    };
+                    Some(msg.to_string())
+                } else {
+                    None
+                };
+            (first, role_ref, perm_change)
+        };
 
+        // Build the system block
+        let system_block = crate::system_prompt::build_system_block(
+            is_first_turn,
+            role.as_deref(),
+            permission_change.as_deref(),
+            mailbox_count,
+        );
+
+        // Emit nudge notification (preserves existing frontend behavior)
+        if mailbox_count > 0 {
             let _ = event_tx.send(Notification::NudgeDelivered(NudgeDeliveredPayload {
                 agent_id: agent_id.clone(),
                 count: mailbox_count,
             }));
+        }
 
-            if user_text.is_empty() {
-                nudge
-            } else {
-                format!("{}\n\n{}", user_text, nudge)
-            }
-        } else {
-            user_text.clone()
+        // Emit permission change system message to frontend
+        if let Some(ref perm_msg) = permission_change {
+            let _ = event_tx.send(Notification::SystemMessage(SystemMessagePayload {
+                agent_id: agent_id.clone(),
+                content: perm_msg.clone(),
+            }));
+        }
+
+        // Combine system block + user text
+        let prompt_text = match (system_block, user_text.is_empty()) {
+            (Some(block), true) => block,
+            (Some(block), false) => format!("{}\n\n{}", block, user_text),
+            (None, false) => user_text.clone(),
+            (None, true) => String::new(),
         };
 
         // Edge case: no user text and mailbox was drained between check and here.
@@ -1226,6 +1252,15 @@ async fn prompt_loop(
                 let _ = reply.send(Err("Empty prompt with no mailbox messages".to_string()));
             }
             continue;
+        }
+
+        // Update state flags
+        {
+            let mut handle = handle_arc.lock().await;
+            if !handle.has_prompted {
+                handle.has_prompted = true;
+            }
+            handle.last_prompted_permissions = handle.has_management_permissions;
         }
 
         // Phase 3: Set status to Working and send the prompt.
