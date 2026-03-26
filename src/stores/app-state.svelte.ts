@@ -315,6 +315,7 @@ function createAppState() {
     cancelPrompt: agentStore.cancelPrompt,
     setConfig: agentStore.setConfig,
     editQueue: agentStore.editQueue,
+    setRole: agentStore.setRole,
     registerQueueDumpHandler: agentStore.registerQueueDumpHandler,
     connectAgents,
     disconnectAgents,

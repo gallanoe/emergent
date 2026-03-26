@@ -104,7 +104,14 @@
         if (agent) appState.setAgentPermissions(agent.id, enabled);
       }}
     />
-    <ChatArea agent={appState.selectedAgent} onEditQueue={handleEditQueue} />
+    <ChatArea
+      agent={appState.selectedAgent}
+      onEditQueue={handleEditQueue}
+      onRoleChange={(role) => {
+        const agent = appState.selectedAgent;
+        if (agent) appState.setRole(agent.id, role);
+      }}
+    />
     <ChatInput
       agent={appState.selectedAgent}
       demoMode={appState.demoMode}
