@@ -288,13 +288,10 @@ pub struct AgentManager {
     history: Arc<RwLock<HashMap<String, Vec<Notification>>>>,
     mailboxes: Arc<RwLock<HashMap<String, crate::mailbox::Mailbox>>>,
     topology: Arc<RwLock<crate::topology::Topology>>,
+    mcp_port: std::sync::atomic::AtomicU16,
+    token_registry: Arc<crate::token_registry::TokenRegistry>,
 }
 
-impl Default for AgentManager {
-    fn default() -> Self {
-        Self::new()
-    }
-}
 
 impl AgentManager {
     /// Generate a short 8-character hex ID from random bytes.
@@ -309,7 +306,8 @@ impl AgentManager {
         id
     }
 
-    pub fn new() -> Self {
+    pub fn new(token_registry: Arc<crate::token_registry::TokenRegistry>) -> Self {
+        enrich_path();
         let (event_tx, _) = broadcast::channel(1024);
         let history: Arc<RwLock<HashMap<String, Vec<Notification>>>> =
             Arc::new(RwLock::new(HashMap::new()));
@@ -342,7 +340,15 @@ impl AgentManager {
             history,
             mailboxes: Arc::new(RwLock::new(HashMap::new())),
             topology: Arc::new(RwLock::new(crate::topology::Topology::new())),
+            mcp_port: std::sync::atomic::AtomicU16::new(0),
+            token_registry,
         }
+    }
+
+    /// Set the MCP HTTP server port (called after HTTP server binds).
+    pub fn set_mcp_port(&self, port: u16) {
+        self.mcp_port
+            .store(port, std::sync::atomic::Ordering::Relaxed);
     }
 
     /// Subscribe to the notification broadcast channel.
@@ -377,7 +383,10 @@ impl AgentManager {
         let mailboxes = self.mailboxes.clone();
         let id = agent_id.clone();
 
-        let socket_path = crate::socket::socket_path();
+        let bearer_token = self.token_registry.register(&id);
+        let mcp_port = self
+            .mcp_port
+            .load(std::sync::atomic::Ordering::Relaxed);
         let role_clone = role.clone();
 
         tokio::spawn(async move {
@@ -390,7 +399,8 @@ impl AgentManager {
                 event_tx.clone(),
                 history,
                 mailboxes,
-                socket_path,
+                mcp_port,
+                bearer_token,
             )
             .await
             {
@@ -422,7 +432,8 @@ impl AgentManager {
         event_tx: broadcast::Sender<Notification>,
         history: Arc<RwLock<HashMap<String, Vec<Notification>>>>,
         mailboxes: Arc<RwLock<HashMap<String, crate::mailbox::Mailbox>>>,
-        socket_path: PathBuf,
+        mcp_port: u16,
+        bearer_token: String,
     ) -> Result<(), String> {
         // Parse command string into binary + args (e.g. "gemini --experimental-acp")
         let parts: Vec<&str> = agent_binary.split_whitespace().collect();
@@ -505,12 +516,17 @@ impl AgentManager {
                         .await
                         .map_err(|e| format!("ACP initialize failed: {}", e))?;
 
-                        // Build MCP server config for swarm communication
-                        let mcp_config =
-                            crate::mcp::mcp_config_for_agent(
-                                &agent_id, &socket_path,
+                        // Build MCP server config for swarm communication (HTTP)
+                        let mcp_config = acp::McpServer::Http(
+                            acp::McpServerHttp::new(
+                                "emergent-swarm",
+                                format!("http://127.0.0.1:{}/mcp", mcp_port),
                             )
-                            .map_err(|e| format!("MCP config failed: {}", e))?;
+                            .headers(vec![acp::HttpHeader::new(
+                                "Authorization",
+                                format!("Bearer {}", bearer_token),
+                            )]),
+                        );
 
                         let session_resp = conn
                             .new_session(
@@ -924,9 +940,10 @@ impl AgentManager {
             }
         }
 
-        // Clean up mailbox and topology
+        // Clean up mailbox, topology, and revoke bearer token
         self.mailboxes.write().await.remove(agent_id);
         self.topology.write().await.remove_agent(agent_id);
+        self.token_registry.revoke_agent(agent_id);
 
         Ok(())
     }
@@ -1324,5 +1341,38 @@ async fn prompt_loop(
 
         // Loop back — immediately re-check for more work (mailbox may have
         // received new messages during the prompt execution).
+    }
+}
+
+/// Enrich PATH with common CLI install locations.
+/// macOS bundled apps launch with a minimal PATH (/usr/bin:/bin:/usr/sbin:/sbin),
+/// so tools installed via npm, bun, cargo, etc. won't be found without this.
+fn enrich_path() {
+    let home = match std::env::var("HOME") {
+        Ok(h) => std::path::PathBuf::from(h),
+        Err(_) => return,
+    };
+
+    let extra_dirs: Vec<std::path::PathBuf> = vec![
+        home.join(".local/bin"),
+        home.join(".cargo/bin"),
+        home.join(".bun/bin"),
+        home.join(".nvm/current/bin"),
+        home.join(".local/share/fnm/aliases/default/bin"),
+        std::path::PathBuf::from("/usr/local/bin"),
+        std::path::PathBuf::from("/opt/homebrew/bin"),
+    ];
+
+    let current_path = std::env::var("PATH").unwrap_or_default();
+    let mut dirs: Vec<std::path::PathBuf> = std::env::split_paths(&current_path).collect();
+
+    for dir in extra_dirs {
+        if dir.is_dir() && !dirs.contains(&dir) {
+            dirs.push(dir);
+        }
+    }
+
+    if let Ok(new_path) = std::env::join_paths(&dirs) {
+        unsafe { std::env::set_var("PATH", &new_path) };
     }
 }

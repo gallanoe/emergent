@@ -17,6 +17,7 @@ interface AgentConnection {
   id: string;
   swarmId: string;
   cli: string;
+  agentName: string;
   status: "initializing" | "idle" | "working" | "error" | "dead";
   messages: DisplayMessage[];
   activeToolCalls: Record<string, DisplayToolCall>;
@@ -410,6 +411,7 @@ function createAgentStore() {
     swarmId: string,
     workingDirectory: string,
     agentCli: string,
+    agentName: string,
   ): Promise<string> {
     const agentId = await invoke<string>("spawn_agent", {
       workingDirectory,
@@ -420,6 +422,7 @@ function createAgentStore() {
       id: agentId,
       swarmId,
       cli: agentCli,
+      agentName,
       status: "initializing",
       messages: [],
       activeToolCalls: {},
@@ -527,20 +530,12 @@ function createAgentStore() {
     }
   }
 
-  const CLI_DISPLAY_NAMES: Record<string, string> = {
-    "claude-agent-acp": "Claude Code",
-    "codex-acp": "Codex",
-    "gemini --experimental-acp": "Gemini",
-    "kiro-cli acp": "Kiro",
-    "opencode acp": "OpenCode",
-  };
-
   function getAgentDisplayName(conn: AgentConnection): string {
-    const typeName = CLI_DISPLAY_NAMES[conn.cli] ?? conn.cli;
+    const typeName = conn.agentName;
 
     // Count how many agents of the same type exist in the same swarm
     const siblings = Object.values(agents).filter(
-      (a) => a.swarmId === conn.swarmId && a.cli === conn.cli,
+      (a) => a.swarmId === conn.swarmId && a.agentName === conn.agentName,
     );
 
     if (siblings.length <= 1) return typeName;
@@ -577,11 +572,12 @@ function createAgentStore() {
     };
   }
 
-  function registerExistingAgent(agentId: string, swarmId: string, cli: string, role?: string) {
+  function registerExistingAgent(agentId: string, swarmId: string, cli: string, agentName: string, role?: string) {
     agents[agentId] = {
       id: agentId,
       swarmId,
       cli,
+      agentName,
       status: "idle",
       messages: [],
       activeToolCalls: {},

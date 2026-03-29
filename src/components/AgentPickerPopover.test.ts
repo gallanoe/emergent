@@ -46,7 +46,7 @@ describe("AgentPickerPopover", () => {
     const onSelect = vi.fn();
     renderPopover({ onSelect });
     await fireEvent.click(screen.getByText("Claude Code"));
-    expect(onSelect).toHaveBeenCalledWith("claude-agent-acp");
+    expect(onSelect).toHaveBeenCalledWith("claude-agent-acp", "Claude Code");
   });
 
   it("does not call onSelect when clicking unavailable agent", async () => {

@@ -69,8 +69,8 @@
     onSelectAgent={(id) => (appState.selectedAgentId = id)}
     onToggleSwarm={(id) => appState.toggleSwarmCollapsed(id)}
     onNewSwarm={() => appState.newSwarm()}
-    onAddAgent={(swarmId, agentCommand) => {
-      appState.addAgentToSwarm(swarmId, agentCommand);
+    onAddAgent={(swarmId, agentCommand, agentName) => {
+      appState.addAgentToSwarm(swarmId, agentCommand, agentName);
     }}
     onKillAgent={(agentId) => {
       const swarms = appState.swarms;

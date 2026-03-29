@@ -52,7 +52,7 @@ interface SidebarOverrides {
   onSelectAgent?: (id: string) => void;
   onToggleSwarm?: (id: string) => void;
   onNewSwarm?: () => void;
-  onAddAgent?: (swarmId: string, agentCommand: string) => void;
+  onAddAgent?: (swarmId: string, agentCommand: string, agentName: string) => void;
   onKillAgent?: (id: string) => void;
 }
 

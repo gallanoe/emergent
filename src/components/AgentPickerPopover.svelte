@@ -14,23 +14,23 @@
 
   interface Props {
     agents: KnownAgent[];
-    onSelect: (command: string) => void;
+    onSelect: (command: string, name: string) => void;
     onClose: () => void;
   }
 
   let { agents, onSelect, onClose }: Props = $props();
 
   const AGENT_LOGOS: Record<string, string> = {
-    "claude-agent-acp": claudeLogo,
-    "codex-acp": openaiLogo,
-    "gemini --experimental-acp": geminiLogo,
-    "kiro-cli acp": kiroLogo,
-    "opencode acp": opencodeLogo,
+    "Claude Code": claudeLogo,
+    "Codex": openaiLogo,
+    "Gemini": geminiLogo,
+    "Kiro": kiroLogo,
+    "OpenCode": opencodeLogo,
   };
 
   function handleClick(agent: KnownAgent) {
     if (!agent.available) return;
-    onSelect(agent.command);
+    onSelect(agent.command, agent.name);
   }
 
   function handleKeydown(event: KeyboardEvent) {
@@ -70,7 +70,7 @@
       data-available={String(agent.available)}
       onclick={() => handleClick(agent)}
     >
-      <img src={AGENT_LOGOS[agent.command]} alt="" class="w-5 h-5 shrink-0" />
+      <img src={AGENT_LOGOS[agent.name]} alt="" class="w-5 h-5 shrink-0" />
       <div class="min-w-0">
         <div class="text-[12px] font-medium text-fg-heading truncate">
           {agent.name}

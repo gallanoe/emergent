@@ -6,6 +6,9 @@ use rmcp::model::{ServerCapabilities, ServerInfo};
 use rmcp::{schemars, tool, tool_router, ServerHandler};
 use serde::{Deserialize, Serialize};
 
+use crate::agent_manager::AgentManager;
+use crate::token_registry::TokenRegistry;
+
 // ---------------------------------------------------------------------------
 // Parameter types for MCP tools
 // ---------------------------------------------------------------------------
@@ -57,125 +60,44 @@ pub struct DisconnectAgentsParams {
 }
 
 // ---------------------------------------------------------------------------
-// MCP config helper
+// MCP Handler — serves MCP tools, calls AgentManager directly
 // ---------------------------------------------------------------------------
 
-/// Build the `McpServerStdio` config to pass to an agent via ACP `session/new`.
-///
-/// The daemon binary is invoked with `--mcp-stdio --agent-id=<id> --socket=<path>`
-/// to serve as an MCP stdio server for a specific agent.
-pub fn mcp_config_for_agent(
-    agent_id: &str,
-    socket_path: &std::path::Path,
-) -> Result<agent_client_protocol::McpServer, String> {
-    let daemon_path = find_emergentd_binary()
-        .ok_or_else(|| "Could not find emergentd binary".to_string())?;
-
-    Ok(agent_client_protocol::McpServer::Stdio(
-        agent_client_protocol::McpServerStdio::new("emergent-swarm", daemon_path).args(vec![
-            "--mcp-stdio".to_string(),
-            format!("--agent-id={}", agent_id),
-            format!("--socket={}", socket_path.display()),
-        ]),
-    ))
-}
-
-/// Find the `emergentd` binary. Checks as a sibling of the current executable
-/// first (for bundled apps), then falls back to PATH lookup.
-fn find_emergentd_binary() -> Option<std::path::PathBuf> {
-    // Check sibling of current executable (covers bundled macOS .app)
-    if let Ok(current) = std::env::current_exe() {
-        let sibling = current.with_file_name("emergentd");
-        if sibling.exists() {
-            return Some(sibling);
-        }
-    }
-
-    // Fall back to PATH lookup
-    which::which("emergentd").ok()
-}
-
-// ---------------------------------------------------------------------------
-// MCP Stdio mode — run when daemon is invoked with --mcp-stdio
-// ---------------------------------------------------------------------------
-
-/// Run the MCP stdio server for a specific agent.
-/// This connects to the main daemon via Unix socket and routes tool calls through.
-pub async fn run_mcp_stdio(agent_id: String, socket_path: std::path::PathBuf) {
-    use emergent_protocol::DaemonClient;
-    use rmcp::ServiceExt;
-
-    // Connect to the main daemon
-    let (client, mut notification_rx) = match DaemonClient::connect(&socket_path).await {
-        Ok(conn) => conn,
-        Err(e) => {
-            eprintln!("Failed to connect to daemon: {}", e);
-            std::process::exit(1);
-        }
-    };
-
-    let server = McpStdioProxy::new(agent_id, Arc::new(client));
-
-    let (stdin, stdout) = rmcp::transport::stdio();
-    match server.serve((stdin, stdout)).await {
-        Ok(service) => {
-            // Exit if either the MCP service ends OR the daemon connection drops.
-            // This prevents orphaned MCP processes when the daemon shuts down.
-            tokio::select! {
-                _ = service.waiting() => {}
-                _ = daemon_connection_closed(&mut notification_rx) => {
-                    log::info!("Daemon connection lost, exiting MCP stdio server");
-                }
-            }
-        }
-        Err(e) => {
-            eprintln!("MCP server error: {}", e);
-            std::process::exit(1);
-        }
-    }
-}
-
-/// Wait until the daemon notification channel closes (meaning the daemon connection dropped).
-async fn daemon_connection_closed(
-    rx: &mut tokio::sync::mpsc::UnboundedReceiver<emergent_protocol::Notification>,
-) {
-    // When the daemon dies, the reader task in DaemonClient exits,
-    // which drops the notification sender, causing recv() to return None.
-    while rx.recv().await.is_some() {}
-}
-
-// ---------------------------------------------------------------------------
-// MCP Stdio Proxy — forwards tool calls to the daemon via JSON-RPC
-// ---------------------------------------------------------------------------
-
-/// MCP server that forwards tool calls to the daemon via JSON-RPC over Unix socket.
-/// Used when the daemon binary is invoked in `--mcp-stdio` mode.
+/// MCP server handler that calls AgentManager directly (no socket proxy).
+/// Each tool reads the agent_id from the bearer token in the HTTP request parts.
 #[derive(Clone)]
-struct McpStdioProxy {
-    agent_id: String,
-    client: Arc<emergent_protocol::DaemonClient>,
+pub struct McpHandler {
+    manager: Arc<AgentManager>,
+    token_registry: Arc<TokenRegistry>,
     tool_router: rmcp::handler::server::router::tool::ToolRouter<Self>,
 }
 
-impl McpStdioProxy {
-    fn new(agent_id: String, client: Arc<emergent_protocol::DaemonClient>) -> Self {
+impl McpHandler {
+    pub fn new(manager: Arc<AgentManager>, token_registry: Arc<TokenRegistry>) -> Self {
         Self {
-            agent_id,
-            client,
+            manager,
+            token_registry,
             tool_router: Self::tool_router(),
         }
     }
 
-    async fn check_management_permissions(&self) -> Result<bool, String> {
-        self.client
-            .has_management_permissions(&self.agent_id)
-            .await
+    /// Extract the agent_id from the HTTP request parts.
+    /// The bearer token is in the Authorization header; we resolve it via TokenRegistry.
+    fn agent_id_from_parts(&self, parts: &http::request::Parts) -> Result<String, String> {
+        let auth = parts
+            .headers
+            .get("authorization")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.strip_prefix("Bearer "))
+            .ok_or_else(|| "Missing or invalid Authorization header".to_string())?;
+        self.token_registry
+            .resolve(auth)
+            .ok_or_else(|| "Invalid bearer token".to_string())
     }
 
-    /// Resolve "self" to this agent's ID.
-    fn resolve_agent_id(&self, id: &str) -> String {
+    fn resolve_agent_id(&self, agent_id: &str, id: &str) -> String {
         if id.eq_ignore_ascii_case("self") {
-            self.agent_id.clone()
+            agent_id.to_string()
         } else {
             id.to_string()
         }
@@ -183,24 +105,24 @@ impl McpStdioProxy {
 }
 
 #[tool_router]
-impl McpStdioProxy {
+impl McpHandler {
     #[tool(
         name = "list_peers",
         description = "List all agents in the swarm. Returns each agent's name, current status, and whether you're connected to them. Connected agents can exchange messages; use connect_agents to connect to unconnected peers."
     )]
-    async fn list_peers(&self) -> Result<String, String> {
-        let connections = self
-            .client
-            .get_agent_connections(&self.agent_id)
-            .await
-            .map_err(|e| e.to_string())?;
-
-        let agents = self.client.list_agents().await.map_err(|e| e.to_string())?;
+    async fn list_peers(
+        &self,
+        rmcp::handler::server::tool::Extension(parts): rmcp::handler::server::tool::Extension<
+            http::request::Parts,
+        >,
+    ) -> Result<String, String> {
+        let agent_id = self.agent_id_from_parts(&parts)?;
+        let connections = self.manager.get_connections(&agent_id).await;
+        let agents = self.manager.list_agents().await;
 
         let mut result = Vec::new();
         for agent in &agents {
-            // Skip self
-            if agent.id == self.agent_id {
+            if agent.id == agent_id {
                 continue;
             }
             result.push(serde_json::json!({
@@ -220,12 +142,19 @@ impl McpStdioProxy {
     )]
     async fn send_message(
         &self,
+        rmcp::handler::server::tool::Extension(parts): rmcp::handler::server::tool::Extension<
+            http::request::Parts,
+        >,
         Parameters(params): Parameters<SendMessageParams>,
     ) -> Result<String, String> {
-        self.client
-            .send_swarm_message(&self.agent_id, &params.target, &params.body)
-            .await
-            .map_err(|e| e.to_string())?;
+        let agent_id = self.agent_id_from_parts(&parts)?;
+        self.manager
+            .deliver_message(&agent_id, &params.target, params.body.clone())
+            .await?;
+
+        // Wake the target agent's prompt loop to process the mailbox message.
+        self.manager.notify_prompt_loop(&params.target).await;
+
         Ok(serde_json::json!({
             "status": "delivered",
             "target": params.target,
@@ -238,13 +167,15 @@ impl McpStdioProxy {
         name = "read_mailbox",
         description = "Read and clear all pending messages from your mailbox. Returns messages with sender name, timestamp, and body. Messages are removed after reading. Call this when you receive a nudge about unread messages."
     )]
-    async fn read_mailbox(&self) -> Result<String, String> {
-        let messages = self
-            .client
-            .read_mailbox(&self.agent_id)
-            .await
-            .map_err(|e| e.to_string())?;
-        Ok(messages.to_string())
+    async fn read_mailbox(
+        &self,
+        rmcp::handler::server::tool::Extension(parts): rmcp::handler::server::tool::Extension<
+            http::request::Parts,
+        >,
+    ) -> Result<String, String> {
+        let agent_id = self.agent_id_from_parts(&parts)?;
+        let messages = self.manager.read_mailbox(&agent_id).await;
+        serde_json::to_string(&messages).map_err(|e| e.to_string())
     }
 
     #[tool(
@@ -253,14 +184,20 @@ impl McpStdioProxy {
     )]
     async fn spawn_agent(
         &self,
+        rmcp::handler::server::tool::Extension(parts): rmcp::handler::server::tool::Extension<
+            http::request::Parts,
+        >,
         Parameters(params): Parameters<SpawnAgentParams>,
     ) -> Result<String, String> {
-        if !self.check_management_permissions().await? {
+        let agent_id = self.agent_id_from_parts(&parts)?;
+        if !self.manager.has_management_permissions(&agent_id).await {
             return Err("Permission denied: management permissions required".to_string());
         }
-        // Resolve display name to CLI command
-        let known = self.client.known_agents().await.unwrap_or_default();
-        let agent = known.iter().find(|a| a.name.eq_ignore_ascii_case(&params.agent_name));
+
+        let known = crate::detect::known_agents();
+        let agent = known
+            .iter()
+            .find(|a| a.name.eq_ignore_ascii_case(&params.agent_name));
         let agent = match agent {
             Some(a) => a,
             None => {
@@ -276,24 +213,25 @@ impl McpStdioProxy {
                 ));
             }
         };
-        // Default to spawning agent's working directory
+
         let wd = match params.working_directory {
             Some(wd) => wd,
             None => {
-                let agents = self.client.list_agents().await.unwrap_or_default();
+                let agents = self.manager.list_agents().await;
                 agents
                     .iter()
-                    .find(|a| a.id == self.agent_id)
+                    .find(|a| a.id == agent_id)
                     .map(|a| a.working_directory.clone())
                     .unwrap_or_else(|| ".".to_string())
             }
         };
-        let agent_id = self
-            .client
-            .spawn_agent(wd, agent.command.clone(), params.role)
+
+        let new_agent_id = self
+            .manager
+            .spawn_agent(wd.into(), agent.command.clone(), params.role)
             .await
             .map_err(|e| e.to_string())?;
-        Ok(serde_json::json!({"agent_id": agent_id}).to_string())
+        Ok(serde_json::json!({"agent_id": new_agent_id}).to_string())
     }
 
     #[tool(
@@ -302,12 +240,16 @@ impl McpStdioProxy {
     )]
     async fn kill_agent(
         &self,
+        rmcp::handler::server::tool::Extension(parts): rmcp::handler::server::tool::Extension<
+            http::request::Parts,
+        >,
         Parameters(params): Parameters<KillAgentParams>,
     ) -> Result<String, String> {
-        if !self.check_management_permissions().await? {
+        let agent_id = self.agent_id_from_parts(&parts)?;
+        if !self.manager.has_management_permissions(&agent_id).await {
             return Err("Permission denied: management permissions required".to_string());
         }
-        self.client
+        self.manager
             .kill_agent(&params.target)
             .await
             .map_err(|e| e.to_string())?;
@@ -320,17 +262,18 @@ impl McpStdioProxy {
     )]
     async fn connect_agents(
         &self,
+        rmcp::handler::server::tool::Extension(parts): rmcp::handler::server::tool::Extension<
+            http::request::Parts,
+        >,
         Parameters(params): Parameters<ConnectAgentsParams>,
     ) -> Result<String, String> {
-        if !self.check_management_permissions().await? {
+        let agent_id = self.agent_id_from_parts(&parts)?;
+        if !self.manager.has_management_permissions(&agent_id).await {
             return Err("Permission denied: management permissions required".to_string());
         }
-        let a = self.resolve_agent_id(&params.agent_a);
-        let b = self.resolve_agent_id(&params.agent_b);
-        self.client
-            .connect_agents(&a, &b)
-            .await
-            .map_err(|e| e.to_string())?;
+        let a = self.resolve_agent_id(&agent_id, &params.agent_a);
+        let b = self.resolve_agent_id(&agent_id, &params.agent_b);
+        self.manager.connect_agents(&a, &b).await;
         Ok(r#"{"status": "connected"}"#.to_string())
     }
 
@@ -340,22 +283,23 @@ impl McpStdioProxy {
     )]
     async fn disconnect_agents(
         &self,
+        rmcp::handler::server::tool::Extension(parts): rmcp::handler::server::tool::Extension<
+            http::request::Parts,
+        >,
         Parameters(params): Parameters<DisconnectAgentsParams>,
     ) -> Result<String, String> {
-        if !self.check_management_permissions().await? {
+        let agent_id = self.agent_id_from_parts(&parts)?;
+        if !self.manager.has_management_permissions(&agent_id).await {
             return Err("Permission denied: management permissions required".to_string());
         }
-        let a = self.resolve_agent_id(&params.agent_a);
-        let b = self.resolve_agent_id(&params.agent_b);
-        self.client
-            .disconnect_agents(&a, &b)
-            .await
-            .map_err(|e| e.to_string())?;
+        let a = self.resolve_agent_id(&agent_id, &params.agent_a);
+        let b = self.resolve_agent_id(&agent_id, &params.agent_b);
+        self.manager.disconnect_agents(&a, &b).await;
         Ok(r#"{"status": "disconnected"}"#.to_string())
     }
 }
 
-impl ServerHandler for McpStdioProxy {
+impl ServerHandler for McpHandler {
     fn get_info(&self) -> ServerInfo {
         ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
             .with_instructions("Emergent swarm communication tools for inter-agent collaboration")
@@ -368,8 +312,6 @@ impl ServerHandler for McpStdioProxy {
     ) -> impl Future<Output = Result<rmcp::model::ListToolsResult, rmcp::model::ErrorData>>
            + Send
            + '_ {
-        // Always list all tools (including management). Permissions are enforced
-        // at call time — each management tool checks has_management_permissions.
         let tools = self.tool_router.list_all();
         async move {
             Ok(rmcp::model::ListToolsResult {

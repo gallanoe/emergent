@@ -11,11 +11,11 @@
   import type { DisplaySwarm } from "../stores/types";
 
   const AGENT_LOGOS: Record<string, string> = {
-    "claude-agent-acp": claudeLogo,
-    "codex-acp": openaiLogo,
-    "gemini --experimental-acp": geminiLogo,
-    "kiro-cli acp": kiroLogo,
-    "opencode acp": opencodeLogo,
+    "Claude Code": claudeLogo,
+    "Codex": openaiLogo,
+    "Gemini": geminiLogo,
+    "Kiro": kiroLogo,
+    "OpenCode": opencodeLogo,
   };
 
   interface Props {
@@ -26,7 +26,7 @@
     onSelectAgent: (id: string) => void;
     onToggleSwarm: (id: string) => void;
     onNewSwarm: () => void;
-    onAddAgent: (swarmId: string, agentCommand: string) => void;
+    onAddAgent: (swarmId: string, agentCommand: string, agentName: string) => void;
     onKillAgent?: (agentId: string) => void;
   }
 
@@ -94,8 +94,8 @@
               {#if pickerSwarmId === swarm.id}
                 <AgentPickerPopover
                   agents={knownAgents}
-                  onSelect={(command) => {
-                    onAddAgent(swarm.id, command);
+                  onSelect={(command, name) => {
+                    onAddAgent(swarm.id, command, name);
                     pickerSwarmId = null;
                   }}
                   onClose={() => {
@@ -153,9 +153,9 @@
                   {agent.preview}
                 </div>
               </div>
-              {#if AGENT_LOGOS[agent.cli]}
+              {#if AGENT_LOGOS[agent.name]}
                 <img
-                  src={AGENT_LOGOS[agent.cli]}
+                  src={AGENT_LOGOS[agent.name]}
                   alt=""
                   class="w-3.5 h-3.5 shrink-0 ml-2 opacity-50"
                 />

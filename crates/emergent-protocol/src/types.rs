@@ -205,42 +205,6 @@ pub struct ConfigUpdatePayload {
 }
 
 // ---------------------------------------------------------------------------
-// JSON-RPC envelope types
-// ---------------------------------------------------------------------------
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct JsonRpcRequest {
-    pub jsonrpc: String,
-    pub id: u64,
-    pub method: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub params: Option<serde_json::Value>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct JsonRpcResponse {
-    pub jsonrpc: String,
-    pub id: u64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub result: Option<serde_json::Value>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<JsonRpcError>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct JsonRpcError {
-    pub code: i32,
-    pub message: String,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct JsonRpcNotification {
-    pub jsonrpc: String,
-    pub method: String,
-    pub params: serde_json::Value,
-}
-
-// ---------------------------------------------------------------------------
 // Notification enum (wraps all daemon-to-client events)
 // ---------------------------------------------------------------------------
 
@@ -322,63 +286,6 @@ mod tests {
         });
         let json = serde_json::to_string(&n).unwrap();
         assert!(json.contains("agent:message-chunk"));
-    }
-
-    #[test]
-    fn jsonrpc_request_roundtrips() {
-        let req = JsonRpcRequest {
-            jsonrpc: "2.0".into(),
-            id: 1,
-            method: "spawn_agent".into(),
-            params: Some(serde_json::json!({
-                "working_directory": "/tmp",
-                "agent_cli": "mock-agent"
-            })),
-        };
-        let json = serde_json::to_string(&req).unwrap();
-        let parsed: JsonRpcRequest = serde_json::from_str(&json).unwrap();
-        assert_eq!(parsed.method, "spawn_agent");
-    }
-
-    #[test]
-    fn jsonrpc_response_with_error() {
-        let resp = JsonRpcResponse {
-            jsonrpc: "2.0".into(),
-            id: 1,
-            result: None,
-            error: Some(JsonRpcError {
-                code: -32600,
-                message: "Invalid request".into(),
-            }),
-        };
-        let json = serde_json::to_string(&resp).unwrap();
-        assert!(json.contains("Invalid request"));
-        assert!(!json.contains("\"result\""));
-    }
-
-    #[test]
-    fn notification_roundtrips_through_jsonrpc() {
-        let original = Notification::MessageChunk(MessageChunkPayload {
-            agent_id: "abc".into(),
-            content: "hello".into(),
-            kind: "message".into(),
-        });
-        let params = serde_json::to_value(&original).unwrap();
-        let json_notif = JsonRpcNotification {
-            jsonrpc: "2.0".into(),
-            method: original.event_name().into(),
-            params,
-        };
-        let wire = serde_json::to_string(&json_notif).unwrap();
-        let parsed: JsonRpcNotification = serde_json::from_str(&wire).unwrap();
-        let restored: Notification = serde_json::from_value(parsed.params).unwrap();
-        match restored {
-            Notification::MessageChunk(p) => {
-                assert_eq!(p.agent_id, "abc");
-                assert_eq!(p.content, "hello");
-            }
-            _ => panic!("Wrong variant"),
-        }
     }
 
     #[test]

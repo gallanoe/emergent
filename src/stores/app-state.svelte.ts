@@ -117,7 +117,8 @@ function createAppState() {
       }
 
       // Register agent in store without spawning (it already exists on daemon)
-      agentStore.registerExistingAgent(agent.id, swarm.id, agent.cli, agent.role);
+      const agentName = knownAgents.find((k) => k.command === agent.cli)?.name ?? agent.cli;
+      agentStore.registerExistingAgent(agent.id, swarm.id, agent.cli, agentName, agent.role);
       swarm.agentIds.push(agent.id);
 
       // Replay history — notifications are typed via DaemonNotification union in agent store
@@ -144,11 +145,11 @@ function createAppState() {
     return id;
   }
 
-  async function addAgentToSwarm(swarmId: string, agentBinary: string): Promise<string> {
+  async function addAgentToSwarm(swarmId: string, agentBinary: string, agentName: string): Promise<string> {
     const swarm = swarms.find((s) => s.id === swarmId);
     if (!swarm) throw new Error(`Swarm ${swarmId} not found`);
 
-    const agentId = await agentStore.spawnAgent(swarmId, swarm.workingDirectory, agentBinary);
+    const agentId = await agentStore.spawnAgent(swarmId, swarm.workingDirectory, agentBinary, agentName);
     swarm.agentIds.push(agentId);
 
     if (!selectedAgentId) {
