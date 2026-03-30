@@ -1,11 +1,12 @@
 <script lang="ts">
   import { appState } from "./stores/app-state.svelte";
-  import Sidebar from "./components/Sidebar.svelte";
+  import SwarmRail from "./components/SwarmRail.svelte";
+  import InnerSidebar from "./components/InnerSidebar.svelte";
   import TopBar from "./components/TopBar.svelte";
   import ChatArea from "./components/ChatArea.svelte";
   import ChatInput from "./components/ChatInput.svelte";
+  import SwarmView from "./components/SwarmView.svelte";
   import ConfirmDialog from "./components/ConfirmDialog.svelte";
-  import SwarmPanel from "./components/SwarmPanel.svelte";
   import { onMount } from "svelte";
 
   let externalContent = $state<{ text: string; seq: number } | null>(null);
@@ -56,89 +57,88 @@
   data-tauri-drag-region
 ></div>
 
-<div
-  class="grid {appState.swarmPanelOpen
-    ? 'grid-cols-[240px_1fr_320px]'
-    : 'grid-cols-[240px_1fr]'} h-screen"
->
-  <Sidebar
+<div class="grid grid-cols-[56px_200px_1fr] h-screen">
+  <SwarmRail
     swarms={appState.swarms}
-    selectedAgentId={appState.selectedAgentId}
+    selectedSwarmId={appState.selectedSwarmId}
     demoMode={appState.demoMode}
-    knownAgents={appState.knownAgents}
-    onSelectAgent={(id) => (appState.selectedAgentId = id)}
-    onToggleSwarm={(id) => appState.toggleSwarmCollapsed(id)}
+    onSelectSwarm={(id) => appState.selectSwarm(id)}
     onNewSwarm={() => appState.newSwarm()}
-    onAddAgent={(swarmId, agentCommand, agentName) => {
-      appState.addAgentToSwarm(swarmId, agentCommand, agentName);
+  />
+  <InnerSidebar
+    swarm={appState.selectedSwarm}
+    activeView={appState.activeView}
+    selectedAgentId={appState.selectedAgentId}
+    onSelectView={(view) => {
+      if (view === "swarm" && appState.selectedSwarmId) {
+        appState.selectSwarm(appState.selectedSwarmId);
+      }
     }}
-    onKillAgent={(agentId) => {
-      const swarms = appState.swarms;
-      const agent = swarms
-        .flatMap((s) => s.agents)
-        .find((a) => a.id === agentId);
-      if (agent) requestShutdown(agent.id, agent.name);
-    }}
+    onSelectAgent={(id) => appState.selectAgent(id)}
   />
   <main class="flex flex-col min-h-0 min-w-0">
-    <TopBar
-      agent={appState.selectedAgent}
-      allAgents={appState.swarms.flatMap((s) => s.agents)}
-      connections={appState.selectedAgent
-        ? (appState.agentConnections[appState.selectedAgent.id] ?? [])
-        : []}
-      onShutdown={() => {
-        const agent = appState.selectedAgent;
-        if (agent) requestShutdown(agent.id, agent.name);
-      }}
-      onConnect={(targetId) => {
-        const agent = appState.selectedAgent;
-        if (agent) appState.connectAgents(agent.id, targetId);
-      }}
-      onDisconnect={(targetId) => {
-        const agent = appState.selectedAgent;
-        if (agent) appState.disconnectAgents(agent.id, targetId);
-      }}
-      onSetPermissions={(enabled) => {
-        const agent = appState.selectedAgent;
-        if (agent) appState.setAgentPermissions(agent.id, enabled);
-      }}
-    />
-    <ChatArea
-      agent={appState.selectedAgent}
-      onEditQueue={handleEditQueue}
-      onRoleChange={(role) => {
-        const agent = appState.selectedAgent;
-        if (agent) appState.setRole(agent.id, role);
-      }}
-    />
-    <ChatInput
-      agent={appState.selectedAgent}
-      demoMode={appState.demoMode}
-      {externalContent}
-      onSend={(text) => {
-        const agent = appState.selectedAgent;
-        if (agent) appState.sendPrompt(agent.id, text);
-      }}
-      onInterrupt={() => {
-        const agent = appState.selectedAgent;
-        if (agent) appState.cancelPrompt(agent.id);
-      }}
-      onSetConfig={(configId, value) => {
-        const agent = appState.selectedAgent;
-        if (agent) appState.setConfig(agent.id, configId, value);
-      }}
-    />
+    {#if appState.activeView === "swarm" && appState.selectedSwarm}
+      <SwarmView
+        swarm={appState.selectedSwarm}
+        messageLog={appState.swarmMessageLog}
+        agentConnections={appState.agentConnections}
+        demoMode={appState.demoMode}
+        knownAgents={appState.knownAgents}
+        onSelectAgent={(id) => appState.selectAgent(id)}
+        onAddAgent={(swarmId, cmd, name) =>
+          appState.addAgentToSwarm(swarmId, cmd, name)}
+      />
+    {:else}
+      <TopBar
+        agent={appState.selectedAgent}
+        allAgents={appState.swarms.flatMap((s) => s.agents)}
+        connections={appState.selectedAgent
+          ? (appState.agentConnections[appState.selectedAgent.id] ?? [])
+          : []}
+        onShutdown={() => {
+          const agent = appState.selectedAgent;
+          if (agent) requestShutdown(agent.id, agent.name);
+        }}
+        onConnect={(targetId) => {
+          const agent = appState.selectedAgent;
+          if (agent) appState.connectAgents(agent.id, targetId);
+        }}
+        onDisconnect={(targetId) => {
+          const agent = appState.selectedAgent;
+          if (agent) appState.disconnectAgents(agent.id, targetId);
+        }}
+        onSetPermissions={(enabled) => {
+          const agent = appState.selectedAgent;
+          if (agent) appState.setAgentPermissions(agent.id, enabled);
+        }}
+      />
+      <ChatArea
+        agent={appState.selectedAgent}
+        onEditQueue={handleEditQueue}
+        onRoleChange={(role) => {
+          const agent = appState.selectedAgent;
+          if (agent) appState.setRole(agent.id, role);
+        }}
+      />
+      <ChatInput
+        agent={appState.selectedAgent}
+        demoMode={appState.demoMode}
+        {externalContent}
+        onSend={(text) => {
+          const agent = appState.selectedAgent;
+          if (agent) appState.sendPrompt(agent.id, text);
+        }}
+        onInterrupt={() => {
+          const agent = appState.selectedAgent;
+          if (agent) appState.cancelPrompt(agent.id);
+        }}
+        onSetConfig={(configId, value) => {
+          const agent = appState.selectedAgent;
+          if (agent) appState.setConfig(agent.id, configId, value);
+        }}
+      />
+    {/if}
   </main>
-  {#if appState.swarmPanelOpen}
-    <SwarmPanel
-      agents={appState.swarms.flatMap((s) => s.agents)}
-      selectedAgentId={appState.selectedAgentId}
-      agentConnections={appState.agentConnections}
-      messageLog={appState.swarmMessageLog}
-      onClose={() => appState.toggleSwarmPanel()}
-    />
-  {/if}
 </div>
 
 {#if shutdownTarget}
