@@ -29,7 +29,7 @@
     tabindex={0}
     onkeydown={onKeydown}
   >
-    <span class="w-1.5 h-1.5 rounded-full bg-accent shrink-0"></span>
+    <span class="w-1.5 h-1.5 rounded-full bg-fg-muted shrink-0"></span>
     <span
       class="text-[12px] font-[family-name:var(--font-mono)] font-medium text-fg-muted"
     >

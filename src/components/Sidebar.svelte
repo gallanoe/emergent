@@ -118,7 +118,7 @@
             <button
               class="interactive flex items-center w-full py-1.5 pl-5 pr-3 text-left
                 {isSelected
-                ? 'bg-bg-selected border-l-2 border-accent'
+                ? 'bg-bg-selected border-l-2 border-fg-muted'
                 : 'border-l-2 border-transparent'}"
               onclick={() => onSelectAgent(agent.id)}
               oncontextmenu={(e) => {

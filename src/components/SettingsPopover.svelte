@@ -122,7 +122,7 @@
     {/if}
 
     <button
-      class="text-[10px] text-accent mt-0.5 cursor-default hover:bg-accent-soft rounded px-0 py-0.5"
+      class="text-[10px] text-fg-muted mt-0.5 cursor-default hover:bg-bg-hover rounded px-0 py-0.5"
       onclick={() => (showConnectDropdown = !showConnectDropdown)}
     >
       + Connect agent

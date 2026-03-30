@@ -136,7 +136,7 @@
                 {opt.category && CATEGORY_COLORS[opt.category]
                 ? CATEGORY_COLORS[opt.category]
                 : 'bg-accent-soft text-fg-muted'}
-                {openConfigId === opt.id ? '!border-accent' : ''}"
+                {openConfigId === opt.id ? '!border-border-strong' : ''}"
               onclick={() => {
                 openConfigId = openConfigId === opt.id ? null : opt.id;
               }}
@@ -184,8 +184,8 @@
             class="interactive w-6 h-6 flex items-center justify-center rounded-md {hasText &&
             !demoMode &&
             agent
-              ? 'bg-accent text-white'
-              : 'bg-fg-disabled text-white'}"
+              ? 'bg-accent text-bg-base'
+              : 'bg-fg-disabled text-bg-base'}"
             onclick={handleSend}
             disabled={isDisabled || !hasText}
           >

@@ -24,7 +24,7 @@
       class="flex items-center justify-center w-[36px] h-[36px] rounded-[10px]
              font-semibold text-[13px] transition-colors duration-150
              {swarm.id === selectedSwarmId
-        ? 'bg-accent text-white shadow-[0_0_0_2px_rgba(167,139,250,0.27)]'
+        ? 'bg-accent text-bg-base shadow-[0_0_0_2px_rgba(255,255,255,0.1)]'
         : 'bg-bg-elevated text-fg-muted border border-border-default hover:bg-bg-hover'}"
       title={swarm.name}
       onclick={() => onSelectSwarm(swarm.id)}
