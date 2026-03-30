@@ -1,10 +1,6 @@
 <script lang="ts">
   import type { DisplaySwarm, SwarmMessageLogEntry } from "../stores/types";
   import ActivityFeed from "./ActivityFeed.svelte";
-  import AgentPickerPopover from "./AgentPickerPopover.svelte";
-
-  let pickerOpen = $state(false);
-
   interface Props {
     swarm: DisplaySwarm;
     messageLog: SwarmMessageLogEntry[];
@@ -70,26 +66,6 @@
         {swarm.agents.length} agent{swarm.agents.length !== 1 ? "s" : ""}
       </span>
     </div>
-    {#if !demoMode}
-      <div class="relative">
-        <button
-          class="text-[10px] text-fg-muted bg-bg-elevated px-2 py-1 rounded border border-border-default hover:bg-bg-hover"
-          onclick={() => (pickerOpen = !pickerOpen)}
-        >
-          + Add Agent
-        </button>
-        {#if pickerOpen}
-          <AgentPickerPopover
-            agents={knownAgents}
-            onSelect={(command, name) => {
-              onAddAgent(swarm.id, command, name);
-              pickerOpen = false;
-            }}
-            onClose={() => (pickerOpen = false)}
-          />
-        {/if}
-      </div>
-    {/if}
   </div>
 
   <!-- Agent cards grid -->

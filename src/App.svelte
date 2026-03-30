@@ -74,12 +74,16 @@
         swarm={appState.selectedSwarm}
         activeView={appState.activeView}
         selectedAgentId={appState.selectedAgentId}
+        demoMode={appState.demoMode}
+        knownAgents={appState.knownAgents}
         onSelectView={(view) => {
           if (view === "swarm" && appState.selectedSwarmId) {
             appState.selectSwarm(appState.selectedSwarmId);
           }
         }}
         onSelectAgent={(id) => appState.selectAgent(id)}
+        onAddAgent={(swarmId, cmd, name) =>
+          appState.addAgentToSwarm(swarmId, cmd, name)}
       />
     </div>
   </div>

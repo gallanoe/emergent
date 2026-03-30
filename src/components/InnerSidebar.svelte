@@ -1,23 +1,42 @@
 <script lang="ts">
   import type { DisplaySwarm } from "../stores/types";
-  import { LayoutGrid, Settings, Sparkles, ListChecks } from "@lucide/svelte";
+  import {
+    LayoutGrid,
+    Settings,
+    Sparkles,
+    ListChecks,
+    Plus,
+  } from "@lucide/svelte";
   import type { Component } from "svelte";
+  import AgentPickerPopover from "./AgentPickerPopover.svelte";
 
   interface Props {
     swarm: DisplaySwarm | undefined;
     activeView: "swarm" | "agent";
     selectedAgentId: string | null;
+    demoMode: boolean;
+    knownAgents: { name: string; command: string; available: boolean }[];
     onSelectView: (view: "swarm" | "agent") => void;
     onSelectAgent: (id: string) => void;
+    onAddAgent: (
+      swarmId: string,
+      agentCommand: string,
+      agentName: string,
+    ) => void;
   }
 
   let {
     swarm,
     activeView,
     selectedAgentId,
+    demoMode,
+    knownAgents,
     onSelectView,
     onSelectAgent,
+    onAddAgent,
   }: Props = $props();
+
+  let pickerOpen = $state(false);
 
   const navItems: {
     id: string;
@@ -103,6 +122,27 @@
           </span>
         </button>
       {/each}
+      {#if !demoMode && swarm}
+        <div class="relative mt-1">
+          <button
+            class="interactive flex items-center gap-1.5 w-full px-2.5 py-[7px] rounded-md text-[11px] text-fg-muted"
+            onclick={() => (pickerOpen = !pickerOpen)}
+          >
+            <Plus size={12} />
+            Add agent
+          </button>
+          {#if pickerOpen}
+            <AgentPickerPopover
+              agents={knownAgents}
+              onSelect={(command, name) => {
+                onAddAgent(swarm.id, command, name);
+                pickerOpen = false;
+              }}
+              onClose={() => (pickerOpen = false)}
+            />
+          {/if}
+        </div>
+      {/if}
     </div>
   {:else}
     <div

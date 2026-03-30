@@ -46,8 +46,14 @@ function renderSidebar(overrides: Record<string, unknown> = {}) {
       swarm: (overrides.swarm as DisplaySwarm | undefined) ?? makeSwarm(),
       activeView: (overrides.activeView as "swarm" | "agent") ?? "swarm",
       selectedAgentId: (overrides.selectedAgentId as string | null) ?? null,
+      demoMode: (overrides.demoMode as boolean) ?? false,
+      knownAgents:
+        (overrides.knownAgents as { name: string; command: string; available: boolean }[]) ?? [],
       onSelectView: (overrides.onSelectView as (view: "swarm" | "agent") => void) ?? (() => {}),
       onSelectAgent: (overrides.onSelectAgent as (id: string) => void) ?? (() => {}),
+      onAddAgent:
+        (overrides.onAddAgent as (swarmId: string, cmd: string, name: string) => void) ??
+        (() => {}),
     },
   });
 }
