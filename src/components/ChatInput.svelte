@@ -67,9 +67,9 @@
   };
 
   const CATEGORY_COLORS: Record<string, string> = {
-    model: "bg-[rgba(124,106,78,0.12)] text-[#7c6a4e]",
-    thought_level: "bg-[rgba(45,140,80,0.1)] text-[#2d6e46]",
-    mode: "bg-[rgba(196,138,26,0.1)] text-[#9a6e10]",
+    model: "bg-accent-soft text-accent-text",
+    thought_level: "bg-[rgba(34,197,94,0.1)] text-success",
+    mode: "bg-[rgba(196,138,26,0.1)] text-warning",
   };
 
   function flatOptions(opt: ConfigOption): { value: string; name: string }[] {
