@@ -36,9 +36,10 @@ function createAppState() {
   let selectedAgentId = $state<string | null>(null);
   let availableAgents = $state<{ name: string; binary: string; path: string }[]>([]);
   let knownAgents = $state<KnownAgent[]>([]);
-  let swarmPanelOpen = $state(true);
   let agentConnections = $state<Record<string, string[]>>({});
   let swarmMessageLog = $state<SwarmMessageLogEntry[]>([]);
+  let selectedSwarmId = $state<string | null>(null);
+  let activeView = $state<"swarm" | "agent">("swarm");
 
   // ── Initialization ────────────────────────────────────────────
 
@@ -142,6 +143,7 @@ function createAppState() {
   function createSwarm(name: string, workingDirectory: string): string {
     const id = crypto.randomUUID();
     swarms.push({ id, name, workingDirectory, collapsed: false, agentIds: [] });
+    if (!selectedSwarmId) selectedSwarmId = id;
     return id;
   }
 
@@ -263,8 +265,26 @@ function createAppState() {
     await invoke("set_agent_permissions", { agentId, enabled });
   }
 
-  function toggleSwarmPanel() {
-    swarmPanelOpen = !swarmPanelOpen;
+  function selectSwarm(swarmId: string) {
+    selectedSwarmId = swarmId;
+    activeView = "swarm";
+  }
+
+  function selectAgent(agentId: string) {
+    selectedAgentId = agentId;
+    // Find which swarm this agent belongs to and select it
+    const swarm = swarms.find((s) => s.agentIds.includes(agentId));
+    if (swarm) selectedSwarmId = swarm.id;
+    activeView = "agent";
+  }
+
+  function getSelectedSwarm(): DisplaySwarm | undefined {
+    if (demoMode) {
+      const swarmList = mockState.swarms;
+      return swarmList.find((s: DisplaySwarm) => s.id === selectedSwarmId) ?? swarmList[0];
+    }
+    const displaySwarms = getDisplaySwarms();
+    return displaySwarms.find((s) => s.id === selectedSwarmId) ?? displaySwarms[0];
   }
 
   function getSelectedAgent(): DisplayAgent | undefined {
@@ -307,8 +327,14 @@ function createAppState() {
     get knownAgents() {
       return knownAgents;
     },
-    get swarmPanelOpen() {
-      return swarmPanelOpen;
+    get selectedSwarmId() {
+      return selectedSwarmId;
+    },
+    get activeView() {
+      return activeView;
+    },
+    get selectedSwarm() {
+      return getSelectedSwarm();
     },
     get agentConnections() {
       return agentConnections;
@@ -331,7 +357,8 @@ function createAppState() {
     connectAgents,
     disconnectAgents,
     setAgentPermissions,
-    toggleSwarmPanel,
+    selectSwarm,
+    selectAgent,
     refreshConnections,
   };
 }
