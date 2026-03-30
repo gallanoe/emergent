@@ -4,20 +4,20 @@ A Tauri 2 desktop application for running LLM agents in parallel. Agents communi
 
 ## Architecture
 
-Emergent uses a daemon + client architecture:
+The Tauri app embeds the agent manager directly — there is no separate daemon process. MCP sidecars connect back to the app via an HTTP server.
 
-- **`emergentd`** (in `crates/emergent-daemon/`) — background daemon that manages agent lifecycles over ACP and exposes a JSON-RPC API on a Unix domain socket
-- **Tauri app** (in `src-tauri/`) — thin desktop client that connects to the daemon and provides the UI
-- **`emergent-protocol`** (in `crates/emergent-protocol/`) — shared types, JSON-RPC client, and socket path resolution used by both daemon and Tauri app
+- **Tauri app** (in `src-tauri/`) — desktop app that owns the `AgentManager`, spawns agent processes over ACP, and runs an MCP HTTP server for sidecar tool calls
+- **`emergent-daemon`** (in `crates/emergent-daemon/`) — library crate containing the agent manager, MCP handler, HTTP server, mailbox, topology, and system prompt logic (embedded into the Tauri app, not a standalone binary)
+- **`emergent-protocol`** (in `crates/emergent-protocol/`) — shared types and notification definitions used by both the Tauri app and daemon library
 
-The Tauri app is a passthrough — all agent management (spawn, prompt, cancel, kill) is delegated to the daemon via JSON-RPC. The app bridges daemon notifications to the frontend via Tauri events.
+The Tauri app creates the `AgentManager` at startup, starts an MCP HTTP server, and bridges agent notifications to the Svelte frontend via Tauri events.
 
 ## Tech Stack
 
 - **Frontend:** Svelte 5, TypeScript, Tailwind CSS 4, Vite 7
 - **Backend:** Rust (edition 2021), Tauri 2, Tokio (async runtime)
 - **Protocol:** Agent Client Protocol (ACP) for agent communication
-- **IPC:** Newline-delimited JSON-RPC 2.0 over Unix domain socket
+- **IPC:** JSON-RPC 2.0 over HTTP (MCP sidecars to app)
 - **Testing:** Vitest + Testing Library (unit/component), Playwright (E2E), `cargo test` (Rust)
 - **Linting/Formatting:** oxlint (JS/TS), Clippy (Rust), Prettier + oxfmt (formatting)
 - **Package Manager:** Bun (use `bun` instead of `npm`)
@@ -34,31 +34,34 @@ src/                          # Frontend (Svelte 5 + TypeScript)
 ├── App.svelte                # Root layout component
 └── main.ts                   # Vite entry point
 
-src-tauri/                    # Tauri app (thin client to daemon)
+src-tauri/                    # Tauri app (embeds agent manager)
 ├── src/
 │   ├── main.rs               # Tauri app entry
-│   ├── lib.rs                # DaemonConnection setup + notification bridge
-│   └── commands.rs           # Tauri IPC command handlers (passthroughs to daemon)
+│   ├── lib.rs                # AgentManager setup, MCP HTTP server, notification bridge
+│   ├── commands.rs           # Tauri IPC command handlers
+│   └── tray.rs               # System tray icon setup
 ├── Cargo.toml
 └── tauri.conf.json
 
 crates/
-├── emergent-daemon/          # Daemon binary (emergentd)
+├── emergent-daemon/          # Agent manager library (embedded in Tauri app)
 │   ├── src/
-│   │   ├── main.rs           # CLI entry, socket server, signal handling
-│   │   ├── lib.rs            # Public modules + run_server()
-│   │   ├── server.rs         # JSON-RPC request dispatch + notification broadcast
+│   │   ├── lib.rs            # Public modules
 │   │   ├── agent_manager.rs  # ACP client + agent lifecycle management
 │   │   ├── detect.rs         # Agent binary detection
-│   │   └── socket.rs         # Stale socket detection, PID file management
+│   │   ├── http_server.rs    # MCP HTTP server for sidecar tool calls
+│   │   ├── mcp_handler.rs    # MCP tool call dispatch (list_peers, send_message, etc.)
+│   │   ├── mailbox.rs        # Inter-agent mailbox system
+│   │   ├── topology.rs       # Agent connection topology
+│   │   ├── system_prompt.rs  # System prompt generation for agents
+│   │   ├── config.rs         # Agent configuration
+│   │   └── token_registry.rs # MCP auth token management
 │   └── tests/
-│       └── integration.rs    # Daemon integration tests
-├── emergent-protocol/        # Shared types + client
+│       └── integration.rs    # Integration tests
+├── emergent-protocol/        # Shared types
 │   └── src/
 │       ├── lib.rs
-│       ├── types.rs          # JSON-RPC, notification, and payload types
-│       ├── client.rs         # DaemonClient (JSON-RPC over Unix socket)
-│       └── socket.rs         # Socket path resolution
+│       └── types.rs          # Notification and payload types
 └── mock-agent/               # Test-only ACP agent (prompt-driven behavior)
     └── src/
         └── main.rs
@@ -69,13 +72,11 @@ e2e/                          # Playwright E2E tests
 
 ## Running the Project
 
-The daemon must be running before the Tauri app can manage agents:
-
 ```bash
-# Terminal 1: start daemon
-cargo run -p emergent-daemon
+# Install dependencies
+bun install
 
-# Terminal 2: start Tauri app
+# Start the Tauri app (agent manager runs embedded)
 bun run dev
 ```
 
