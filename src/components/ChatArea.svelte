@@ -40,7 +40,7 @@
   // Reset scroll state when switching agents
   let agentId = $derived(agent?.id);
   $effect(() => {
-    agentId;
+    const _id = agentId;
     userScrolledAway = false;
     requestAnimationFrame(() => scrollToBottom());
   });

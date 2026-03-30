@@ -9,7 +9,7 @@
     "prebuild": "bun run lint && bun run lint:rust && bun run fmt:check && bun run typecheck",
     "preview": "vite preview",
     "tauri": "tauri",
-    "lint": "oxlint --ignore-pattern '*.svelte' --ignore-pattern 'target/'",
+    "lint": "oxlint --ignore-pattern 'target/'",
     "lint:rust": "cargo clippy --workspace -- -D warnings",
     "fmt": "prettier --write 'src/**/*.svelte' && oxfmt",
     "fmt:check": "prettier --check 'src/**/*.svelte' && oxfmt --check",

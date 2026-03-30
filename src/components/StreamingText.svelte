@@ -30,7 +30,6 @@
 
   // When content grows, schedule a settle (but don't reset existing timer).
   $effect(() => {
-    content.length; // track
     if (streaming && settledLength < content.length) {
       scheduleSettle();
     }
