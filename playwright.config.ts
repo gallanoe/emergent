@@ -16,8 +16,8 @@ export default defineConfig({
       use: {},
     },
     {
-      name: "daemon",
-      testMatch: "daemon-connection.spec.ts",
+      name: "startup",
+      testMatch: "app-startup.spec.ts",
       use: {},
     },
   ],

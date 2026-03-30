@@ -6,16 +6,17 @@ test("app renders with swarm UI", async ({ page }) => {
   await setupMocks(page);
   await page.goto("/");
 
-  // Sidebar renders with app title
-  await expect(page.locator("text=emergent").first()).toBeVisible();
+  // InnerSidebar renders with swarm name
+  await expect(page.locator("text=website-redesign").first()).toBeVisible();
 
-  // Swarm group is visible
-  await expect(page.locator("text=website-redesign")).toBeVisible();
+  // Swarm view nav is visible
+  await expect(page.locator("text=Swarm").first()).toBeVisible();
 
-  // Selected agent's chat heading is visible
-  await expect(
-    page.getByRole("heading", { name: "Refactoring the navigation component" }),
-  ).toBeVisible();
+  // Agent cards are visible in SwarmView
+  await expect(page.locator("text=Refactoring the navigatio").first()).toBeVisible();
+
+  // Click an agent to open chat view
+  await page.locator("text=Refactoring the navigati").first().click();
 
   // Chat messages render
   await expect(

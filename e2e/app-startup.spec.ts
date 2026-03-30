@@ -1,12 +1,11 @@
-// e2e/daemon-connection.spec.ts
+// e2e/app-startup.spec.ts
 import { test, expect } from "@playwright/test";
 
 /**
- * Tauri mock that simulates the in-process daemon with no agents.
- * The daemon is now embedded in the Tauri process, so there's no
- * disconnected state — it's always ready.
+ * Tauri mock that simulates the app with no swarms or agents.
+ * Provides known agent definitions but none are running.
  */
-const connectedMock = `
+const emptyStateMock = `
 (function() {
   let callbackId = 0;
   const callbacks = {};
@@ -50,15 +49,14 @@ const connectedMock = `
 
 test.describe("app startup", () => {
   test("starts immediately without splash screen", async ({ page }) => {
-    await page.addInitScript(connectedMock);
+    await page.addInitScript(emptyStateMock);
     await page.goto("/");
 
-    // No splash screen — app renders directly
+    // App renders directly with no loading state
     await expect(page.locator("text=Starting…")).not.toBeVisible();
-    await expect(page.locator("text=Couldn't start daemon")).not.toBeVisible();
 
-    // New swarm button is immediately available
-    const newSwarmBtn = page.locator("button", { hasText: "New swarm" });
+    // New swarm button is immediately available (icon button in SwarmRail)
+    const newSwarmBtn = page.locator('button[title="New swarm"]');
     await expect(newSwarmBtn).toBeVisible();
     await expect(newSwarmBtn).toBeEnabled();
   });
