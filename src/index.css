@@ -10,47 +10,79 @@
 @import "tailwindcss";
 
 :root {
-  --color-bg-base: #faf9f7;
-  --color-bg-sidebar: #f5f3f0;
-  --color-bg-elevated: #f5f3f0;
-  --color-bg-hover: #efecea;
-  --color-bg-active: #e8e5e2;
-  --color-bg-selected: rgba(124, 106, 78, 0.08);
-  --color-fg-default: #3d3833;
-  --color-fg-heading: #1a1714;
-  --color-fg-muted: #706860;
-  --color-fg-disabled: #b5afa6;
-  --color-border-default: rgba(0, 0, 0, 0.06);
-  --color-border-strong: rgba(0, 0, 0, 0.1);
-  --color-border-focus: #7c6a4e;
-  --color-accent: #7c6a4e;
-  --color-accent-hover: #6b5b42;
-  --color-accent-text: #7c6a4e;
-  --color-accent-soft: rgba(124, 106, 78, 0.12);
-  --color-success: #2d8c50;
+  /* Dark theme (default) */
+  --color-background: #09090b;
+  --color-background-sidebar: #0a0a0c;
+  --color-background-card: #18181b;
+  --color-background-hover: #27272a;
+  --color-background-active: #3f3f46;
+  --color-background-selected: rgba(124, 58, 237, 0.08);
+  --color-foreground: #fafafa;
+  --color-foreground-heading: #fafafa;
+  --color-foreground-muted: #a1a1aa;
+  --color-foreground-disabled: #52525b;
+  --color-border: #27272a;
+  --color-border-strong: #3f3f46;
+  --color-border-focus: #7c3aed;
+  --color-accent: #7c3aed;
+  --color-accent-hover: #6d28d9;
+  --color-accent-text: #a78bfa;
+  --color-accent-soft: rgba(124, 58, 237, 0.12);
+  --color-success: #22c55e;
+  --color-warning: #c48a1a;
+  --color-error: #c83c3c;
+  --color-added-bg: rgba(34, 197, 94, 0.07);
+  --color-added-fg: #4ade80;
+  --color-removed-bg: rgba(200, 60, 60, 0.07);
+  --color-removed-fg: #f87171;
+  --color-scrollbar-thumb: rgba(255, 255, 255, 0.12);
+  --color-scrollbar-thumb-hover: rgba(255, 255, 255, 0.2);
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
+  --font-ui: "Inter", -apple-system, system-ui, sans-serif;
+  --font-content: "Source Serif 4", Georgia, serif;
+}
+
+[data-theme="light"] {
+  --color-background: #ffffff;
+  --color-background-sidebar: #fafafa;
+  --color-background-card: #ffffff;
+  --color-background-hover: #f4f4f5;
+  --color-background-active: #e4e4e7;
+  --color-background-selected: rgba(124, 58, 237, 0.06);
+  --color-foreground: #09090b;
+  --color-foreground-heading: #09090b;
+  --color-foreground-muted: #71717a;
+  --color-foreground-disabled: #a1a1aa;
+  --color-border: #e4e4e7;
+  --color-border-strong: #d4d4d8;
+  --color-border-focus: #7c3aed;
+  --color-accent: #7c3aed;
+  --color-accent-hover: #6d28d9;
+  --color-accent-text: #7c3aed;
+  --color-accent-soft: rgba(124, 58, 237, 0.08);
+  --color-success: #22c55e;
   --color-warning: #c48a1a;
   --color-error: #c83c3c;
   --color-added-bg: rgba(45, 140, 80, 0.07);
   --color-added-fg: #2d6e46;
   --color-removed-bg: rgba(200, 60, 60, 0.07);
   --color-removed-fg: #a83232;
-  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
-  --font-ui: "Inter", -apple-system, system-ui, sans-serif;
-  --font-content: "Source Serif 4", Georgia, serif;
+  --color-scrollbar-thumb: rgba(0, 0, 0, 0.12);
+  --color-scrollbar-thumb-hover: rgba(0, 0, 0, 0.2);
 }
 
 @theme {
-  --color-bg-base: var(--color-bg-base);
-  --color-bg-sidebar: var(--color-bg-sidebar);
-  --color-bg-elevated: var(--color-bg-elevated);
-  --color-bg-hover: var(--color-bg-hover);
-  --color-bg-active: var(--color-bg-active);
-  --color-bg-selected: var(--color-bg-selected);
-  --color-fg-default: var(--color-fg-default);
-  --color-fg-heading: var(--color-fg-heading);
-  --color-fg-muted: var(--color-fg-muted);
-  --color-fg-disabled: var(--color-fg-disabled);
-  --color-border-default: var(--color-border-default);
+  --color-bg-base: var(--color-background);
+  --color-bg-sidebar: var(--color-background-sidebar);
+  --color-bg-elevated: var(--color-background-card);
+  --color-bg-hover: var(--color-background-hover);
+  --color-bg-active: var(--color-background-active);
+  --color-bg-selected: var(--color-background-selected);
+  --color-fg-default: var(--color-foreground);
+  --color-fg-heading: var(--color-foreground-heading);
+  --color-fg-muted: var(--color-foreground-muted);
+  --color-fg-disabled: var(--color-foreground-disabled);
+  --color-border-default: var(--color-border);
   --color-border-strong: var(--color-border-strong);
   --color-border-focus: var(--color-border-focus);
   --color-accent: var(--color-accent);
@@ -141,10 +173,10 @@ input,
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.12);
+  background: var(--color-scrollbar-thumb);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--color-scrollbar-thumb-hover);
 }

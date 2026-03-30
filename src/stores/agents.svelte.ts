@@ -572,7 +572,13 @@ function createAgentStore() {
     };
   }
 
-  function registerExistingAgent(agentId: string, swarmId: string, cli: string, agentName: string, role?: string) {
+  function registerExistingAgent(
+    agentId: string,
+    swarmId: string,
+    cli: string,
+    agentName: string,
+    role?: string,
+  ) {
     agents[agentId] = {
       id: agentId,
       swarmId,

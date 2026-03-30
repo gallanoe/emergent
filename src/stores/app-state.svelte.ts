@@ -145,11 +145,20 @@ function createAppState() {
     return id;
   }
 
-  async function addAgentToSwarm(swarmId: string, agentBinary: string, agentName: string): Promise<string> {
+  async function addAgentToSwarm(
+    swarmId: string,
+    agentBinary: string,
+    agentName: string,
+  ): Promise<string> {
     const swarm = swarms.find((s) => s.id === swarmId);
     if (!swarm) throw new Error(`Swarm ${swarmId} not found`);
 
-    const agentId = await agentStore.spawnAgent(swarmId, swarm.workingDirectory, agentBinary, agentName);
+    const agentId = await agentStore.spawnAgent(
+      swarmId,
+      swarm.workingDirectory,
+      agentBinary,
+      agentName,
+    );
     swarm.agentIds.push(agentId);
 
     if (!selectedAgentId) {

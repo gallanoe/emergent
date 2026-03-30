@@ -22,10 +22,10 @@
 
   const AGENT_LOGOS: Record<string, string> = {
     "Claude Code": claudeLogo,
-    "Codex": openaiLogo,
-    "Gemini": geminiLogo,
-    "Kiro": kiroLogo,
-    "OpenCode": opencodeLogo,
+    Codex: openaiLogo,
+    Gemini: geminiLogo,
+    Kiro: kiroLogo,
+    OpenCode: opencodeLogo,
   };
 
   function handleClick(agent: KnownAgent) {

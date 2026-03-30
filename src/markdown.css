@@ -75,7 +75,7 @@
 .markdown a {
   color: var(--color-accent);
   text-decoration: underline;
-  text-decoration-color: rgba(124, 106, 78, 0.3);
+  text-decoration-color: var(--color-accent-soft);
   text-underline-offset: 2px;
   cursor: pointer;
 }

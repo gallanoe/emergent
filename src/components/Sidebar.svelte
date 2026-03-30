@@ -12,10 +12,10 @@
 
   const AGENT_LOGOS: Record<string, string> = {
     "Claude Code": claudeLogo,
-    "Codex": openaiLogo,
-    "Gemini": geminiLogo,
-    "Kiro": kiroLogo,
-    "OpenCode": opencodeLogo,
+    Codex: openaiLogo,
+    Gemini: geminiLogo,
+    Kiro: kiroLogo,
+    OpenCode: opencodeLogo,
   };
 
   interface Props {
@@ -26,7 +26,11 @@
     onSelectAgent: (id: string) => void;
     onToggleSwarm: (id: string) => void;
     onNewSwarm: () => void;
-    onAddAgent: (swarmId: string, agentCommand: string, agentName: string) => void;
+    onAddAgent: (
+      swarmId: string,
+      agentCommand: string,
+      agentName: string,
+    ) => void;
     onKillAgent?: (agentId: string) => void;
   }
 
