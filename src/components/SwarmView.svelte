@@ -1,6 +1,9 @@
 <script lang="ts">
   import type { DisplaySwarm, SwarmMessageLogEntry } from "../stores/types";
   import ActivityFeed from "./ActivityFeed.svelte";
+  import AgentPickerPopover from "./AgentPickerPopover.svelte";
+
+  let pickerOpen = $state(false);
 
   interface Props {
     swarm: DisplaySwarm;
@@ -56,7 +59,7 @@
 <div class="flex flex-col h-full min-h-0">
   <!-- Top bar -->
   <div
-    class="flex items-center justify-between px-5 py-2.5 border-b border-border-default flex-shrink-0"
+    class="flex items-center justify-between h-[38px] px-5 border-b border-border-default flex-shrink-0 relative z-[60]"
   >
     <div class="flex items-center gap-2">
       <span class="text-[13px] font-semibold text-fg-heading">{swarm.name}</span
@@ -68,11 +71,24 @@
       </span>
     </div>
     {#if !demoMode}
-      <button
-        class="text-[10px] text-fg-muted bg-bg-elevated px-2 py-1 rounded border border-border-default hover:bg-bg-hover"
-      >
-        + Add Agent
-      </button>
+      <div class="relative">
+        <button
+          class="text-[10px] text-fg-muted bg-bg-elevated px-2 py-1 rounded border border-border-default hover:bg-bg-hover"
+          onclick={() => (pickerOpen = !pickerOpen)}
+        >
+          + Add Agent
+        </button>
+        {#if pickerOpen}
+          <AgentPickerPopover
+            agents={knownAgents}
+            onSelect={(command, name) => {
+              onAddAgent(swarm.id, command, name);
+              pickerOpen = false;
+            }}
+            onClose={() => (pickerOpen = false)}
+          />
+        {/if}
+      </div>
     {/if}
   </div>
 

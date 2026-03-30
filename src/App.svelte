@@ -57,25 +57,32 @@
   data-tauri-drag-region
 ></div>
 
-<div class="grid grid-cols-[56px_200px_1fr] h-screen">
-  <SwarmRail
-    swarms={appState.swarms}
-    selectedSwarmId={appState.selectedSwarmId}
-    demoMode={appState.demoMode}
-    onSelectSwarm={(id) => appState.selectSwarm(id)}
-    onNewSwarm={() => appState.newSwarm()}
-  />
-  <InnerSidebar
-    swarm={appState.selectedSwarm}
-    activeView={appState.activeView}
-    selectedAgentId={appState.selectedAgentId}
-    onSelectView={(view) => {
-      if (view === "swarm" && appState.selectedSwarmId) {
-        appState.selectSwarm(appState.selectedSwarmId);
-      }
-    }}
-    onSelectAgent={(id) => appState.selectAgent(id)}
-  />
+<div class="grid grid-cols-[256px_1fr] h-screen">
+  <div class="flex flex-col min-h-0">
+    <div
+      class="h-[38px] flex-shrink-0 bg-bg-sidebar border-b border-r border-border-default"
+    ></div>
+    <div class="flex flex-1 min-h-0">
+      <SwarmRail
+        swarms={appState.swarms}
+        selectedSwarmId={appState.selectedSwarmId}
+        demoMode={appState.demoMode}
+        onSelectSwarm={(id) => appState.selectSwarm(id)}
+        onNewSwarm={() => appState.newSwarm()}
+      />
+      <InnerSidebar
+        swarm={appState.selectedSwarm}
+        activeView={appState.activeView}
+        selectedAgentId={appState.selectedAgentId}
+        onSelectView={(view) => {
+          if (view === "swarm" && appState.selectedSwarmId) {
+            appState.selectSwarm(appState.selectedSwarmId);
+          }
+        }}
+        onSelectAgent={(id) => appState.selectAgent(id)}
+      />
+    </div>
+  </div>
   <main class="flex flex-col min-h-0 min-w-0">
     {#if appState.activeView === "swarm" && appState.selectedSwarm}
       <SwarmView

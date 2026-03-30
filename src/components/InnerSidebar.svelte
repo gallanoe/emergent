@@ -1,5 +1,7 @@
 <script lang="ts">
   import type { DisplaySwarm } from "../stores/types";
+  import { LayoutGrid, Settings, Sparkles, ListChecks } from "@lucide/svelte";
+  import type { Component } from "svelte";
 
   interface Props {
     swarm: DisplaySwarm | undefined;
@@ -17,12 +19,17 @@
     onSelectAgent,
   }: Props = $props();
 
-  const navItems = [
-    { id: "swarm", label: "Swarm", icon: "◻", enabled: true },
-    { id: "settings", label: "Settings", icon: "⚙", enabled: false },
-    { id: "skills", label: "Skills", icon: "✦", enabled: false },
-    { id: "tasks", label: "Tasks", icon: "☐", enabled: false },
-  ] as const;
+  const navItems: {
+    id: string;
+    label: string;
+    icon: Component;
+    enabled: boolean;
+  }[] = [
+    { id: "swarm", label: "Swarm", icon: LayoutGrid, enabled: true },
+    { id: "settings", label: "Settings", icon: Settings, enabled: false },
+    { id: "skills", label: "Skills", icon: Sparkles, enabled: false },
+    { id: "tasks", label: "Tasks", icon: ListChecks, enabled: false },
+  ];
 
   function statusColor(status: string): string {
     switch (status) {
@@ -39,17 +46,17 @@
 </script>
 
 <aside
-  class="flex flex-col w-[200px] border-r border-border-default bg-bg-sidebar pt-[50px]"
+  class="flex flex-col w-[200px] border-r border-border-default bg-bg-sidebar pt-3"
 >
   {#if swarm}
     <div class="px-4 pb-2 text-[13px] font-semibold text-fg-heading truncate">
       {swarm.name}
     </div>
 
-    <div class="px-2">
+    <div class="px-2 flex flex-col gap-0.5">
       {#each navItems as item (item.id)}
         <button
-          class="flex items-center gap-2 w-full px-2.5 py-[7px] rounded-md text-[12px] mt-0.5
+          class="flex items-center gap-2 w-full px-2.5 py-1.5 rounded-md text-[12px]
                  {item.enabled
             ? activeView === 'swarm' && item.id === 'swarm'
               ? 'bg-bg-hover text-fg-heading'
@@ -60,9 +67,10 @@
             if (item.enabled && item.id === "swarm") onSelectView("swarm");
           }}
         >
-          <span class={item.enabled ? "opacity-70" : "opacity-40"}
-            >{item.icon}</span
-          >
+          <item.icon
+            size={14}
+            class={item.enabled ? "opacity-70" : "opacity-40"}
+          />
           {item.label}
         </button>
       {/each}

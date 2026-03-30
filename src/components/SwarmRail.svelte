@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { DisplaySwarm } from "../stores/types";
   import ThemeToggle from "./ThemeToggle.svelte";
+  import { Plus } from "@lucide/svelte";
 
   interface Props {
     swarms: DisplaySwarm[];
@@ -16,7 +17,7 @@
 
 <nav
   class="flex flex-col items-center w-[56px] border-r border-border-default
-         bg-bg-sidebar py-3 gap-2 pt-[50px]"
+         bg-bg-sidebar py-3 gap-2"
 >
   {#each swarms as swarm (swarm.id)}
     <button
@@ -37,11 +38,11 @@
   {#if !demoMode}
     <button
       class="interactive flex items-center justify-center w-[36px] h-[36px] rounded-[10px]
-             bg-bg-elevated text-fg-muted border border-border-default text-[16px]"
+             bg-bg-elevated text-fg-muted border border-border-default"
       title="New swarm"
       onclick={onNewSwarm}
     >
-      +
+      <Plus size={16} />
     </button>
   {/if}
 

@@ -27,7 +27,7 @@
 </script>
 
 <header
-  class="flex items-center h-[38px] px-4 border-b border-border-default bg-bg-base gap-3"
+  class="flex items-center h-[38px] px-4 border-b border-border-default bg-bg-base gap-3 relative z-[60]"
 >
   <div class="flex items-center gap-1.5 flex-1 min-w-0">
     <h1
