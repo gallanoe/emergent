@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Pencil, Settings, Power, Users } from "@lucide/svelte";
+  import { Pencil, Settings, Power } from "@lucide/svelte";
   import type { DisplayAgent } from "../stores/types";
   import SettingsPopover from "./SettingsPopover.svelte";
 
@@ -7,8 +7,6 @@
     agent: DisplayAgent | undefined;
     allAgents: DisplayAgent[];
     connections: string[];
-    swarmPanelOpen?: boolean;
-    onToggleSwarmPanel?: () => void;
     onShutdown?: () => void;
     onConnect?: (agentId: string) => void;
     onDisconnect?: (agentId: string) => void;
@@ -19,8 +17,6 @@
     agent,
     allAgents = [],
     connections = [],
-    swarmPanelOpen = false,
-    onToggleSwarmPanel,
     onShutdown,
     onConnect,
     onDisconnect,
