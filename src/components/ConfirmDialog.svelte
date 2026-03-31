@@ -45,7 +45,7 @@
   onkeydown={() => {}}
 >
   <div
-    class="bg-white rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.15),0_2px_8px_rgba(0,0,0,0.08)] w-[340px]"
+    class="bg-bg-elevated rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.15),0_2px_8px_rgba(0,0,0,0.08)] w-[340px]"
   >
     <div class="p-5 pb-4">
       <div class="flex items-center gap-2.5 mb-2">
@@ -60,7 +60,7 @@
     </div>
     <div class="flex justify-end gap-2 px-5 pb-4">
       <button
-        class="interactive h-7 px-3.5 rounded-[5px] text-[12px] font-medium text-fg-default bg-white border border-border-strong"
+        class="interactive h-7 px-3.5 rounded-[5px] text-[12px] font-medium text-fg-default bg-bg-elevated border border-border-strong"
         onclick={onCancel}
       >
         Cancel
