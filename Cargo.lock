@@ -1031,7 +1031,7 @@ checksum = "4ef6b89e5b37196644d8796de5268852ff179b44e96276cf4290264843743bb7"
 name = "emergent"
 version = "0.1.0"
 dependencies = [
- "emergent-daemon",
+ "emergent-core",
  "emergent-protocol",
  "log",
  "serde",
@@ -1044,7 +1044,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "emergent-daemon"
+name = "emergent-core"
 version = "0.1.0"
 dependencies = [
  "agent-client-protocol",

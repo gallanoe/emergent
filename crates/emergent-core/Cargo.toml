@@ -1,5 +1,5 @@
 [package]
-name = "emergent-daemon"
+name = "emergent-core"
 version = "0.1.0"
 edition = "2021"
 
