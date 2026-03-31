@@ -11,7 +11,7 @@ set -euo pipefail
 TARGET_TRIPLE=$(rustc -vV | grep host | cut -d' ' -f2)
 echo "Building emergentd for ${TARGET_TRIPLE}..."
 
-cargo build -p emergent-daemon --release
+cargo build -p emergent-core --release
 
 mkdir -p src-tauri/binaries
 cp "target/release/emergentd" "src-tauri/binaries/emergentd-${TARGET_TRIPLE}"
