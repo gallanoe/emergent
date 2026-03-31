@@ -1,10 +1,6 @@
 <!-- src/components/AgentPickerPopover.svelte -->
 <script lang="ts">
-  import claudeLogo from "../assets/claude.svg";
-  import openaiLogo from "../assets/openai.svg";
-  import geminiLogo from "../assets/gemini.svg";
-  import kiroLogo from "../assets/kiro.svg";
-  import opencodeLogo from "../assets/opencode.svg";
+  import { AGENT_LOGOS } from "../../lib/agent-logos";
 
   interface KnownAgent {
     name: string;
@@ -19,14 +15,6 @@
   }
 
   let { agents, onSelect, onClose }: Props = $props();
-
-  const AGENT_LOGOS: Record<string, string> = {
-    "Claude Code": claudeLogo,
-    Codex: openaiLogo,
-    Gemini: geminiLogo,
-    Kiro: kiroLogo,
-    OpenCode: opencodeLogo,
-  };
 
   function handleClick(agent: KnownAgent) {
     if (!agent.available) return;

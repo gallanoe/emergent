@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/svelte";
 import Sidebar from "./Sidebar.svelte";
-import type { DisplaySwarm } from "../stores/types";
+import type { DisplaySwarm } from "../../stores/types";
 
 function makeSwarm(overrides?: Partial<DisplaySwarm>): DisplaySwarm {
   return {

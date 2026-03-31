@@ -1,7 +1,7 @@
 <!-- src/components/ContextMenu.svelte -->
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
-  import type { MenuItem } from "../stores/types";
+  import type { MenuItem } from "../../stores/types";
 
   interface Props {
     x: number;

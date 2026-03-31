@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Check } from "@lucide/svelte";
-  import type { ConfigOption, ConfigSelectGroup } from "../stores/types";
+  import type { ConfigOption, ConfigSelectGroup } from "../../stores/types";
 
   interface Props {
     configOption: ConfigOption;

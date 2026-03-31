@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { DisplaySwarm, SwarmMessageLogEntry } from "../stores/types";
+  import type { DisplaySwarm, SwarmMessageLogEntry } from "../../stores/types";
   import ActivityFeed from "./ActivityFeed.svelte";
   interface Props {
     swarm: DisplaySwarm;

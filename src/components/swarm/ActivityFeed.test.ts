@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/svelte";
 import ActivityFeed from "./ActivityFeed.svelte";
-import type { SwarmMessageLogEntry } from "../stores/types";
+import type { SwarmMessageLogEntry } from "../../stores/types";
 
 function makeEntry(overrides?: Partial<SwarmMessageLogEntry>): SwarmMessageLogEntry {
   return {

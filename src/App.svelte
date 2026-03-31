@@ -1,11 +1,11 @@
 <script lang="ts">
   import { appState } from "./stores/app-state.svelte";
-  import SwarmRail from "./components/SwarmRail.svelte";
-  import InnerSidebar from "./components/InnerSidebar.svelte";
-  import TopBar from "./components/TopBar.svelte";
-  import ChatArea from "./components/ChatArea.svelte";
-  import ChatInput from "./components/ChatInput.svelte";
-  import SwarmView from "./components/SwarmView.svelte";
+  import SwarmRail from "./components/swarm/SwarmRail.svelte";
+  import InnerSidebar from "./components/sidebar/InnerSidebar.svelte";
+  import TopBar from "./components/topbar/TopBar.svelte";
+  import ChatArea from "./components/chat/ChatArea.svelte";
+  import ChatInput from "./components/chat/ChatInput.svelte";
+  import SwarmView from "./components/swarm/SwarmView.svelte";
   import ConfirmDialog from "./components/ConfirmDialog.svelte";
   import { onMount } from "svelte";
 

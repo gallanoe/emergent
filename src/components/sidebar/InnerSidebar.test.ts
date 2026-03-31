@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/svelte";
 import InnerSidebar from "./InnerSidebar.svelte";
-import type { DisplaySwarm, DisplayAgent } from "../stores/types";
+import type { DisplaySwarm, DisplayAgent } from "../../stores/types";
 
 function makeAgent(overrides?: Partial<DisplayAgent>): DisplayAgent {
   return {

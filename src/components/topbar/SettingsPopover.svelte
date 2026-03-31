@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { DisplayAgent } from "../stores/types";
+  import type { DisplayAgent } from "../../stores/types";
 
   interface Props {
     agent: DisplayAgent;

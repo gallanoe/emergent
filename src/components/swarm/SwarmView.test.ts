@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/svelte";
 import SwarmView from "./SwarmView.svelte";
-import type { DisplaySwarm, DisplayAgent, SwarmMessageLogEntry } from "../stores/types";
+import type { DisplaySwarm, DisplayAgent, SwarmMessageLogEntry } from "../../stores/types";
 
 function makeAgent(overrides?: Partial<DisplayAgent>): DisplayAgent {
   return {

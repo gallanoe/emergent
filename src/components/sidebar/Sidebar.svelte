@@ -3,20 +3,8 @@
   import { ChevronRight, ChevronDown, Plus } from "@lucide/svelte";
   import AgentPickerPopover from "./AgentPickerPopover.svelte";
   import ContextMenu from "./ContextMenu.svelte";
-  import claudeLogo from "../assets/claude.svg";
-  import openaiLogo from "../assets/openai.svg";
-  import geminiLogo from "../assets/gemini.svg";
-  import kiroLogo from "../assets/kiro.svg";
-  import opencodeLogo from "../assets/opencode.svg";
-  import type { DisplaySwarm } from "../stores/types";
-
-  const AGENT_LOGOS: Record<string, string> = {
-    "Claude Code": claudeLogo,
-    Codex: openaiLogo,
-    Gemini: geminiLogo,
-    Kiro: kiroLogo,
-    OpenCode: opencodeLogo,
-  };
+  import { AGENT_LOGOS } from "../../lib/agent-logos";
+  import type { DisplaySwarm } from "../../stores/types";
 
   interface Props {
     swarms: DisplaySwarm[];

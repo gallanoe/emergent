@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { SwarmMessageLogEntry } from "../stores/types";
+  import type { SwarmMessageLogEntry } from "../../stores/types";
 
   interface Props {
     entries: SwarmMessageLogEntry[];

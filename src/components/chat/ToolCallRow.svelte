@@ -6,7 +6,7 @@
     DisplayToolCall,
     MailboxMessage,
     ToolKind,
-  } from "../stores/types";
+  } from "../../stores/types";
   import MailboxToolRender from "./MailboxToolRender.svelte";
   import PeersToolRender from "./PeersToolRender.svelte";
   import SendToolRender from "./SendToolRender.svelte";

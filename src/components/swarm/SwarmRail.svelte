@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { DisplaySwarm } from "../stores/types";
+  import type { DisplaySwarm } from "../../stores/types";
   import ThemeToggle from "./ThemeToggle.svelte";
   import { Plus } from "@lucide/svelte";
 

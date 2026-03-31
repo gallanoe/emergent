@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/svelte";
 import ContextMenu from "./ContextMenu.svelte";
-import type { MenuItem } from "../stores/types";
+import type { MenuItem } from "../../stores/types";
 
 function renderMenu(
   overrides: Partial<{

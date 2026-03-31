@@ -1,7 +1,7 @@
 <!-- src/components/ToolCallGroup.svelte -->
 <script lang="ts">
   import ToolCallRow from "./ToolCallRow.svelte";
-  import type { DisplayToolCall } from "../stores/types";
+  import type { DisplayToolCall } from "../../stores/types";
 
   interface Props {
     toolCalls: DisplayToolCall[];

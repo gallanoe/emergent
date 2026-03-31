@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { MailboxMessage } from "../stores/types";
+  import type { MailboxMessage } from "../../stores/types";
 
   interface Props {
     messages: MailboxMessage[];

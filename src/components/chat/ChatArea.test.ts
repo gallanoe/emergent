@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/svelte";
 import ChatArea from "./ChatArea.svelte";
-import type { DisplayAgent, DisplayMessage } from "../stores/types";
+import type { DisplayAgent, DisplayMessage } from "../../stores/types";
 
 function makeAgent(messages: DisplayMessage[], overrides?: Partial<DisplayAgent>): DisplayAgent {
   return {

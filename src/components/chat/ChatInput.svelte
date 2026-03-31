@@ -8,7 +8,7 @@
     Square,
   } from "@lucide/svelte";
   import ConfigPopover from "./ConfigPopover.svelte";
-  import type { ConfigOption, DisplayAgent } from "../stores/types";
+  import type { ConfigOption, DisplayAgent } from "../../stores/types";
 
   interface Props {
     agent: DisplayAgent | undefined;
