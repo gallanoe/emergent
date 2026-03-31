@@ -7,8 +7,8 @@ use rmcp::transport::streamable_http_server::{
 use tokio_util::sync::CancellationToken;
 
 use crate::agent_manager::AgentManager;
-use crate::mcp_handler::McpHandler;
-use crate::token_registry::TokenRegistry;
+use super::handler::McpHandler;
+use super::token_registry::TokenRegistry;
 
 /// Handle returned after starting the HTTP server.
 pub struct McpHttpServer {

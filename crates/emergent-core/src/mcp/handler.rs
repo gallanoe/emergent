@@ -7,7 +7,7 @@ use rmcp::{schemars, tool, tool_router, ServerHandler};
 use serde::{Deserialize, Serialize};
 
 use crate::agent_manager::AgentManager;
-use crate::token_registry::TokenRegistry;
+use super::token_registry::TokenRegistry;
 
 // ---------------------------------------------------------------------------
 // Parameter types for MCP tools
