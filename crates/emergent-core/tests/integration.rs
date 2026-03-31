@@ -1,6 +1,6 @@
-use emergent_core::agent_manager::AgentManager;
-use emergent_core::http_server;
-use emergent_core::token_registry::TokenRegistry;
+use emergent_core::agent::AgentManager;
+use emergent_core::mcp::http_server;
+use emergent_core::mcp::TokenRegistry;
 use std::sync::Arc;
 
 /// Spawn an MCP HTTP server backed by a fresh AgentManager.

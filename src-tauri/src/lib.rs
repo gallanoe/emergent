@@ -1,8 +1,8 @@
 mod commands;
 mod tray;
 
-use emergent_core::agent_manager::AgentManager;
-use emergent_core::token_registry::TokenRegistry;
+use emergent_core::agent::AgentManager;
+use emergent_core::mcp::TokenRegistry;
 use emergent_protocol::Notification;
 use std::sync::Arc;
 use tauri::Manager;
@@ -60,7 +60,7 @@ pub fn run() {
             let http_manager = manager.clone();
             let http_registry = token_registry.clone();
             tauri::async_runtime::spawn(async move {
-                match emergent_core::http_server::start(http_manager.clone(), http_registry).await
+                match emergent_core::mcp::http_server::start(http_manager.clone(), http_registry).await
                 {
                     Ok(server) => {
                         http_manager.set_mcp_port(server.port);

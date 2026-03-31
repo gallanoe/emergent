@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use tauri::State;
 
-use emergent_core::agent_manager::AgentManager;
+use emergent_core::agent::AgentManager;
 use emergent_core::detect;
 use emergent_protocol::{AgentInfo, AgentSummary, ConfigOption, KnownAgent, Notification};
 

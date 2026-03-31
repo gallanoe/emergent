@@ -6,7 +6,7 @@ use rmcp::model::{ServerCapabilities, ServerInfo};
 use rmcp::{schemars, tool, tool_router, ServerHandler};
 use serde::{Deserialize, Serialize};
 
-use crate::agent_manager::AgentManager;
+use crate::agent::AgentManager;
 use super::token_registry::TokenRegistry;
 
 // ---------------------------------------------------------------------------

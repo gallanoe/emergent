@@ -6,7 +6,7 @@ use rmcp::transport::streamable_http_server::{
 };
 use tokio_util::sync::CancellationToken;
 
-use crate::agent_manager::AgentManager;
+use crate::agent::AgentManager;
 use super::handler::McpHandler;
 use super::token_registry::TokenRegistry;
 
