@@ -111,7 +111,7 @@
   }
 </script>
 
-<div class="px-5 py-3 border-t border-border-default">
+<div class="px-10 py-3 border-t border-border-default">
   <div
     class="border border-border-strong rounded-lg transition-colors duration-150 focus-within:border-border-focus"
   >

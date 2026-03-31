@@ -64,14 +64,12 @@
     requestAnimationFrame(() => scrollToBottom());
   });
 
-  function spacingClass(index: number): string {
-    if (index === 0) return "";
-    if (!agent) return "mt-[6px]";
-    // 14px gap only before user messages that start a new turn
+  function newTurnClass(index: number): string {
+    if (index === 0 || !agent) return "";
     const msg = agent.messages[index]!;
     if (msg.role === "user" && isNewTurn(agent.messages, index))
-      return "mt-[14px]";
-    return "mt-[6px]";
+      return "mt-[8px]";
+    return "";
   }
 </script>
 
@@ -90,7 +88,7 @@
 <div
   bind:this={scrollContainer}
   onscroll={onScroll}
-  class="flex-1 overflow-y-auto min-w-0 px-5 py-4"
+  class="flex-1 overflow-y-auto min-w-0 px-20 py-4"
 >
   {#if agent}
     {#if agent.status === "initializing"}
@@ -168,7 +166,7 @@
       </div>
     {:else}
       <!-- Normal chat flow -->
-      <div class="flex flex-col">
+      <div class="flex flex-col gap-[6px]">
         <!-- Locked role pill -->
         {#if agent.role}
           <div class="flex justify-center mb-3.5">
@@ -181,11 +179,11 @@
         {/if}
         {#each agent.messages as message, i (message.id)}
           {#if message.role === "thinking"}
-            <div class={spacingClass(i)}>
+            <div>
               <ThinkingBlock content={message.content} />
             </div>
           {:else if message.role === "assistant"}
-            <div class={spacingClass(i)}>
+            <div>
               {#if agent.status === "working" && i === agent.messages.length - 1}
                 <div class="text-[12px] text-fg-default leading-relaxed">
                   <StreamingText content={message.content} streaming={true} />
@@ -197,7 +195,7 @@
               {/if}
             </div>
           {:else if message.role === "user"}
-            <div class="{spacingClass(i)} bg-accent-soft rounded-lg px-3 py-2">
+            <div class="{newTurnClass(i)} bg-accent-soft rounded-lg px-3 py-2">
               <div class="markdown">
                 {@html renderMarkdown(message.content)}
               </div>
@@ -212,18 +210,16 @@
             </div>
           {:else if message.role === "nudge"}
             <div
-              class="{spacingClass(
-                i,
-              )} flex items-center gap-1.5 text-[11px] text-fg-muted py-1"
+              class="flex items-center gap-1.5 text-[11px] text-fg-muted py-1"
             >
               {@render nudgeBadge(message.nudgeCount ?? 0)}
             </div>
           {:else if message.role === "tool-group" && message.toolCalls}
-            <div class={spacingClass(i)}>
+            <div>
               <ToolCallGroup toolCalls={message.toolCalls} />
             </div>
           {:else if message.role === "system"}
-            <div class="{spacingClass(i)} flex items-center gap-2 py-1">
+            <div class="flex items-center gap-2 py-1">
               <div class="flex-1 h-px bg-border-default"></div>
               <span
                 class="text-[10px] text-fg-muted whitespace-nowrap shrink-0"
@@ -237,16 +233,14 @@
 
         <!-- Active (in-progress) tool calls -->
         {#if agent.activeToolCalls.length > 0}
-          <div class="mt-[6px]">
+          <div>
             <ToolCallGroup toolCalls={agent.activeToolCalls} />
           </div>
         {/if}
 
         <!-- Working indicator -->
         {#if agent.status === "working"}
-          <div
-            class="mt-[6px] flex items-center gap-1.5 text-[12px] text-fg-muted"
-          >
+          <div class="flex items-center gap-1.5 text-[12px] text-fg-muted">
             <span class="w-1.5 h-1.5 rounded-full bg-success animate-pulse"
             ></span>
             <span class="tracking-widest">· · ·</span>
