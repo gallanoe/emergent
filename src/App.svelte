@@ -53,7 +53,7 @@
 
 <!-- Drag region overlay for window dragging -->
 <div
-  class="fixed top-0 left-0 right-0 h-[38px] z-50"
+  class="fixed top-0 left-0 right-0 h-[38px] z-[100]"
   data-tauri-drag-region
 ></div>
 
