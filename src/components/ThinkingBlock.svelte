@@ -1,6 +1,7 @@
 <!-- src/components/ThinkingBlock.svelte -->
 <script lang="ts">
-  import { ChevronRight, ChevronDown } from "@lucide/svelte";
+  import { ChevronRight, ChevronDown, Brain } from "@lucide/svelte";
+  import { slide } from "svelte/transition";
 
   interface Props {
     content: string;
@@ -29,7 +30,7 @@
     tabindex={0}
     onkeydown={onKeydown}
   >
-    <span class="w-1.5 h-1.5 rounded-full bg-fg-muted shrink-0"></span>
+    <Brain size={13} class="text-fg-muted shrink-0" />
     <span
       class="text-[12px] font-[family-name:var(--font-mono)] font-medium text-fg-muted"
     >
@@ -45,7 +46,8 @@
   </div>
   {#if expanded}
     <div
-      class="ml-[30px] mr-2.5 mt-0.5 border-l-2 border-[rgba(124,106,78,0.3)] pl-2.5 text-[12px] text-fg-muted leading-normal whitespace-pre-wrap"
+      transition:slide={{ duration: 150 }}
+      class="mt-0.5 border-l-2 border-[rgba(124,106,78,0.3)] pl-2.5 text-[12px] text-fg-muted leading-normal whitespace-pre-wrap"
     >
       {content}
     </div>

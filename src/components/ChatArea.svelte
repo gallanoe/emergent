@@ -5,7 +5,6 @@
   import ToolCallGroup from "./ToolCallGroup.svelte";
   import ThinkingBlock from "./ThinkingBlock.svelte";
   import type { DisplayAgent } from "../stores/types";
-  import { isNewTurn } from "../lib/chat-utils";
   import { renderMarkdown } from "../lib/render-markdown";
 
   interface Props {
@@ -63,14 +62,6 @@
     if (!scrollContainer || userScrolledAway) return;
     requestAnimationFrame(() => scrollToBottom());
   });
-
-  function newTurnClass(index: number): string {
-    if (index === 0 || !agent) return "";
-    const msg = agent.messages[index]!;
-    if (msg.role === "user" && isNewTurn(agent.messages, index))
-      return "mt-[8px]";
-    return "";
-  }
 </script>
 
 {#snippet nudgeBadge(count: number)}
@@ -195,7 +186,7 @@
               {/if}
             </div>
           {:else if message.role === "user"}
-            <div class="{newTurnClass(i)} bg-accent-soft rounded-lg px-3 py-2">
+            <div class="bg-accent-soft rounded-lg px-3 py-2">
               <div class="markdown">
                 {@html renderMarkdown(message.content)}
               </div>

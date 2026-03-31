@@ -22,3 +22,10 @@ let callbackId = 0;
 (globalThis as any).__TAURI_EVENT_PLUGIN_INTERNALS__ = {
   unregisterListener: () => {},
 };
+
+// Polyfill Element.animate for Svelte transitions in jsdom
+if (typeof Element.prototype.animate !== "function") {
+  Element.prototype.animate = function () {
+    return { finished: Promise.resolve(), cancel: () => {} } as any;
+  };
+}
