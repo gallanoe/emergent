@@ -27,7 +27,7 @@
 </script>
 
 <header
-  class="flex items-center h-[38px] px-4 border-b border-border-default bg-bg-base gap-3 relative z-[60]"
+  class="flex items-center h-[38px] px-4 border-b border-border-default bg-bg-base gap-3 relative"
 >
   <div class="flex items-center gap-1.5 flex-1 min-w-0">
     <h1
@@ -45,7 +45,8 @@
     {/if}
   </div>
   {#if agent}
-    <div class="relative z-[60] flex items-center gap-0.5 shrink-0">
+    <!-- z-[101] to sit above the drag region overlay (z-[100]) -->
+    <div class="relative z-[101] flex items-center gap-0.5 shrink-0">
       <div class="relative">
         <button
           class="interactive flex items-center gap-[5px] h-[26px] px-2 rounded text-[11px] font-medium text-fg-muted"

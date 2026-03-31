@@ -51,7 +51,8 @@
   }
 </script>
 
-<!-- Drag region overlay for window dragging -->
+<!-- Drag region overlay for window dragging (z-[100]).
+     Interactive elements in the top bar must use z-[101]+ to sit above this. -->
 <div
   class="fixed top-0 left-0 right-0 h-[38px] z-[100]"
   data-tauri-drag-region

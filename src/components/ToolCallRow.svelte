@@ -1,6 +1,7 @@
 <!-- src/components/ToolCallRow.svelte -->
 <script lang="ts">
   import { ChevronRight, ChevronDown } from "@lucide/svelte";
+  import { slide } from "svelte/transition";
   import type {
     DisplayToolCall,
     MailboxMessage,
@@ -49,11 +50,11 @@
     other: "Tool",
   };
 
-  /** Strip markdown code fences (```lang\n...\n```) from text content. */
   function stripCodeFence(text: string): string {
     return text.replace(/^```\w*\n?/, "").replace(/\n?```\s*$/, "");
   }
 
+  // ── Tool type detection ────────────────────────────────────────
   let isMailboxTool = $derived(toolCall.name.endsWith("read_mailbox"));
   let isSendTool = $derived(toolCall.name.endsWith("send_message"));
   let isPeersTool = $derived(toolCall.name.endsWith("list_peers"));
@@ -71,7 +72,6 @@
       isDisconnectTool,
   );
 
-  /** Try to parse JSON from the first text content item. */
   function parseTextContent(): unknown {
     try {
       const text = toolCall.content.find((c) => c.type === "text");
@@ -82,6 +82,7 @@
     return null;
   }
 
+  // ── Derived display values ─────────────────────────────────────
   let verb = $derived(
     isMailboxTool
       ? "Inbox"
@@ -147,7 +148,6 @@
     }
     if (toolCall.status === "in_progress") return "running";
     if (toolCall.status === "pending") return "pending";
-    // Mockup shows "completed" for Inbox, "delivered" for Send
     if (isSendTool && toolCall.status === "completed") return "delivered";
     if (isMailboxTool && toolCall.status === "completed") return "completed";
     return null;
@@ -170,6 +170,42 @@
         toolCall.status !== "pending" &&
         toolCall.status !== "in_progress"),
   );
+
+  // ── Parsed content for expanded views ──────────────────────────
+  let mailboxMessages = $derived.by(() => {
+    if (!isMailboxTool) return [];
+    try {
+      const text = toolCall.content.find((c) => c.type === "text");
+      if (text?.type === "text") {
+        const parsed = JSON.parse(text.text);
+        return Array.isArray(parsed) ? parsed : (parsed.messages ?? []);
+      }
+    } catch {
+      /* */
+    }
+    return [] as MailboxMessage[];
+  });
+
+  let sendBody = $derived.by(() => {
+    if (!isSendTool) return "";
+    const text = toolCall.content.find((c) => c.type === "text");
+    if (text?.type === "text") {
+      try {
+        const parsed = JSON.parse(text.text);
+        if (parsed.body) return parsed.body as string;
+      } catch {
+        /* */
+      }
+      return text.text;
+    }
+    return "";
+  });
+
+  let peersList = $derived.by(() => {
+    if (!isPeersTool) return [];
+    const parsed = parseTextContent();
+    return Array.isArray(parsed) ? parsed : [];
+  });
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
@@ -210,81 +246,56 @@
     {/if}
   </div>
 
-  {#if expanded && isMailboxTool}
-    {@const mailboxMessages = (() => {
-      try {
-        const text = toolCall.content.find((c) => c.type === "text");
-        if (text?.type === "text") {
-          const parsed = JSON.parse(text.text);
-          return Array.isArray(parsed) ? parsed : (parsed.messages ?? []);
-        }
-      } catch {
-        /* */
-      }
-      return [] as MailboxMessage[];
-    })()}
-    <MailboxToolRender messages={mailboxMessages} />
-  {:else if expanded && isSendTool}
-    {@const sendBody = (() => {
-      const text = toolCall.content.find((c) => c.type === "text");
-      if (text?.type === "text") {
-        try {
-          const parsed = JSON.parse(text.text);
-          if (parsed.body) return parsed.body;
-        } catch {
-          /* */
-        }
-        return text.text;
-      }
-      return "";
-    })()}
-    <SendToolRender body={sendBody} />
-  {:else if expanded && isPeersTool}
-    {@const peers = (() => {
-      const parsed = parseTextContent();
-      return Array.isArray(parsed) ? parsed : [];
-    })()}
-    <PeersToolRender {peers} />
-  {:else if expanded}
-    <div class="flex flex-col gap-1.5 pb-1.5">
-      {#each toolCall.content as item}
-        {#if item.type === "text"}
-          <div
-            class="mx-2.5 ml-[30px] rounded bg-[rgba(0,0,0,0.03)] px-2 py-1.5 font-[family-name:var(--font-mono)] text-[10.5px] leading-normal text-fg-muted whitespace-pre-wrap"
-          >
-            {stripCodeFence(item.text)}
-          </div>
-        {:else if item.type === "diff"}
-          <div
-            class="mx-2.5 ml-[30px] rounded bg-[rgba(0,0,0,0.03)] px-2 py-1.5 font-[family-name:var(--font-mono)] text-[10.5px] leading-normal"
-          >
-            {#if item.oldText != null}
-              {#each item.oldText.split("\n") as line}
-                <div
-                  class="rounded-sm bg-removed-bg text-removed-fg px-1 -mx-1"
-                >
-                  {`- ${line}`}
-                </div>
-              {/each}
-            {/if}
-            {#each item.newText.split("\n") as line}
-              <div class="rounded-sm bg-added-bg text-added-fg px-1 -mx-1">
-                {`+ ${line}`}
+  {#if expanded}
+    <div transition:slide={{ duration: 150 }}>
+      {#if isMailboxTool}
+        <MailboxToolRender messages={mailboxMessages} />
+      {:else if isSendTool}
+        <SendToolRender body={sendBody} />
+      {:else if isPeersTool}
+        <PeersToolRender peers={peersList} />
+      {:else}
+        <div class="flex flex-col gap-1.5 pb-1.5">
+          {#each toolCall.content as item}
+            {#if item.type === "text"}
+              <div
+                class="mx-2.5 rounded bg-[rgba(0,0,0,0.03)] px-2 py-1.5 font-[family-name:var(--font-mono)] text-[10.5px] leading-normal text-fg-muted whitespace-pre-wrap"
+              >
+                {stripCodeFence(item.text)}
               </div>
-            {/each}
-          </div>
-        {:else if item.type === "terminal" && item.output}
-          {@const isFailed = toolCall.status === "failed"}
-          <div
-            class="mx-2.5 ml-[30px] rounded px-2 py-1.5 font-[family-name:var(--font-mono)] text-[10.5px] leading-normal whitespace-pre-wrap
-            {isFailed
-              ? 'bg-[rgba(200,60,60,0.04)] text-removed-fg'
-              : 'bg-[rgba(0,0,0,0.03)] text-fg-muted'}"
-          >
-            {item.output}
-          </div>
-        {/if}
-      {/each}
+            {:else if item.type === "diff"}
+              <div
+                class="mx-2.5 rounded bg-[rgba(0,0,0,0.03)] px-2 py-1.5 font-[family-name:var(--font-mono)] text-[10.5px] leading-normal"
+              >
+                {#if item.oldText != null}
+                  {#each item.oldText.split("\n") as line}
+                    <div
+                      class="rounded-sm bg-removed-bg text-removed-fg px-1 -mx-1"
+                    >
+                      {`- ${line}`}
+                    </div>
+                  {/each}
+                {/if}
+                {#each item.newText.split("\n") as line}
+                  <div class="rounded-sm bg-added-bg text-added-fg px-1 -mx-1">
+                    {`+ ${line}`}
+                  </div>
+                {/each}
+              </div>
+            {:else if item.type === "terminal" && item.output}
+              {@const isFailed = toolCall.status === "failed"}
+              <div
+                class="mx-2.5 rounded px-2 py-1.5 font-[family-name:var(--font-mono)] text-[10.5px] leading-normal whitespace-pre-wrap
+                {isFailed
+                  ? 'bg-[rgba(200,60,60,0.04)] text-removed-fg'
+                  : 'bg-[rgba(0,0,0,0.03)] text-fg-muted'}"
+              >
+                {item.output}
+              </div>
+            {/if}
+          {/each}
+        </div>
+      {/if}
     </div>
   {/if}
 </div>

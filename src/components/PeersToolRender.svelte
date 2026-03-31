@@ -12,7 +12,7 @@
   let { peers }: Props = $props();
 </script>
 
-<div class="ml-[30px] py-1.5 flex flex-col gap-0.5 px-2.5">
+<div class="py-1.5 flex flex-col gap-0.5 px-2.5">
   {#each peers as peer}
     <div
       class="flex items-center gap-1.5 text-[11px] px-2 py-1 rounded bg-[rgba(0,0,0,0.03)]"
