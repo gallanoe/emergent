@@ -7,8 +7,8 @@ A Tauri 2 desktop application for running LLM agents in parallel. Agents communi
 The Tauri app embeds the agent manager directly — there is no separate daemon process. MCP sidecars connect back to the app via an HTTP server.
 
 - **Tauri app** (in `src-tauri/`) — desktop app that owns the `AgentManager`, spawns agent processes over ACP, and runs an MCP HTTP server for sidecar tool calls
-- **`emergent-daemon`** (in `crates/emergent-daemon/`) — library crate containing the agent manager, MCP handler, HTTP server, mailbox, topology, and system prompt logic (embedded into the Tauri app, not a standalone binary)
-- **`emergent-protocol`** (in `crates/emergent-protocol/`) — shared types and notification definitions used by both the Tauri app and daemon library
+- **`emergent-core`** (in `crates/emergent-core/`) — core library containing agent orchestration, MCP server, swarm coordination, and system prompt logic (embedded into the Tauri app)
+- **`emergent-protocol`** (in `crates/emergent-protocol/`) — shared types and notification definitions used by both the Tauri app and core library
 
 The Tauri app creates the `AgentManager` at startup, starts an MCP HTTP server, and bridges agent notifications to the Svelte frontend via Tauri events.
 
@@ -44,18 +44,26 @@ src-tauri/                    # Tauri app (embeds agent manager)
 └── tauri.conf.json
 
 crates/
-├── emergent-daemon/          # Agent manager library (embedded in Tauri app)
+├── emergent-core/            # Core library (embedded in Tauri app)
 │   ├── src/
 │   │   ├── lib.rs            # Public modules
-│   │   ├── agent_manager.rs  # ACP client + agent lifecycle management
-│   │   ├── detect.rs         # Agent binary detection
-│   │   ├── http_server.rs    # MCP HTTP server for sidecar tool calls
-│   │   ├── mcp_handler.rs    # MCP tool call dispatch (list_peers, send_message, etc.)
-│   │   ├── mailbox.rs        # Inter-agent mailbox system
-│   │   ├── topology.rs       # Agent connection topology
-│   │   ├── system_prompt.rs  # System prompt generation for agents
-│   │   ├── config.rs         # Agent configuration
-│   │   └── token_registry.rs # MCP auth token management
+│   │   ├── agent/            # Agent lifecycle and ACP communication
+│   │   │   ├── mod.rs        # AgentManager public API
+│   │   │   ├── acp_bridge.rs # ACP client adapter + command loop
+│   │   │   ├── lifecycle.rs  # Agent spawn + ACP handshake
+│   │   │   └── prompt_loop.rs # Prompt wake/inject/send cycle
+│   │   ├── mcp/              # MCP server and auth
+│   │   │   ├── mod.rs        # Re-exports
+│   │   │   ├── handler.rs    # MCP tool implementations
+│   │   │   ├── http_server.rs # Axum HTTP server
+│   │   │   └── token_registry.rs # Bearer token management
+│   │   ├── swarm/            # Inter-agent coordination
+│   │   │   ├── mod.rs        # Re-exports
+│   │   │   ├── mailbox.rs    # Message queue
+│   │   │   ├── topology.rs   # Connection graph
+│   │   │   └── system_prompt.rs # System block injection
+│   │   ├── config.rs         # ACP config conversion
+│   │   └── detect.rs         # Agent binary detection
 │   └── tests/
 │       └── integration.rs    # Integration tests
 ├── emergent-protocol/        # Shared types
