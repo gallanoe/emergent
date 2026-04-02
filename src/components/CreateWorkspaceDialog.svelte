@@ -46,10 +46,12 @@
         Create Workspace
       </h2>
       <label
+        for="new-workspace-name"
         class="block text-[10px] font-medium uppercase tracking-wider text-fg-muted mb-1.5"
         >Workspace Name</label
       >
       <input
+        id="new-workspace-name"
         bind:this={inputEl}
         bind:value={name}
         class="w-full bg-bg-base border border-border-strong rounded-md px-3 py-1.5 text-[13px] text-fg-default focus:outline-none focus:border-border-focus"

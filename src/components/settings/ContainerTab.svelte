@@ -55,9 +55,9 @@
 
 <div class="space-y-6">
   <div>
-    <label
+    <span
       class="block text-[10px] font-medium uppercase tracking-wider text-fg-muted mb-1.5"
-      >Status</label
+      >Status</span
     >
     <div class="flex items-center gap-2">
       <span
@@ -71,9 +71,9 @@
 
   <div>
     <div class="flex items-center justify-between mb-1.5">
-      <label
+      <span
         class="text-[10px] font-medium uppercase tracking-wider text-fg-muted"
-        >Dockerfile</label
+        >Dockerfile</span
       >
       <button
         class="interactive text-[11px] text-fg-muted px-2 py-0.5 rounded"
