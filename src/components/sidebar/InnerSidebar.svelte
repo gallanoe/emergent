@@ -16,7 +16,7 @@
     selectedAgentId: string | null;
     demoMode: boolean;
     knownAgents: { name: string; command: string; available: boolean }[];
-    onSelectView: (view: "swarm" | "agent") => void;
+    onSelectView: (view: "swarm" | "settings") => void;
     onSelectAgent: (id: string) => void;
     onAddAgent: (
       swarmId: string,
@@ -45,7 +45,7 @@
     enabled: boolean;
   }[] = [
     { id: "swarm", label: "Swarm", icon: LayoutGrid, enabled: true },
-    { id: "settings", label: "Settings", icon: Settings, enabled: false },
+    { id: "settings", label: "Settings", icon: Settings, enabled: true },
     { id: "skills", label: "Skills", icon: Sparkles, enabled: false },
     { id: "tasks", label: "Tasks", icon: ListChecks, enabled: false },
   ];
@@ -77,13 +77,17 @@
         <button
           class="flex items-center gap-2 w-full px-2.5 py-1.5 rounded-md text-[12px]
                  {item.enabled
-            ? activeView === 'swarm' && item.id === 'swarm'
+            ? (item.id === 'settings' && activeView === 'settings') ||
+              (item.id === 'swarm' && (activeView === 'swarm' || activeView === 'agent'))
               ? 'bg-bg-hover text-fg-heading'
               : 'text-fg-muted hover:bg-bg-hover'
             : 'text-fg-disabled cursor-default'}"
           disabled={!item.enabled}
           onclick={() => {
-            if (item.enabled && item.id === "swarm") onSelectView("swarm");
+            if (item.enabled) {
+              if (item.id === "swarm") onSelectView("swarm");
+              else if (item.id === "settings") onSelectView("settings");
+            }
           }}
         >
           <item.icon

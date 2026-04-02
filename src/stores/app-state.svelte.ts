@@ -386,6 +386,9 @@ function createAppState() {
     get activeView() {
       return activeView;
     },
+    set activeView(v: "swarm" | "agent" | "settings") {
+      activeView = v;
+    },
     get selectedSwarm() {
       return getSelectedSwarm();
     },

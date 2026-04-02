@@ -6,12 +6,16 @@
   import ChatArea from "./components/chat/ChatArea.svelte";
   import ChatInput from "./components/chat/ChatInput.svelte";
   import SwarmView from "./components/swarm/SwarmView.svelte";
+  import SettingsView from "./components/settings/SettingsView.svelte";
   import ConfirmDialog from "./components/ConfirmDialog.svelte";
+  import CreateWorkspaceDialog from "./components/CreateWorkspaceDialog.svelte";
+  import { Plus } from "@lucide/svelte";
   import { onMount } from "svelte";
 
   let externalContent = $state<{ text: string; seq: number } | null>(null);
   let seq = 0;
   let shutdownTarget = $state<{ id: string; name: string } | null>(null);
+  let showCreateWorkspace = $state(false);
 
   function pushToInput(text: string) {
     externalContent = { text, seq: ++seq };
@@ -69,7 +73,7 @@
         selectedWorkspaceId={appState.selectedSwarmId}
         demoMode={appState.demoMode}
         onSelectWorkspace={(id) => appState.selectWorkspace(id)}
-        onNewWorkspace={() => appState.createWorkspace("New Workspace")}
+        onNewWorkspace={() => (showCreateWorkspace = true)}
       />
       <InnerSidebar
         swarm={appState.selectedSwarm}
@@ -80,6 +84,8 @@
         onSelectView={(view) => {
           if (view === "swarm" && appState.selectedSwarmId) {
             appState.selectWorkspace(appState.selectedSwarmId);
+          } else if (view === "settings") {
+            appState.activeView = "settings";
           }
         }}
         onSelectAgent={(id) => appState.selectAgent(id)}
@@ -89,7 +95,40 @@
     </div>
   </div>
   <main class="flex flex-col min-h-0 min-w-0">
-    {#if appState.activeView === "swarm" && appState.selectedSwarm}
+    {#if appState.dockerStatus && !appState.dockerStatus.docker_available}
+      <div class="flex flex-col items-center justify-center flex-1 gap-3 text-center">
+        <div class="w-10 h-10 rounded-full bg-bg-hover flex items-center justify-center text-warning">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+        </div>
+        <div class="text-[13px] font-semibold text-fg-heading">Docker not found</div>
+        <div class="text-[12px] text-fg-muted max-w-xs leading-relaxed">
+          Emergent requires Docker to run workspaces. Install Docker Desktop and restart the app.
+        </div>
+      </div>
+    {:else if !appState.demoMode && appState.swarms.length === 0}
+      <div class="flex flex-col items-center justify-center flex-1 gap-3 text-center">
+        <div class="w-10 h-10 rounded-full bg-bg-hover flex items-center justify-center text-fg-muted">
+          <Plus size={20} />
+        </div>
+        <div class="text-[13px] font-semibold text-fg-heading">No workspaces yet</div>
+        <div class="text-[12px] text-fg-muted">Create a workspace to get started</div>
+        <button
+          class="mt-1 h-7 px-4 rounded-[5px] text-[12px] font-medium text-bg-base bg-accent hover:bg-accent-hover transition-colors"
+          onclick={() => (showCreateWorkspace = true)}
+        >
+          Create Workspace
+        </button>
+      </div>
+    {:else if appState.activeView === "settings" && appState.selectedSwarmId}
+      <SettingsView
+        workspaceId={appState.selectedSwarmId}
+        containerStatus={appState.selectedSwarm?.containerStatus ?? { state: "stopped" }}
+        onUpdateName={(name) => appState.updateWorkspace(appState.selectedSwarmId!, name)}
+        onStart={() => appState.startContainer(appState.selectedSwarmId!)}
+        onStop={() => appState.stopContainer(appState.selectedSwarmId!)}
+        onRebuild={() => appState.rebuildContainer(appState.selectedSwarmId!)}
+      />
+    {:else if appState.activeView === "swarm" && appState.selectedSwarm}
       <SwarmView
         swarm={appState.selectedSwarm}
         messageLog={appState.swarmMessageLog}
@@ -162,5 +201,15 @@
     onCancel={() => {
       shutdownTarget = null;
     }}
+  />
+{/if}
+
+{#if showCreateWorkspace}
+  <CreateWorkspaceDialog
+    onConfirm={async (name) => {
+      showCreateWorkspace = false;
+      await appState.createWorkspace(name);
+    }}
+    onCancel={() => (showCreateWorkspace = false)}
   />
 {/if}

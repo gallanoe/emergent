@@ -45,12 +45,12 @@ function renderSidebar(overrides: Record<string, unknown> = {}) {
   return render(InnerSidebar, {
     props: {
       swarm: (overrides.swarm as DisplayWorkspace | undefined) ?? makeSwarm(),
-      activeView: (overrides.activeView as "swarm" | "agent") ?? "swarm",
+      activeView: (overrides.activeView as "swarm" | "agent" | "settings") ?? "swarm",
       selectedAgentId: (overrides.selectedAgentId as string | null) ?? null,
       demoMode: (overrides.demoMode as boolean) ?? false,
       knownAgents:
         (overrides.knownAgents as { name: string; command: string; available: boolean }[]) ?? [],
-      onSelectView: (overrides.onSelectView as (view: "swarm" | "agent") => void) ?? (() => {}),
+      onSelectView: (overrides.onSelectView as (view: "swarm" | "settings") => void) ?? (() => {}),
       onSelectAgent: (overrides.onSelectAgent as (id: string) => void) ?? (() => {}),
       onAddAgent:
         (overrides.onAddAgent as (swarmId: string, cmd: string, name: string) => void) ??
@@ -65,7 +65,7 @@ describe("InnerSidebar", () => {
     expect(screen.getByText("Research Swarm")).toBeTruthy();
   });
 
-  it("renders nav items with Settings, Skills, Tasks greyed out", () => {
+  it("renders nav items with Skills and Tasks greyed out", () => {
     renderSidebar();
     expect(screen.getByText("Swarm")).toBeTruthy();
     expect(screen.getByText("Settings")).toBeTruthy();
@@ -93,10 +93,17 @@ describe("InnerSidebar", () => {
     expect(onSelectAgent).toHaveBeenCalledWith("agent-2");
   });
 
-  it("does not fire onSelectView for disabled items", async () => {
+  it("calls onSelectView when Settings nav clicked", async () => {
     const onSelectView = vi.fn();
     renderSidebar({ onSelectView });
     await fireEvent.click(screen.getByText("Settings"));
+    expect(onSelectView).toHaveBeenCalledWith("settings");
+  });
+
+  it("does not fire onSelectView for disabled items", async () => {
+    const onSelectView = vi.fn();
+    renderSidebar({ onSelectView });
+    await fireEvent.click(screen.getByText("Skills"));
     expect(onSelectView).not.toHaveBeenCalled();
   });
 });
