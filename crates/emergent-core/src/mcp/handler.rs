@@ -201,7 +201,7 @@ impl McpHandler {
             return Err("Permission denied: management permissions required".to_string());
         }
 
-        let known = crate::detect::known_agents();
+        let known = crate::detect::known_agents_unavailable();
         let agent = known
             .iter()
             .find(|a| a.name.eq_ignore_ascii_case(&params.agent_name));

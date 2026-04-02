@@ -1,8 +1,11 @@
-pub use emergent_protocol::{AgentInfo, KnownAgent};
+pub use emergent_protocol::KnownAgent;
+
+use bollard::exec::CreateExecOptions;
+use bollard::Docker;
 
 /// Known agent CLIs: (display name, command binary, extra args, required binaries).
 ///
-/// `requires` lists binaries that must be on PATH for the agent to be considered available.
+/// `requires` lists binaries that must be findable via `which` inside the container.
 /// If empty, the command binary itself is checked.
 const KNOWN_AGENTS: &[(&str, &str, &[&str], &[&str])] = &[
     ("Claude Code", "bunx", &["@zed-industries/claude-agent-acp"], &["claude", "bunx"]),
@@ -20,37 +23,75 @@ fn build_command(binary: &str, args: &[&str]) -> String {
     }
 }
 
-fn is_available(binary: &str, requires: &[&str]) -> bool {
-    if requires.is_empty() {
-        which::which(binary).is_ok()
-    } else {
-        requires.iter().all(|bin| which::which(bin).is_ok())
+/// Check if a binary exists inside a running container via `which`.
+async fn is_available_in_container(docker: &Docker, container_id: &str, binary: &str) -> bool {
+    let exec = docker
+        .create_exec(
+            container_id,
+            CreateExecOptions {
+                cmd: Some(vec!["which", binary]),
+                attach_stdout: Some(false),
+                attach_stderr: Some(false),
+                ..Default::default()
+            },
+        )
+        .await;
+
+    let exec_id = match exec {
+        Ok(resp) => resp.id,
+        Err(_) => return false,
+    };
+
+    if docker.start_exec(&exec_id, None).await.is_err() {
+        return false;
+    }
+
+    // Check exit code
+    match docker.inspect_exec(&exec_id).await {
+        Ok(info) => info.exit_code == Some(0),
+        Err(_) => false,
     }
 }
 
-/// Return all known agent types, marking which are installed.
-pub fn known_agents() -> Vec<KnownAgent> {
-    KNOWN_AGENTS
-        .iter()
-        .map(|&(name, binary, args, requires)| KnownAgent {
+/// Return all known agent types, checking availability inside a container.
+pub async fn known_agents_in_container(
+    docker: &Docker,
+    container_id: &str,
+) -> Vec<KnownAgent> {
+    let mut agents = Vec::new();
+
+    for &(name, binary, args, requires) in KNOWN_AGENTS {
+        let available = if requires.is_empty() {
+            is_available_in_container(docker, container_id, binary).await
+        } else {
+            let mut all_ok = true;
+            for bin in requires {
+                if !is_available_in_container(docker, container_id, bin).await {
+                    all_ok = false;
+                    break;
+                }
+            }
+            all_ok
+        };
+
+        agents.push(KnownAgent {
             name: name.to_string(),
             command: build_command(binary, args),
-            available: is_available(binary, requires),
-        })
-        .collect()
+            available,
+        });
+    }
+
+    agents
 }
 
-/// Detect which known agent CLIs are installed on the system.
-pub fn detect_agents() -> Vec<AgentInfo> {
+/// Return all known agent types with `available: false` (no container running).
+pub fn known_agents_unavailable() -> Vec<KnownAgent> {
     KNOWN_AGENTS
         .iter()
-        .filter(|&&(_, binary, _, requires)| is_available(binary, requires))
-        .map(|&(name, binary, args, _)| AgentInfo {
+        .map(|&(name, binary, args, _)| KnownAgent {
             name: name.to_string(),
-            binary: build_command(binary, args),
-            path: which::which(binary)
-                .map(|p| p.to_string_lossy().to_string())
-                .unwrap_or_default(),
+            command: build_command(binary, args),
+            available: false,
         })
         .collect()
 }
@@ -60,36 +101,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn detect_agents_returns_vec() {
-        let agents = detect_agents();
-        assert!(agents.len() <= KNOWN_AGENTS.len());
-    }
-
-    #[test]
-    fn agent_info_serializes() {
-        let info = AgentInfo {
-            name: "Test Agent".into(),
-            binary: "test-agent".into(),
-            path: "/usr/bin/test-agent".into(),
-        };
-        let json = serde_json::to_string(&info).unwrap();
-        assert!(json.contains("Test Agent"));
-    }
-
-    #[test]
-    fn known_agents_returns_all() {
-        let agents = known_agents();
+    fn known_agents_unavailable_returns_all() {
+        let agents = known_agents_unavailable();
         assert_eq!(agents.len(), KNOWN_AGENTS.len());
         assert_eq!(agents[0].name, "Claude Code");
         assert_eq!(agents[0].command, "bunx @zed-industries/claude-agent-acp");
-        assert_eq!(agents[1].name, "Codex");
-        assert_eq!(agents[1].command, "bunx @zed-industries/codex-acp");
-        assert_eq!(agents[2].name, "Gemini");
-        assert_eq!(agents[2].command, "gemini --experimental-acp");
-        assert_eq!(agents[3].name, "Kiro");
-        assert_eq!(agents[3].command, "kiro-cli acp");
-        assert_eq!(agents[4].name, "OpenCode");
-        assert_eq!(agents[4].command, "opencode acp");
+        assert!(agents.iter().all(|a| !a.available));
     }
 
     #[test]
@@ -101,13 +118,5 @@ mod tests {
         };
         let json = serde_json::to_string(&agent).unwrap();
         assert!(json.contains("\"available\":true"));
-    }
-
-    #[test]
-    fn is_available_checks_all_requires() {
-        // Nonexistent binaries should fail
-        assert!(!is_available("nonexistent-xyz", &["nonexistent-xyz", "also-nonexistent"]));
-        // Empty requires falls back to checking the binary itself
-        assert!(!is_available("nonexistent-xyz", &[]));
     }
 }

@@ -82,16 +82,30 @@ pub async fn create_and_start_container(
         platform: None,
     };
 
+    // Remove any existing container with the same name (e.g. from a previous run)
+    let _ = docker
+        .remove_container(
+            &name,
+            Some(RemoveContainerOptions {
+                force: true,
+                ..Default::default()
+            }),
+        )
+        .await;
+
+    log::info!("Creating container '{}' from image '{}'", name, tag);
     let response = docker
         .create_container(Some(options), config)
         .await
-        .map_err(|e| format!("Failed to create container: {}", e))?;
+        .map_err(|e| format!("Failed to create container '{}': {}", name, e))?;
 
+    log::info!("Container created: {}, starting...", response.id);
     docker
         .start_container::<String>(&response.id, None)
         .await
-        .map_err(|e| format!("Failed to start container: {}", e))?;
+        .map_err(|e| format!("Failed to start container '{}': {}", response.id, e))?;
 
+    log::info!("Container started: {}", response.id);
     Ok(response.id)
 }
 

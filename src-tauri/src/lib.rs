@@ -123,7 +123,6 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
-            commands::detect_agents,
             commands::known_agents,
             commands::spawn_agent,
             commands::send_prompt,

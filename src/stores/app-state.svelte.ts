@@ -37,7 +37,6 @@ function createAppState() {
   );
   let workspaces = $state<Workspace[]>([]);
   let selectedAgentId = $state<string | null>(null);
-  let availableAgents = $state<{ name: string; binary: string; path: string }[]>([]);
   let knownAgents = $state<KnownAgent[]>([]);
   let agentConnections = $state<Record<string, string[]>>({});
   let swarmMessageLog = $state<SwarmMessageLogEntry[]>([]);
@@ -63,12 +62,6 @@ function createAppState() {
       dockerStatus = { docker_available: false, docker_version: null };
     }
 
-    const detected = await agentStore.detectAgents();
-    availableAgents = detected;
-
-    const known = await invoke<KnownAgent[]>("known_agents");
-    knownAgents = known;
-
     // Load existing workspaces
     try {
       const wsList = await invoke<WorkspaceSummary[]>("list_workspaces");
@@ -84,6 +77,11 @@ function createAppState() {
       if (workspaces.length > 0 && !selectedWorkspaceId) {
         selectedWorkspaceId = workspaces[0]!.id;
       }
+      // Refresh known agents for the first running workspace
+      const runningWs = workspaces.find((w) => w.containerStatus.state === "running");
+      if (runningWs) {
+        await refreshKnownAgents(runningWs.id);
+      }
     } catch {
       // No workspaces yet
     }
@@ -94,6 +92,11 @@ function createAppState() {
     await listen<WorkspaceStatusChangePayload>("workspace:status-change", (e) => {
       const ws = workspaces.find((w) => w.id === e.payload.workspace_id);
       if (ws) ws.containerStatus = e.payload.status;
+
+      // Refresh known agents when container starts running
+      if (e.payload.status.state === "running") {
+        refreshKnownAgents(e.payload.workspace_id);
+      }
     });
 
     // Listen for swarm messages (global, not per-agent)
@@ -135,6 +138,14 @@ function createAppState() {
       await setupAfterConnect();
     } catch (e) {
       console.error("Failed to initialize:", e);
+    }
+  }
+
+  async function refreshKnownAgents(workspaceId: string) {
+    try {
+      knownAgents = await invoke<KnownAgent[]>("known_agents", { workspaceId });
+    } catch {
+      knownAgents = [];
     }
   }
 
@@ -371,9 +382,6 @@ function createAppState() {
     },
     get selectedAgent() {
       return getSelectedAgent();
-    },
-    get availableAgents() {
-      return availableAgents;
     },
     get knownAgents() {
       return knownAgents;

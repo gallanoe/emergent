@@ -5,18 +5,26 @@ use emergent_core::agent::AgentManager;
 use emergent_core::detect;
 use emergent_core::workspace::WorkspaceManager;
 use emergent_protocol::{
-    AgentInfo, AgentSummary, ConfigOption, DockerStatus, KnownAgent, Notification, WorkspaceInfo,
+    AgentSummary, ConfigOption, DockerStatus, KnownAgent, Notification, WorkspaceInfo,
     WorkspaceSummary,
 };
 
 #[tauri::command]
-pub async fn detect_agents() -> Result<Vec<AgentInfo>, String> {
-    Ok(detect::detect_agents())
-}
+pub async fn known_agents(
+    workspace_manager: State<'_, Arc<WorkspaceManager>>,
+    workspace_id: String,
+) -> Result<Vec<KnownAgent>, String> {
+    let ws_id = emergent_protocol::WorkspaceId::from(workspace_id.as_str());
+    let info = workspace_manager.get_workspace(&ws_id).await?;
 
-#[tauri::command]
-pub async fn known_agents() -> Result<Vec<KnownAgent>, String> {
-    Ok(detect::known_agents())
+    match (workspace_manager.docker(), info.container_id.as_deref()) {
+        (Some(docker), Some(container_id))
+            if info.container_status == emergent_protocol::ContainerStatus::Running =>
+        {
+            Ok(detect::known_agents_in_container(docker, container_id).await)
+        }
+        _ => Ok(detect::known_agents_unavailable()),
+    }
 }
 
 #[tauri::command]

@@ -107,46 +107,52 @@
     </div>
 
     <div class="px-2 flex-1 overflow-y-auto min-h-0">
-      {#each swarm.agents as agent (agent.id)}
-        <button
-          class="flex items-center gap-2 w-full px-2.5 py-[7px] rounded-md text-[12px] mt-0.5 truncate
-                 {activeView === 'agent' && selectedAgentId === agent.id
-            ? 'bg-bg-hover text-fg-heading'
-            : 'text-fg-muted hover:bg-bg-hover'}"
-          onclick={() => onSelectAgent(agent.id)}
-        >
-          <span
-            class="w-[7px] h-[7px] rounded-full flex-shrink-0 {statusColor(
-              agent.status,
-            )}"
-          ></span>
-          <span class="truncate">
-            {agent.name}{#if agent.role}<span class="text-fg-disabled">
-                — {agent.role}</span
-              >{/if}
-          </span>
-        </button>
-      {/each}
-      {#if !demoMode && swarm}
-        <div class="relative mt-1">
-          <button
-            class="interactive flex items-center gap-1.5 w-full px-2.5 py-[7px] rounded-md text-[11px] text-fg-muted"
-            onclick={() => (pickerOpen = !pickerOpen)}
-          >
-            <Plus size={12} />
-            Add agent
-          </button>
-          {#if pickerOpen}
-            <AgentPickerPopover
-              agents={knownAgents}
-              onSelect={(command, name) => {
-                onAddAgent(swarm.id, command, name);
-                pickerOpen = false;
-              }}
-              onClose={() => (pickerOpen = false)}
-            />
-          {/if}
+      {#if swarm.containerStatus.state !== "running"}
+        <div class="px-2.5 py-2 text-[11px] text-fg-disabled">
+          Workspace isn't available
         </div>
+      {:else}
+        {#each swarm.agents as agent (agent.id)}
+          <button
+            class="flex items-center gap-2 w-full px-2.5 py-[7px] rounded-md text-[12px] mt-0.5 truncate
+                   {activeView === 'agent' && selectedAgentId === agent.id
+              ? 'bg-bg-hover text-fg-heading'
+              : 'text-fg-muted hover:bg-bg-hover'}"
+            onclick={() => onSelectAgent(agent.id)}
+          >
+            <span
+              class="w-[7px] h-[7px] rounded-full flex-shrink-0 {statusColor(
+                agent.status,
+              )}"
+            ></span>
+            <span class="truncate">
+              {agent.name}{#if agent.role}<span class="text-fg-disabled">
+                  — {agent.role}</span
+                >{/if}
+            </span>
+          </button>
+        {/each}
+        {#if !demoMode && swarm}
+          <div class="relative mt-1">
+            <button
+              class="interactive flex items-center gap-1.5 w-full px-2.5 py-[7px] rounded-md text-[11px] text-fg-muted"
+              onclick={() => (pickerOpen = !pickerOpen)}
+            >
+              <Plus size={12} />
+              Add agent
+            </button>
+            {#if pickerOpen}
+              <AgentPickerPopover
+                agents={knownAgents}
+                onSelect={(command, name) => {
+                  onAddAgent(swarm.id, command, name);
+                  pickerOpen = false;
+                }}
+                onClose={() => (pickerOpen = false)}
+              />
+            {/if}
+          </div>
+        {/if}
       {/if}
     </div>
   {:else}

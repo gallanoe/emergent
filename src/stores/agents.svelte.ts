@@ -85,11 +85,7 @@ interface ConfigUpdatePayload {
   changes: { option_name: string; new_value_name: string }[];
 }
 
-interface AgentInfo {
-  name: string;
-  binary: string;
-  path: string;
-}
+
 
 // ── Store ───────────────────────────────────────────────────────
 
@@ -403,10 +399,6 @@ function createAgentStore() {
 
   // ── Public API ────────────────────────────────────────────────
 
-  async function detectAgents(): Promise<AgentInfo[]> {
-    return invoke<AgentInfo[]>("detect_agents");
-  }
-
   async function spawnAgent(
     workspaceId: string,
     agentCli: string,
@@ -648,7 +640,6 @@ function createAgentStore() {
     getAgent,
     toDisplayAgent,
     setupListeners,
-    detectAgents,
     spawnAgent,
     sendPrompt,
     cancelPrompt,

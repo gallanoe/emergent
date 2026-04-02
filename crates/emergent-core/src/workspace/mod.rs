@@ -58,7 +58,12 @@ impl WorkspaceManager {
     // Helpers
     // -----------------------------------------------------------------------
 
-    fn docker(&self) -> Result<&Docker, String> {
+    /// Get a reference to the Docker client, if available.
+    pub fn docker(&self) -> Option<&Docker> {
+        self.docker.as_ref()
+    }
+
+    fn require_docker(&self) -> Result<&Docker, String> {
         self.docker
             .as_ref()
             .ok_or_else(|| "Docker is not available".to_string())
@@ -209,6 +214,7 @@ impl WorkspaceManager {
         self.emit_status(&workspace_id, ContainerStatus::Building);
 
         // Build container
+        log::info!("Building container for workspace '{}'", workspace_id);
         if let Err(e) = self.build_container(&workspace_id).await {
             let error_status = ContainerStatus::Error { message: e.clone() };
             {
@@ -222,6 +228,7 @@ impl WorkspaceManager {
         }
 
         // Start container
+        log::info!("Starting container for workspace '{}'", workspace_id);
         if let Err(e) = self.start_container(&workspace_id).await {
             let error_status = ContainerStatus::Error { message: e.clone() };
             {
@@ -346,7 +353,7 @@ impl WorkspaceManager {
     // -----------------------------------------------------------------------
 
     pub async fn build_container(&self, id: &WorkspaceId) -> Result<(), String> {
-        let docker = self.docker()?;
+        let docker = self.require_docker()?;
         let workspace_path = {
             let mut state = self.state.write().await;
             let ws = state
@@ -365,7 +372,7 @@ impl WorkspaceManager {
     }
 
     pub async fn start_container(&self, id: &WorkspaceId) -> Result<(), String> {
-        let docker = self.docker()?;
+        let docker = self.require_docker()?;
         let workspace_path = {
             let state = self.state.read().await;
             state
@@ -392,7 +399,7 @@ impl WorkspaceManager {
     }
 
     pub async fn stop_container(&self, id: &WorkspaceId) -> Result<(), String> {
-        let docker = self.docker()?;
+        let docker = self.require_docker()?;
 
         let container_id = {
             let state = self.state.read().await;
