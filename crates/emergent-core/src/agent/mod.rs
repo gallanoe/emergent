@@ -1,6 +1,9 @@
 mod acp_bridge;
 mod lifecycle;
 mod prompt_loop;
+pub mod spawner;
+
+pub use spawner::{AgentProcess, DockerCliSpawner, ProcessSpawner};
 
 use std::collections::HashMap;
 use std::path::PathBuf;
