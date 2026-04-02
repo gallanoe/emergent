@@ -3,7 +3,11 @@ use tauri::State;
 
 use emergent_core::agent::AgentManager;
 use emergent_core::detect;
-use emergent_protocol::{AgentInfo, AgentSummary, ConfigOption, KnownAgent, Notification};
+use emergent_core::workspace::WorkspaceManager;
+use emergent_protocol::{
+    AgentInfo, AgentSummary, ConfigOption, DockerStatus, KnownAgent, Notification, WorkspaceInfo,
+    WorkspaceSummary,
+};
 
 #[tauri::command]
 pub async fn detect_agents() -> Result<Vec<AgentInfo>, String> {
@@ -18,13 +22,12 @@ pub async fn known_agents() -> Result<Vec<KnownAgent>, String> {
 #[tauri::command]
 pub async fn spawn_agent(
     manager: State<'_, Arc<AgentManager>>,
-    working_directory: String,
+    workspace_id: String,
     agent_cli: String,
     role: Option<String>,
 ) -> Result<String, String> {
-    manager
-        .spawn_agent(working_directory.into(), agent_cli, role)
-        .await
+    let ws_id = emergent_protocol::WorkspaceId::from(workspace_id.as_str());
+    manager.spawn_agent(ws_id, agent_cli, role).await
 }
 
 #[tauri::command]
@@ -102,8 +105,7 @@ pub async fn connect_agents(
     agent_id_a: String,
     agent_id_b: String,
 ) -> Result<(), String> {
-    manager.connect_agents(&agent_id_a, &agent_id_b).await;
-    Ok(())
+    manager.connect_agents(&agent_id_a, &agent_id_b).await
 }
 
 #[tauri::command]
@@ -134,4 +136,141 @@ pub async fn get_agent_connections(
     agent_id: String,
 ) -> Result<Vec<String>, String> {
     Ok(manager.get_connections(&agent_id).await)
+}
+
+// ── Workspace commands ─────────────────────────────────────
+
+#[tauri::command]
+pub async fn create_workspace(
+    workspace_manager: State<'_, Arc<WorkspaceManager>>,
+    name: String,
+) -> Result<String, String> {
+    let id = workspace_manager.create_workspace(name).await?;
+    Ok(id.to_string())
+}
+
+#[tauri::command]
+pub async fn delete_workspace(
+    workspace_manager: State<'_, Arc<WorkspaceManager>>,
+    agent_manager: State<'_, Arc<AgentManager>>,
+    workspace_id: String,
+) -> Result<(), String> {
+    let id = emergent_protocol::WorkspaceId::from(workspace_id.as_str());
+    agent_manager.kill_agents_in_workspace(&id).await?;
+    workspace_manager.delete_workspace(&id).await
+}
+
+#[tauri::command]
+pub async fn list_workspaces(
+    workspace_manager: State<'_, Arc<WorkspaceManager>>,
+    agent_manager: State<'_, Arc<AgentManager>>,
+) -> Result<Vec<WorkspaceSummary>, String> {
+    let entries = workspace_manager.list_workspaces().await;
+    let agents = agent_manager.list_agents().await;
+    let summaries = entries
+        .into_iter()
+        .map(|entry| {
+            let agent_count = agents.iter().filter(|a| a.workspace_id == entry.id).count();
+            WorkspaceSummary {
+                id: entry.id,
+                name: entry.name,
+                container_status: entry.container_status,
+                agent_count,
+            }
+        })
+        .collect();
+    Ok(summaries)
+}
+
+#[tauri::command]
+pub async fn get_workspace(
+    workspace_manager: State<'_, Arc<WorkspaceManager>>,
+    workspace_id: String,
+) -> Result<WorkspaceInfo, String> {
+    let id = emergent_protocol::WorkspaceId::from(workspace_id.as_str());
+    workspace_manager.get_workspace(&id).await
+}
+
+#[tauri::command]
+pub async fn update_workspace(
+    workspace_manager: State<'_, Arc<WorkspaceManager>>,
+    workspace_id: String,
+    name: String,
+) -> Result<(), String> {
+    let id = emergent_protocol::WorkspaceId::from(workspace_id.as_str());
+    workspace_manager.update_workspace(&id, name).await
+}
+
+#[tauri::command]
+pub async fn get_dockerfile(
+    workspace_manager: State<'_, Arc<WorkspaceManager>>,
+    workspace_id: String,
+) -> Result<String, String> {
+    let id = emergent_protocol::WorkspaceId::from(workspace_id.as_str());
+    workspace_manager.get_dockerfile(&id).await
+}
+
+#[tauri::command]
+pub async fn open_dockerfile_editor(
+    workspace_manager: State<'_, Arc<WorkspaceManager>>,
+    workspace_id: String,
+) -> Result<(), String> {
+    let id = emergent_protocol::WorkspaceId::from(workspace_id.as_str());
+    let info = workspace_manager.get_workspace(&id).await?;
+    let dockerfile_path = format!("{}/Dockerfile", info.path);
+
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&dockerfile_path)
+            .spawn()
+            .map_err(|e| format!("Failed to open editor: {}", e))?;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&dockerfile_path)
+            .spawn()
+            .map_err(|e| format!("Failed to open editor: {}", e))?;
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn start_container(
+    workspace_manager: State<'_, Arc<WorkspaceManager>>,
+    workspace_id: String,
+) -> Result<(), String> {
+    let id = emergent_protocol::WorkspaceId::from(workspace_id.as_str());
+    workspace_manager.start_container(&id).await
+}
+
+#[tauri::command]
+pub async fn stop_container(
+    workspace_manager: State<'_, Arc<WorkspaceManager>>,
+    agent_manager: State<'_, Arc<AgentManager>>,
+    workspace_id: String,
+) -> Result<(), String> {
+    let id = emergent_protocol::WorkspaceId::from(workspace_id.as_str());
+    agent_manager.kill_agents_in_workspace(&id).await?;
+    workspace_manager.stop_container(&id).await
+}
+
+#[tauri::command]
+pub async fn rebuild_container(
+    workspace_manager: State<'_, Arc<WorkspaceManager>>,
+    agent_manager: State<'_, Arc<AgentManager>>,
+    workspace_id: String,
+) -> Result<(), String> {
+    let id = emergent_protocol::WorkspaceId::from(workspace_id.as_str());
+    agent_manager.kill_agents_in_workspace(&id).await?;
+    workspace_manager.rebuild_container(&id).await
+}
+
+#[tauri::command]
+pub async fn detect_docker(
+    workspace_manager: State<'_, Arc<WorkspaceManager>>,
+) -> Result<DockerStatus, String> {
+    Ok(workspace_manager.detect_docker())
 }

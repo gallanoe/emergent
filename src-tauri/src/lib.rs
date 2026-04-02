@@ -3,9 +3,11 @@ mod tray;
 
 use emergent_core::agent::AgentManager;
 use emergent_core::mcp::TokenRegistry;
+use emergent_core::workspace::WorkspaceManager;
 use emergent_protocol::Notification;
 use std::sync::Arc;
 use tauri::Manager;
+use tokio::sync::broadcast;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -15,19 +17,53 @@ pub fn run() {
         .setup(|app| {
             let _rt_guard = tauri::async_runtime::handle().inner().enter();
 
+            // Create shared notification channel
+            let (event_tx, _) = broadcast::channel::<Notification>(1024);
+
+            // Create shared workspace state
+            let workspace_state = emergent_core::workspace::new_shared_state();
+
+            // Connect to Docker (optional — log warning if unavailable)
+            let docker = match bollard::Docker::connect_with_local_defaults() {
+                Ok(d) => Some(d),
+                Err(e) => {
+                    log::warn!("Docker not available: {}", e);
+                    None
+                }
+            };
+
+            // Create workspace manager (async — use block_on)
+            let workspace_manager = tauri::async_runtime::block_on(async {
+                let wm = WorkspaceManager::new(
+                    workspace_state.clone(),
+                    event_tx.clone(),
+                    docker,
+                )
+                .await;
+                if let Err(e) = wm.load_workspaces().await {
+                    log::error!("Failed to load workspaces: {}", e);
+                }
+                Arc::new(wm)
+            });
+
             // Create shared token registry
             let token_registry = Arc::new(TokenRegistry::new());
 
-            // Create the agent manager
-            let manager = Arc::new(AgentManager::new(token_registry.clone()));
+            // Create the agent manager (new API: workspace_state, event_tx, token_registry)
+            let manager = Arc::new(AgentManager::new(
+                workspace_state,
+                event_tx.clone(),
+                token_registry.clone(),
+            ));
             app.manage(manager.clone());
+            app.manage(workspace_manager);
 
             // Set up system tray icon
             tray::setup_tray(app).expect("failed to build system tray");
 
-            // Bridge agent notifications to Tauri events
+            // Bridge notifications to Tauri events
             let bridge_handle = app.handle().clone();
-            let mut bridge_rx = manager.subscribe();
+            let mut bridge_rx = event_tx.subscribe();
             tauri::async_runtime::spawn(async move {
                 use tauri::Emitter;
                 loop {
@@ -46,6 +82,7 @@ pub fn run() {
                                 Notification::SystemMessage(p) => { let _ = bridge_handle.emit(event_name, p); }
                                 Notification::SwarmMessage(p) => { let _ = bridge_handle.emit(event_name, p); }
                                 Notification::TopologyChanged(p) => { let _ = bridge_handle.emit(event_name, p); }
+                                Notification::WorkspaceStatusChange(p) => { let _ = bridge_handle.emit(event_name, p); }
                             }
                         }
                         Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
@@ -101,6 +138,17 @@ pub fn run() {
             commands::disconnect_agents,
             commands::set_agent_permissions,
             commands::get_agent_connections,
+            commands::create_workspace,
+            commands::delete_workspace,
+            commands::list_workspaces,
+            commands::get_workspace,
+            commands::update_workspace,
+            commands::get_dockerfile,
+            commands::open_dockerfile_editor,
+            commands::start_container,
+            commands::stop_container,
+            commands::rebuild_container,
+            commands::detect_docker,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
