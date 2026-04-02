@@ -56,4 +56,21 @@ describe("SwarmRail", () => {
     renderRail();
     expect(screen.getByTitle("Toggle theme")).toBeTruthy();
   });
+
+  it("calls onContextMenu with workspace id and position on right-click", async () => {
+    const onContextMenu = vi.fn();
+    render(SwarmRail, {
+      props: {
+        workspaces: [makeSwarm(), makeSwarm({ id: "swarm-2", name: "Dev" })],
+        selectedWorkspaceId: "swarm-1",
+        demoMode: false,
+        onSelectWorkspace: () => {},
+        onNewWorkspace: () => {},
+        onContextMenu,
+      },
+    });
+    const btn = screen.getByText("D");
+    await fireEvent.contextMenu(btn, { clientX: 80, clientY: 120 });
+    expect(onContextMenu).toHaveBeenCalledWith("swarm-2", 80, 120);
+  });
 });

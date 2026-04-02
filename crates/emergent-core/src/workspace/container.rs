@@ -114,7 +114,7 @@ pub async fn stop_and_remove_container(
     docker: &Docker,
     container_id: &str,
 ) -> Result<(), String> {
-    let stop_options = StopContainerOptions { t: 10 };
+    let stop_options = StopContainerOptions { t: 2 };
     let _ = docker.stop_container(container_id, Some(stop_options)).await;
 
     let remove_options = RemoveContainerOptions {

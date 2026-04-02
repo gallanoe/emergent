@@ -69,4 +69,11 @@ describe("ContextMenu", () => {
     await fireEvent.mouseDown(document.body);
     expect(onClose).toHaveBeenCalledOnce();
   });
+
+  it("renders menu item without icon gracefully", () => {
+    renderMenu({
+      items: [{ id: "stop", label: "Stop" }],
+    });
+    expect(screen.getByText("Stop")).toBeTruthy();
+  });
 });

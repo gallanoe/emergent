@@ -9,6 +9,7 @@
     demoMode: boolean;
     onSelectWorkspace: (id: string) => void;
     onNewWorkspace: () => void;
+    onContextMenu?: (workspaceId: string, x: number, y: number) => void;
   }
 
   let {
@@ -17,6 +18,7 @@
     demoMode,
     onSelectWorkspace,
     onNewWorkspace,
+    onContextMenu,
   }: Props = $props();
 
   function statusDotColor(status: ContainerStatus): string {
@@ -47,6 +49,10 @@
           : 'bg-bg-elevated text-fg-muted border border-border-default hover:bg-bg-hover'}"
         title={workspace.name}
         onclick={() => onSelectWorkspace(workspace.id)}
+        oncontextmenu={(e: MouseEvent) => {
+          e.preventDefault();
+          onContextMenu?.(workspace.id, e.clientX, e.clientY);
+        }}
       >
         {workspace.name.charAt(0).toUpperCase()}
       </button>

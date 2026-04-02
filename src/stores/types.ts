@@ -1,3 +1,5 @@
+import type { Component } from "svelte";
+
 /** Shared display types used by all components.
  *  Both mock and real agent stores produce data in these shapes. */
 
@@ -162,4 +164,5 @@ export interface MenuItem {
   disabled?: boolean;
   shortcut?: string;
   separator?: boolean;
+  icon?: Component;
 }

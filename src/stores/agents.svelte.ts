@@ -85,8 +85,6 @@ interface ConfigUpdatePayload {
   changes: { option_name: string; new_value_name: string }[];
 }
 
-
-
 // ── Store ───────────────────────────────────────────────────────
 
 interface ChunkBuffer {

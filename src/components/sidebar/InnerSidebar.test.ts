@@ -57,6 +57,7 @@ function renderSidebar(overrides: Record<string, unknown> = {}) {
       onAddAgent:
         (overrides.onAddAgent as (swarmId: string, cmd: string, name: string) => void) ??
         (() => {}),
+      onOverflowMenu: (overrides.onOverflowMenu as (x: number, y: number) => void) ?? (() => {}),
     },
   });
 }
@@ -107,5 +108,17 @@ describe("InnerSidebar", () => {
     renderSidebar({ onSelectView });
     await fireEvent.click(screen.getByText("Skills"));
     expect(onSelectView).not.toHaveBeenCalled();
+  });
+
+  it("renders overflow menu button next to workspace name", () => {
+    renderSidebar();
+    expect(screen.getByTitle("Workspace actions")).toBeTruthy();
+  });
+
+  it("calls onOverflowMenu when overflow button clicked", async () => {
+    const onOverflowMenu = vi.fn();
+    renderSidebar({ onOverflowMenu });
+    await fireEvent.click(screen.getByTitle("Workspace actions"));
+    expect(onOverflowMenu).toHaveBeenCalled();
   });
 });

@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { ContainerStatus } from "../../stores/types";
   import ConfirmDialog from "../ConfirmDialog.svelte";
+  import { Play, Square, RefreshCw } from "@lucide/svelte";
 
   interface Props {
     containerStatus: ContainerStatus;
@@ -88,27 +89,30 @@
   <div class="flex gap-2">
     {#if !isRunning && !isBuilding}
       <button
-        class="interactive h-7 px-3.5 rounded-[5px] text-[12px] font-medium text-fg-default bg-bg-elevated border border-border-strong"
+        class="interactive flex items-center gap-1.5 h-7 px-3.5 rounded-[5px] text-[12px] font-medium text-fg-default bg-bg-elevated border border-border-strong"
         onclick={onStart}
       >
+        <Play size={12} />
         Start
       </button>
     {/if}
     {#if isRunning}
       <button
-        class="interactive h-7 px-3.5 rounded-[5px] text-[12px] font-medium text-fg-default bg-bg-elevated border border-border-strong"
+        class="interactive flex items-center gap-1.5 h-7 px-3.5 rounded-[5px] text-[12px] font-medium text-fg-default bg-bg-elevated border border-border-strong"
         onclick={onStop}
       >
+        <Square size={12} />
         Stop
       </button>
     {/if}
     <button
-      class="interactive h-7 px-3.5 rounded-[5px] text-[12px] font-medium text-fg-default bg-bg-elevated border border-border-strong {isBuilding
+      class="interactive flex items-center gap-1.5 h-7 px-3.5 rounded-[5px] text-[12px] font-medium text-fg-default bg-bg-elevated border border-border-strong {isBuilding
         ? 'opacity-50 pointer-events-none'
         : ''}"
       disabled={isBuilding}
       onclick={() => (showRebuildConfirm = true)}
     >
+      <RefreshCw size={12} />
       Rebuild
     </button>
   </div>

@@ -9,14 +9,105 @@
   import SettingsView from "./components/settings/SettingsView.svelte";
   import TerminalView from "./components/terminal/TerminalView.svelte";
   import ConfirmDialog from "./components/ConfirmDialog.svelte";
+  import ContextMenu from "./components/sidebar/ContextMenu.svelte";
   import CreateWorkspaceDialog from "./components/CreateWorkspaceDialog.svelte";
-  import { Plus } from "@lucide/svelte";
+  import {
+    Plus,
+    Square,
+    Play,
+    RefreshCw,
+    Trash2,
+    Loader,
+  } from "@lucide/svelte";
   import { onMount } from "svelte";
+  import { listen } from "@tauri-apps/api/event";
+  import type {
+    MenuItem,
+    ContainerStatus,
+    WorkspaceStatusChangePayload,
+  } from "./stores/types";
 
   let externalContent = $state<{ text: string; seq: number } | null>(null);
   let seq = 0;
   let shutdownTarget = $state<{ id: string; name: string } | null>(null);
   let showCreateWorkspace = $state(false);
+  let workspaceMenu = $state<{
+    x: number;
+    y: number;
+    workspaceId: string;
+  } | null>(null);
+  let deleteTarget = $state<{ id: string; name: string } | null>(null);
+
+  function workspaceMenuItems(status: ContainerStatus): MenuItem[] {
+    switch (status.state) {
+      case "running":
+        return [
+          { id: "stop", label: "Stop", icon: Square },
+          { id: "sep", label: "", separator: true },
+          { id: "delete", label: "Delete", icon: Trash2, danger: true },
+        ];
+      case "stopped":
+        return [
+          { id: "start", label: "Start", icon: Play },
+          { id: "sep", label: "", separator: true },
+          { id: "delete", label: "Delete", icon: Trash2, danger: true },
+        ];
+      case "building":
+        return [
+          { id: "building", label: "Building…", icon: Loader, disabled: true },
+          { id: "sep", label: "", separator: true },
+          {
+            id: "delete",
+            label: "Delete",
+            icon: Trash2,
+            danger: true,
+            disabled: true,
+          },
+        ];
+      case "error":
+        return [
+          { id: "rebuild", label: "Rebuild", icon: RefreshCw },
+          { id: "sep", label: "", separator: true },
+          { id: "delete", label: "Delete", icon: Trash2, danger: true },
+        ];
+    }
+  }
+
+  function handleWorkspaceMenuAction(actionId: string) {
+    if (!workspaceMenu) return;
+    const wsId = workspaceMenu.workspaceId;
+    const ws = appState.swarms.find((s) => s.id === wsId);
+    workspaceMenu = null;
+
+    switch (actionId) {
+      case "stop":
+        appState.stopContainer(wsId);
+        break;
+      case "start":
+        appState.startContainer(wsId);
+        break;
+      case "rebuild":
+        appState.rebuildContainer(wsId);
+        break;
+      case "delete":
+        if (ws) deleteTarget = { id: wsId, name: ws.name };
+        break;
+    }
+  }
+
+  async function confirmDeleteWorkspace() {
+    if (!deleteTarget) return;
+    const id = deleteTarget.id;
+    deleteTarget = null;
+    if (appState.selectedSwarmId === id) {
+      appState.activeView = "swarm";
+    }
+    await appState.deleteWorkspace(id);
+  }
+
+  function openWorkspaceMenu(workspaceId: string, x: number, y: number) {
+    workspaceMenu = { x, y, workspaceId };
+  }
 
   const isEmptyOrDockerMissing = $derived(
     (appState.dockerStatus && !appState.dockerStatus.docker_available) ||
@@ -41,6 +132,19 @@
   onMount(() => {
     appState.initialize();
 
+    // Close workspace menu when its target workspace changes status
+    const unlistenPromise = listen<WorkspaceStatusChangePayload>(
+      "workspace:status-change",
+      (e) => {
+        if (
+          workspaceMenu &&
+          e.payload.workspace_id === workspaceMenu.workspaceId
+        ) {
+          workspaceMenu = null;
+        }
+      },
+    );
+
     // Register handler for queue dump on error.
     // Only dump if the errored agent is currently selected — otherwise
     // the content would be sent to the wrong agent.
@@ -49,6 +153,10 @@
         pushToInput(content);
       }
     });
+
+    return () => {
+      unlistenPromise.then((fn) => fn());
+    };
   });
 
   function handleEditQueue() {
@@ -80,6 +188,7 @@
         demoMode={appState.demoMode}
         onSelectWorkspace={(id) => appState.selectWorkspace(id)}
         onNewWorkspace={() => (showCreateWorkspace = true)}
+        onContextMenu={openWorkspaceMenu}
       />
       <InnerSidebar
         swarm={appState.selectedSwarm}
@@ -101,6 +210,11 @@
         onSelectAgent={(id) => appState.selectAgent(id)}
         onAddAgent={(swarmId, cmd, name) =>
           appState.addAgentToWorkspace(swarmId, cmd, name)}
+        onOverflowMenu={(x, y) => {
+          if (appState.selectedSwarmId) {
+            openWorkspaceMenu(appState.selectedSwarmId, x, y);
+          }
+        }}
       />
     </div>
   </div>
@@ -274,5 +388,31 @@
       await appState.createWorkspace(name);
     }}
     onCancel={() => (showCreateWorkspace = false)}
+  />
+{/if}
+
+{#if workspaceMenu}
+  {@const menu = workspaceMenu}
+  {@const ws = appState.swarms.find((s) => s.id === menu.workspaceId)}
+  {#if ws}
+    <ContextMenu
+      x={menu.x}
+      y={menu.y}
+      items={workspaceMenuItems(ws.containerStatus)}
+      onSelect={handleWorkspaceMenuAction}
+      onClose={() => (workspaceMenu = null)}
+    />
+  {/if}
+{/if}
+
+{#if deleteTarget}
+  <ConfirmDialog
+    title="Delete {deleteTarget.name}?"
+    description="All agents will be terminated. The container, image, and workspace files will be permanently deleted."
+    confirmLabel="Delete"
+    onConfirm={confirmDeleteWorkspace}
+    onCancel={() => {
+      deleteTarget = null;
+    }}
   />
 {/if}

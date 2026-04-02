@@ -7,6 +7,7 @@
     ListChecks,
     Plus,
     SquareTerminal,
+    Ellipsis,
   } from "@lucide/svelte";
   import type { Component } from "svelte";
   import AgentPickerPopover from "./AgentPickerPopover.svelte";
@@ -20,6 +21,7 @@
     knownAgents: { name: string; command: string; available: boolean }[];
     onSelectView: (view: "swarm" | "settings" | "terminal") => void;
     onSelectAgent: (id: string) => void;
+    onOverflowMenu?: (x: number, y: number) => void;
     onAddAgent: (
       swarmId: string,
       agentCommand: string,
@@ -36,6 +38,7 @@
     knownAgents,
     onSelectView,
     onSelectAgent,
+    onOverflowMenu,
     onAddAgent,
   }: Props = $props();
 
@@ -74,8 +77,20 @@
   class="flex flex-col w-[200px] border-r border-border-default bg-bg-sidebar pt-3"
 >
   {#if swarm}
-    <div class="px-4 pb-2 text-[13px] font-semibold text-fg-heading truncate">
-      {swarm.name}
+    <div class="px-4 pb-2 flex items-center justify-between">
+      <span class="text-[13px] font-semibold text-fg-heading truncate">
+        {swarm.name}
+      </span>
+      <button
+        class="interactive flex items-center justify-center w-[22px] h-[22px] rounded-[5px] text-fg-muted"
+        title="Workspace actions"
+        onclick={(e: MouseEvent) => {
+          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+          onOverflowMenu?.(rect.left, rect.bottom + 4);
+        }}
+      >
+        <Ellipsis size={14} />
+      </button>
     </div>
 
     <div class="px-2 flex flex-col gap-0.5">
