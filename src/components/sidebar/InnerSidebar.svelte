@@ -6,17 +6,19 @@
     Sparkles,
     ListChecks,
     Plus,
+    SquareTerminal,
   } from "@lucide/svelte";
   import type { Component } from "svelte";
   import AgentPickerPopover from "./AgentPickerPopover.svelte";
 
   interface Props {
     swarm: DisplayWorkspace | undefined;
-    activeView: "swarm" | "agent" | "settings";
+    activeView: "swarm" | "agent" | "settings" | "terminal";
     selectedAgentId: string | null;
     demoMode: boolean;
+    containerRunning: boolean;
     knownAgents: { name: string; command: string; available: boolean }[];
-    onSelectView: (view: "swarm" | "settings") => void;
+    onSelectView: (view: "swarm" | "settings" | "terminal") => void;
     onSelectAgent: (id: string) => void;
     onAddAgent: (
       swarmId: string,
@@ -30,6 +32,7 @@
     activeView,
     selectedAgentId,
     demoMode,
+    containerRunning,
     knownAgents,
     onSelectView,
     onSelectAgent,
@@ -38,17 +41,20 @@
 
   let pickerOpen = $state(false);
 
-  const navItems: {
-    id: string;
-    label: string;
-    icon: Component;
-    enabled: boolean;
-  }[] = [
+  const navItems = $derived<
+    { id: string; label: string; icon: Component; enabled: boolean }[]
+  >([
     { id: "swarm", label: "Swarm", icon: LayoutGrid, enabled: true },
     { id: "settings", label: "Settings", icon: Settings, enabled: true },
+    {
+      id: "terminal",
+      label: "Terminal",
+      icon: SquareTerminal,
+      enabled: containerRunning,
+    },
     { id: "skills", label: "Skills", icon: Sparkles, enabled: false },
     { id: "tasks", label: "Tasks", icon: ListChecks, enabled: false },
-  ];
+  ]);
 
   function statusColor(status: string): string {
     switch (status) {
@@ -79,7 +85,8 @@
                  {item.enabled
             ? (item.id === 'settings' && activeView === 'settings') ||
               (item.id === 'swarm' &&
-                (activeView === 'swarm' || activeView === 'agent'))
+                (activeView === 'swarm' || activeView === 'agent')) ||
+              (item.id === 'terminal' && activeView === 'terminal')
               ? 'bg-bg-hover text-fg-heading'
               : 'text-fg-muted hover:bg-bg-hover'
             : 'text-fg-disabled cursor-default'}"
@@ -88,6 +95,7 @@
             if (item.enabled) {
               if (item.id === "swarm") onSelectView("swarm");
               else if (item.id === "settings") onSelectView("settings");
+              else if (item.id === "terminal") onSelectView("terminal");
             }
           }}
         >

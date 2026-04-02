@@ -45,12 +45,14 @@ function renderSidebar(overrides: Record<string, unknown> = {}) {
   return render(InnerSidebar, {
     props: {
       swarm: (overrides.swarm as DisplayWorkspace | undefined) ?? makeSwarm(),
-      activeView: (overrides.activeView as "swarm" | "agent" | "settings") ?? "swarm",
+      activeView: (overrides.activeView as "swarm" | "agent" | "settings" | "terminal") ?? "swarm",
       selectedAgentId: (overrides.selectedAgentId as string | null) ?? null,
       demoMode: (overrides.demoMode as boolean) ?? false,
+      containerRunning: (overrides.containerRunning as boolean) ?? false,
       knownAgents:
         (overrides.knownAgents as { name: string; command: string; available: boolean }[]) ?? [],
-      onSelectView: (overrides.onSelectView as (view: "swarm" | "settings") => void) ?? (() => {}),
+      onSelectView:
+        (overrides.onSelectView as (view: "swarm" | "settings" | "terminal") => void) ?? (() => {}),
       onSelectAgent: (overrides.onSelectAgent as (id: string) => void) ?? (() => {}),
       onAddAgent:
         (overrides.onAddAgent as (swarmId: string, cmd: string, name: string) => void) ??

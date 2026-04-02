@@ -7,6 +7,7 @@
   import ChatInput from "./components/chat/ChatInput.svelte";
   import SwarmView from "./components/swarm/SwarmView.svelte";
   import SettingsView from "./components/settings/SettingsView.svelte";
+  import TerminalView from "./components/terminal/TerminalView.svelte";
   import ConfirmDialog from "./components/ConfirmDialog.svelte";
   import CreateWorkspaceDialog from "./components/CreateWorkspaceDialog.svelte";
   import { Plus } from "@lucide/svelte";
@@ -85,12 +86,16 @@
         activeView={appState.activeView}
         selectedAgentId={appState.selectedAgentId}
         demoMode={appState.demoMode}
+        containerRunning={appState.selectedSwarm?.containerStatus.state ===
+          "running"}
         knownAgents={appState.knownAgents}
         onSelectView={(view) => {
           if (view === "swarm" && appState.selectedSwarmId) {
             appState.selectWorkspace(appState.selectedSwarmId);
           } else if (view === "settings") {
             appState.activeView = "settings";
+          } else if (view === "terminal") {
+            appState.activeView = "terminal";
           }
         }}
         onSelectAgent={(id) => appState.selectAgent(id)}
@@ -172,6 +177,19 @@
         onStart={() => appState.startContainer(appState.selectedSwarmId!)}
         onStop={() => appState.stopContainer(appState.selectedSwarmId!)}
         onRebuild={() => appState.rebuildContainer(appState.selectedSwarmId!)}
+      />
+    {:else if appState.activeView === "terminal" && appState.selectedSwarmId}
+      <TerminalView
+        workspaceId={appState.selectedSwarmId}
+        containerStatus={appState.selectedSwarm?.containerStatus ?? {
+          state: "stopped",
+        }}
+        sessionId={appState.terminalSessionIds[appState.selectedSwarmId] ??
+          null}
+        onSessionCreated={(sid) =>
+          appState.setTerminalSessionId(appState.selectedSwarmId!, sid)}
+        onSessionEnded={() =>
+          appState.setTerminalSessionId(appState.selectedSwarmId!, null)}
       />
     {:else if appState.activeView === "swarm" && appState.selectedSwarm}
       <SwarmView

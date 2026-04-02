@@ -41,8 +41,9 @@ function createAppState() {
   let agentConnections = $state<Record<string, string[]>>({});
   let swarmMessageLog = $state<SwarmMessageLogEntry[]>([]);
   let selectedWorkspaceId = $state<string | null>(null);
-  let activeView = $state<"swarm" | "agent" | "settings">("swarm");
+  let activeView = $state<"swarm" | "agent" | "settings" | "terminal">("swarm");
   let dockerStatus = $state<DockerStatus | null>(null);
+  let terminalSessionIds = $state<Record<string, string>>({});
 
   // ── Initialization ────────────────────────────────────────────
 
@@ -96,6 +97,11 @@ function createAppState() {
       // Refresh known agents when container starts running
       if (e.payload.status.state === "running") {
         refreshKnownAgents(e.payload.workspace_id);
+      }
+
+      // Clear terminal session when container stops
+      if (e.payload.status.state !== "running") {
+        delete terminalSessionIds[e.payload.workspace_id];
       }
     });
 
@@ -396,7 +402,7 @@ function createAppState() {
     get activeView() {
       return activeView;
     },
-    set activeView(v: "swarm" | "agent" | "settings") {
+    set activeView(v: "swarm" | "agent" | "settings" | "terminal") {
       activeView = v;
     },
     get selectedSwarm() {
@@ -433,6 +439,16 @@ function createAppState() {
     selectWorkspace,
     selectAgent,
     refreshConnections,
+    get terminalSessionIds() {
+      return terminalSessionIds;
+    },
+    setTerminalSessionId(workspaceId: string, sessionId: string | null) {
+      if (sessionId) {
+        terminalSessionIds[workspaceId] = sessionId;
+      } else {
+        delete terminalSessionIds[workspaceId];
+      }
+    },
   };
 }
 
