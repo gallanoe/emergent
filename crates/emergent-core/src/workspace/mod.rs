@@ -1,5 +1,6 @@
 pub mod container;
 mod state;
+pub mod terminal;
 
 pub use state::{
     new_shared_state, ContainerStatus, SharedWorkspaceState, Workspace, WorkspaceId,
@@ -45,6 +46,7 @@ pub struct WorkspaceManager {
     docker: Option<Docker>,
     docker_status: DockerStatus,
     workspaces_dir: PathBuf,
+    terminal_sessions: terminal::TerminalSessions,
 }
 
 impl WorkspaceManager {
@@ -70,6 +72,7 @@ impl WorkspaceManager {
             docker,
             docker_status,
             workspaces_dir,
+            terminal_sessions: terminal::new_terminal_sessions(),
         }
     }
 
@@ -279,6 +282,9 @@ impl WorkspaceManager {
                 .ok_or_else(|| format!("Workspace '{}' not found", id))?
         };
 
+        // Close any terminal sessions for this workspace
+        terminal::close_sessions_for_workspace(&self.terminal_sessions, id).await;
+
         // Stop and remove container if docker is available
         if let Some(docker) = &self.docker {
             let container_id = {
@@ -435,6 +441,9 @@ impl WorkspaceManager {
                 .ok_or_else(|| format!("No running container for workspace '{}'", id))?
         };
 
+        // Close any terminal sessions for this workspace
+        terminal::close_sessions_for_workspace(&self.terminal_sessions, id).await;
+
         container::stop_and_remove_container(docker, &container_id).await?;
 
         {
@@ -496,6 +505,76 @@ impl WorkspaceManager {
 
     pub fn detect_docker(&self) -> DockerStatus {
         self.docker_status.clone()
+    }
+
+    // -----------------------------------------------------------------------
+    // Terminal sessions
+    // -----------------------------------------------------------------------
+
+    pub async fn create_terminal_session(
+        &self,
+        workspace_id: &WorkspaceId,
+    ) -> Result<String, String> {
+        let docker = self.require_docker()?;
+        let container_id = {
+            let state = self.state.read().await;
+            state
+                .workspaces
+                .get(workspace_id)
+                .and_then(|ws| ws.container_id.clone())
+                .ok_or_else(|| {
+                    format!("No running container for workspace '{}'", workspace_id)
+                })?
+        };
+
+        let session = terminal::create_session(
+            docker,
+            &container_id,
+            workspace_id.clone(),
+            &self.event_tx,
+        )
+        .await?;
+
+        let session_id = session.session_id.clone();
+        self.terminal_sessions
+            .lock()
+            .await
+            .insert(session_id.clone(), session);
+        Ok(session_id)
+    }
+
+    pub async fn write_terminal(&self, session_id: &str, data: &[u8]) -> Result<(), String> {
+        let mut sessions = self.terminal_sessions.lock().await;
+        let session = sessions
+            .get_mut(session_id)
+            .ok_or_else(|| format!("Terminal session '{}' not found", session_id))?;
+        session.write(data).await
+    }
+
+    pub async fn resize_terminal(
+        &self,
+        session_id: &str,
+        cols: u16,
+        rows: u16,
+    ) -> Result<(), String> {
+        let docker = self.require_docker()?;
+        let exec_id = {
+            let sessions = self.terminal_sessions.lock().await;
+            sessions
+                .get(session_id)
+                .map(|s| s.exec_id.clone())
+                .ok_or_else(|| format!("Terminal session '{}' not found", session_id))?
+        };
+        terminal::TerminalSession::resize(docker, &exec_id, cols, rows).await
+    }
+
+    pub async fn close_terminal_session(&self, session_id: &str) -> Result<(), String> {
+        let mut sessions = self.terminal_sessions.lock().await;
+        let session = sessions
+            .remove(session_id)
+            .ok_or_else(|| format!("Terminal session '{}' not found", session_id))?;
+        session.close();
+        Ok(())
     }
 }
 
