@@ -11,21 +11,32 @@
     onNewWorkspace: () => void;
   }
 
-  let { workspaces, selectedWorkspaceId, demoMode, onSelectWorkspace, onNewWorkspace }: Props =
-    $props();
+  let {
+    workspaces,
+    selectedWorkspaceId,
+    demoMode,
+    onSelectWorkspace,
+    onNewWorkspace,
+  }: Props = $props();
 
   function statusDotColor(status: ContainerStatus): string {
     switch (status.state) {
-      case "running": return "bg-success";
-      case "building": return "bg-warning animate-pulse";
-      case "error": return "bg-error";
+      case "running":
+        return "bg-success";
+      case "building":
+        return "bg-warning animate-pulse";
+      case "error":
+        return "bg-error";
       case "stopped":
-      default: return "bg-fg-disabled";
+      default:
+        return "bg-fg-disabled";
     }
   }
 </script>
 
-<nav class="flex flex-col items-center w-[56px] border-r border-border-default bg-bg-sidebar py-3 gap-2">
+<nav
+  class="flex flex-col items-center w-[56px] border-r border-border-default bg-bg-sidebar py-3 gap-2"
+>
   {#each workspaces as workspace (workspace.id)}
     <div class="relative">
       <button

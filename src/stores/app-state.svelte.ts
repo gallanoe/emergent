@@ -194,11 +194,7 @@ function createAppState() {
     const workspace = workspaces.find((w) => w.id === workspaceId);
     if (!workspace) throw new Error(`Workspace ${workspaceId} not found`);
 
-    const agentId = await agentStore.spawnAgent(
-      workspaceId,
-      agentBinary,
-      agentName,
-    );
+    const agentId = await agentStore.spawnAgent(workspaceId, agentBinary, agentName);
     workspace.agentIds.push(agentId);
 
     if (!selectedAgentId) {
@@ -222,7 +218,9 @@ function createAppState() {
         nextSelection = workspace.agentIds[idx + 1] ?? null;
       } else {
         // Workspace will be empty — find first agent in any other workspace
-        const otherAgent = workspaces.filter((w) => w.id !== workspace.id).flatMap((w) => w.agentIds)[0];
+        const otherAgent = workspaces
+          .filter((w) => w.id !== workspace.id)
+          .flatMap((w) => w.agentIds)[0];
         nextSelection = otherAgent ?? null;
       }
 

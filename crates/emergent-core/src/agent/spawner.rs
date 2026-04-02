@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use tokio::io::{AsyncRead, AsyncWrite};
 
 /// A process running inside a container, providing stdin/stdout for ACP.
+#[async_trait]
 pub trait AgentProcess: Send {
     type Stdin: AsyncWrite + Unpin + Send;
     type Stdout: AsyncRead + Unpin + Send;
@@ -35,6 +36,7 @@ pub struct DockerCliProcess {
     stdout: Option<tokio::process::ChildStdout>,
 }
 
+#[async_trait]
 impl AgentProcess for DockerCliProcess {
     type Stdin = tokio::process::ChildStdin;
     type Stdout = tokio::process::ChildStdout;

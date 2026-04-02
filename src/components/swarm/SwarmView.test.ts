@@ -51,16 +51,6 @@ function renderSwarmView(overrides: Record<string, unknown> = {}) {
 }
 
 describe("SwarmView", () => {
-  it("renders swarm name in top bar", () => {
-    renderSwarmView();
-    expect(screen.getByText("Research Swarm")).toBeTruthy();
-  });
-
-  it("renders agent count badge", () => {
-    renderSwarmView();
-    expect(screen.getByText("2 agents")).toBeTruthy();
-  });
-
   it("renders agent cards with names", () => {
     renderSwarmView();
     expect(screen.getByText("Claude")).toBeTruthy();

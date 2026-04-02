@@ -1,5 +1,8 @@
 <script lang="ts">
-  import type { DisplayWorkspace, SwarmMessageLogEntry } from "../../stores/types";
+  import type {
+    DisplayWorkspace,
+    SwarmMessageLogEntry,
+  } from "../../stores/types";
   import ActivityFeed from "./ActivityFeed.svelte";
   interface Props {
     swarm: DisplayWorkspace;
@@ -53,21 +56,6 @@
 </script>
 
 <div class="flex flex-col h-full min-h-0">
-  <!-- Top bar -->
-  <div
-    class="flex items-center justify-between h-[38px] px-5 border-b border-border-default flex-shrink-0 relative z-[60]"
-  >
-    <div class="flex items-center gap-2">
-      <span class="text-[13px] font-semibold text-fg-heading">{swarm.name}</span
-      >
-      <span
-        class="text-[10px] text-fg-muted bg-bg-elevated px-2 py-0.5 rounded-full border border-border-default"
-      >
-        {swarm.agents.length} agent{swarm.agents.length !== 1 ? "s" : ""}
-      </span>
-    </div>
-  </div>
-
   <!-- Agent cards grid -->
   <div
     class="px-5 py-4 grid gap-2.5 flex-shrink-0"

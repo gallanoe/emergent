@@ -67,7 +67,9 @@
         Cancel
       </button>
       <button
-        class="h-7 px-3.5 rounded-[5px] text-[12px] font-medium text-bg-base bg-accent hover:bg-accent-hover transition-colors duration-100 {!name.trim() ? 'opacity-50 pointer-events-none' : ''}"
+        class="h-7 px-3.5 rounded-[5px] text-[12px] font-medium text-bg-base bg-accent hover:bg-accent-hover transition-colors duration-100 {!name.trim()
+          ? 'opacity-50 pointer-events-none'
+          : ''}"
         disabled={!name.trim()}
         onclick={handleSubmit}
       >

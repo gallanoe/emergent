@@ -13,7 +13,14 @@
     onRebuild: () => void;
   }
 
-  let { workspaceId, containerStatus, onUpdateName, onStart, onStop, onRebuild }: Props = $props();
+  let {
+    workspaceId,
+    containerStatus,
+    onUpdateName,
+    onStart,
+    onStop,
+    onRebuild,
+  }: Props = $props();
 
   let activeTab = $state<"general" | "container">("general");
   let workspace = $state<WorkspaceInfo | null>(null);
@@ -25,7 +32,7 @@
   }
 
   $effect(() => {
-    workspaceId;
+    void workspaceId;
     loadWorkspace();
   });
 
@@ -35,7 +42,7 @@
 </script>
 
 <div class="flex flex-col h-full">
-  <div class="flex border-b border-border-default bg-bg-sidebar px-4">
+  <div class="flex border-b border-border-default px-5">
     <button
       class="px-4 py-2.5 text-[12px] font-medium border-b-2 transition-colors
              {activeTab === 'general'

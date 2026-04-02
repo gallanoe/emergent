@@ -11,7 +11,14 @@
     onOpenEditor: () => void;
   }
 
-  let { containerStatus, dockerfile, onStart, onStop, onRebuild, onOpenEditor }: Props = $props();
+  let {
+    containerStatus,
+    dockerfile,
+    onStart,
+    onStop,
+    onRebuild,
+    onOpenEditor,
+  }: Props = $props();
 
   let showRebuildConfirm = $state(false);
 
@@ -96,7 +103,9 @@
       </button>
     {/if}
     <button
-      class="interactive h-7 px-3.5 rounded-[5px] text-[12px] font-medium text-fg-default bg-bg-elevated border border-border-strong {isBuilding ? 'opacity-50 pointer-events-none' : ''}"
+      class="interactive h-7 px-3.5 rounded-[5px] text-[12px] font-medium text-fg-default bg-bg-elevated border border-border-strong {isBuilding
+        ? 'opacity-50 pointer-events-none'
+        : ''}"
       disabled={isBuilding}
       onclick={() => (showRebuildConfirm = true)}
     >

@@ -1,12 +1,15 @@
 use emergent_core::agent::AgentManager;
 use emergent_core::mcp::http_server;
 use emergent_core::mcp::TokenRegistry;
+use emergent_core::workspace;
 use std::sync::Arc;
 
 /// Spawn an MCP HTTP server backed by a fresh AgentManager.
 async fn spawn_test_server() -> (String, Arc<TokenRegistry>, Arc<AgentManager>) {
     let registry = Arc::new(TokenRegistry::new());
-    let manager = Arc::new(AgentManager::new(registry.clone()));
+    let workspace_state = workspace::new_shared_state();
+    let (event_tx, _) = tokio::sync::broadcast::channel(1024);
+    let manager = Arc::new(AgentManager::new(workspace_state, event_tx, registry.clone()));
     let server = http_server::start(manager.clone(), registry.clone())
         .await
         .expect("failed to start HTTP server");

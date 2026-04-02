@@ -78,7 +78,8 @@
           class="flex items-center gap-2 w-full px-2.5 py-1.5 rounded-md text-[12px]
                  {item.enabled
             ? (item.id === 'settings' && activeView === 'settings') ||
-              (item.id === 'swarm' && (activeView === 'swarm' || activeView === 'agent'))
+              (item.id === 'swarm' &&
+                (activeView === 'swarm' || activeView === 'agent'))
               ? 'bg-bg-hover text-fg-heading'
               : 'text-fg-muted hover:bg-bg-hover'
             : 'text-fg-disabled cursor-default'}"
