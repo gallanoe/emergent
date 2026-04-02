@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { agentStore } from "./agents.svelte";
+import { dispose as disposeTerminal } from "../components/terminal/terminal-instances";
 import type {
   ContainerStatus,
   DisplayAgent,
@@ -277,6 +278,8 @@ function createAppState() {
 
   async function deleteWorkspace(workspaceId: string) {
     await invoke("delete_workspace", { workspaceId });
+    disposeTerminal(workspaceId);
+    delete terminalSessionIds[workspaceId];
     const idx = workspaces.findIndex((w) => w.id === workspaceId);
     if (idx !== -1) workspaces.splice(idx, 1);
     if (selectedWorkspaceId === workspaceId) {
