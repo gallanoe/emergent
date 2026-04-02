@@ -1,13 +1,16 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { open } from "@tauri-apps/plugin-dialog";
 import { agentStore } from "./agents.svelte";
 import type {
+  ContainerStatus,
   DisplayAgent,
-  DisplaySwarm,
+  DisplayWorkspace,
+  DockerStatus,
   SwarmMessageLogEntry,
   SwarmMessagePayload,
   TopologyChangedPayload,
+  WorkspaceSummary,
+  WorkspaceStatusChangePayload,
 } from "./types";
 
 // Import mock data for demo mode
@@ -19,11 +22,11 @@ interface KnownAgent {
   available: boolean;
 }
 
-interface Swarm {
+interface Workspace {
   id: string;
   name: string;
-  workingDirectory: string;
   collapsed: boolean;
+  containerStatus: ContainerStatus;
   agentIds: string[];
 }
 
@@ -32,14 +35,15 @@ function createAppState() {
     import.meta.env.VITE_DEMO_MODE === "true" ||
       (globalThis as Record<string, unknown>).__EMERGENT_DEMO_MODE__ === true,
   );
-  let swarms = $state<Swarm[]>([]);
+  let workspaces = $state<Workspace[]>([]);
   let selectedAgentId = $state<string | null>(null);
   let availableAgents = $state<{ name: string; binary: string; path: string }[]>([]);
   let knownAgents = $state<KnownAgent[]>([]);
   let agentConnections = $state<Record<string, string[]>>({});
   let swarmMessageLog = $state<SwarmMessageLogEntry[]>([]);
-  let selectedSwarmId = $state<string | null>(null);
-  let activeView = $state<"swarm" | "agent">("swarm");
+  let selectedWorkspaceId = $state<string | null>(null);
+  let activeView = $state<"swarm" | "agent" | "settings">("swarm");
+  let dockerStatus = $state<DockerStatus | null>(null);
 
   // ── Initialization ────────────────────────────────────────────
 
@@ -47,18 +51,50 @@ function createAppState() {
     id: string;
     cli: string;
     status: string;
-    working_directory: string;
+    workspace_id: string;
     role?: string;
   }
 
   async function setupAfterConnect() {
+    // Detect Docker availability
+    try {
+      dockerStatus = await invoke<DockerStatus>("detect_docker");
+    } catch {
+      dockerStatus = { docker_available: false, docker_version: null };
+    }
+
     const detected = await agentStore.detectAgents();
     availableAgents = detected;
 
     const known = await invoke<KnownAgent[]>("known_agents");
     knownAgents = known;
 
+    // Load existing workspaces
+    try {
+      const wsList = await invoke<WorkspaceSummary[]>("list_workspaces");
+      for (const ws of wsList) {
+        workspaces.push({
+          id: ws.id,
+          name: ws.name,
+          collapsed: false,
+          containerStatus: ws.container_status,
+          agentIds: [],
+        });
+      }
+      if (workspaces.length > 0 && !selectedWorkspaceId) {
+        selectedWorkspaceId = workspaces[0]!.id;
+      }
+    } catch {
+      // No workspaces yet
+    }
+
     await agentStore.setupListeners();
+
+    // Listen for workspace status changes
+    await listen<WorkspaceStatusChangePayload>("workspace:status-change", (e) => {
+      const ws = workspaces.find((w) => w.id === e.payload.workspace_id);
+      if (ws) ws.containerStatus = e.payload.status;
+    });
 
     // Listen for swarm messages (global, not per-agent)
     await listen<SwarmMessagePayload>("swarm:message", (e) => {
@@ -109,18 +145,14 @@ function createAppState() {
       // Skip agents already in the local store
       if (agentStore.getAgent(agent.id)) continue;
 
-      // Find or create swarm by working_directory
-      let swarm = swarms.find((s) => s.workingDirectory === agent.working_directory);
-      if (!swarm) {
-        const name = agent.working_directory.split("/").pop() || agent.working_directory;
-        const id = createSwarm(name, agent.working_directory);
-        swarm = swarms.find((s) => s.id === id)!;
-      }
+      // Find workspace by workspace_id
+      const workspace = workspaces.find((w) => w.id === agent.workspace_id);
+      if (!workspace) continue; // Skip agents with unknown workspaces
 
       // Register agent in store without spawning (it already exists on daemon)
       const agentName = knownAgents.find((k) => k.command === agent.cli)?.name ?? agent.cli;
-      agentStore.registerExistingAgent(agent.id, swarm.id, agent.cli, agentName, agent.role);
-      swarm.agentIds.push(agent.id);
+      agentStore.registerExistingAgent(agent.id, workspace.id, agent.cli, agentName, agent.role);
+      workspace.agentIds.push(agent.id);
 
       // Replay history — notifications are typed via DaemonNotification union in agent store
       const history = await invoke<Parameters<typeof agentStore.replayNotifications>[0]>(
@@ -138,30 +170,36 @@ function createAppState() {
     await Promise.all(agents.map((agent) => refreshConnections(agent.id)));
   }
 
-  // ── Swarm management ──────────────────────────────────────────
+  // ── Workspace management ──────────────────────────────────────
 
-  function createSwarm(name: string, workingDirectory: string): string {
-    const id = crypto.randomUUID();
-    swarms.push({ id, name, workingDirectory, collapsed: false, agentIds: [] });
-    if (!selectedSwarmId) selectedSwarmId = id;
+  async function createWorkspace(name: string): Promise<string> {
+    const id = await invoke<string>("create_workspace", { name });
+    workspaces.push({
+      id,
+      name,
+      collapsed: false,
+      containerStatus: { state: "building" },
+      agentIds: [],
+    });
+    selectedWorkspaceId = id;
+    activeView = "settings";
     return id;
   }
 
-  async function addAgentToSwarm(
-    swarmId: string,
+  async function addAgentToWorkspace(
+    workspaceId: string,
     agentBinary: string,
     agentName: string,
   ): Promise<string> {
-    const swarm = swarms.find((s) => s.id === swarmId);
-    if (!swarm) throw new Error(`Swarm ${swarmId} not found`);
+    const workspace = workspaces.find((w) => w.id === workspaceId);
+    if (!workspace) throw new Error(`Workspace ${workspaceId} not found`);
 
     const agentId = await agentStore.spawnAgent(
-      swarmId,
-      swarm.workingDirectory,
+      workspaceId,
       agentBinary,
       agentName,
     );
-    swarm.agentIds.push(agentId);
+    workspace.agentIds.push(agentId);
 
     if (!selectedAgentId) {
       selectedAgentId = agentId;
@@ -173,23 +211,23 @@ function createAppState() {
   async function killAgent(agentId: string): Promise<void> {
     // Find the agent's position before removing it (for selection logic)
     let nextSelection: string | null = null;
-    for (const swarm of swarms) {
-      const idx = swarm.agentIds.indexOf(agentId);
+    for (const workspace of workspaces) {
+      const idx = workspace.agentIds.indexOf(agentId);
       if (idx === -1) continue;
 
-      // Determine next selection: prefer above, then below, then other swarms
+      // Determine next selection: prefer above, then below, then other workspaces
       if (idx > 0) {
-        nextSelection = swarm.agentIds[idx - 1] ?? null;
-      } else if (swarm.agentIds.length > 1) {
-        nextSelection = swarm.agentIds[idx + 1] ?? null;
+        nextSelection = workspace.agentIds[idx - 1] ?? null;
+      } else if (workspace.agentIds.length > 1) {
+        nextSelection = workspace.agentIds[idx + 1] ?? null;
       } else {
-        // Swarm will be empty — find first agent in any other swarm
-        const otherAgent = swarms.filter((s) => s.id !== swarm.id).flatMap((s) => s.agentIds)[0];
+        // Workspace will be empty — find first agent in any other workspace
+        const otherAgent = workspaces.filter((w) => w.id !== workspace.id).flatMap((w) => w.agentIds)[0];
         nextSelection = otherAgent ?? null;
       }
 
-      // Remove from swarm
-      swarm.agentIds.splice(idx, 1);
+      // Remove from workspace
+      workspace.agentIds.splice(idx, 1);
       break;
     }
 
@@ -200,15 +238,31 @@ function createAppState() {
     }
   }
 
-  async function newSwarm(): Promise<void> {
-    if (demoMode) return;
+  async function startContainer(workspaceId: string) {
+    await invoke("start_container", { workspaceId });
+  }
 
-    const selected = await open({ directory: true, multiple: false });
-    if (!selected) return; // user cancelled
+  async function stopContainer(workspaceId: string) {
+    await invoke("stop_container", { workspaceId });
+  }
 
-    const path = selected as string;
-    const name = path.split("/").pop() || path;
-    createSwarm(name, path);
+  async function rebuildContainer(workspaceId: string) {
+    await invoke("rebuild_container", { workspaceId });
+  }
+
+  async function updateWorkspace(workspaceId: string, name: string) {
+    await invoke("update_workspace", { workspaceId, name });
+    const ws = workspaces.find((w) => w.id === workspaceId);
+    if (ws) ws.name = name;
+  }
+
+  async function deleteWorkspace(workspaceId: string) {
+    await invoke("delete_workspace", { workspaceId });
+    const idx = workspaces.findIndex((w) => w.id === workspaceId);
+    if (idx !== -1) workspaces.splice(idx, 1);
+    if (selectedWorkspaceId === workspaceId) {
+      selectedWorkspaceId = workspaces[0]?.id ?? null;
+    }
   }
 
   function toggleSwarmCollapsed(swarmId: string) {
@@ -216,21 +270,20 @@ function createAppState() {
       mockState.toggleSwarmCollapsed(swarmId);
       return;
     }
-    const swarm = swarms.find((s) => s.id === swarmId);
-    if (swarm) swarm.collapsed = !swarm.collapsed;
+    const workspace = workspaces.find((w) => w.id === swarmId);
+    if (workspace) workspace.collapsed = !workspace.collapsed;
   }
 
   // ── Computed display data ─────────────────────────────────────
 
-  function getDisplaySwarms(): DisplaySwarm[] {
-    if (demoMode) {
-      return mockState.swarms;
-    }
-    return swarms.map((s) => ({
-      id: s.id,
-      name: s.name,
-      collapsed: s.collapsed,
-      agents: s.agentIds
+  function getDisplayWorkspaces(): DisplayWorkspace[] {
+    if (demoMode) return mockState.swarms as unknown as DisplayWorkspace[];
+    return workspaces.map((w) => ({
+      id: w.id,
+      name: w.name,
+      collapsed: w.collapsed,
+      containerStatus: w.containerStatus,
+      agents: w.agentIds
         .map((id) => agentStore.getAgent(id))
         .filter(Boolean)
         .map((conn) => agentStore.toDisplayAgent(conn!)),
@@ -265,26 +318,26 @@ function createAppState() {
     await invoke("set_agent_permissions", { agentId, enabled });
   }
 
-  function selectSwarm(swarmId: string) {
-    selectedSwarmId = swarmId;
+  function selectWorkspace(workspaceId: string) {
+    selectedWorkspaceId = workspaceId;
     activeView = "swarm";
   }
 
   function selectAgent(agentId: string) {
     selectedAgentId = agentId;
-    // Find which swarm this agent belongs to and select it
-    const swarm = swarms.find((s) => s.agentIds.includes(agentId));
-    if (swarm) selectedSwarmId = swarm.id;
+    // Find which workspace this agent belongs to and select it
+    const workspace = workspaces.find((w) => w.agentIds.includes(agentId));
+    if (workspace) selectedWorkspaceId = workspace.id;
     activeView = "agent";
   }
 
-  function getSelectedSwarm(): DisplaySwarm | undefined {
+  function getSelectedSwarm(): DisplayWorkspace | undefined {
     if (demoMode) {
-      const swarmList = mockState.swarms;
-      return swarmList.find((s: DisplaySwarm) => s.id === selectedSwarmId) ?? swarmList[0];
+      const swarmList = mockState.swarms as unknown as DisplayWorkspace[];
+      return swarmList.find((s) => s.id === selectedWorkspaceId) ?? swarmList[0];
     }
-    const displaySwarms = getDisplaySwarms();
-    return displaySwarms.find((s) => s.id === selectedSwarmId) ?? displaySwarms[0];
+    const displayWorkspaces = getDisplayWorkspaces();
+    return displayWorkspaces.find((w) => w.id === selectedWorkspaceId) ?? displayWorkspaces[0];
   }
 
   function getSelectedAgent(): DisplayAgent | undefined {
@@ -316,7 +369,7 @@ function createAppState() {
       }
     },
     get swarms() {
-      return getDisplaySwarms();
+      return getDisplayWorkspaces();
     },
     get selectedAgent() {
       return getSelectedAgent();
@@ -328,7 +381,7 @@ function createAppState() {
       return knownAgents;
     },
     get selectedSwarmId() {
-      return selectedSwarmId;
+      return selectedWorkspaceId;
     },
     get activeView() {
       return activeView;
@@ -342,12 +395,19 @@ function createAppState() {
     get swarmMessageLog() {
       return swarmMessageLog;
     },
+    get dockerStatus() {
+      return dockerStatus;
+    },
     initialize,
-    createSwarm,
-    addAgentToSwarm,
-    newSwarm,
+    createWorkspace,
+    addAgentToWorkspace,
     toggleSwarmCollapsed,
     killAgent,
+    updateWorkspace,
+    deleteWorkspace,
+    startContainer,
+    stopContainer,
+    rebuildContainer,
     sendPrompt: agentStore.sendPrompt,
     cancelPrompt: agentStore.cancelPrompt,
     setConfig: agentStore.setConfig,
@@ -357,7 +417,7 @@ function createAppState() {
     connectAgents,
     disconnectAgents,
     setAgentPermissions,
-    selectSwarm,
+    selectWorkspace,
     selectAgent,
     refreshConnections,
   };

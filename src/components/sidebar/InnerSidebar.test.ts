@@ -1,12 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/svelte";
 import InnerSidebar from "./InnerSidebar.svelte";
-import type { DisplaySwarm, DisplayAgent } from "../../stores/types";
+import type { DisplayWorkspace, DisplayAgent } from "../../stores/types";
 
 function makeAgent(overrides?: Partial<DisplayAgent>): DisplayAgent {
   return {
     id: "agent-1",
-    swarmId: "swarm-1",
+    workspaceId: "swarm-1",
     cli: "claude-agent-acp",
     name: "Claude",
     status: "working",
@@ -22,11 +22,12 @@ function makeAgent(overrides?: Partial<DisplayAgent>): DisplayAgent {
   };
 }
 
-function makeSwarm(overrides?: Partial<DisplaySwarm>): DisplaySwarm {
+function makeSwarm(overrides?: Partial<DisplayWorkspace>): DisplayWorkspace {
   return {
     id: "swarm-1",
     name: "Research Swarm",
     collapsed: false,
+    containerStatus: { state: "running" },
     agents: [
       makeAgent(),
       makeAgent({
@@ -43,7 +44,7 @@ function makeSwarm(overrides?: Partial<DisplaySwarm>): DisplaySwarm {
 function renderSidebar(overrides: Record<string, unknown> = {}) {
   return render(InnerSidebar, {
     props: {
-      swarm: (overrides.swarm as DisplaySwarm | undefined) ?? makeSwarm(),
+      swarm: (overrides.swarm as DisplayWorkspace | undefined) ?? makeSwarm(),
       activeView: (overrides.activeView as "swarm" | "agent") ?? "swarm",
       selectedAgentId: (overrides.selectedAgentId as string | null) ?? null,
       demoMode: (overrides.demoMode as boolean) ?? false,

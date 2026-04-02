@@ -93,7 +93,7 @@ export type AgentStatus = "initializing" | "idle" | "working" | "error";
 
 export interface DisplayAgent {
   id: string;
-  swarmId: string;
+  workspaceId: string;
   cli: string;
   name: string;
   status: AgentStatus;
@@ -108,12 +108,47 @@ export interface DisplayAgent {
   role?: string;
 }
 
-export interface DisplaySwarm {
+export type ContainerStatus =
+  | { state: "stopped" }
+  | { state: "building" }
+  | { state: "running" }
+  | { state: "error"; message: string };
+
+export interface WorkspaceSummary {
+  id: string;
+  name: string;
+  container_status: ContainerStatus;
+  agent_count: number;
+}
+
+export interface WorkspaceInfo {
+  id: string;
+  name: string;
+  path: string;
+  container_id: string | null;
+  container_status: ContainerStatus;
+}
+
+export interface DockerStatus {
+  docker_available: boolean;
+  docker_version: string | null;
+}
+
+export interface WorkspaceStatusChangePayload {
+  workspace_id: string;
+  status: ContainerStatus;
+}
+
+export interface DisplayWorkspace {
   id: string;
   name: string;
   collapsed: boolean;
+  containerStatus: ContainerStatus;
   agents: DisplayAgent[];
 }
+
+/** @deprecated Use DisplayWorkspace instead */
+export type DisplaySwarm = DisplayWorkspace;
 
 export interface SystemMessagePayload {
   agent_id: string;

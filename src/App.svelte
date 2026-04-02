@@ -65,11 +65,11 @@
     ></div>
     <div class="flex flex-1 min-h-0">
       <SwarmRail
-        swarms={appState.swarms}
-        selectedSwarmId={appState.selectedSwarmId}
+        workspaces={appState.swarms}
+        selectedWorkspaceId={appState.selectedSwarmId}
         demoMode={appState.demoMode}
-        onSelectSwarm={(id) => appState.selectSwarm(id)}
-        onNewSwarm={() => appState.newSwarm()}
+        onSelectWorkspace={(id) => appState.selectWorkspace(id)}
+        onNewWorkspace={() => appState.createWorkspace("New Workspace")}
       />
       <InnerSidebar
         swarm={appState.selectedSwarm}
@@ -79,12 +79,12 @@
         knownAgents={appState.knownAgents}
         onSelectView={(view) => {
           if (view === "swarm" && appState.selectedSwarmId) {
-            appState.selectSwarm(appState.selectedSwarmId);
+            appState.selectWorkspace(appState.selectedSwarmId);
           }
         }}
         onSelectAgent={(id) => appState.selectAgent(id)}
         onAddAgent={(swarmId, cmd, name) =>
-          appState.addAgentToSwarm(swarmId, cmd, name)}
+          appState.addAgentToWorkspace(swarmId, cmd, name)}
       />
     </div>
   </div>
@@ -98,7 +98,7 @@
         knownAgents={appState.knownAgents}
         onSelectAgent={(id) => appState.selectAgent(id)}
         onAddAgent={(swarmId, cmd, name) =>
-          appState.addAgentToSwarm(swarmId, cmd, name)}
+          appState.addAgentToWorkspace(swarmId, cmd, name)}
       />
     {:else}
       <TopBar

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { DisplaySwarm } from "../../stores/types";
+  import type { DisplayWorkspace } from "../../stores/types";
   import {
     LayoutGrid,
     Settings,
@@ -11,8 +11,8 @@
   import AgentPickerPopover from "./AgentPickerPopover.svelte";
 
   interface Props {
-    swarm: DisplaySwarm | undefined;
-    activeView: "swarm" | "agent";
+    swarm: DisplayWorkspace | undefined;
+    activeView: "swarm" | "agent" | "settings";
     selectedAgentId: string | null;
     demoMode: boolean;
     knownAgents: { name: string; command: string; available: boolean }[];

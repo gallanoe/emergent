@@ -6,7 +6,7 @@ import type { DisplayAgent, DisplayMessage } from "../../stores/types";
 function makeAgent(messages: DisplayMessage[], overrides?: Partial<DisplayAgent>): DisplayAgent {
   return {
     id: "agent-1",
-    swarmId: "swarm-1",
+    workspaceId: "swarm-1",
     cli: "claude-agent-acp",
     name: "Test Agent",
     status: "idle",

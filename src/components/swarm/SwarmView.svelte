@@ -1,8 +1,8 @@
 <script lang="ts">
-  import type { DisplaySwarm, SwarmMessageLogEntry } from "../../stores/types";
+  import type { DisplayWorkspace, SwarmMessageLogEntry } from "../../stores/types";
   import ActivityFeed from "./ActivityFeed.svelte";
   interface Props {
-    swarm: DisplaySwarm;
+    swarm: DisplayWorkspace;
     messageLog: SwarmMessageLogEntry[];
     agentConnections: Record<string, string[]>;
     demoMode: boolean;

@@ -1,17 +1,18 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/svelte";
 import Sidebar from "./Sidebar.svelte";
-import type { DisplaySwarm } from "../../stores/types";
+import type { DisplayWorkspace } from "../../stores/types";
 
-function makeSwarm(overrides?: Partial<DisplaySwarm>): DisplaySwarm {
+function makeSwarm(overrides?: Partial<DisplayWorkspace>): DisplayWorkspace {
   return {
     id: "swarm-1",
     name: "test-swarm",
     collapsed: false,
+    containerStatus: { state: "running" },
     agents: [
       {
         id: "agent-1",
-        swarmId: "swarm-1",
+        workspaceId: "swarm-1",
         cli: "claude-agent-acp",
         name: "Fix navigation bug",
         status: "working",
@@ -25,7 +26,7 @@ function makeSwarm(overrides?: Partial<DisplaySwarm>): DisplaySwarm {
       },
       {
         id: "agent-2",
-        swarmId: "swarm-1",
+        workspaceId: "swarm-1",
         cli: "codex-acp",
         name: "Update tests",
         status: "idle",
@@ -45,7 +46,7 @@ function makeSwarm(overrides?: Partial<DisplaySwarm>): DisplaySwarm {
 const noop = () => {};
 
 interface SidebarOverrides {
-  swarms?: DisplaySwarm[];
+  swarms?: DisplayWorkspace[];
   selectedAgentId?: string | null;
   demoMode?: boolean;
   knownAgents?: { name: string; command: string; available: boolean }[];
@@ -125,7 +126,7 @@ describe("Sidebar", () => {
       agents: [
         {
           id: "agent-init",
-          swarmId: "swarm-1",
+          workspaceId: "swarm-1",
           cli: "claude-agent-acp",
           name: "Claude",
           status: "initializing",
