@@ -283,3 +283,41 @@ pub async fn detect_docker(
 ) -> Result<DockerStatus, String> {
     Ok(workspace_manager.detect_docker())
 }
+
+#[tauri::command]
+pub async fn create_terminal_session(
+    workspace_manager: State<'_, Arc<WorkspaceManager>>,
+    workspace_id: String,
+) -> Result<String, String> {
+    let id = emergent_protocol::WorkspaceId::from(workspace_id.as_str());
+    workspace_manager.create_terminal_session(&id).await
+}
+
+#[tauri::command]
+pub async fn write_terminal(
+    workspace_manager: State<'_, Arc<WorkspaceManager>>,
+    session_id: String,
+    data: Vec<u8>,
+) -> Result<(), String> {
+    workspace_manager.write_terminal(&session_id, &data).await
+}
+
+#[tauri::command]
+pub async fn resize_terminal(
+    workspace_manager: State<'_, Arc<WorkspaceManager>>,
+    session_id: String,
+    cols: u16,
+    rows: u16,
+) -> Result<(), String> {
+    workspace_manager
+        .resize_terminal(&session_id, cols, rows)
+        .await
+}
+
+#[tauri::command]
+pub async fn close_terminal_session(
+    workspace_manager: State<'_, Arc<WorkspaceManager>>,
+    session_id: String,
+) -> Result<(), String> {
+    workspace_manager.close_terminal_session(&session_id).await
+}

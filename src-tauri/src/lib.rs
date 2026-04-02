@@ -83,6 +83,8 @@ pub fn run() {
                                 Notification::SwarmMessage(p) => { let _ = bridge_handle.emit(event_name, p); }
                                 Notification::TopologyChanged(p) => { let _ = bridge_handle.emit(event_name, p); }
                                 Notification::WorkspaceStatusChange(p) => { let _ = bridge_handle.emit(event_name, p); }
+                                Notification::TerminalOutput(p) => { let _ = bridge_handle.emit(event_name, p); }
+                                Notification::TerminalExited(p) => { let _ = bridge_handle.emit(event_name, p); }
                             }
                         }
                         Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
@@ -148,6 +150,10 @@ pub fn run() {
             commands::stop_container,
             commands::rebuild_container,
             commands::detect_docker,
+            commands::create_terminal_session,
+            commands::write_terminal,
+            commands::resize_terminal,
+            commands::close_terminal_session,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
