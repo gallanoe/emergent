@@ -28,10 +28,6 @@ pub struct SpawnAgentParams {
     )]
     pub agent_name: String,
     #[schemars(
-        description = "Working directory for the new agent. Defaults to the spawning agent's directory if not specified."
-    )]
-    pub working_directory: Option<String>,
-    #[schemars(
         description = "Optional role for the agent (e.g. 'Code reviewer', 'Test writer'). Shapes the agent's behavior."
     )]
     pub role: Option<String>,
@@ -120,9 +116,20 @@ impl McpHandler {
         let connections = self.manager.get_connections(&agent_id).await;
         let agents = self.manager.list_agents().await;
 
+        // Resolve caller's workspace_id so we only show same-workspace peers
+        let caller_workspace_id = agents
+            .iter()
+            .find(|a| a.id == agent_id)
+            .map(|a| a.workspace_id.clone())
+            .ok_or_else(|| format!("Calling agent '{}' not found", agent_id))?;
+
         let mut result = Vec::new();
         for agent in &agents {
             if agent.id == agent_id {
+                continue;
+            }
+            // Only list agents in the same workspace
+            if agent.workspace_id != caller_workspace_id {
                 continue;
             }
             result.push(serde_json::json!({
@@ -194,7 +201,7 @@ impl McpHandler {
             return Err("Permission denied: management permissions required".to_string());
         }
 
-        let known = crate::detect::known_agents();
+        let known = crate::detect::known_agents_unavailable();
         let agent = known
             .iter()
             .find(|a| a.name.eq_ignore_ascii_case(&params.agent_name));
@@ -214,21 +221,19 @@ impl McpHandler {
             }
         };
 
-        let wd = match params.working_directory {
-            Some(wd) => wd,
-            None => {
-                let agents = self.manager.list_agents().await;
-                agents
-                    .iter()
-                    .find(|a| a.id == agent_id)
-                    .map(|a| a.working_directory.clone())
-                    .unwrap_or_else(|| ".".to_string())
-            }
+        // Use the calling agent's workspace_id
+        let workspace_id = {
+            let agents = self.manager.list_agents().await;
+            agents
+                .iter()
+                .find(|a| a.id == agent_id)
+                .map(|a| a.workspace_id.clone())
+                .ok_or_else(|| format!("Calling agent '{}' not found", agent_id))?
         };
 
         let new_agent_id = self
             .manager
-            .spawn_agent(wd.into(), agent.command.clone(), params.role)
+            .spawn_agent(workspace_id, agent.command.clone(), params.role)
             .await
             .map_err(|e| e.to_string())?;
         Ok(serde_json::json!({"agent_id": new_agent_id}).to_string())
@@ -273,7 +278,7 @@ impl McpHandler {
         }
         let a = self.resolve_agent_id(&agent_id, &params.agent_a);
         let b = self.resolve_agent_id(&agent_id, &params.agent_b);
-        self.manager.connect_agents(&a, &b).await;
+        self.manager.connect_agents(&a, &b).await?;
         Ok(r#"{"status": "connected"}"#.to_string())
     }
 

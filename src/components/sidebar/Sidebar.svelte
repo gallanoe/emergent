@@ -4,10 +4,10 @@
   import AgentPickerPopover from "./AgentPickerPopover.svelte";
   import ContextMenu from "./ContextMenu.svelte";
   import { AGENT_LOGOS } from "../../lib/agent-logos";
-  import type { DisplaySwarm } from "../../stores/types";
+  import type { DisplayWorkspace } from "../../stores/types";
 
   interface Props {
-    swarms: DisplaySwarm[];
+    swarms: DisplayWorkspace[];
     selectedAgentId: string | null;
     demoMode: boolean;
     knownAgents: { name: string; command: string; available: boolean }[];

@@ -1,12 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/svelte";
 import InnerSidebar from "./InnerSidebar.svelte";
-import type { DisplaySwarm, DisplayAgent } from "../../stores/types";
+import type { DisplayWorkspace, DisplayAgent } from "../../stores/types";
 
 function makeAgent(overrides?: Partial<DisplayAgent>): DisplayAgent {
   return {
     id: "agent-1",
-    swarmId: "swarm-1",
+    workspaceId: "swarm-1",
     cli: "claude-agent-acp",
     name: "Claude",
     status: "working",
@@ -22,11 +22,12 @@ function makeAgent(overrides?: Partial<DisplayAgent>): DisplayAgent {
   };
 }
 
-function makeSwarm(overrides?: Partial<DisplaySwarm>): DisplaySwarm {
+function makeSwarm(overrides?: Partial<DisplayWorkspace>): DisplayWorkspace {
   return {
     id: "swarm-1",
     name: "Research Swarm",
     collapsed: false,
+    containerStatus: { state: "running" },
     agents: [
       makeAgent(),
       makeAgent({
@@ -43,17 +44,20 @@ function makeSwarm(overrides?: Partial<DisplaySwarm>): DisplaySwarm {
 function renderSidebar(overrides: Record<string, unknown> = {}) {
   return render(InnerSidebar, {
     props: {
-      swarm: (overrides.swarm as DisplaySwarm | undefined) ?? makeSwarm(),
-      activeView: (overrides.activeView as "swarm" | "agent") ?? "swarm",
+      swarm: (overrides.swarm as DisplayWorkspace | undefined) ?? makeSwarm(),
+      activeView: (overrides.activeView as "swarm" | "agent" | "settings" | "terminal") ?? "swarm",
       selectedAgentId: (overrides.selectedAgentId as string | null) ?? null,
       demoMode: (overrides.demoMode as boolean) ?? false,
+      containerRunning: (overrides.containerRunning as boolean) ?? false,
       knownAgents:
         (overrides.knownAgents as { name: string; command: string; available: boolean }[]) ?? [],
-      onSelectView: (overrides.onSelectView as (view: "swarm" | "agent") => void) ?? (() => {}),
+      onSelectView:
+        (overrides.onSelectView as (view: "swarm" | "settings" | "terminal") => void) ?? (() => {}),
       onSelectAgent: (overrides.onSelectAgent as (id: string) => void) ?? (() => {}),
       onAddAgent:
         (overrides.onAddAgent as (swarmId: string, cmd: string, name: string) => void) ??
         (() => {}),
+      onOverflowMenu: (overrides.onOverflowMenu as (x: number, y: number) => void) ?? (() => {}),
     },
   });
 }
@@ -64,7 +68,7 @@ describe("InnerSidebar", () => {
     expect(screen.getByText("Research Swarm")).toBeTruthy();
   });
 
-  it("renders nav items with Settings, Skills, Tasks greyed out", () => {
+  it("renders nav items with Skills and Tasks greyed out", () => {
     renderSidebar();
     expect(screen.getByText("Swarm")).toBeTruthy();
     expect(screen.getByText("Settings")).toBeTruthy();
@@ -92,10 +96,29 @@ describe("InnerSidebar", () => {
     expect(onSelectAgent).toHaveBeenCalledWith("agent-2");
   });
 
-  it("does not fire onSelectView for disabled items", async () => {
+  it("calls onSelectView when Settings nav clicked", async () => {
     const onSelectView = vi.fn();
     renderSidebar({ onSelectView });
     await fireEvent.click(screen.getByText("Settings"));
+    expect(onSelectView).toHaveBeenCalledWith("settings");
+  });
+
+  it("does not fire onSelectView for disabled items", async () => {
+    const onSelectView = vi.fn();
+    renderSidebar({ onSelectView });
+    await fireEvent.click(screen.getByText("Skills"));
     expect(onSelectView).not.toHaveBeenCalled();
+  });
+
+  it("renders overflow menu button next to workspace name", () => {
+    renderSidebar();
+    expect(screen.getByTitle("Workspace actions")).toBeTruthy();
+  });
+
+  it("calls onOverflowMenu when overflow button clicked", async () => {
+    const onOverflowMenu = vi.fn();
+    renderSidebar({ onOverflowMenu });
+    await fireEvent.click(screen.getByTitle("Workspace actions"));
+    expect(onOverflowMenu).toHaveBeenCalled();
   });
 });

@@ -1,23 +1,27 @@
 <script lang="ts">
-  import type { DisplaySwarm } from "../../stores/types";
+  import type { DisplayWorkspace } from "../../stores/types";
   import {
     LayoutGrid,
     Settings,
     Sparkles,
     ListChecks,
     Plus,
+    SquareTerminal,
+    Ellipsis,
   } from "@lucide/svelte";
   import type { Component } from "svelte";
   import AgentPickerPopover from "./AgentPickerPopover.svelte";
 
   interface Props {
-    swarm: DisplaySwarm | undefined;
-    activeView: "swarm" | "agent";
+    swarm: DisplayWorkspace | undefined;
+    activeView: "swarm" | "agent" | "settings" | "terminal";
     selectedAgentId: string | null;
     demoMode: boolean;
+    containerRunning: boolean;
     knownAgents: { name: string; command: string; available: boolean }[];
-    onSelectView: (view: "swarm" | "agent") => void;
+    onSelectView: (view: "swarm" | "settings" | "terminal") => void;
     onSelectAgent: (id: string) => void;
+    onOverflowMenu?: (x: number, y: number) => void;
     onAddAgent: (
       swarmId: string,
       agentCommand: string,
@@ -30,25 +34,30 @@
     activeView,
     selectedAgentId,
     demoMode,
+    containerRunning,
     knownAgents,
     onSelectView,
     onSelectAgent,
+    onOverflowMenu,
     onAddAgent,
   }: Props = $props();
 
   let pickerOpen = $state(false);
 
-  const navItems: {
-    id: string;
-    label: string;
-    icon: Component;
-    enabled: boolean;
-  }[] = [
+  const navItems = $derived<
+    { id: string; label: string; icon: Component; enabled: boolean }[]
+  >([
     { id: "swarm", label: "Swarm", icon: LayoutGrid, enabled: true },
-    { id: "settings", label: "Settings", icon: Settings, enabled: false },
+    { id: "settings", label: "Settings", icon: Settings, enabled: true },
+    {
+      id: "terminal",
+      label: "Terminal",
+      icon: SquareTerminal,
+      enabled: containerRunning,
+    },
     { id: "skills", label: "Skills", icon: Sparkles, enabled: false },
     { id: "tasks", label: "Tasks", icon: ListChecks, enabled: false },
-  ];
+  ]);
 
   function statusColor(status: string): string {
     switch (status) {
@@ -68,8 +77,20 @@
   class="flex flex-col w-[200px] border-r border-border-default bg-bg-sidebar pt-3"
 >
   {#if swarm}
-    <div class="px-4 pb-2 text-[13px] font-semibold text-fg-heading truncate">
-      {swarm.name}
+    <div class="px-4 pb-2 flex items-center justify-between">
+      <span class="text-[13px] font-semibold text-fg-heading truncate">
+        {swarm.name}
+      </span>
+      <button
+        class="interactive flex items-center justify-center w-[22px] h-[22px] rounded-[5px] text-fg-muted"
+        title="Workspace actions"
+        onclick={(e: MouseEvent) => {
+          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+          onOverflowMenu?.(rect.left, rect.bottom + 4);
+        }}
+      >
+        <Ellipsis size={14} />
+      </button>
     </div>
 
     <div class="px-2 flex flex-col gap-0.5">
@@ -77,13 +98,20 @@
         <button
           class="flex items-center gap-2 w-full px-2.5 py-1.5 rounded-md text-[12px]
                  {item.enabled
-            ? activeView === 'swarm' && item.id === 'swarm'
+            ? (item.id === 'settings' && activeView === 'settings') ||
+              (item.id === 'swarm' &&
+                (activeView === 'swarm' || activeView === 'agent')) ||
+              (item.id === 'terminal' && activeView === 'terminal')
               ? 'bg-bg-hover text-fg-heading'
               : 'text-fg-muted hover:bg-bg-hover'
             : 'text-fg-disabled cursor-default'}"
           disabled={!item.enabled}
           onclick={() => {
-            if (item.enabled && item.id === "swarm") onSelectView("swarm");
+            if (item.enabled) {
+              if (item.id === "swarm") onSelectView("swarm");
+              else if (item.id === "settings") onSelectView("settings");
+              else if (item.id === "terminal") onSelectView("terminal");
+            }
           }}
         >
           <item.icon
@@ -102,46 +130,52 @@
     </div>
 
     <div class="px-2 flex-1 overflow-y-auto min-h-0">
-      {#each swarm.agents as agent (agent.id)}
-        <button
-          class="flex items-center gap-2 w-full px-2.5 py-[7px] rounded-md text-[12px] mt-0.5 truncate
-                 {activeView === 'agent' && selectedAgentId === agent.id
-            ? 'bg-bg-hover text-fg-heading'
-            : 'text-fg-muted hover:bg-bg-hover'}"
-          onclick={() => onSelectAgent(agent.id)}
-        >
-          <span
-            class="w-[7px] h-[7px] rounded-full flex-shrink-0 {statusColor(
-              agent.status,
-            )}"
-          ></span>
-          <span class="truncate">
-            {agent.name}{#if agent.role}<span class="text-fg-disabled">
-                — {agent.role}</span
-              >{/if}
-          </span>
-        </button>
-      {/each}
-      {#if !demoMode && swarm}
-        <div class="relative mt-1">
-          <button
-            class="interactive flex items-center gap-1.5 w-full px-2.5 py-[7px] rounded-md text-[11px] text-fg-muted"
-            onclick={() => (pickerOpen = !pickerOpen)}
-          >
-            <Plus size={12} />
-            Add agent
-          </button>
-          {#if pickerOpen}
-            <AgentPickerPopover
-              agents={knownAgents}
-              onSelect={(command, name) => {
-                onAddAgent(swarm.id, command, name);
-                pickerOpen = false;
-              }}
-              onClose={() => (pickerOpen = false)}
-            />
-          {/if}
+      {#if swarm.containerStatus.state !== "running"}
+        <div class="px-2.5 py-2 text-[11px] text-fg-disabled">
+          Workspace isn't available
         </div>
+      {:else}
+        {#each swarm.agents as agent (agent.id)}
+          <button
+            class="flex items-center gap-2 w-full px-2.5 py-[7px] rounded-md text-[12px] mt-0.5 truncate
+                   {activeView === 'agent' && selectedAgentId === agent.id
+              ? 'bg-bg-hover text-fg-heading'
+              : 'text-fg-muted hover:bg-bg-hover'}"
+            onclick={() => onSelectAgent(agent.id)}
+          >
+            <span
+              class="w-[7px] h-[7px] rounded-full flex-shrink-0 {statusColor(
+                agent.status,
+              )}"
+            ></span>
+            <span class="truncate">
+              {agent.name}{#if agent.role}<span class="text-fg-disabled">
+                  — {agent.role}</span
+                >{/if}
+            </span>
+          </button>
+        {/each}
+        {#if !demoMode && swarm}
+          <div class="relative mt-1">
+            <button
+              class="interactive flex items-center gap-1.5 w-full px-2.5 py-[7px] rounded-md text-[11px] text-fg-muted"
+              onclick={() => (pickerOpen = !pickerOpen)}
+            >
+              <Plus size={12} />
+              Add agent
+            </button>
+            {#if pickerOpen}
+              <AgentPickerPopover
+                agents={knownAgents}
+                onSelect={(command, name) => {
+                  onAddAgent(swarm.id, command, name);
+                  pickerOpen = false;
+                }}
+                onClose={() => (pickerOpen = false)}
+              />
+            {/if}
+          </div>
+        {/if}
       {/if}
     </div>
   {:else}

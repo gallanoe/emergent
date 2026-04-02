@@ -15,7 +15,7 @@ import type {
 
 interface AgentConnection {
   id: string;
-  swarmId: string;
+  workspaceId: string;
   cli: string;
   agentName: string;
   status: "initializing" | "idle" | "working" | "error" | "dead";
@@ -83,12 +83,6 @@ interface ConfigUpdatePayload {
   agent_id: string;
   config_options: ConfigOption[];
   changes: { option_name: string; new_value_name: string }[];
-}
-
-interface AgentInfo {
-  name: string;
-  binary: string;
-  path: string;
 }
 
 // ── Store ───────────────────────────────────────────────────────
@@ -403,24 +397,19 @@ function createAgentStore() {
 
   // ── Public API ────────────────────────────────────────────────
 
-  async function detectAgents(): Promise<AgentInfo[]> {
-    return invoke<AgentInfo[]>("detect_agents");
-  }
-
   async function spawnAgent(
-    swarmId: string,
-    workingDirectory: string,
+    workspaceId: string,
     agentCli: string,
     agentName: string,
   ): Promise<string> {
     const agentId = await invoke<string>("spawn_agent", {
-      workingDirectory,
+      workspaceId,
       agentCli,
     });
 
     agents[agentId] = {
       id: agentId,
-      swarmId,
+      workspaceId,
       cli: agentCli,
       agentName,
       status: "initializing",
@@ -535,7 +524,7 @@ function createAgentStore() {
 
     // Count how many agents of the same type exist in the same swarm
     const siblings = Object.values(agents).filter(
-      (a) => a.swarmId === conn.swarmId && a.agentName === conn.agentName,
+      (a) => a.workspaceId === conn.workspaceId && a.agentName === conn.agentName,
     );
 
     if (siblings.length <= 1) return typeName;
@@ -556,7 +545,7 @@ function createAgentStore() {
     };
     return {
       id: conn.id,
-      swarmId: conn.swarmId,
+      workspaceId: conn.workspaceId,
       cli: conn.cli,
       name: getAgentDisplayName(conn),
       status: statusMap[conn.status],
@@ -574,14 +563,14 @@ function createAgentStore() {
 
   function registerExistingAgent(
     agentId: string,
-    swarmId: string,
+    workspaceId: string,
     cli: string,
     agentName: string,
     role?: string,
   ) {
     agents[agentId] = {
       id: agentId,
-      swarmId,
+      workspaceId,
       cli,
       agentName,
       status: "idle",
@@ -649,7 +638,6 @@ function createAgentStore() {
     getAgent,
     toDisplayAgent,
     setupListeners,
-    detectAgents,
     spawnAgent,
     sendPrompt,
     cancelPrompt,

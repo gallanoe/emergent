@@ -1,11 +1,11 @@
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use acp::Agent as _;
 use agent_client_protocol as acp;
 use emergent_protocol::{
     AgentStatus, ConfigOption, ConfigUpdatePayload, Notification, StatusChangePayload,
+    WorkspaceId,
 };
 use tokio::sync::{broadcast, mpsc, oneshot, Mutex, RwLock};
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
@@ -20,7 +20,8 @@ use crate::swarm::Mailbox;
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn initialize_agent(
     agent_id: String,
-    working_directory: PathBuf,
+    workspace_id: WorkspaceId,
+    container_id: String,
     agent_binary: String,
     role: Option<String>,
     agents: Arc<RwLock<HashMap<String, Arc<Mutex<AgentHandle>>>>>,
@@ -30,23 +31,19 @@ pub(crate) async fn initialize_agent(
     mcp_port: u16,
     bearer_token: String,
 ) -> Result<(), String> {
-    // Parse command string into binary + args (e.g. "gemini --experimental-acp")
+    // Build docker exec command: split agent_binary into parts and prepend docker exec -i
     let parts: Vec<&str> = agent_binary.split_whitespace().collect();
-    let binary = parts
-        .first()
-        .ok_or_else(|| "Empty agent command".to_string())?;
-    let args = &parts[1..];
+    let mut docker_args = vec!["exec", "-i", &container_id];
+    docker_args.extend_from_slice(&parts);
 
-    // Spawn the agent subprocess
-    let mut child = tokio::process::Command::new(binary)
-        .args(args)
+    let mut child = tokio::process::Command::new("docker")
+        .args(&docker_args)
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())
-        .current_dir(&working_directory)
         .kill_on_drop(true)
         .spawn()
-        .map_err(|e| format!("Failed to spawn agent '{}': {}", agent_binary, e))?;
+        .map_err(|e| format!("Failed to spawn agent '{}' via docker exec: {}", agent_binary, e))?;
 
     let child_stdin = child.stdin.take().ok_or("Failed to capture agent stdin")?;
     let child_stdout = child
@@ -58,7 +55,6 @@ pub(crate) async fn initialize_agent(
 
     let agent_id_for_thread = agent_id.clone();
     let event_tx_clone = event_tx.clone();
-    let wd = working_directory.clone();
 
     // Use a oneshot to receive the session_id + initial config (or error) from the LocalSet thread.
     let (init_tx, init_rx) =
@@ -115,7 +111,7 @@ pub(crate) async fn initialize_agent(
                     let mcp_config = acp::McpServer::Http(
                         acp::McpServerHttp::new(
                             "emergent-swarm",
-                            format!("http://127.0.0.1:{}/mcp", mcp_port),
+                            format!("http://host.docker.internal:{}/mcp", mcp_port),
                         )
                         .headers(vec![acp::HttpHeader::new(
                             "Authorization",
@@ -125,7 +121,7 @@ pub(crate) async fn initialize_agent(
 
                     let session_resp = conn
                         .new_session(
-                            acp::NewSessionRequest::new(&wd)
+                            acp::NewSessionRequest::new("/workspace/")
                                 .mcp_servers(vec![mcp_config]),
                         )
                         .await
@@ -180,7 +176,7 @@ pub(crate) async fn initialize_agent(
     let handle = AgentHandle {
         status: AgentStatus::Idle,
         cli: agent_binary,
-        working_directory,
+        workspace_id,
         command_tx,
         child,
         thread_handle: Some(thread_handle),

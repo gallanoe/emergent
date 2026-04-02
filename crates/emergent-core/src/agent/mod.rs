@@ -1,14 +1,16 @@
 mod acp_bridge;
 mod lifecycle;
 mod prompt_loop;
+pub mod spawner;
+
+pub use spawner::{AgentProcess, DockerCliSpawner, ProcessSpawner};
 
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use emergent_protocol::{
     AgentErrorPayload, AgentStatus, AgentSummary, ConfigOption, ConfigUpdatePayload, Notification,
-    StatusChangePayload, SwarmMessagePayload,
+    StatusChangePayload, SwarmMessagePayload, WorkspaceId,
 };
 use tokio::sync::{broadcast, mpsc, oneshot, Mutex, RwLock};
 
@@ -41,7 +43,7 @@ pub(crate) enum AgentCommand {
 pub(crate) struct AgentHandle {
     pub(crate) status: AgentStatus,
     pub(crate) cli: String,
-    pub(crate) working_directory: PathBuf,
+    pub(crate) workspace_id: WorkspaceId,
     pub(crate) command_tx: mpsc::UnboundedSender<AgentCommand>,
     /// Handle to the OS-level child process (for kill).
     pub(crate) child: tokio::process::Child,
@@ -75,6 +77,7 @@ pub struct AgentManager {
     topology: Arc<RwLock<crate::swarm::Topology>>,
     mcp_port: std::sync::atomic::AtomicU16,
     token_registry: Arc<crate::mcp::TokenRegistry>,
+    workspace_state: crate::workspace::SharedWorkspaceState,
 }
 
 impl AgentManager {
@@ -90,9 +93,12 @@ impl AgentManager {
         id
     }
 
-    pub fn new(token_registry: Arc<crate::mcp::TokenRegistry>) -> Self {
+    pub fn new(
+        workspace_state: crate::workspace::SharedWorkspaceState,
+        event_tx: broadcast::Sender<Notification>,
+        token_registry: Arc<crate::mcp::TokenRegistry>,
+    ) -> Self {
         enrich_path();
-        let (event_tx, _) = broadcast::channel(1024);
         let history: Arc<RwLock<HashMap<String, Vec<Notification>>>> =
             Arc::new(RwLock::new(HashMap::new()));
 
@@ -126,6 +132,7 @@ impl AgentManager {
             topology: Arc::new(RwLock::new(crate::swarm::Topology::new())),
             mcp_port: std::sync::atomic::AtomicU16::new(0),
             token_registry,
+            workspace_state,
         }
     }
 
@@ -135,28 +142,45 @@ impl AgentManager {
             .store(port, std::sync::atomic::Ordering::Relaxed);
     }
 
-    /// Subscribe to the notification broadcast channel.
-    pub fn subscribe(&self) -> broadcast::Receiver<Notification> {
-        self.event_tx.subscribe()
-    }
-
     /// Spawn an agent subprocess asynchronously.
     ///
     /// Returns the agent ID immediately. The ACP handshake runs in a background
     /// task and emits `StatusChange(Idle)` or `Error` notifications on completion.
     pub async fn spawn_agent(
         &self,
-        working_directory: PathBuf,
+        workspace_id: WorkspaceId,
         agent_binary: String,
         role: Option<String>,
     ) -> Result<String, String> {
+        // Read workspace state to get the container_id
+        let container_id = {
+            let state = self.workspace_state.read().await;
+            let ws = state
+                .workspaces
+                .get(&workspace_id)
+                .ok_or_else(|| format!("Workspace '{}' not found", workspace_id))?;
+            match &ws.container_status {
+                emergent_protocol::ContainerStatus::Running => {}
+                other => {
+                    return Err(format!(
+                        "Workspace '{}' container is not running (status: {})",
+                        workspace_id, other
+                    ));
+                }
+            }
+            ws.container_id
+                .clone()
+                .ok_or_else(|| format!("Workspace '{}' has no container_id", workspace_id))?
+        };
+
         let agent_id = Self::generate_short_id();
 
         log::info!(
-            "Spawning agent {} (cli: {}, wd: {})",
+            "Spawning agent {} (cli: {}, workspace: {}, container: {})",
             &agent_id,
             agent_binary,
-            working_directory.display()
+            workspace_id,
+            container_id
         );
 
         // Return ID immediately — the frontend sets "initializing" status locally.
@@ -176,7 +200,8 @@ impl AgentManager {
         tokio::spawn(async move {
             match lifecycle::initialize_agent(
                 id.clone(),
-                working_directory,
+                workspace_id,
+                container_id,
                 agent_binary,
                 role_clone,
                 agents,
@@ -355,6 +380,30 @@ impl AgentManager {
         Ok(())
     }
 
+    /// Kill all agents in a workspace.
+    pub async fn kill_agents_in_workspace(
+        &self,
+        workspace_id: &WorkspaceId,
+    ) -> Result<(), String> {
+        let agent_ids: Vec<String> = {
+            let agents = self.agents.read().await;
+            let mut ids = Vec::new();
+            for (id, handle_arc) in agents.iter() {
+                let handle = handle_arc.lock().await;
+                if &handle.workspace_id == workspace_id {
+                    ids.push(id.clone());
+                }
+            }
+            ids
+        };
+
+        for id in agent_ids {
+            self.kill_agent(&id).await?;
+        }
+
+        Ok(())
+    }
+
     /// List all running agents.
     pub async fn list_agents(&self) -> Vec<AgentSummary> {
         let agents = self.agents.read().await;
@@ -365,7 +414,7 @@ impl AgentManager {
                 id: id.clone(),
                 cli: handle.cli.clone(),
                 status: handle.status.to_string(),
-                working_directory: handle.working_directory.display().to_string(),
+                workspace_id: handle.workspace_id.clone(),
                 role: handle.role.clone(),
             });
         }
@@ -447,7 +496,20 @@ impl AgentManager {
     // Swarm: topology management
     // -----------------------------------------------------------------------
 
-    pub async fn connect_agents(&self, a: &str, b: &str) {
+    pub async fn connect_agents(&self, a: &str, b: &str) -> Result<(), String> {
+        // Validate both agents are in the same workspace
+        let (ws_a, ws_b) = {
+            let agents = self.agents.read().await;
+            let handle_a = agents.get(a).ok_or_else(|| format!("Agent '{}' not found", a))?;
+            let handle_b = agents.get(b).ok_or_else(|| format!("Agent '{}' not found", b))?;
+            let ws_a = handle_a.lock().await.workspace_id.clone();
+            let ws_b = handle_b.lock().await.workspace_id.clone();
+            (ws_a, ws_b)
+        };
+        if ws_a != ws_b {
+            return Err("Cannot connect agents in different workspaces".to_string());
+        }
+
         self.topology.write().await.connect(a, b);
         let _ = self.event_tx.send(Notification::TopologyChanged(
             emergent_protocol::TopologyChangedPayload {
@@ -455,6 +517,7 @@ impl AgentManager {
                 agent_id_b: b.to_string(),
             },
         ));
+        Ok(())
     }
 
     pub async fn disconnect_agents(&self, a: &str, b: &str) {
@@ -509,6 +572,17 @@ impl AgentManager {
         // Check topology
         if !self.topology.read().await.is_connected(from, to) {
             return Err(format!("Agents {} and {} are not connected", from, to));
+        }
+        // Check same workspace
+        {
+            let agents = self.agents.read().await;
+            let from_handle = agents.get(from).ok_or_else(|| format!("Agent '{}' not found", from))?;
+            let to_handle = agents.get(to).ok_or_else(|| format!("Agent '{}' not found", to))?;
+            let ws_from = from_handle.lock().await.workspace_id.clone();
+            let ws_to = to_handle.lock().await.workspace_id.clone();
+            if ws_from != ws_to {
+                return Err("Cannot send messages between agents in different workspaces".to_string());
+            }
         }
         // Check target exists
         if !self.agents.read().await.contains_key(to) {

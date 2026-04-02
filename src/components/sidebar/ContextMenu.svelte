@@ -13,13 +13,18 @@
 
   let { x, y, items, onSelect, onClose }: Props = $props();
 
+  let menuEl: HTMLDivElement | undefined = $state();
+  let offsetX = $state(0);
+  let offsetY = $state(0);
+  let adjustedX = $derived(x + offsetX);
+  let adjustedY = $derived(y + offsetY);
+
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === "Escape") onClose();
   }
 
   function handleMousedown(e: MouseEvent) {
-    const menu = document.querySelector("[data-testid='context-menu']");
-    if (menu && !menu.contains(e.target as Node)) {
+    if (menuEl && !menuEl.contains(e.target as Node)) {
       onClose();
     }
   }
@@ -27,6 +32,17 @@
   onMount(() => {
     window.addEventListener("keydown", handleKeydown);
     document.addEventListener("mousedown", handleMousedown);
+
+    // Viewport-aware positioning: flip if menu overflows
+    if (menuEl) {
+      const rect = menuEl.getBoundingClientRect();
+      if (rect.right > window.innerWidth) {
+        offsetX = -rect.width;
+      }
+      if (rect.bottom > window.innerHeight) {
+        offsetY = -rect.height;
+      }
+    }
   });
 
   onDestroy(() => {
@@ -36,8 +52,9 @@
 </script>
 
 <div
-  class="fixed bg-white border border-border-strong rounded-md shadow-[0_4px_16px_rgba(0,0,0,0.1),0_1px_4px_rgba(0,0,0,0.06)] py-1 min-w-[150px] z-[200]"
-  style="left: {x}px; top: {y}px;"
+  bind:this={menuEl}
+  class="fixed bg-bg-elevated border border-border-strong rounded-md shadow-[0_4px_16px_rgba(0,0,0,0.1),0_1px_4px_rgba(0,0,0,0.06)] py-1 min-w-[150px] z-[200]"
+  style="left: {adjustedX}px; top: {adjustedY}px;"
   data-testid="context-menu"
 >
   {#each items as item (item.id)}
@@ -56,6 +73,9 @@
         }}
         disabled={item.disabled}
       >
+        {#if item.icon}
+          <item.icon size={13} class="opacity-70 shrink-0" />
+        {/if}
         {item.label}
         {#if item.shortcut}
           <span

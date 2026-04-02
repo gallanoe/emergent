@@ -18,6 +18,7 @@ const emptyStateMock = `
       const responses = {
         get_daemon_status: "connected",
         detect_agents: [],
+        detect_docker: { docker_available: true, docker_version: "27.0.0" },
         known_agents: [
           { name: "Claude Code", command: "claude-agent-acp", available: false },
           { name: "Codex", command: "codex-acp", available: false },
@@ -26,6 +27,7 @@ const emptyStateMock = `
           { name: "OpenCode", command: "opencode acp", available: false },
         ],
         list_agents: [],
+        list_workspaces: [],
       };
       if (cmd in responses) return Promise.resolve(responses[cmd]);
       return Promise.reject("Unknown command: " + cmd);
@@ -55,9 +57,9 @@ test.describe("app startup", () => {
     // App renders directly with no loading state
     await expect(page.locator("text=Starting…")).not.toBeVisible();
 
-    // New swarm button is immediately available (icon button in SwarmRail)
-    const newSwarmBtn = page.locator('button[title="New swarm"]');
-    await expect(newSwarmBtn).toBeVisible();
-    await expect(newSwarmBtn).toBeEnabled();
+    // New workspace button is immediately available (icon button in SwarmRail)
+    const newWorkspaceBtn = page.locator('button[title="New workspace"]');
+    await expect(newWorkspaceBtn).toBeVisible();
+    await expect(newWorkspaceBtn).toBeEnabled();
   });
 });

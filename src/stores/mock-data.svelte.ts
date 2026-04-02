@@ -1,16 +1,17 @@
 // src/stores/mock-data.svelte.ts
 
-import type { DisplayAgent, DisplaySwarm } from "./types";
+import type { DisplayAgent, DisplayWorkspace } from "./types";
 
-const swarms: DisplaySwarm[] = [
+const swarms: DisplayWorkspace[] = [
   {
     id: "swarm-1",
     name: "website-redesign",
     collapsed: false,
+    containerStatus: { state: "running" },
     agents: [
       {
         id: "agent-1",
-        swarmId: "swarm-1",
+        workspaceId: "swarm-1",
         cli: "claude-agent-acp",
         name: "Refactoring the navigation component",
         status: "working",
@@ -116,7 +117,7 @@ const swarms: DisplaySwarm[] = [
       },
       {
         id: "agent-2",
-        swarmId: "swarm-1",
+        workspaceId: "swarm-1",
         cli: "claude-agent-acp",
         name: "Set up Tailwind config",
         status: "idle",
@@ -174,7 +175,7 @@ const swarms: DisplaySwarm[] = [
       },
       {
         id: "agent-3",
-        swarmId: "swarm-1",
+        workspaceId: "swarm-1",
         cli: "codex-acp",
         name: "Fix broken image imports",
         status: "error",
@@ -222,10 +223,11 @@ const swarms: DisplaySwarm[] = [
     id: "swarm-2",
     name: "api-migration",
     collapsed: true,
+    containerStatus: { state: "stopped" },
     agents: [
       {
         id: "agent-4",
-        swarmId: "swarm-2",
+        workspaceId: "swarm-2",
         cli: "claude-agent-acp",
         name: "Migrate auth endpoints to v2",
         status: "working",
@@ -239,7 +241,7 @@ const swarms: DisplaySwarm[] = [
       },
       {
         id: "agent-5",
-        swarmId: "swarm-2",
+        workspaceId: "swarm-2",
         cli: "codex-acp",
         name: "Update API documentation",
         status: "idle",

@@ -122,6 +122,117 @@ impl std::fmt::Display for AgentStatus {
 }
 
 // ---------------------------------------------------------------------------
+// Workspace types
+// ---------------------------------------------------------------------------
+
+#[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
+pub struct WorkspaceId(pub String);
+
+impl std::fmt::Display for WorkspaceId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl From<String> for WorkspaceId {
+    fn from(s: String) -> Self {
+        Self(s)
+    }
+}
+
+impl From<&str> for WorkspaceId {
+    fn from(s: &str) -> Self {
+        Self(s.to_string())
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum ContainerStatus {
+    Stopped,
+    Building,
+    Running,
+    Error { message: String },
+}
+
+impl std::fmt::Display for ContainerStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ContainerStatus::Stopped => write!(f, "stopped"),
+            ContainerStatus::Building => write!(f, "building"),
+            ContainerStatus::Running => write!(f, "running"),
+            ContainerStatus::Error { message } => write!(f, "error: {}", message),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct WorkspaceEntry {
+    pub id: WorkspaceId,
+    pub name: String,
+    pub container_status: ContainerStatus,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct WorkspaceSummary {
+    pub id: WorkspaceId,
+    pub name: String,
+    pub container_status: ContainerStatus,
+    pub agent_count: usize,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct WorkspaceInfo {
+    pub id: WorkspaceId,
+    pub name: String,
+    pub path: String,
+    pub container_id: Option<String>,
+    pub container_status: ContainerStatus,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DockerStatus {
+    pub docker_available: bool,
+    pub docker_version: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct WorkspaceStatusChangePayload {
+    pub workspace_id: WorkspaceId,
+    pub status: ContainerStatus,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TerminalOutputPayload {
+    pub session_id: String,
+    #[serde(with = "base64_bytes")]
+    pub data: Vec<u8>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TerminalExitedPayload {
+    pub session_id: String,
+}
+
+mod base64_bytes {
+    use base64::Engine;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    pub fn serialize<S: Serializer>(data: &[u8], s: S) -> Result<S::Ok, S::Error> {
+        base64::engine::general_purpose::STANDARD
+            .encode(data)
+            .serialize(s)
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<u8>, D::Error> {
+        let s = String::deserialize(d)?;
+        base64::engine::general_purpose::STANDARD
+            .decode(&s)
+            .map_err(serde::de::Error::custom)
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Agent detection types
 // ---------------------------------------------------------------------------
 
@@ -149,7 +260,7 @@ pub struct AgentSummary {
     pub id: String,
     pub cli: String,
     pub status: String,
-    pub working_directory: String,
+    pub workspace_id: WorkspaceId,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub role: Option<String>,
 }
@@ -233,6 +344,12 @@ pub enum Notification {
     SwarmMessage(SwarmMessagePayload),
     #[serde(rename = "swarm:topology-changed")]
     TopologyChanged(TopologyChangedPayload),
+    #[serde(rename = "workspace:status-change")]
+    WorkspaceStatusChange(WorkspaceStatusChangePayload),
+    #[serde(rename = "terminal:output")]
+    TerminalOutput(TerminalOutputPayload),
+    #[serde(rename = "terminal:exited")]
+    TerminalExited(TerminalExitedPayload),
 }
 
 impl Notification {
@@ -249,6 +366,9 @@ impl Notification {
             Notification::SystemMessage(_) => "agent:system-message",
             Notification::SwarmMessage(_) => "swarm:message",
             Notification::TopologyChanged(_) => "swarm:topology-changed",
+            Notification::WorkspaceStatusChange(_) => "workspace:status-change",
+            Notification::TerminalOutput(_) => "terminal:output",
+            Notification::TerminalExited(_) => "terminal:exited",
         }
     }
 
@@ -265,6 +385,9 @@ impl Notification {
             Notification::SystemMessage(p) => Some(&p.agent_id),
             Notification::SwarmMessage(_) => None, // not agent-specific
             Notification::TopologyChanged(_) => None, // not agent-specific
+            Notification::WorkspaceStatusChange(_) => None,
+            Notification::TerminalOutput(_) => None,
+            Notification::TerminalExited(_) => None,
         }
     }
 }
@@ -347,10 +470,58 @@ mod tests {
             id: "abc".into(),
             cli: "mock-agent".into(),
             status: "idle".into(),
-            working_directory: "/tmp".into(),
+            workspace_id: WorkspaceId::from("ws-123"),
             role: None,
         };
         let json = serde_json::to_string(&s).unwrap();
-        assert!(json.contains("working_directory"));
+        assert!(json.contains("workspace_id"));
+        assert!(!json.contains("working_directory"));
+    }
+
+    #[test]
+    fn terminal_output_notification_roundtrips() {
+        let n = Notification::TerminalOutput(TerminalOutputPayload {
+            session_id: "sess-123".into(),
+            data: b"hello world\n".to_vec(),
+        });
+        let json = serde_json::to_string(&n).unwrap();
+        assert!(json.contains("terminal:output"));
+        // data should be base64 encoded
+        assert!(json.contains("aGVsbG8gd29ybGQK"));
+        let restored: Notification = serde_json::from_str(&json).unwrap();
+        match restored {
+            Notification::TerminalOutput(p) => {
+                assert_eq!(p.session_id, "sess-123");
+                assert_eq!(p.data, b"hello world\n");
+            }
+            _ => panic!("Wrong variant"),
+        }
+    }
+
+    #[test]
+    fn terminal_exited_notification_roundtrips() {
+        let n = Notification::TerminalExited(TerminalExitedPayload {
+            session_id: "sess-456".into(),
+        });
+        let json = serde_json::to_string(&n).unwrap();
+        assert!(json.contains("terminal:exited"));
+        let restored: Notification = serde_json::from_str(&json).unwrap();
+        match restored {
+            Notification::TerminalExited(p) => assert_eq!(p.session_id, "sess-456"),
+            _ => panic!("Wrong variant"),
+        }
+    }
+
+    #[test]
+    fn workspace_status_change_notification_roundtrips() {
+        let n = Notification::WorkspaceStatusChange(WorkspaceStatusChangePayload {
+            workspace_id: WorkspaceId::from("ws-abc"),
+            status: ContainerStatus::Building,
+        });
+        let json = serde_json::to_string(&n).unwrap();
+        assert!(json.contains("workspace:status-change"));
+        let restored: Notification = serde_json::from_str(&json).unwrap();
+        assert_eq!(restored.event_name(), "workspace:status-change");
+        assert!(restored.agent_id().is_none());
     }
 }
