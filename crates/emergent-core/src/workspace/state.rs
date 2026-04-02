@@ -36,3 +36,10 @@ pub type SharedWorkspaceState = Arc<RwLock<WorkspaceState>>;
 pub fn new_shared_state() -> SharedWorkspaceState {
     Arc::new(RwLock::new(WorkspaceState::new()))
 }
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct WorkspaceMetadata {
+    pub id: String,
+    pub name: String,
+    pub created_at: String,
+}
