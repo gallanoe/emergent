@@ -115,7 +115,7 @@
     exited = false;
     if (terminalEl) {
       const { terminal, fitAddon } = getOrCreate(workspaceId);
-      terminal.open(terminalEl);
+      terminal.open(terminalEl); // fresh instance after dispose, so open() is safe
       fitAddon.fit();
     }
     await createSession();
@@ -126,7 +126,12 @@
 
     const { terminal, fitAddon } = getOrCreate(workspaceId);
 
-    terminal.open(terminalEl);
+    if (terminal.element) {
+      // Already opened before — reparent the existing DOM
+      terminalEl.appendChild(terminal.element);
+    } else {
+      terminal.open(terminalEl);
+    }
     fitAddon.fit();
 
     resizeObserver = new ResizeObserver(() => handleResize());
