@@ -16,7 +16,26 @@ use tokio::sync::broadcast;
 
 const DEFAULT_DOCKERFILE: &str = "\
 FROM ubuntu:24.04
-RUN apt-get update && apt-get install -y curl git && rm -rf /var/lib/apt/lists/*
+
+# System dependencies
+RUN apt-get update && apt-get install -y curl git unzip && rm -rf /var/lib/apt/lists/*
+
+# Node.js (latest LTS via NodeSource)
+RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# Bun
+RUN curl -fsSL https://bun.sh/install | bash
+ENV PATH=\"/root/.bun/bin:$PATH\"
+
+# Claude Code CLI
+RUN curl -fsSL https://claude.ai/install.sh | bash
+ENV PATH=\"/root/.local/bin:$PATH\"
+
+# Codex CLI
+RUN npm install -g @openai/codex
+
 CMD [\"sleep\", \"infinity\"]
 ";
 
