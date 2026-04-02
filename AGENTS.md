@@ -1,21 +1,22 @@
 # Emergent
 
-A Tauri 2 desktop application for running LLM agents in parallel. Agents communicate via the Agent Client Protocol (ACP) and work on documents concurrently through a chat-based interface.
+A Tauri 2 desktop application for running LLM agents in parallel inside containerized workspaces. Agents communicate via the Agent Client Protocol (ACP) and work on tasks concurrently through a chat-based interface.
 
 ## Architecture
 
-The Tauri app embeds the agent manager directly — there is no separate daemon process. MCP sidecars connect back to the app via an HTTP server.
+The Tauri app embeds the agent manager and workspace manager directly — there is no separate daemon process. MCP sidecars connect back to the app via an HTTP server.
 
-- **Tauri app** (in `src-tauri/`) — desktop app that owns the `AgentManager`, spawns agent processes over ACP, and runs an MCP HTTP server for sidecar tool calls
-- **`emergent-core`** (in `crates/emergent-core/`) — core library containing agent orchestration, MCP server, swarm coordination, and system prompt logic (embedded into the Tauri app)
+- **Tauri app** (in `src-tauri/`) — desktop app that owns the `AgentManager` and `WorkspaceManager`, spawns agent processes over ACP inside Docker containers, and runs an MCP HTTP server for sidecar tool calls
+- **`emergent-core`** (in `crates/emergent-core/`) — core library containing agent orchestration, workspace/container management, terminal sessions, MCP server, swarm coordination, and system prompt logic
 - **`emergent-protocol`** (in `crates/emergent-protocol/`) — shared types and notification definitions used by both the Tauri app and core library
 
-The Tauri app creates the `AgentManager` at startup, starts an MCP HTTP server, and bridges agent notifications to the Svelte frontend via Tauri events.
+At startup, the Tauri app connects to Docker, creates the `WorkspaceManager` (which loads persisted workspaces and inspects container states), creates the `AgentManager`, starts an MCP HTTP server, and bridges notifications to the Svelte frontend via Tauri events.
 
 ## Tech Stack
 
 - **Frontend:** Svelte 5, TypeScript, Tailwind CSS 4, Vite 7
 - **Backend:** Rust (edition 2021), Tauri 2, Tokio (async runtime)
+- **Containers:** Docker (via bollard crate), per-workspace isolation
 - **Protocol:** Agent Client Protocol (ACP) for agent communication
 - **IPC:** JSON-RPC 2.0 over HTTP (MCP sidecars to app)
 - **Testing:** Vitest + Testing Library (unit/component), Playwright (E2E), `cargo test` (Rust)
@@ -28,16 +29,26 @@ The Tauri app creates the `AgentManager` at startup, starts an MCP HTTP server, 
 Cargo.toml                    # Workspace root
 
 src/                          # Frontend (Svelte 5 + TypeScript)
-├── components/               # Svelte components (ChatArea, Sidebar, TopBar, ChatInput)
+├── components/               # Svelte components
+│   ├── chat/                 # ChatArea, ChatInput
+│   ├── swarm/                # SwarmRail, SwarmView
+│   ├── sidebar/              # InnerSidebar, ContextMenu, AgentPickerPopover
+│   ├── settings/             # SettingsView, GeneralTab, ContainerTab
+│   ├── terminal/             # TerminalView (xterm.js)
+│   └── topbar/               # TopBar
 ├── stores/                   # Rune-based state (.svelte.ts files)
+│   ├── app-state.svelte.ts   # Central app state (workspaces, agents, views)
+│   ├── agents.svelte.ts      # Agent connection store
+│   ├── xterm-instances.svelte.ts # Terminal instance persistence
+│   └── types.ts              # Shared display types
 ├── lib/                      # Utility functions
 ├── App.svelte                # Root layout component
 └── main.ts                   # Vite entry point
 
-src-tauri/                    # Tauri app (embeds agent manager)
+src-tauri/                    # Tauri app (embeds agent manager + workspace manager)
 ├── src/
 │   ├── main.rs               # Tauri app entry
-│   ├── lib.rs                # AgentManager setup, MCP HTTP server, notification bridge
+│   ├── lib.rs                # App setup, Docker connection, notification bridge
 │   ├── commands.rs           # Tauri IPC command handlers
 │   └── tray.rs               # System tray icon setup
 ├── Cargo.toml
@@ -50,8 +61,14 @@ crates/
 │   │   ├── agent/            # Agent lifecycle and ACP communication
 │   │   │   ├── mod.rs        # AgentManager public API
 │   │   │   ├── acp_bridge.rs # ACP client adapter + command loop
-│   │   │   ├── lifecycle.rs  # Agent spawn + ACP handshake
+│   │   │   ├── lifecycle.rs  # Agent spawn via docker exec + ACP handshake
+│   │   │   ├── spawner.rs    # Agent spawner trait + Docker implementation
 │   │   │   └── prompt_loop.rs # Prompt wake/inject/send cycle
+│   │   ├── workspace/        # Workspace and container management
+│   │   │   ├── mod.rs        # WorkspaceManager (CRUD, container lifecycle)
+│   │   │   ├── container.rs  # Docker operations (build, start, stop, remove)
+│   │   │   ├── state.rs      # Workspace state types (SharedWorkspaceState)
+│   │   │   └── terminal.rs   # Terminal sessions via docker exec
 │   │   ├── mcp/              # MCP server and auth
 │   │   │   ├── mod.rs        # Re-exports
 │   │   │   ├── handler.rs    # MCP tool implementations
@@ -87,6 +104,8 @@ bun install
 # Start the Tauri app (agent manager runs embedded)
 bun run dev
 ```
+
+Docker Desktop must be running for workspace containers to work. The app will start without Docker but workspaces cannot be created.
 
 ## Best Practices
 
