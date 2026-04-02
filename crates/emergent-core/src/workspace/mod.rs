@@ -150,16 +150,22 @@ impl WorkspaceManager {
 
             let workspace_id = WorkspaceId(metadata.id.clone());
 
-            let container_status = if let Some(docker) = &self.docker {
-                container::inspect_container_status(docker, &workspace_id).await
+            let (container_status, container_id) = if let Some(docker) = &self.docker {
+                let status = container::inspect_container_status(docker, &workspace_id).await;
+                let cid = if status == ContainerStatus::Running {
+                    Some(container::container_name(&workspace_id))
+                } else {
+                    None
+                };
+                (status, cid)
             } else {
-                ContainerStatus::Stopped
+                (ContainerStatus::Stopped, None)
             };
 
             let workspace = Workspace {
                 name: metadata.name,
                 path: entry_path,
-                container_id: None,
+                container_id,
                 container_status,
             };
 

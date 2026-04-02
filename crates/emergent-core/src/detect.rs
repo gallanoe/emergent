@@ -1,7 +1,8 @@
 pub use emergent_protocol::KnownAgent;
 
-use bollard::exec::CreateExecOptions;
+use bollard::exec::{CreateExecOptions, StartExecResults};
 use bollard::Docker;
+use futures_util::StreamExt;
 
 /// Known agent CLIs: (display name, command binary, extra args, required binaries).
 ///
@@ -30,8 +31,8 @@ async fn is_available_in_container(docker: &Docker, container_id: &str, binary: 
             container_id,
             CreateExecOptions {
                 cmd: Some(vec!["which", binary]),
-                attach_stdout: Some(false),
-                attach_stderr: Some(false),
+                attach_stdout: Some(true),
+                attach_stderr: Some(true),
                 ..Default::default()
             },
         )
@@ -42,11 +43,16 @@ async fn is_available_in_container(docker: &Docker, container_id: &str, binary: 
         Err(_) => return false,
     };
 
-    if docker.start_exec(&exec_id, None).await.is_err() {
-        return false;
+    // Start exec and drain the output stream to wait for completion
+    match docker.start_exec(&exec_id, None).await {
+        Ok(StartExecResults::Attached { mut output, .. }) => {
+            while output.next().await.is_some() {}
+        }
+        Ok(StartExecResults::Detached) => {}
+        Err(_) => return false,
     }
 
-    // Check exit code
+    // Now inspect — exec is finished, exit_code will be set
     match docker.inspect_exec(&exec_id).await {
         Ok(info) => info.exit_code == Some(0),
         Err(_) => false,

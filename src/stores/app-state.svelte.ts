@@ -189,11 +189,15 @@ function createAppState() {
       id,
       name,
       collapsed: false,
-      containerStatus: { state: "building" },
+      containerStatus: { state: "running" },
       agentIds: [],
     });
     selectedWorkspaceId = id;
     activeView = "settings";
+
+    // Refresh known agents now that the container is running
+    await refreshKnownAgents(id);
+
     return id;
   }
 

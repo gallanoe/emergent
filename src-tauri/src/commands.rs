@@ -17,11 +17,12 @@ pub async fn known_agents(
     let ws_id = emergent_protocol::WorkspaceId::from(workspace_id.as_str());
     let info = workspace_manager.get_workspace(&ws_id).await?;
 
-    match (workspace_manager.docker(), info.container_id.as_deref()) {
-        (Some(docker), Some(container_id))
+    match workspace_manager.docker() {
+        Some(docker)
             if info.container_status == emergent_protocol::ContainerStatus::Running =>
         {
-            Ok(detect::known_agents_in_container(docker, container_id).await)
+            let name = emergent_core::workspace::container::container_name(&ws_id);
+            Ok(detect::known_agents_in_container(docker, &name).await)
         }
         _ => Ok(detect::known_agents_unavailable()),
     }
