@@ -496,7 +496,20 @@ impl AgentManager {
     // Swarm: topology management
     // -----------------------------------------------------------------------
 
-    pub async fn connect_agents(&self, a: &str, b: &str) {
+    pub async fn connect_agents(&self, a: &str, b: &str) -> Result<(), String> {
+        // Validate both agents are in the same workspace
+        let (ws_a, ws_b) = {
+            let agents = self.agents.read().await;
+            let handle_a = agents.get(a).ok_or_else(|| format!("Agent '{}' not found", a))?;
+            let handle_b = agents.get(b).ok_or_else(|| format!("Agent '{}' not found", b))?;
+            let ws_a = handle_a.lock().await.workspace_id.clone();
+            let ws_b = handle_b.lock().await.workspace_id.clone();
+            (ws_a, ws_b)
+        };
+        if ws_a != ws_b {
+            return Err("Cannot connect agents in different workspaces".to_string());
+        }
+
         self.topology.write().await.connect(a, b);
         let _ = self.event_tx.send(Notification::TopologyChanged(
             emergent_protocol::TopologyChangedPayload {
@@ -504,6 +517,7 @@ impl AgentManager {
                 agent_id_b: b.to_string(),
             },
         ));
+        Ok(())
     }
 
     pub async fn disconnect_agents(&self, a: &str, b: &str) {
@@ -558,6 +572,17 @@ impl AgentManager {
         // Check topology
         if !self.topology.read().await.is_connected(from, to) {
             return Err(format!("Agents {} and {} are not connected", from, to));
+        }
+        // Check same workspace
+        {
+            let agents = self.agents.read().await;
+            let from_handle = agents.get(from).ok_or_else(|| format!("Agent '{}' not found", from))?;
+            let to_handle = agents.get(to).ok_or_else(|| format!("Agent '{}' not found", to))?;
+            let ws_from = from_handle.lock().await.workspace_id.clone();
+            let ws_to = to_handle.lock().await.workspace_id.clone();
+            if ws_from != ws_to {
+                return Err("Cannot send messages between agents in different workspaces".to_string());
+            }
         }
         // Check target exists
         if !self.agents.read().await.contains_key(to) {

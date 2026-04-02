@@ -116,9 +116,20 @@ impl McpHandler {
         let connections = self.manager.get_connections(&agent_id).await;
         let agents = self.manager.list_agents().await;
 
+        // Resolve caller's workspace_id so we only show same-workspace peers
+        let caller_workspace_id = agents
+            .iter()
+            .find(|a| a.id == agent_id)
+            .map(|a| a.workspace_id.clone())
+            .ok_or_else(|| format!("Calling agent '{}' not found", agent_id))?;
+
         let mut result = Vec::new();
         for agent in &agents {
             if agent.id == agent_id {
+                continue;
+            }
+            // Only list agents in the same workspace
+            if agent.workspace_id != caller_workspace_id {
                 continue;
             }
             result.push(serde_json::json!({
@@ -267,7 +278,7 @@ impl McpHandler {
         }
         let a = self.resolve_agent_id(&agent_id, &params.agent_a);
         let b = self.resolve_agent_id(&agent_id, &params.agent_b);
-        self.manager.connect_agents(&a, &b).await;
+        self.manager.connect_agents(&a, &b).await?;
         Ok(r#"{"status": "connected"}"#.to_string())
     }
 
