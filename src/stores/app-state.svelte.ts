@@ -3,8 +3,11 @@ import { listen } from "@tauri-apps/api/event";
 import { agentStore } from "./agents.svelte";
 import { dispose as disposeTerminal } from "../components/terminal/terminal-instances";
 import type {
+  ActiveView,
+  AgentDefinition,
   ContainerStatus,
   DisplayAgent,
+  DisplayAgentDefinition,
   DisplayWorkspace,
   DockerStatus,
   SwarmMessageLogEntry,
@@ -29,6 +32,7 @@ interface Workspace {
   collapsed: boolean;
   containerStatus: ContainerStatus;
   agentIds: string[];
+  agentDefinitionIds: string[];
 }
 
 function createAppState() {
@@ -38,11 +42,13 @@ function createAppState() {
   );
   let workspaces = $state<Workspace[]>([]);
   let selectedAgentId = $state<string | null>(null);
+  let selectedThreadId = $state<string | null>(null);
+  let agentDefinitions = $state<Record<string, AgentDefinition>>({});
   let knownAgents = $state<KnownAgent[]>([]);
   let agentConnections = $state<Record<string, string[]>>({});
   let swarmMessageLog = $state<SwarmMessageLogEntry[]>([]);
   let selectedWorkspaceId = $state<string | null>(null);
-  let activeView = $state<"swarm" | "agent" | "settings" | "terminal">("swarm");
+  let activeView = $state<ActiveView>("swarm");
   let dockerStatus = $state<DockerStatus | null>(null);
   let terminalSessionIds = $state<Record<string, string>>({});
 
@@ -74,6 +80,7 @@ function createAppState() {
           collapsed: false,
           containerStatus: ws.container_status,
           agentIds: [],
+      agentDefinitionIds: [],
         });
       }
       if (workspaces.length > 0 && !selectedWorkspaceId) {
@@ -198,6 +205,7 @@ function createAppState() {
       collapsed: false,
       containerStatus: { state: "running" },
       agentIds: [],
+      agentDefinitionIds: [],
     });
     selectedWorkspaceId = id;
     activeView = "settings";
@@ -305,7 +313,17 @@ function createAppState() {
       name: w.name,
       collapsed: w.collapsed,
       containerStatus: w.containerStatus,
-      agentDefinitions: [],
+      agentDefinitions: (w.agentDefinitionIds ?? [])
+        .map((defId): DisplayAgentDefinition | null => {
+          const def = agentDefinitions[defId];
+          if (!def) return null;
+          const threads = agentStore.getThreadsForAgent(defId);
+          return {
+            ...def,
+            threads: threads.map((t) => agentStore.toDisplayThread(t)),
+          };
+        })
+        .filter(Boolean) as DisplayAgentDefinition[],
       agents: w.agentIds
         .map((id) => agentStore.getAgent(id))
         .filter(Boolean)
@@ -348,10 +366,28 @@ function createAppState() {
 
   function selectAgent(agentId: string) {
     selectedAgentId = agentId;
+    selectedThreadId = null;
     // Find which workspace this agent belongs to and select it
-    const workspace = workspaces.find((w) => w.agentIds.includes(agentId));
+    const workspace = workspaces.find(
+      (w) => w.agentIds.includes(agentId) || w.agentDefinitionIds.includes(agentId),
+    );
     if (workspace) selectedWorkspaceId = workspace.id;
-    activeView = "agent";
+    activeView = "agent-threads";
+  }
+
+  function selectThread(threadId: string) {
+    selectedThreadId = threadId;
+    activeView = "agent-chat";
+  }
+
+  function backToThreads() {
+    selectedThreadId = null;
+    activeView = "agent-threads";
+  }
+
+  function openAgentSettings() {
+    selectedThreadId = null;
+    activeView = "agent-settings";
   }
 
   function getSelectedSwarm(): DisplayWorkspace | undefined {
@@ -406,7 +442,7 @@ function createAppState() {
     get activeView() {
       return activeView;
     },
-    set activeView(v: "swarm" | "agent" | "settings" | "terminal") {
+    set activeView(v: ActiveView) {
       activeView = v;
     },
     get selectedSwarm() {
@@ -442,6 +478,67 @@ function createAppState() {
     setAgentPermissions,
     selectWorkspace,
     selectAgent,
+    selectThread,
+    backToThreads,
+    openAgentSettings,
+    get selectedThreadId() {
+      return selectedThreadId;
+    },
+    get selectedThread() {
+      if (!selectedThreadId) return undefined;
+      const conn = agentStore.getAgent(selectedThreadId);
+      if (!conn) return undefined;
+      return agentStore.toDisplayThread(conn);
+    },
+    get selectedAgentDef(): DisplayAgentDefinition | undefined {
+      if (!selectedAgentId) return undefined;
+      const def = agentDefinitions[selectedAgentId];
+      if (!def) return undefined;
+      const threads = agentStore.getThreadsForAgent(selectedAgentId);
+      return {
+        ...def,
+        threads: threads.map((t) => agentStore.toDisplayThread(t)),
+      };
+    },
+    get agentDefinitionsMap() {
+      return agentDefinitions;
+    },
+    async createAgentDefinition(
+      workspaceId: string,
+      name: string,
+      role: string,
+      cli: string,
+    ): Promise<string> {
+      const agentId = await invoke<string>("create_agent", { workspaceId, name, role, cli });
+      agentDefinitions[agentId] = { id: agentId, workspace_id: workspaceId, name, role, cli };
+      const ws = workspaces.find((w) => w.id === workspaceId);
+      if (ws) ws.agentDefinitionIds.push(agentId);
+      return agentId;
+    },
+    async updateAgentDefinition(agentId: string, name?: string, role?: string): Promise<void> {
+      await invoke("update_agent", { agentId, name, role });
+      const def = agentDefinitions[agentId];
+      if (def) {
+        if (name !== undefined) def.name = name;
+        if (role !== undefined) def.role = role;
+      }
+    },
+    async deleteAgentDefinition(agentId: string): Promise<void> {
+      await invoke("delete_agent", { agentId });
+      delete agentDefinitions[agentId];
+      for (const ws of workspaces) {
+        ws.agentDefinitionIds = ws.agentDefinitionIds.filter((id) => id !== agentId);
+      }
+      if (selectedAgentId === agentId) {
+        selectedAgentId = null;
+        activeView = "swarm";
+      }
+    },
+    async spawnThread(agentId: string): Promise<string> {
+      const def = agentDefinitions[agentId];
+      if (!def) throw new Error(`Agent ${agentId} not found`);
+      return agentStore.spawnThread(agentId, def);
+    },
     refreshConnections,
     get terminalSessionIds() {
       return terminalSessionIds;
