@@ -1,41 +1,33 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use emergent_protocol::{
-    AgentStatus, Notification, NudgeDeliveredPayload, StatusChangePayload, SystemMessagePayload,
-    UserMessagePayload,
+    AgentStatus, Notification, StatusChangePayload, SystemMessagePayload, UserMessagePayload,
 };
-use tokio::sync::{broadcast, oneshot, Mutex, RwLock};
+use tokio::sync::{broadcast, oneshot, Mutex};
 
 use super::{AgentCommand, ThreadHandle};
-use crate::swarm::{build_system_block, Mailbox};
+use crate::swarm::build_system_block;
 
-/// Per-agent prompt loop. Owns the prompt lifecycle for a single agent.
-/// Wakes on `Notify`, checks for a queued user prompt or pending mailbox
-/// messages, constructs the prompt, and sends it to the ACP command loop.
+/// Per-thread prompt loop. Owns the prompt lifecycle for a single thread.
+/// Wakes on `Notify`, checks for a queued user prompt, constructs the prompt,
+/// and sends it to the ACP command loop.
 pub(crate) async fn prompt_loop(
     agent_id: String,
     handle_arc: Arc<Mutex<ThreadHandle>>,
-    mailboxes: Arc<RwLock<HashMap<String, Mailbox>>>,
     event_tx: broadcast::Sender<Notification>,
 ) {
     // Grab the Notify from the handle (it's Arc-wrapped, so clone is cheap).
     let notify = handle_arc.lock().await.prompt_notify.clone();
 
     loop {
-        // Phase 1: Check for work — take pending prompt and/or check mailbox.
+        // Phase 1: Check for work — take pending prompt.
         let pending = {
             let mut handle = handle_arc.lock().await;
             handle.pending_prompt.take()
         };
 
-        let mailbox_count = {
-            let mboxes = mailboxes.read().await;
-            mboxes.get(&agent_id).map_or(0, |m| m.len())
-        };
-
         // If no work, wait for a notification.
-        if pending.is_none() && mailbox_count == 0 {
+        if pending.is_none() {
             notify.notified().await;
             continue; // Re-check after waking.
         }
@@ -44,12 +36,6 @@ pub(crate) async fn prompt_loop(
         let (user_text, reply_tx) = match pending {
             Some((text, reply)) => (text, Some(reply)),
             None => (String::new(), None),
-        };
-
-        // Re-read mailbox count (may have changed since we took the pending prompt).
-        let mailbox_count = {
-            let mboxes = mailboxes.read().await;
-            mboxes.get(&agent_id).map_or(0, |m| m.len())
         };
 
         // Determine injection parameters
@@ -71,21 +57,13 @@ pub(crate) async fn prompt_loop(
             (first, role_ref, perm_change)
         };
 
-        // Build the system block
+        // Build the system block (mailbox disconnected — always pass 0)
         let system_block = build_system_block(
             is_first_turn,
             role.as_deref(),
             permission_change.as_deref(),
-            mailbox_count,
+            0,
         );
-
-        // Emit nudge notification (preserves existing frontend behavior)
-        if mailbox_count > 0 {
-            let _ = event_tx.send(Notification::NudgeDelivered(NudgeDeliveredPayload {
-                agent_id: agent_id.clone(),
-                count: mailbox_count,
-            }));
-        }
 
         // Emit permission change system message to frontend
         if let Some(ref perm_msg) = permission_change {
@@ -103,10 +81,11 @@ pub(crate) async fn prompt_loop(
             (None, true) => String::new(),
         };
 
-        // Edge case: no user text and mailbox was drained between check and here.
+        // Edge case: empty prompt (shouldn't happen with mailbox disconnected,
+        // but guard against it).
         if prompt_text.is_empty() {
             if let Some(reply) = reply_tx {
-                let _ = reply.send(Err("Empty prompt with no mailbox messages".to_string()));
+                let _ = reply.send(Err("Empty prompt".to_string()));
             }
             continue;
         }
@@ -179,7 +158,6 @@ pub(crate) async fn prompt_loop(
             let _ = reply.send(send_result);
         }
 
-        // Loop back — immediately re-check for more work (mailbox may have
-        // received new messages during the prompt execution).
+        // Loop back — immediately re-check for more work.
     }
 }

@@ -13,7 +13,6 @@ use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 use super::acp_bridge::{agent_command_loop, EmergentClient};
 use super::prompt_loop::prompt_loop;
 use super::{AgentCommand, ThreadHandle};
-use crate::swarm::Mailbox;
 
 /// Perform the full agent initialization: spawn process, ACP handshake,
 /// store handle, and emit notifications.
@@ -28,7 +27,6 @@ pub(crate) async fn initialize_agent(
     agents: Arc<RwLock<HashMap<String, Arc<Mutex<ThreadHandle>>>>>,
     event_tx: broadcast::Sender<Notification>,
     history: Arc<RwLock<HashMap<String, Vec<Notification>>>>,
-    mailboxes: Arc<RwLock<HashMap<String, Mailbox>>>,
     mcp_port: u16,
     bearer_token: String,
 ) -> Result<(), String> {
@@ -214,24 +212,17 @@ pub(crate) async fn initialize_agent(
         .await
         .insert(agent_id.clone(), handle_arc.clone());
 
-    // Initialize mailbox for this agent
-    mailboxes
-        .write()
-        .await
-        .insert(agent_id.clone(), Mailbox::new());
-
-    // Initialize history for this agent
+    // Initialize history for this thread
     history
         .write()
         .await
         .entry(agent_id.clone())
         .or_default();
 
-    // Spawn the prompt loop for this agent.
+    // Spawn the prompt loop for this thread.
     let loop_handle = tokio::spawn(prompt_loop(
         agent_id,
         handle_arc.clone(),
-        mailboxes,
         event_tx.clone(),
     ));
 

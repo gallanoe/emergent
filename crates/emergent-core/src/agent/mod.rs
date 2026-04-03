@@ -44,8 +44,10 @@ pub(crate) enum AgentCommand {
 
 pub(crate) struct ThreadHandle {
     /// Parent agent definition ID.
+    #[allow(dead_code)] // Used in upcoming coordinator refactor
     pub(crate) agent_id: String,
     /// ACP session ID returned by the agent CLI during init handshake.
+    #[allow(dead_code)] // Used for future session resumption
     pub(crate) acp_session_id: Option<String>,
     pub(crate) status: AgentStatus,
     pub(crate) cli: String,
@@ -194,7 +196,6 @@ impl AgentManager {
         let agents = self.agents.clone();
         let event_tx = self.event_tx.clone();
         let history = self.history.clone();
-        let mailboxes = self.mailboxes.clone();
         let id = agent_id.clone();
 
         let bearer_token = self.token_registry.register(&id);
@@ -214,7 +215,6 @@ impl AgentManager {
                 agents,
                 event_tx.clone(),
                 history,
-                mailboxes,
                 mcp_port,
                 bearer_token,
             )

@@ -14,26 +14,6 @@ use super::token_registry::TokenRegistry;
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema)]
-pub struct SendMessageParams {
-    #[schemars(description = "The agent ID of the connected peer to send the message to. Use list_peers to find agent IDs.")]
-    pub target: String,
-    #[schemars(description = "The message text to send")]
-    pub body: String,
-}
-
-#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema)]
-pub struct SpawnAgentParams {
-    #[schemars(
-        description = "Name of the agent to spawn. Supported: Claude Code, Codex, Gemini, Kiro, OpenCode"
-    )]
-    pub agent_name: String,
-    #[schemars(
-        description = "Optional role for the agent (e.g. 'Code reviewer', 'Test writer'). Shapes the agent's behavior."
-    )]
-    pub role: Option<String>,
-}
-
-#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema)]
 pub struct KillAgentParams {
     #[schemars(description = "The name or ID of the agent to kill")]
     pub target: String,
@@ -141,102 +121,6 @@ impl McpHandler {
         }
 
         serde_json::to_string_pretty(&result).map_err(|e| e.to_string())
-    }
-
-    #[tool(
-        name = "send_message",
-        description = "Send a message to a connected peer agent by their agent ID (from list_peers). The message will be queued in their mailbox and they'll be notified on their next turn."
-    )]
-    async fn send_message(
-        &self,
-        rmcp::handler::server::tool::Extension(parts): rmcp::handler::server::tool::Extension<
-            http::request::Parts,
-        >,
-        Parameters(params): Parameters<SendMessageParams>,
-    ) -> Result<String, String> {
-        let agent_id = self.agent_id_from_parts(&parts)?;
-        self.manager
-            .deliver_message(&agent_id, &params.target, params.body.clone())
-            .await?;
-
-        // Wake the target agent's prompt loop to process the mailbox message.
-        self.manager.notify_prompt_loop(&params.target).await;
-
-        Ok(serde_json::json!({
-            "status": "delivered",
-            "target": params.target,
-            "body": params.body,
-        })
-        .to_string())
-    }
-
-    #[tool(
-        name = "read_mailbox",
-        description = "Read and clear all pending messages from your mailbox. Returns messages with sender name, timestamp, and body. Messages are removed after reading. Call this when you receive a nudge about unread messages."
-    )]
-    async fn read_mailbox(
-        &self,
-        rmcp::handler::server::tool::Extension(parts): rmcp::handler::server::tool::Extension<
-            http::request::Parts,
-        >,
-    ) -> Result<String, String> {
-        let agent_id = self.agent_id_from_parts(&parts)?;
-        let messages = self.manager.read_mailbox(&agent_id).await;
-        serde_json::to_string(&messages).map_err(|e| e.to_string())
-    }
-
-    #[tool(
-        name = "spawn_agent",
-        description = "Spawn a new agent in the swarm. Requires management permissions. The agent starts with no connections — use connect_agents and then send_message to give it instructions."
-    )]
-    async fn spawn_agent(
-        &self,
-        rmcp::handler::server::tool::Extension(parts): rmcp::handler::server::tool::Extension<
-            http::request::Parts,
-        >,
-        Parameters(params): Parameters<SpawnAgentParams>,
-    ) -> Result<String, String> {
-        let agent_id = self.agent_id_from_parts(&parts)?;
-        if !self.manager.has_management_permissions(&agent_id).await {
-            return Err("Permission denied: management permissions required".to_string());
-        }
-
-        let known = crate::detect::known_agents_unavailable();
-        let agent = known
-            .iter()
-            .find(|a| a.name.eq_ignore_ascii_case(&params.agent_name));
-        let agent = match agent {
-            Some(a) => a,
-            None => {
-                let names: Vec<&str> = known.iter().map(|a| a.name.as_str()).collect();
-                return Err(format!(
-                    "Unknown agent '{}'. Supported agents: {}",
-                    params.agent_name,
-                    if names.is_empty() {
-                        "none".to_string()
-                    } else {
-                        names.join(", ")
-                    }
-                ));
-            }
-        };
-
-        // Use the calling agent's workspace_id
-        let workspace_id = {
-            let agents = self.manager.list_agents().await;
-            agents
-                .iter()
-                .find(|a| a.id == agent_id)
-                .map(|a| a.workspace_id.clone())
-                .ok_or_else(|| format!("Calling agent '{}' not found", agent_id))?
-        };
-
-        let new_agent_id = self
-            .manager
-            .spawn_agent(workspace_id, agent.command.clone(), params.role)
-            .await
-            .map_err(|e| e.to_string())?;
-        Ok(serde_json::json!({"agent_id": new_agent_id}).to_string())
     }
 
     #[tool(
