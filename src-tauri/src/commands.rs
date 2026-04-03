@@ -35,7 +35,7 @@ pub async fn create_agent(
     manager: State<'_, Arc<AgentManager>>,
     workspace_id: String,
     name: String,
-    role: String,
+    role: Option<String>,
     cli: String,
 ) -> Result<String, String> {
     let ws_id = emergent_protocol::WorkspaceId::from(workspace_id.as_str());
