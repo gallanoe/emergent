@@ -336,7 +336,12 @@
       <ThreadListView
         agentDefinition={appState.selectedAgentDef}
         onSelectThread={(id) => appState.selectThread(id)}
-        onNewThread={() => appState.spawnThread(appState.selectedAgentId!)}
+        onNewThread={async () => {
+          const threadId = await appState.spawnThread(
+            appState.selectedAgentId!,
+          );
+          appState.selectThread(threadId);
+        }}
         onOpenSettings={() => appState.openAgentSettings()}
       />
     {:else if appState.activeView === "agent-settings" && appState.selectedAgentDef}
@@ -367,14 +372,7 @@
           >{appState.selectedThread.name}</span
         >
       </div>
-      <ChatArea
-        agent={appState.selectedAgent}
-        onEditQueue={handleEditQueue}
-        onRoleChange={(role) => {
-          const agent = appState.selectedAgent;
-          if (agent) appState.setRole(agent.id, role);
-        }}
-      />
+      <ChatArea agent={appState.selectedAgent} onEditQueue={handleEditQueue} />
       <ChatInput
         agent={appState.selectedAgent}
         demoMode={appState.demoMode}
@@ -416,14 +414,7 @@
           if (agent) appState.setAgentPermissions(agent.id, enabled);
         }}
       />
-      <ChatArea
-        agent={appState.selectedAgent}
-        onEditQueue={handleEditQueue}
-        onRoleChange={(role) => {
-          const agent = appState.selectedAgent;
-          if (agent) appState.setRole(agent.id, role);
-        }}
-      />
+      <ChatArea agent={appState.selectedAgent} onEditQueue={handleEditQueue} />
       <ChatInput
         agent={appState.selectedAgent}
         demoMode={appState.demoMode}

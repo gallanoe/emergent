@@ -12,6 +12,7 @@ import type {
   DockerStatus,
   SwarmMessageLogEntry,
   SwarmMessagePayload,
+  ThreadMapping,
   TopologyChangedPayload,
   WorkspaceSummary,
   WorkspaceStatusChangePayload,
@@ -98,6 +99,28 @@ function createAppState() {
           }
         } catch {
           // Workspace may not have any definitions yet
+        }
+      }
+
+      // Load persisted thread mappings for each workspace
+      for (const ws of workspaces) {
+        try {
+          const mappings = await invoke<ThreadMapping[]>("list_thread_mappings", {
+            workspaceId: ws.id,
+          });
+          for (const mapping of mappings) {
+            const def = agentDefinitions[mapping.agent_definition_id];
+            if (def) {
+              agentStore.registerPersistedThread(
+                mapping.thread_id,
+                mapping.agent_definition_id,
+                def,
+                mapping.acp_session_id,
+              );
+            }
+          }
+        } catch {
+          // No persisted threads for this workspace
         }
       }
 
@@ -375,6 +398,19 @@ function createAppState() {
   function selectThread(threadId: string) {
     selectedThreadId = threadId;
     activeView = "agent-chat";
+
+    // Auto-resume dead threads that have a persisted ACP session
+    const conn = agentStore.getAgent(threadId);
+    if (conn && conn.status === "dead" && conn.acpSessionId) {
+      conn.status = "initializing";
+      invoke("resume_thread", {
+        threadId,
+        agentId: conn.agentId,
+        acpSessionId: conn.acpSessionId,
+      }).catch((e: unknown) => {
+        console.error("Failed to resume thread:", e);
+      });
+    }
   }
 
   function backToThreads() {
@@ -400,8 +436,10 @@ function createAppState() {
     if (demoMode) {
       return mockState.selectedAgent;
     }
-    if (!selectedAgentId) return undefined;
-    const conn = agentStore.getAgent(selectedAgentId);
+    // In chat view, look up by thread ID (agents store is keyed by thread ID)
+    const lookupId = selectedThreadId ?? selectedAgentId;
+    if (!lookupId) return undefined;
+    const conn = agentStore.getAgent(lookupId);
     if (!conn) return undefined;
     return agentStore.toDisplayAgent(conn);
   }
