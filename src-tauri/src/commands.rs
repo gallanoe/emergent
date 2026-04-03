@@ -5,8 +5,8 @@ use emergent_core::agent::AgentManager;
 use emergent_core::detect;
 use emergent_core::workspace::WorkspaceManager;
 use emergent_protocol::{
-    AgentSummary, ConfigOption, DockerStatus, KnownAgent, Notification, WorkspaceInfo,
-    WorkspaceSummary,
+    AgentDefinition, AgentSummary, ConfigOption, DockerStatus, KnownAgent, Notification,
+    ThreadSummary, WorkspaceInfo, WorkspaceSummary,
 };
 
 #[tauri::command]
@@ -26,6 +26,76 @@ pub async fn known_agents(
         }
         _ => Ok(detect::known_agents_unavailable()),
     }
+}
+
+// ── Agent definition CRUD ─────────────────────────────────
+
+#[tauri::command]
+pub async fn create_agent(
+    manager: State<'_, Arc<AgentManager>>,
+    workspace_id: String,
+    name: String,
+    role: String,
+    cli: String,
+) -> Result<String, String> {
+    let ws_id = emergent_protocol::WorkspaceId::from(workspace_id.as_str());
+    Ok(manager.create_agent(ws_id, name, role, cli).await)
+}
+
+#[tauri::command]
+pub async fn update_agent(
+    manager: State<'_, Arc<AgentManager>>,
+    agent_id: String,
+    name: Option<String>,
+    role: Option<String>,
+) -> Result<(), String> {
+    manager.update_agent(&agent_id, name, role).await
+}
+
+#[tauri::command]
+pub async fn delete_agent(
+    manager: State<'_, Arc<AgentManager>>,
+    agent_id: String,
+) -> Result<(), String> {
+    manager.delete_agent(&agent_id).await
+}
+
+#[tauri::command]
+pub async fn get_agent(
+    manager: State<'_, Arc<AgentManager>>,
+    agent_id: String,
+) -> Result<AgentDefinition, String> {
+    manager
+        .get_agent(&agent_id)
+        .await
+        .ok_or_else(|| format!("Agent '{}' not found", agent_id))
+}
+
+#[tauri::command]
+pub async fn list_agent_definitions(
+    manager: State<'_, Arc<AgentManager>>,
+    workspace_id: String,
+) -> Result<Vec<AgentDefinition>, String> {
+    let ws_id = emergent_protocol::WorkspaceId::from(workspace_id.as_str());
+    Ok(manager.list_agent_definitions(&ws_id).await)
+}
+
+#[tauri::command]
+pub async fn list_threads(
+    manager: State<'_, Arc<AgentManager>>,
+    agent_id: String,
+) -> Result<Vec<ThreadSummary>, String> {
+    Ok(manager.list_threads(&agent_id).await)
+}
+
+// ── Thread lifecycle ──────────────────────────────────────
+
+#[tauri::command]
+pub async fn spawn_thread(
+    manager: State<'_, Arc<AgentManager>>,
+    agent_id: String,
+) -> Result<String, String> {
+    manager.spawn_thread(&agent_id).await
 }
 
 #[tauri::command]

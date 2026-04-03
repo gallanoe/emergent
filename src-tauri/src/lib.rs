@@ -85,6 +85,8 @@ pub fn run() {
                                 Notification::WorkspaceStatusChange(p) => { let _ = bridge_handle.emit(event_name, p); }
                                 Notification::TerminalOutput(p) => { let _ = bridge_handle.emit(event_name, p); }
                                 Notification::TerminalExited(p) => { let _ = bridge_handle.emit(event_name, p); }
+                                Notification::AgentCreated(p) => { let _ = bridge_handle.emit(event_name, p); }
+                                Notification::AgentDeleted(p) => { let _ = bridge_handle.emit(event_name, p); }
                             }
                         }
                         Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
@@ -126,6 +128,13 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::known_agents,
+            commands::create_agent,
+            commands::update_agent,
+            commands::delete_agent,
+            commands::get_agent,
+            commands::list_agent_definitions,
+            commands::list_threads,
+            commands::spawn_thread,
             commands::spawn_agent,
             commands::send_prompt,
             commands::cancel_prompt,
