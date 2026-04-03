@@ -1,23 +1,15 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/svelte";
 import InnerSidebar from "./InnerSidebar.svelte";
-import type { DisplayWorkspace, DisplayAgent } from "../../stores/types";
+import type { DisplayWorkspace, DisplayAgentDefinition } from "../../stores/types";
 
-function makeAgent(overrides?: Partial<DisplayAgent>): DisplayAgent {
+function makeAgentDef(overrides?: Partial<DisplayAgentDefinition>): DisplayAgentDefinition {
   return {
     id: "agent-1",
-    workspaceId: "swarm-1",
-    cli: "claude-agent-acp",
     name: "Claude",
-    status: "working",
-    preview: "Researching...",
-    updatedAt: "2m ago",
-    messages: [],
-    activeToolCalls: [],
-    queuedMessage: null,
-    configOptions: [],
-    hasManagementPermissions: false,
     role: "Researcher",
+    cli: "claude",
+    threads: [],
     ...overrides,
   };
 }
@@ -28,16 +20,15 @@ function makeSwarm(overrides?: Partial<DisplayWorkspace>): DisplayWorkspace {
     name: "Research Swarm",
     collapsed: false,
     containerStatus: { state: "running" },
-    agentDefinitions: [],
-    agents: [
-      makeAgent(),
-      makeAgent({
+    agentDefinitions: [
+      makeAgentDef(),
+      makeAgentDef({
         id: "agent-2",
         name: "Gemini",
         role: "Analyst",
-        status: "idle",
       }),
     ],
+    agents: [],
     ...overrides,
   };
 }
@@ -46,18 +37,14 @@ function renderSidebar(overrides: Record<string, unknown> = {}) {
   return render(InnerSidebar, {
     props: {
       swarm: (overrides.swarm as DisplayWorkspace | undefined) ?? makeSwarm(),
-      activeView: (overrides.activeView as "swarm" | "agent" | "settings" | "terminal") ?? "swarm",
+      activeView: (overrides.activeView as string) ?? "swarm",
       selectedAgentId: (overrides.selectedAgentId as string | null) ?? null,
       demoMode: (overrides.demoMode as boolean) ?? false,
       containerRunning: (overrides.containerRunning as boolean) ?? false,
-      knownAgents:
-        (overrides.knownAgents as { name: string; command: string; available: boolean }[]) ?? [],
       onSelectView:
         (overrides.onSelectView as (view: "swarm" | "settings" | "terminal") => void) ?? (() => {}),
       onSelectAgent: (overrides.onSelectAgent as (id: string) => void) ?? (() => {}),
-      onAddAgent:
-        (overrides.onAddAgent as (swarmId: string, cmd: string, name: string) => void) ??
-        (() => {}),
+      onCreateAgent: (overrides.onCreateAgent as () => void) ?? (() => {}),
       onOverflowMenu: (overrides.onOverflowMenu as (x: number, y: number) => void) ?? (() => {}),
     },
   });
