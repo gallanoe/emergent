@@ -86,6 +86,21 @@ function createAppState() {
       if (workspaces.length > 0 && !selectedWorkspaceId) {
         selectedWorkspaceId = workspaces[0]!.id;
       }
+      // Load agent definitions for each workspace
+      for (const ws of workspaces) {
+        try {
+          const defs = await invoke<AgentDefinition[]>("list_agent_definitions", {
+            workspaceId: ws.id,
+          });
+          for (const def of defs) {
+            agentDefinitions[def.id] = def;
+            ws.agentDefinitionIds.push(def.id);
+          }
+        } catch {
+          // Workspace may not have any definitions yet
+        }
+      }
+
       // Refresh known agents for the first running workspace
       const runningWs = workspaces.find((w) => w.containerStatus.state === "running");
       if (runningWs) {
@@ -224,12 +239,21 @@ function createAppState() {
     const workspace = workspaces.find((w) => w.id === workspaceId);
     if (!workspace) throw new Error(`Workspace ${workspaceId} not found`);
 
-    const agentId = await agentStore.spawnAgent(workspaceId, agentBinary, agentName);
-    workspace.agentIds.push(agentId);
-
-    if (!selectedAgentId) {
-      selectedAgentId = agentId;
-    }
+    const agentId = await invoke<string>("create_agent", {
+      workspaceId,
+      name: agentName,
+      role: "",
+      cli: agentBinary,
+    });
+    agentDefinitions[agentId] = {
+      id: agentId,
+      workspace_id: workspaceId,
+      name: agentName,
+      role: "",
+      cli: agentBinary,
+    };
+    workspace.agentDefinitionIds.push(agentId);
+    selectAgent(agentId);
 
     return agentId;
   }

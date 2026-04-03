@@ -59,6 +59,15 @@
     { id: "tasks", label: "Tasks", icon: ListChecks, enabled: false },
   ]);
 
+  function aggregateStatus(threads: { processStatus: string }[]): string {
+    if (threads.length === 0) return "idle";
+    if (threads.some((t) => t.processStatus === "error")) return "error";
+    if (threads.some((t) => t.processStatus === "working")) return "working";
+    if (threads.some((t) => t.processStatus === "initializing"))
+      return "initializing";
+    return "idle";
+  }
+
   function statusColor(status: string): string {
     switch (status) {
       case "working":
@@ -135,23 +144,24 @@
           Workspace isn't available
         </div>
       {:else}
-        {#each swarm.agents as agent (agent.id)}
+        {#each swarm.agentDefinitions as agentDef (agentDef.id)}
+          {@const aggStatus = aggregateStatus(agentDef.threads)}
           <button
             class="flex items-center gap-2 w-full px-2.5 py-[7px] rounded-md text-[12px] mt-0.5 truncate
                    {activeView.startsWith('agent') &&
-            selectedAgentId === agent.id
+            selectedAgentId === agentDef.id
               ? 'bg-bg-hover text-fg-heading'
               : 'text-fg-muted hover:bg-bg-hover'}"
-            onclick={() => onSelectAgent(agent.id)}
+            onclick={() => onSelectAgent(agentDef.id)}
           >
             <span
               class="w-[7px] h-[7px] rounded-full flex-shrink-0 {statusColor(
-                agent.status,
+                aggStatus,
               )}"
             ></span>
             <span class="truncate">
-              {agent.name}{#if agent.role}<span class="text-fg-disabled">
-                  — {agent.role}</span
+              {agentDef.name}{#if agentDef.role}<span class="text-fg-disabled">
+                  — {agentDef.role}</span
                 >{/if}
             </span>
           </button>
