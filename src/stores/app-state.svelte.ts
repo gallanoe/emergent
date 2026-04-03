@@ -231,33 +231,6 @@ function createAppState() {
     return id;
   }
 
-  async function addAgentToWorkspace(
-    workspaceId: string,
-    agentBinary: string,
-    agentName: string,
-  ): Promise<string> {
-    const workspace = workspaces.find((w) => w.id === workspaceId);
-    if (!workspace) throw new Error(`Workspace ${workspaceId} not found`);
-
-    const agentId = await invoke<string>("create_agent", {
-      workspaceId,
-      name: agentName,
-      role: "",
-      cli: agentBinary,
-    });
-    agentDefinitions[agentId] = {
-      id: agentId,
-      workspace_id: workspaceId,
-      name: agentName,
-      role: "",
-      cli: agentBinary,
-    };
-    workspace.agentDefinitionIds.push(agentId);
-    selectAgent(agentId);
-
-    return agentId;
-  }
-
   async function killAgent(agentId: string): Promise<void> {
     // Find the agent's position before removing it (for selection logic)
     let nextSelection: string | null = null;
@@ -483,7 +456,6 @@ function createAppState() {
     },
     initialize,
     createWorkspace,
-    addAgentToWorkspace,
     toggleSwarmCollapsed,
     killAgent,
     updateWorkspace,
@@ -505,6 +477,9 @@ function createAppState() {
     selectThread,
     backToThreads,
     openAgentSettings,
+    startCreatingAgent() {
+      activeView = "create-agent";
+    },
     get selectedThreadId() {
       return selectedThreadId;
     },
@@ -530,11 +505,22 @@ function createAppState() {
     async createAgentDefinition(
       workspaceId: string,
       name: string,
-      role: string,
+      role: string | undefined,
       cli: string,
     ): Promise<string> {
-      const agentId = await invoke<string>("create_agent", { workspaceId, name, role, cli });
-      agentDefinitions[agentId] = { id: agentId, workspace_id: workspaceId, name, role, cli };
+      const agentId = await invoke<string>("create_agent", {
+        workspaceId,
+        name,
+        ...(role !== undefined && { role }),
+        cli,
+      });
+      agentDefinitions[agentId] = {
+        id: agentId,
+        workspace_id: workspaceId,
+        name,
+        ...(role !== undefined && { role }),
+        cli,
+      };
       const ws = workspaces.find((w) => w.id === workspaceId);
       if (ws) ws.agentDefinitionIds.push(agentId);
       return agentId;
