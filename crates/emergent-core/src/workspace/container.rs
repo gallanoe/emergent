@@ -54,7 +54,10 @@ pub async fn create_and_start_container(
     let name = container_name(workspace_id);
     let tag = image_tag(workspace_id);
 
-    let host_path_str = host_path
+    // Mount the `home/` subdirectory — keeps metadata.json, agents.json,
+    // and Dockerfile out of the container's /workspace.
+    let mount_path = host_path.join("home");
+    let mount_path_str = mount_path
         .to_str()
         .ok_or_else(|| "Workspace path is not valid UTF-8".to_string())?;
 
@@ -67,7 +70,7 @@ pub async fn create_and_start_container(
     let config = Config {
         image: Some(tag.as_str()),
         host_config: Some(HostConfig {
-            binds: Some(vec![format!("{}:/workspace", host_path_str)]),
+            binds: Some(vec![format!("{}:/workspace", mount_path_str)]),
             extra_hosts,
             ..Default::default()
         }),

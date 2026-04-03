@@ -7,7 +7,7 @@ pub mod thread_manager;
 
 pub use registry::AgentRegistry;
 pub use spawner::{AgentProcess, DockerCliSpawner, ProcessSpawner};
-pub use thread_manager::ThreadManager;
+pub use thread_manager::{ThreadManager, ThreadMapping};
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -96,7 +96,7 @@ impl AgentManager {
     ) -> Self {
         enrich_path();
 
-        let threads = ThreadManager::new(event_tx.clone(), token_registry);
+        let threads = ThreadManager::new(event_tx.clone(), token_registry, workspace_state.clone());
 
         Self {
             registry: Arc::new(RwLock::new(AgentRegistry::new())),
@@ -112,6 +112,47 @@ impl AgentManager {
     // Agent definition CRUD (coordinator → registry)
     // -----------------------------------------------------------------------
 
+    /// Look up the on-disk path for a workspace (for persisting agents.json).
+    async fn workspace_path(&self, workspace_id: &WorkspaceId) -> Option<std::path::PathBuf> {
+        let state = self.workspace_state.read().await;
+        state.workspaces.get(workspace_id).map(|ws| ws.path.clone())
+    }
+
+    /// Persist agent definitions for a workspace after a mutation.
+    async fn persist_agents(&self, workspace_id: &WorkspaceId) {
+        if let Some(path) = self.workspace_path(workspace_id).await {
+            let reg = self.registry.read().await;
+            if let Err(e) = reg.save_to_dir(workspace_id, &path).await {
+                log::error!("Failed to persist agent definitions: {}", e);
+            }
+        }
+    }
+
+    /// Load persisted agent definitions for a workspace.
+    pub async fn load_agents_for_workspace(
+        &self,
+        workspace_id: &WorkspaceId,
+    ) -> Result<(), String> {
+        let path = self
+            .workspace_path(workspace_id)
+            .await
+            .ok_or_else(|| format!("Workspace '{}' not found", workspace_id))?;
+        let mut reg = self.registry.write().await;
+        reg.load_from_dir(&path).await
+    }
+
+    /// Load persisted thread mappings for a workspace.
+    pub async fn load_thread_mappings(
+        &self,
+        workspace_id: &WorkspaceId,
+    ) -> Result<Vec<ThreadMapping>, String> {
+        let path = self
+            .workspace_path(workspace_id)
+            .await
+            .ok_or_else(|| format!("Workspace '{}' not found", workspace_id))?;
+        ThreadManager::load_from_dir(&path).await
+    }
+
     pub async fn create_agent(
         &self,
         workspace_id: WorkspaceId,
@@ -121,8 +162,9 @@ impl AgentManager {
     ) -> String {
         let id = {
             let mut reg = self.registry.write().await;
-            reg.create_agent(workspace_id, name, role, cli)
+            reg.create_agent(workspace_id.clone(), name, role, cli)
         };
+        self.persist_agents(&workspace_id).await;
         let _ = self
             .event_tx
             .send(Notification::AgentCreated(AgentCreatedPayload {
@@ -137,18 +179,28 @@ impl AgentManager {
         name: Option<String>,
         role: Option<String>,
     ) -> Result<(), String> {
-        let mut reg = self.registry.write().await;
-        reg.update_agent(agent_id, name, role)
+        let workspace_id = {
+            let mut reg = self.registry.write().await;
+            reg.update_agent(agent_id, name, role)?;
+            reg.get_agent(agent_id).map(|d| d.workspace_id.clone())
+        };
+        if let Some(ws_id) = workspace_id {
+            self.persist_agents(&ws_id).await;
+        }
+        Ok(())
     }
 
     pub async fn delete_agent(&self, agent_id: &str) -> Result<(), String> {
         // Kill all threads for this agent first
         self.threads.kill_threads_for_agent(agent_id).await?;
 
-        // Remove from registry
-        let mut reg = self.registry.write().await;
-        reg.delete_agent(agent_id)?;
-        drop(reg);
+        // Remove from registry and get workspace_id for persistence
+        let workspace_id = {
+            let mut reg = self.registry.write().await;
+            let def = reg.delete_agent(agent_id)?;
+            def.workspace_id
+        };
+        self.persist_agents(&workspace_id).await;
 
         let _ = self
             .event_tx
@@ -222,6 +274,62 @@ impl AgentManager {
                 container_id,
                 definition.cli,
                 definition.role,
+            )
+            .await
+    }
+
+    /// Resume a persisted thread by loading its ACP session.
+    pub async fn resume_thread(
+        &self,
+        thread_id: &str,
+        agent_id: &str,
+        acp_session_id: &str,
+    ) -> Result<(), String> {
+        // Read agent definition
+        let definition = {
+            let reg = self.registry.read().await;
+            reg.get_agent(agent_id)
+                .cloned()
+                .ok_or_else(|| format!("Agent definition '{}' not found", agent_id))?
+        };
+
+        // Validate workspace container is running and get container_id
+        let container_id = {
+            let state = self.workspace_state.read().await;
+            let ws = state
+                .workspaces
+                .get(&definition.workspace_id)
+                .ok_or_else(|| {
+                    format!("Workspace '{}' not found", definition.workspace_id)
+                })?;
+            match &ws.container_status {
+                emergent_protocol::ContainerStatus::Running => {}
+                other => {
+                    return Err(format!(
+                        "Workspace '{}' container is not running (status: {})",
+                        definition.workspace_id, other
+                    ));
+                }
+            }
+            ws.container_id
+                .clone()
+                .ok_or_else(|| {
+                    format!(
+                        "Workspace '{}' has no container_id",
+                        definition.workspace_id
+                    )
+                })?
+        };
+
+        self.threads
+            .resume_thread(
+                thread_id.to_string(),
+                agent_id.to_string(),
+                definition.workspace_id,
+                container_id,
+                definition.cli,
+                definition.role,
+                acp_session_id.to_string(),
             )
             .await
     }

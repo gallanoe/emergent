@@ -196,10 +196,13 @@ impl WorkspaceManager {
         let workspace_id = WorkspaceId(id.clone());
         let workspace_path = self.workspace_path(&workspace_id);
 
-        // Create directory
+        // Create directory and `home/` subdirectory (the mount point for the container)
         tokio::fs::create_dir_all(&workspace_path)
             .await
             .map_err(|e| format!("Failed to create workspace dir: {}", e))?;
+        tokio::fs::create_dir_all(workspace_path.join("home"))
+            .await
+            .map_err(|e| format!("Failed to create workspace home dir: {}", e))?;
 
         // VirtioFS workaround: touch the parent directory to force a metadata sync
         let parent = workspace_path

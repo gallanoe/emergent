@@ -51,10 +51,25 @@ pub fn run() {
 
             // Create the agent manager (new API: workspace_state, event_tx, token_registry)
             let manager = Arc::new(AgentManager::new(
-                workspace_state,
+                workspace_state.clone(),
                 event_tx.clone(),
                 token_registry.clone(),
             ));
+
+            // Load persisted agent definitions for all loaded workspaces
+            tauri::async_runtime::block_on(async {
+                let state = workspace_state.read().await;
+                for ws_id in state.workspaces.keys() {
+                    if let Err(e) = manager.load_agents_for_workspace(ws_id).await {
+                        log::error!(
+                            "Failed to load agent definitions for workspace '{}': {}",
+                            ws_id,
+                            e
+                        );
+                    }
+                }
+            });
+
             app.manage(manager.clone());
             app.manage(workspace_manager);
 
@@ -134,7 +149,9 @@ pub fn run() {
             commands::get_agent,
             commands::list_agent_definitions,
             commands::list_threads,
+            commands::list_thread_mappings,
             commands::spawn_thread,
+            commands::resume_thread,
             commands::spawn_agent,
             commands::send_prompt,
             commands::cancel_prompt,
