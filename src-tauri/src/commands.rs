@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use tauri::State;
 
-use emergent_core::agent::AgentManager;
+use emergent_core::agent::{AgentManager, ThreadMapping};
 use emergent_core::detect;
 use emergent_core::workspace::WorkspaceManager;
 use emergent_protocol::{
@@ -88,6 +88,15 @@ pub async fn list_threads(
     Ok(manager.list_threads(&agent_id).await)
 }
 
+#[tauri::command]
+pub async fn list_thread_mappings(
+    manager: State<'_, Arc<AgentManager>>,
+    workspace_id: String,
+) -> Result<Vec<ThreadMapping>, String> {
+    let ws_id = emergent_protocol::WorkspaceId::from(workspace_id);
+    manager.load_thread_mappings(&ws_id).await
+}
+
 // ── Thread lifecycle ──────────────────────────────────────
 
 #[tauri::command]
@@ -96,6 +105,18 @@ pub async fn spawn_thread(
     agent_id: String,
 ) -> Result<String, String> {
     manager.spawn_thread(&agent_id).await
+}
+
+#[tauri::command]
+pub async fn resume_thread(
+    manager: State<'_, Arc<AgentManager>>,
+    thread_id: String,
+    agent_id: String,
+    acp_session_id: String,
+) -> Result<(), String> {
+    manager
+        .resume_thread(&thread_id, &agent_id, &acp_session_id)
+        .await
 }
 
 #[tauri::command]

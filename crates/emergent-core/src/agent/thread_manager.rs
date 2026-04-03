@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::Arc;
 
 use emergent_protocol::{
@@ -7,8 +8,17 @@ use emergent_protocol::{
 };
 use tokio::sync::{broadcast, oneshot, Mutex, RwLock};
 
+use super::lifecycle::SessionInit;
 use super::spawner::AgentProcess;
 use super::{lifecycle, AgentCommand, ThreadHandle};
+
+/// Persisted thread-to-session mapping (stored in threads.json).
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct ThreadMapping {
+    pub thread_id: String,
+    pub agent_definition_id: String,
+    pub acp_session_id: Option<String>,
+}
 
 pub struct ThreadManager {
     pub(crate) threads: Arc<RwLock<HashMap<String, Arc<Mutex<ThreadHandle>>>>>,
@@ -16,12 +26,14 @@ pub struct ThreadManager {
     pub(crate) history: Arc<RwLock<HashMap<String, Vec<Notification>>>>,
     pub(crate) token_registry: Arc<crate::mcp::TokenRegistry>,
     pub(crate) mcp_port: std::sync::atomic::AtomicU16,
+    pub(crate) workspace_state: crate::workspace::SharedWorkspaceState,
 }
 
 impl ThreadManager {
     pub fn new(
         event_tx: broadcast::Sender<Notification>,
         token_registry: Arc<crate::mcp::TokenRegistry>,
+        workspace_state: crate::workspace::SharedWorkspaceState,
     ) -> Self {
         let history: Arc<RwLock<HashMap<String, Vec<Notification>>>> =
             Arc::new(RwLock::new(HashMap::new()));
@@ -54,6 +66,7 @@ impl ThreadManager {
             history,
             token_registry,
             mcp_port: std::sync::atomic::AtomicU16::new(0),
+            workspace_state,
         }
     }
 
@@ -102,6 +115,99 @@ impl ThreadManager {
         let event_tx = self.event_tx.clone();
         let history = self.history.clone();
         let id = thread_id.clone();
+        let ws_state = self.workspace_state.clone();
+
+        let bearer_token = self.token_registry.register(&id);
+        let mcp_port = self
+            .mcp_port
+            .load(std::sync::atomic::Ordering::Relaxed);
+
+        let ws_id_for_persist = workspace_id.clone();
+        let threads_for_persist = self.threads.clone();
+
+        tokio::spawn(async move {
+            match lifecycle::initialize_agent(
+                id.clone(),
+                agent_definition_id,
+                workspace_id,
+                container_id,
+                agent_binary,
+                role,
+                SessionInit::New,
+                threads,
+                event_tx.clone(),
+                history,
+                mcp_port,
+                bearer_token,
+            )
+            .await
+            {
+                Ok(()) => {
+                    log::info!("Thread {} spawned successfully", &id);
+                    // Persist thread mappings after successful init
+                    let workspace_dir = {
+                        let state = ws_state.read().await;
+                        state.workspaces.get(&ws_id_for_persist).map(|ws| ws.path.clone())
+                    };
+                    if let Some(dir) = workspace_dir {
+                        let mappings = Self::collect_mappings_static(
+                            &threads_for_persist,
+                            &ws_id_for_persist,
+                        )
+                        .await;
+                        if let Err(e) = Self::save_to_dir(&mappings, &dir).await {
+                            log::error!("Failed to persist thread mappings: {}", e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    log::error!("Thread {} failed to initialize: {}", &id, e);
+                    let _ = event_tx.send(Notification::Error(AgentErrorPayload {
+                        agent_id: id,
+                        message: e,
+                    }));
+                }
+            }
+        });
+
+        Ok(thread_id)
+    }
+
+    /// Resume a persisted thread by loading its ACP session.
+    ///
+    /// Re-uses the original thread ID so the frontend can map it back to
+    /// the persisted stub.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn resume_thread(
+        &self,
+        thread_id: String,
+        agent_definition_id: String,
+        workspace_id: WorkspaceId,
+        container_id: String,
+        agent_binary: String,
+        role: Option<String>,
+        acp_session_id: String,
+    ) -> Result<(), String> {
+        // Check if thread is already live
+        {
+            let threads = self.threads.read().await;
+            if threads.contains_key(&thread_id) {
+                return Err(format!("Thread '{}' is already running", thread_id));
+            }
+        }
+
+        log::info!(
+            "Resuming thread {} (agent: {}, session: {}, workspace: {})",
+            &thread_id,
+            &agent_definition_id,
+            &acp_session_id,
+            &workspace_id,
+        );
+
+        let threads = self.threads.clone();
+        let event_tx = self.event_tx.clone();
+        let history = self.history.clone();
+        let id = thread_id.clone();
 
         let bearer_token = self.token_registry.register(&id);
         let mcp_port = self
@@ -116,6 +222,7 @@ impl ThreadManager {
                 container_id,
                 agent_binary,
                 role,
+                SessionInit::Load { acp_session_id },
                 threads,
                 event_tx.clone(),
                 history,
@@ -125,10 +232,10 @@ impl ThreadManager {
             .await
             {
                 Ok(()) => {
-                    log::info!("Thread {} spawned successfully", &id);
+                    log::info!("Thread {} resumed successfully", &id);
                 }
                 Err(e) => {
-                    log::error!("Thread {} failed to initialize: {}", &id, e);
+                    log::error!("Thread {} failed to resume: {}", &id, e);
                     let _ = event_tx.send(Notification::Error(AgentErrorPayload {
                         agent_id: id,
                         message: e,
@@ -137,7 +244,7 @@ impl ThreadManager {
             }
         });
 
-        Ok(thread_id)
+        Ok(())
     }
 
     /// Queue a user prompt for a thread.
@@ -243,6 +350,7 @@ impl ThreadManager {
         };
 
         let mut handle = handle_arc.lock().await;
+        let workspace_id = handle.workspace_id.clone();
 
         if let Some(loop_handle) = handle.prompt_loop_handle.take() {
             loop_handle.abort();
@@ -260,9 +368,13 @@ impl ThreadManager {
         }
 
         drop(handle.thread_handle.take());
+        drop(handle);
 
         // Revoke bearer token
         self.token_registry.revoke_agent(thread_id);
+
+        // Persist updated mappings (thread removed)
+        self.persist_threads_for_workspace(&workspace_id).await;
 
         Ok(())
     }
@@ -430,5 +542,69 @@ impl ThreadManager {
             .ok_or_else(|| format!("Thread not found: {}", thread_id))?;
         handle_arc.lock().await.has_management_permissions = enabled;
         Ok(())
+    }
+
+    // -----------------------------------------------------------------------
+    // Persistence
+    // -----------------------------------------------------------------------
+
+    /// Persist all thread mappings for a given workspace to `threads.json`.
+    pub async fn persist_threads_for_workspace(&self, workspace_id: &WorkspaceId) {
+        let workspace_dir = {
+            let state = self.workspace_state.read().await;
+            match state.workspaces.get(workspace_id) {
+                Some(ws) => ws.path.clone(),
+                None => return,
+            }
+        };
+
+        let mappings = Self::collect_mappings_static(&self.threads, workspace_id).await;
+        if let Err(e) = Self::save_to_dir(&mappings, &workspace_dir).await {
+            log::error!("Failed to persist thread mappings: {}", e);
+        }
+    }
+
+    /// Collect thread mappings for a workspace (static version for use in spawned tasks).
+    async fn collect_mappings_static(
+        threads: &RwLock<HashMap<String, Arc<Mutex<ThreadHandle>>>>,
+        workspace_id: &WorkspaceId,
+    ) -> Vec<ThreadMapping> {
+        let threads = threads.read().await;
+        let mut mappings = Vec::new();
+        for (id, handle_arc) in threads.iter() {
+            let handle = handle_arc.lock().await;
+            if &handle.workspace_id == workspace_id {
+                mappings.push(ThreadMapping {
+                    thread_id: id.clone(),
+                    agent_definition_id: handle.agent_id.clone(),
+                    acp_session_id: handle.acp_session_id.clone(),
+                });
+            }
+        }
+        mappings
+    }
+
+    async fn save_to_dir(mappings: &[ThreadMapping], workspace_dir: &Path) -> Result<(), String> {
+        let json = serde_json::to_string_pretty(mappings)
+            .map_err(|e| format!("Failed to serialize thread mappings: {}", e))?;
+        let path = workspace_dir.join("threads.json");
+        tokio::fs::write(&path, json)
+            .await
+            .map_err(|e| format!("Failed to write threads.json: {}", e))?;
+        Ok(())
+    }
+
+    /// Load persisted thread mappings from `threads.json`.
+    pub async fn load_from_dir(workspace_dir: &Path) -> Result<Vec<ThreadMapping>, String> {
+        let path = workspace_dir.join("threads.json");
+        if !path.exists() {
+            return Ok(Vec::new());
+        }
+        let raw = tokio::fs::read_to_string(&path)
+            .await
+            .map_err(|e| format!("Failed to read threads.json: {}", e))?;
+        let mappings: Vec<ThreadMapping> = serde_json::from_str(&raw)
+            .map_err(|e| format!("Failed to parse threads.json: {}", e))?;
+        Ok(mappings)
     }
 }

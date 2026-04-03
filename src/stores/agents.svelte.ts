@@ -31,6 +31,7 @@ interface AgentConnection {
   errorMessage?: string;
   role?: string;
   hasPrompted?: boolean;
+  acpSessionId?: string | null;
 }
 
 // ── Event payloads from Rust ────────────────────────────────────
@@ -403,6 +404,34 @@ function createAgentStore() {
   // Per-agent thread counter for naming
   const threadCounters: Record<string, number> = {};
 
+  function registerPersistedThread(
+    threadId: string,
+    agentDefinitionId: string,
+    agentDefinition: AgentDefinition,
+    acpSessionId: string | null,
+  ) {
+    if (agents[threadId]) return; // Already known (live thread)
+
+    const count = (threadCounters[agentDefinitionId] ?? 0) + 1;
+    threadCounters[agentDefinitionId] = count;
+
+    agents[threadId] = {
+      id: threadId,
+      agentId: agentDefinitionId,
+      workspaceId: agentDefinition.workspace_id,
+      cli: agentDefinition.cli,
+      agentName: `Thread ${count}`,
+      status: "dead",
+      messages: [],
+      activeToolCalls: {},
+      stopReason: null,
+      queuedContent: "",
+      configOptions: [],
+      hasManagementPermissions: false,
+      acpSessionId,
+    };
+  }
+
   async function spawnThread(
     agentDefinitionId: string,
     agentDefinition: AgentDefinition,
@@ -694,6 +723,7 @@ function createAgentStore() {
     toDisplayThread,
     getThreadsForAgent,
     setupListeners,
+    registerPersistedThread,
     spawnThread,
     spawnAgent,
     sendPrompt,

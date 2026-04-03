@@ -111,6 +111,12 @@ export interface ThreadSummary {
   acp_session_id: string | null;
 }
 
+export interface ThreadMapping {
+  thread_id: string;
+  agent_definition_id: string;
+  acp_session_id: string | null;
+}
+
 export interface DisplayThread {
   id: string;
   agentId: string;

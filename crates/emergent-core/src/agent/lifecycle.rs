@@ -15,6 +15,14 @@ use super::prompt_loop::prompt_loop;
 use super::spawner::AgentProcess;
 use super::{AgentCommand, ThreadHandle};
 
+/// Whether to create a new session or load an existing one.
+pub(crate) enum SessionInit {
+    /// Create a brand new ACP session.
+    New,
+    /// Resume an existing session by loading it with the stored session ID.
+    Load { acp_session_id: String },
+}
+
 /// Perform the full agent initialization: spawn process, ACP handshake,
 /// store handle, and emit notifications.
 #[allow(clippy::too_many_arguments)]
@@ -25,6 +33,7 @@ pub(crate) async fn initialize_agent(
     container_id: String,
     agent_binary: String,
     role: Option<String>,
+    session_init: SessionInit,
     agents: Arc<RwLock<HashMap<String, Arc<Mutex<ThreadHandle>>>>>,
     event_tx: broadcast::Sender<Notification>,
     history: Arc<RwLock<HashMap<String, Vec<Notification>>>>,
@@ -90,7 +99,7 @@ pub(crate) async fn initialize_agent(
                     }
                 });
 
-                // Initialize + create session
+                // Initialize + create/load session
                 log::debug!("Agent {} starting ACP handshake", &agent_id);
                 let init_result = async {
                     conn.initialize(
@@ -113,24 +122,48 @@ pub(crate) async fn initialize_agent(
                         )]),
                     );
 
-                    let session_resp = conn
-                        .new_session(
-                            acp::NewSessionRequest::new("/workspace/")
-                                .mcp_servers(vec![mcp_config]),
-                        )
-                        .await
-                        .map_err(|e| format!("ACP new_session failed: {}", e))?;
+                    match session_init {
+                        SessionInit::New => {
+                            let session_resp = conn
+                                .new_session(
+                                    acp::NewSessionRequest::new("/workspace/")
+                                        .mcp_servers(vec![mcp_config]),
+                                )
+                                .await
+                                .map_err(|e| format!("ACP new_session failed: {}", e))?;
 
-                    let initial_config = session_resp
-                        .config_options
-                        .as_deref()
-                        .map(crate::config::convert_config_options)
-                        .unwrap_or_default();
+                            let initial_config = session_resp
+                                .config_options
+                                .as_deref()
+                                .map(crate::config::convert_config_options)
+                                .unwrap_or_default();
 
-                    // Store initial config in the EmergentClient for diffing
-                    *config_state.lock().unwrap() = initial_config.clone();
+                            *config_state.lock().unwrap() = initial_config.clone();
 
-                    Ok::<_, String>((session_resp.session_id, initial_config))
+                            Ok::<_, String>((session_resp.session_id, initial_config))
+                        }
+                        SessionInit::Load { acp_session_id } => {
+                            log::info!(
+                                "Agent {} loading existing session {}",
+                                &agent_id,
+                                &acp_session_id,
+                            );
+                            let session_id = acp::SessionId::new(acp_session_id);
+
+                            let _load_resp = conn
+                                .load_session(
+                                    acp::LoadSessionRequest::new(session_id.clone(), "/workspace/")
+                                        .mcp_servers(vec![mcp_config]),
+                                )
+                                .await
+                                .map_err(|e| format!("ACP load_session failed: {}", e))?;
+
+                            // Config comes from load_session response if available
+                            let initial_config = config_state.lock().unwrap().clone();
+
+                            Ok::<_, String>((session_id, initial_config))
+                        }
+                    }
                 }
                 .await;
 
@@ -169,7 +202,7 @@ pub(crate) async fn initialize_agent(
     let prompt_notify = Arc::new(tokio::sync::Notify::new());
     let handle = ThreadHandle {
         agent_id: agent_definition_id,
-        acp_session_id: Some(format!("{:?}", session_id)),
+        acp_session_id: Some(session_id.0.to_string()),
         status: AgentStatus::Idle,
         cli: agent_binary,
         workspace_id,
