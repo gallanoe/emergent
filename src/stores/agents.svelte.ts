@@ -1,9 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type {
+  AgentDefinition,
   ConfigOption,
   DisplayAgent,
   DisplayMessage,
+  DisplayThread,
   DisplayToolCall,
   NudgeDeliveredPayload,
   SystemMessagePayload,
@@ -15,6 +17,7 @@ import type {
 
 interface AgentConnection {
   id: string;
+  agentId: string;
   workspaceId: string;
   cli: string;
   agentName: string;
@@ -397,6 +400,38 @@ function createAgentStore() {
 
   // ── Public API ────────────────────────────────────────────────
 
+  // Per-agent thread counter for naming
+  const threadCounters: Record<string, number> = {};
+
+  async function spawnThread(
+    agentDefinitionId: string,
+    agentDefinition: AgentDefinition,
+  ): Promise<string> {
+    const threadId = await invoke<string>("spawn_thread", {
+      agentId: agentDefinitionId,
+    });
+
+    const count = (threadCounters[agentDefinitionId] ?? 0) + 1;
+    threadCounters[agentDefinitionId] = count;
+
+    agents[threadId] = {
+      id: threadId,
+      agentId: agentDefinitionId,
+      workspaceId: agentDefinition.workspace_id,
+      cli: agentDefinition.cli,
+      agentName: `Thread ${count}`,
+      status: "initializing",
+      messages: [],
+      activeToolCalls: {},
+      stopReason: null,
+      queuedContent: "",
+      configOptions: [],
+      hasManagementPermissions: false,
+    };
+
+    return threadId;
+  }
+
   async function spawnAgent(
     workspaceId: string,
     agentCli: string,
@@ -409,6 +444,7 @@ function createAgentStore() {
 
     agents[agentId] = {
       id: agentId,
+      agentId: "",
       workspaceId,
       cli: agentCli,
       agentName,
@@ -420,9 +456,6 @@ function createAgentStore() {
       configOptions: [],
       hasManagementPermissions: false,
     };
-
-    // No explicit config fetch needed — config arrives via ConfigUpdate
-    // notification after the daemon completes the async ACP handshake.
 
     return agentId;
   }
@@ -437,8 +470,6 @@ function createAgentStore() {
       return;
     }
 
-    // Pass role on first prompt only
-    const role = !agent.hasPrompted ? agent.role : undefined;
     agent.hasPrompted = true;
 
     agent.messages.push({
@@ -453,7 +484,7 @@ function createAgentStore() {
 
     agent.status = "working";
 
-    invoke("send_prompt", { agentId, text, role }).catch((err) => {
+    invoke("send_prompt", { agentId, text }).catch((err) => {
       agent.status = "error";
       console.error("send_prompt failed:", err);
     });
@@ -567,9 +598,11 @@ function createAgentStore() {
     cli: string,
     agentName: string,
     role?: string,
+    agentDefinitionId?: string,
   ) {
     agents[agentId] = {
       id: agentId,
+      agentId: agentDefinitionId ?? "",
       workspaceId,
       cli,
       agentName,
@@ -581,6 +614,27 @@ function createAgentStore() {
       configOptions: [],
       hasManagementPermissions: false,
       ...(role !== undefined && { role }),
+    };
+  }
+
+  function getThreadsForAgent(agentDefinitionId: string): AgentConnection[] {
+    return Object.values(agents).filter((a) => a.agentId === agentDefinitionId);
+  }
+
+  function toDisplayThread(conn: AgentConnection): DisplayThread {
+    return {
+      id: conn.id,
+      agentId: conn.agentId,
+      name: conn.agentName,
+      processStatus: conn.status,
+      messages: conn.messages,
+      activeToolCalls: Object.values(conn.activeToolCalls),
+      queuedMessage: conn.queuedContent || null,
+      configOptions: conn.configOptions,
+      hasManagementPermissions: conn.hasManagementPermissions,
+      ...(conn.errorMessage !== undefined && { errorMessage: conn.errorMessage }),
+      updatedAt: conn.messages.at(-1)?.timestamp ?? "just now",
+      stopReason: conn.stopReason,
     };
   }
 
@@ -637,7 +691,10 @@ function createAgentStore() {
     },
     getAgent,
     toDisplayAgent,
+    toDisplayThread,
+    getThreadsForAgent,
     setupListeners,
+    spawnThread,
     spawnAgent,
     sendPrompt,
     cancelPrompt,
