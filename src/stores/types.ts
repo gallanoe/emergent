@@ -99,7 +99,7 @@ export interface AgentDefinition {
   id: string;
   workspace_id: string;
   name: string;
-  role: string;
+  role?: string;
   cli: string;
 }
 
@@ -129,7 +129,7 @@ export interface DisplayThread {
 export interface DisplayAgentDefinition {
   id: string;
   name: string;
-  role: string;
+  role?: string;
   cli: string;
   threads: DisplayThread[];
 }
@@ -147,6 +147,7 @@ export type ActiveView =
   | "agent-threads"
   | "agent-chat"
   | "agent-settings"
+  | "create-agent"
   | "settings"
   | "terminal";
 
