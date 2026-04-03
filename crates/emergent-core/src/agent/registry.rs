@@ -27,7 +27,7 @@ impl AgentRegistry {
         &mut self,
         workspace_id: WorkspaceId,
         name: String,
-        role: String,
+        role: Option<String>,
         cli: String,
     ) -> String {
         let id = generate_id();
@@ -60,7 +60,7 @@ impl AgentRegistry {
             def.name = n;
         }
         if let Some(r) = role {
-            def.role = r;
+            def.role = Some(r);
         }
         Ok(())
     }
@@ -97,28 +97,28 @@ mod tests {
         let id = reg.create_agent(
             ws_id(),
             "Reviewer".into(),
-            "Review code".into(),
+            Some("Review code".into()),
             "claude --acp".into(),
         );
         let def = reg.get_agent(&id).unwrap();
         assert_eq!(def.name, "Reviewer");
-        assert_eq!(def.role, "Review code");
+        assert_eq!(def.role, Some("Review code".into()));
         assert_eq!(def.cli, "claude --acp");
     }
 
     #[test]
     fn test_update_agent() {
         let mut reg = AgentRegistry::new();
-        let id = reg.create_agent(ws_id(), "Old".into(), "old role".into(), "claude".into());
+        let id = reg.create_agent(ws_id(), "Old".into(), Some("old role".into()), "claude".into());
         reg.update_agent(&id, Some("New".into()), None).unwrap();
         assert_eq!(reg.get_agent(&id).unwrap().name, "New");
-        assert_eq!(reg.get_agent(&id).unwrap().role, "old role");
+        assert_eq!(reg.get_agent(&id).unwrap().role, Some("old role".into()));
     }
 
     #[test]
     fn test_delete_agent() {
         let mut reg = AgentRegistry::new();
-        let id = reg.create_agent(ws_id(), "A".into(), "r".into(), "c".into());
+        let id = reg.create_agent(ws_id(), "A".into(), Some("r".into()), "c".into());
         reg.delete_agent(&id).unwrap();
         assert!(reg.get_agent(&id).is_none());
     }
@@ -132,8 +132,8 @@ mod tests {
     #[test]
     fn test_list_agents_filters_by_workspace() {
         let mut reg = AgentRegistry::new();
-        reg.create_agent(ws_id(), "A".into(), "r".into(), "c".into());
-        reg.create_agent(WorkspaceId::from("other"), "B".into(), "r".into(), "c".into());
+        reg.create_agent(ws_id(), "A".into(), None, "c".into());
+        reg.create_agent(WorkspaceId::from("other"), "B".into(), Some("r".into()), "c".into());
         let list = reg.list_agents(&ws_id());
         assert_eq!(list.len(), 1);
         assert_eq!(list[0].name, "A");

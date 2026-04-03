@@ -116,7 +116,7 @@ impl AgentManager {
         &self,
         workspace_id: WorkspaceId,
         name: String,
-        role: String,
+        role: Option<String>,
         cli: String,
     ) -> String {
         let id = {
@@ -221,7 +221,7 @@ impl AgentManager {
                 definition.workspace_id,
                 container_id,
                 definition.cli,
-                Some(definition.role),
+                definition.role,
             )
             .await
     }
