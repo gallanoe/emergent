@@ -16,7 +16,8 @@
 
   let { knownAgents, onCreate, onCancel }: Props = $props();
 
-  let selectedCli = $state(knownAgents.find((a) => a.available)?.command ?? "");
+  const initialCli = knownAgents.find((a) => a.available)?.command ?? "";
+  let selectedCli = $state(initialCli);
   let name = $state("");
   let role = $state("");
   let dropdownOpen = $state(false);
