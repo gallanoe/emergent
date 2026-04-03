@@ -10,6 +10,7 @@
   import TerminalView from "./components/terminal/TerminalView.svelte";
   import ThreadListView from "./components/agent/ThreadListView.svelte";
   import AgentSettingsView from "./components/agent/AgentSettingsView.svelte";
+  import AgentCreatorView from "./components/agent/AgentCreatorView.svelte";
   import ConfirmDialog from "./components/ConfirmDialog.svelte";
   import ContextMenu from "./components/sidebar/ContextMenu.svelte";
   import CreateWorkspaceDialog from "./components/CreateWorkspaceDialog.svelte";
@@ -199,7 +200,6 @@
         demoMode={appState.demoMode}
         containerRunning={appState.selectedSwarm?.containerStatus.state ===
           "running"}
-        knownAgents={appState.knownAgents}
         onSelectView={(view) => {
           if (view === "swarm" && appState.selectedSwarmId) {
             appState.selectWorkspace(appState.selectedSwarmId);
@@ -210,8 +210,7 @@
           }
         }}
         onSelectAgent={(id) => appState.selectAgent(id)}
-        onAddAgent={(swarmId, cmd, name) =>
-          appState.addAgentToWorkspace(swarmId, cmd, name)}
+        onCreateAgent={() => appState.startCreatingAgent()}
         onOverflowMenu={(x, y) => {
           if (appState.selectedSwarmId) {
             openWorkspaceMenu(appState.selectedSwarmId, x, y);
@@ -313,10 +312,25 @@
         messageLog={appState.swarmMessageLog}
         agentConnections={appState.agentConnections}
         demoMode={appState.demoMode}
-        knownAgents={appState.knownAgents}
         onSelectAgent={(id) => appState.selectAgent(id)}
-        onAddAgent={(swarmId, cmd, name) =>
-          appState.addAgentToWorkspace(swarmId, cmd, name)}
+      />
+    {:else if appState.activeView === "create-agent" && appState.selectedSwarmId}
+      <AgentCreatorView
+        knownAgents={appState.knownAgents}
+        onCreate={async (cli, name, role) => {
+          const agentId = await appState.createAgentDefinition(
+            appState.selectedSwarmId!,
+            name,
+            role,
+            cli,
+          );
+          appState.selectAgent(agentId);
+        }}
+        onCancel={() => {
+          if (appState.selectedSwarmId) {
+            appState.selectWorkspace(appState.selectedSwarmId);
+          }
+        }}
       />
     {:else if appState.activeView === "agent-threads" && appState.selectedAgentDef}
       <ThreadListView
