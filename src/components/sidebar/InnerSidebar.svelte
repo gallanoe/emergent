@@ -10,7 +10,6 @@
     Ellipsis,
   } from "@lucide/svelte";
   import type { Component } from "svelte";
-  import AgentPickerPopover from "./AgentPickerPopover.svelte";
 
   interface Props {
     swarm: DisplayWorkspace | undefined;
@@ -18,15 +17,10 @@
     selectedAgentId: string | null;
     demoMode: boolean;
     containerRunning: boolean;
-    knownAgents: { name: string; command: string; available: boolean }[];
     onSelectView: (view: "swarm" | "settings" | "terminal") => void;
     onSelectAgent: (id: string) => void;
     onOverflowMenu?: (x: number, y: number) => void;
-    onAddAgent: (
-      swarmId: string,
-      agentCommand: string,
-      agentName: string,
-    ) => void;
+    onCreateAgent: () => void;
   }
 
   let {
@@ -35,14 +29,11 @@
     selectedAgentId,
     demoMode,
     containerRunning,
-    knownAgents,
     onSelectView,
     onSelectAgent,
     onOverflowMenu,
-    onAddAgent,
+    onCreateAgent,
   }: Props = $props();
-
-  let pickerOpen = $state(false);
 
   const navItems = $derived<
     { id: string; label: string; icon: Component; enabled: boolean }[]
@@ -167,25 +158,13 @@
           </button>
         {/each}
         {#if !demoMode && swarm}
-          <div class="relative mt-1">
-            <button
-              class="interactive flex items-center gap-1.5 w-full px-2.5 py-[7px] rounded-md text-[11px] text-fg-muted"
-              onclick={() => (pickerOpen = !pickerOpen)}
-            >
-              <Plus size={12} />
-              Add agent
-            </button>
-            {#if pickerOpen}
-              <AgentPickerPopover
-                agents={knownAgents}
-                onSelect={(command, name) => {
-                  onAddAgent(swarm.id, command, name);
-                  pickerOpen = false;
-                }}
-                onClose={() => (pickerOpen = false)}
-              />
-            {/if}
-          </div>
+          <button
+            class="interactive flex items-center gap-1.5 w-full px-2.5 py-[7px] rounded-md text-[11px] text-fg-muted mt-1"
+            onclick={onCreateAgent}
+          >
+            <Plus size={12} />
+            Add agent
+          </button>
         {/if}
       {/if}
     </div>
