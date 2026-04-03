@@ -87,8 +87,7 @@
           onblur={handleRoleBlur}
         ></textarea>
         <span class="text-[10px] text-fg-disabled leading-snug"
-          >Injected into the system prompt on the first turn of each
-          thread.</span
+          >Injected into the system prompt on the first turn of each thread.</span
         >
       </div>
 

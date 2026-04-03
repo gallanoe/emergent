@@ -80,7 +80,7 @@ function createAppState() {
           collapsed: false,
           containerStatus: ws.container_status,
           agentIds: [],
-      agentDefinitionIds: [],
+          agentDefinitionIds: [],
         });
       }
       if (workspaces.length > 0 && !selectedWorkspaceId) {

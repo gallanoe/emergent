@@ -1,5 +1,9 @@
 <script lang="ts">
-  import type { DisplayAgentDefinition, DisplayThread, AgentStatus } from "../../stores/types";
+  import type {
+    DisplayAgentDefinition,
+    DisplayThread,
+    AgentStatus,
+  } from "../../stores/types";
   import { Settings, Plus } from "@lucide/svelte";
 
   interface Props {
@@ -54,7 +58,10 @@
   <div class="flex-1 overflow-y-auto p-3">
     <div class="flex items-center justify-between px-2.5 pb-2">
       <span class="text-[11px] text-fg-disabled">
-        {agentDefinition.threads.length} thread{agentDefinition.threads.length !== 1 ? "s" : ""}
+        {agentDefinition.threads.length} thread{agentDefinition.threads
+          .length !== 1
+          ? "s"
+          : ""}
       </span>
       <button
         class="text-[11px] text-fg-muted border border-border-default rounded-md px-3 py-1 hover:bg-bg-hover transition-colors"
@@ -67,7 +74,9 @@
       </button>
     </div>
 
-    <div class="text-[10px] font-medium uppercase tracking-wider text-fg-disabled px-2.5 pt-3 pb-1">
+    <div
+      class="text-[10px] font-medium uppercase tracking-wider text-fg-disabled px-2.5 pt-3 pb-1"
+    >
       Conversations
     </div>
 
@@ -83,7 +92,9 @@
             onclick={() => onSelectThread(thread.id)}
           >
             <span
-              class="w-[6px] h-[6px] rounded-full flex-shrink-0 {statusColor(thread.processStatus)}"
+              class="w-[6px] h-[6px] rounded-full flex-shrink-0 {statusColor(
+                thread.processStatus,
+              )}"
             ></span>
             <span class="text-[12px] flex-shrink-0 opacity-70 w-4 text-center"
               >💬</span

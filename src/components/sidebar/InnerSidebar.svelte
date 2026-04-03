@@ -138,7 +138,8 @@
         {#each swarm.agents as agent (agent.id)}
           <button
             class="flex items-center gap-2 w-full px-2.5 py-[7px] rounded-md text-[12px] mt-0.5 truncate
-                   {activeView.startsWith('agent') && selectedAgentId === agent.id
+                   {activeView.startsWith('agent') &&
+            selectedAgentId === agent.id
               ? 'bg-bg-hover text-fg-heading'
               : 'text-fg-muted hover:bg-bg-hover'}"
             onclick={() => onSelectAgent(agent.id)}
