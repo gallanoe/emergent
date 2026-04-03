@@ -13,7 +13,7 @@
   let { agentDefinition, onBack, onUpdate, onDelete }: Props = $props();
 
   let name = $derived(agentDefinition.name);
-  let role = $derived(agentDefinition.role);
+  let role = $derived(agentDefinition.role ?? "");
   let editName = $state("");
   let editRole = $state("");
   let showDeleteConfirm = $state(false);
@@ -33,8 +33,10 @@
   }
 
   function handleRoleBlur() {
-    if (editRole !== role) {
-      onUpdate(undefined, editRole);
+    const newRole = editRole.trim() || undefined;
+    const currentRole = role || undefined;
+    if (newRole !== currentRole) {
+      onUpdate(undefined, newRole);
     }
   }
 </script>
