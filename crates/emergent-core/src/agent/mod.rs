@@ -39,10 +39,14 @@ pub(crate) enum AgentCommand {
 }
 
 // ---------------------------------------------------------------------------
-// AgentHandle — the Send-safe handle stored in the manager map
+// ThreadHandle — the Send-safe handle stored in the manager map
 // ---------------------------------------------------------------------------
 
-pub(crate) struct AgentHandle {
+pub(crate) struct ThreadHandle {
+    /// Parent agent definition ID.
+    pub(crate) agent_id: String,
+    /// ACP session ID returned by the agent CLI during init handshake.
+    pub(crate) acp_session_id: Option<String>,
     pub(crate) status: AgentStatus,
     pub(crate) cli: String,
     pub(crate) workspace_id: WorkspaceId,
@@ -53,13 +57,13 @@ pub(crate) struct AgentHandle {
     pub(crate) thread_handle: Option<std::thread::JoinHandle<()>>,
     pub(crate) config_options: Vec<ConfigOption>,
     pub(crate) has_management_permissions: bool,
-    /// Whether the agent has received at least one prompt (gates first-turn injection).
+    /// Whether the thread has received at least one prompt (gates first-turn injection).
     pub(crate) has_prompted: bool,
-    /// Optional role for this agent. Set at spawn (MCP) or first prompt (user).
+    /// Optional role for this thread. Read from parent AgentDefinition.
     pub(crate) role: Option<String>,
     /// Permission state at time of last prompt — used to detect changes.
     pub(crate) last_prompted_permissions: bool,
-    /// Wakes the prompt loop when work is available (user prompt or mailbox message).
+    /// Wakes the prompt loop when work is available.
     pub(crate) prompt_notify: Arc<tokio::sync::Notify>,
     /// Queued user prompt + reply channel. At most one pending at a time.
     pub(crate) pending_prompt: Option<(String, oneshot::Sender<Result<(), String>>)>,
@@ -72,7 +76,7 @@ pub(crate) struct AgentHandle {
 // ---------------------------------------------------------------------------
 
 pub struct AgentManager {
-    agents: Arc<RwLock<HashMap<String, Arc<Mutex<AgentHandle>>>>>,
+    agents: Arc<RwLock<HashMap<String, Arc<Mutex<ThreadHandle>>>>>,
     event_tx: broadcast::Sender<Notification>,
     history: Arc<RwLock<HashMap<String, Vec<Notification>>>>,
     mailboxes: Arc<RwLock<HashMap<String, Mailbox>>>,
@@ -202,6 +206,7 @@ impl AgentManager {
         tokio::spawn(async move {
             match lifecycle::initialize_agent(
                 id.clone(),
+                String::new(), // agent_definition_id — set properly in Task 6 coordinator
                 workspace_id,
                 container_id,
                 agent_binary,

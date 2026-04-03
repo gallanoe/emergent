@@ -12,7 +12,7 @@ use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
 use super::acp_bridge::{agent_command_loop, EmergentClient};
 use super::prompt_loop::prompt_loop;
-use super::{AgentCommand, AgentHandle};
+use super::{AgentCommand, ThreadHandle};
 use crate::swarm::Mailbox;
 
 /// Perform the full agent initialization: spawn process, ACP handshake,
@@ -20,11 +20,12 @@ use crate::swarm::Mailbox;
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn initialize_agent(
     agent_id: String,
+    agent_definition_id: String,
     workspace_id: WorkspaceId,
     container_id: String,
     agent_binary: String,
     role: Option<String>,
-    agents: Arc<RwLock<HashMap<String, Arc<Mutex<AgentHandle>>>>>,
+    agents: Arc<RwLock<HashMap<String, Arc<Mutex<ThreadHandle>>>>>,
     event_tx: broadcast::Sender<Notification>,
     history: Arc<RwLock<HashMap<String, Vec<Notification>>>>,
     mailboxes: Arc<RwLock<HashMap<String, Mailbox>>>,
@@ -167,13 +168,15 @@ pub(crate) async fn initialize_agent(
         .map_err(|e| format!("Failed to spawn agent thread: {}", e))?;
 
     // Wait for initialization to complete
-    let (_session_id, initial_config) = init_rx
+    let (session_id, initial_config) = init_rx
         .await
         .map_err(|_| "Agent thread terminated during initialization".to_string())??;
 
     // Store the handle
     let prompt_notify = Arc::new(tokio::sync::Notify::new());
-    let handle = AgentHandle {
+    let handle = ThreadHandle {
+        agent_id: agent_definition_id,
+        acp_session_id: Some(format!("{:?}", session_id)),
         status: AgentStatus::Idle,
         cli: agent_binary,
         workspace_id,

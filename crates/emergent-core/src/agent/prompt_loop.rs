@@ -7,7 +7,7 @@ use emergent_protocol::{
 };
 use tokio::sync::{broadcast, oneshot, Mutex, RwLock};
 
-use super::{AgentCommand, AgentHandle};
+use super::{AgentCommand, ThreadHandle};
 use crate::swarm::{build_system_block, Mailbox};
 
 /// Per-agent prompt loop. Owns the prompt lifecycle for a single agent.
@@ -15,7 +15,7 @@ use crate::swarm::{build_system_block, Mailbox};
 /// messages, constructs the prompt, and sends it to the ACP command loop.
 pub(crate) async fn prompt_loop(
     agent_id: String,
-    handle_arc: Arc<Mutex<AgentHandle>>,
+    handle_arc: Arc<Mutex<ThreadHandle>>,
     mailboxes: Arc<RwLock<HashMap<String, Mailbox>>>,
     event_tx: broadcast::Sender<Notification>,
 ) {
