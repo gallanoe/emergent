@@ -305,6 +305,7 @@ function createAppState() {
       name: w.name,
       collapsed: w.collapsed,
       containerStatus: w.containerStatus,
+      agentDefinitions: [],
       agents: w.agentIds
         .map((id) => agentStore.getAgent(id))
         .filter(Boolean)

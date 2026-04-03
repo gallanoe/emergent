@@ -8,6 +8,7 @@ const swarms: DisplayWorkspace[] = [
     name: "website-redesign",
     collapsed: false,
     containerStatus: { state: "running" },
+    agentDefinitions: [],
     agents: [
       {
         id: "agent-1",
@@ -224,6 +225,7 @@ const swarms: DisplayWorkspace[] = [
     name: "api-migration",
     collapsed: true,
     containerStatus: { state: "stopped" },
+    agentDefinitions: [],
     agents: [
       {
         id: "agent-4",

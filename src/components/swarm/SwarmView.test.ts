@@ -28,6 +28,7 @@ function makeSwarm(overrides?: Partial<DisplayWorkspace>): DisplayWorkspace {
     name: "Research Swarm",
     collapsed: false,
     containerStatus: { state: "running" },
+    agentDefinitions: [],
     agents: [
       makeAgent(),
       makeAgent({ id: "agent-2", name: "Gemini", role: "Analyst", status: "idle" }),
