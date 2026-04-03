@@ -3,20 +3,22 @@ mod lifecycle;
 mod prompt_loop;
 pub mod registry;
 pub mod spawner;
+pub mod thread_manager;
 
 pub use registry::AgentRegistry;
 pub use spawner::{AgentProcess, DockerCliSpawner, ProcessSpawner};
+pub use thread_manager::ThreadManager;
 
 use std::collections::HashMap;
 use std::sync::Arc;
 
 use emergent_protocol::{
-    AgentErrorPayload, AgentStatus, AgentSummary, ConfigOption, ConfigUpdatePayload, Notification,
-    StatusChangePayload, SwarmMessagePayload, WorkspaceId,
+    AgentCreatedPayload, AgentDefinition, AgentDeletedPayload, AgentSummary, ConfigOption,
+    Notification, ThreadSummary, WorkspaceId,
 };
-use tokio::sync::{broadcast, mpsc, oneshot, Mutex, RwLock};
+use tokio::sync::{broadcast, mpsc, oneshot, RwLock};
 
-use crate::swarm::{Mailbox, MailboxMessage};
+use crate::swarm::Mailbox;
 
 // ---------------------------------------------------------------------------
 // Commands sent to the dedicated ACP thread
@@ -44,12 +46,11 @@ pub(crate) enum AgentCommand {
 
 pub(crate) struct ThreadHandle {
     /// Parent agent definition ID.
-    #[allow(dead_code)] // Used in upcoming coordinator refactor
     pub(crate) agent_id: String,
     /// ACP session ID returned by the agent CLI during init handshake.
     #[allow(dead_code)] // Used for future session resumption
     pub(crate) acp_session_id: Option<String>,
-    pub(crate) status: AgentStatus,
+    pub(crate) status: emergent_protocol::AgentStatus,
     pub(crate) cli: String,
     pub(crate) workspace_id: WorkspaceId,
     pub(crate) command_tx: mpsc::UnboundedSender<AgentCommand>,
@@ -74,93 +75,166 @@ pub(crate) struct ThreadHandle {
 }
 
 // ---------------------------------------------------------------------------
-// AgentManager
+// AgentManager — coordinator that owns AgentRegistry + ThreadManager
 // ---------------------------------------------------------------------------
 
 pub struct AgentManager {
-    agents: Arc<RwLock<HashMap<String, Arc<Mutex<ThreadHandle>>>>>,
-    event_tx: broadcast::Sender<Notification>,
-    history: Arc<RwLock<HashMap<String, Vec<Notification>>>>,
-    mailboxes: Arc<RwLock<HashMap<String, Mailbox>>>,
+    registry: Arc<RwLock<AgentRegistry>>,
+    pub(crate) threads: ThreadManager,
     topology: Arc<RwLock<crate::swarm::Topology>>,
-    mcp_port: std::sync::atomic::AtomicU16,
-    token_registry: Arc<crate::mcp::TokenRegistry>,
+    #[allow(dead_code)] // Kept for future mailbox reconnection
+    mailboxes: Arc<RwLock<HashMap<String, Mailbox>>>,
     workspace_state: crate::workspace::SharedWorkspaceState,
+    event_tx: broadcast::Sender<Notification>,
 }
 
 impl AgentManager {
-    /// Generate a short 8-character hex ID from random bytes.
-    fn generate_short_id() -> String {
-        use std::fmt::Write;
-        let mut buf = [0u8; 4];
-        getrandom::fill(&mut buf).expect("Failed to generate random bytes");
-        let mut id = String::with_capacity(8);
-        for byte in &buf {
-            write!(id, "{:02x}", byte).unwrap();
-        }
-        id
-    }
-
     pub fn new(
         workspace_state: crate::workspace::SharedWorkspaceState,
         event_tx: broadcast::Sender<Notification>,
         token_registry: Arc<crate::mcp::TokenRegistry>,
     ) -> Self {
         enrich_path();
-        let history: Arc<RwLock<HashMap<String, Vec<Notification>>>> =
-            Arc::new(RwLock::new(HashMap::new()));
 
-        // Spawn background task to record all notifications into per-agent history
-        let history_clone = history.clone();
-        let mut recorder_rx: broadcast::Receiver<Notification> = event_tx.subscribe();
-        tokio::spawn(async move {
-            loop {
-                match recorder_rx.recv().await {
-                    Ok(notification) => {
-                        if let Some(agent_id) = notification.agent_id() {
-                            let mut h = history_clone.write().await;
-                            h.entry(agent_id.to_string())
-                                .or_default()
-                                .push(notification);
-                        }
-                    }
-                    Err(broadcast::error::RecvError::Lagged(n)) => {
-                        log::warn!("History recorder lagged, missed {} notifications", n);
-                    }
-                    Err(broadcast::error::RecvError::Closed) => break,
-                }
-            }
-        });
+        let threads = ThreadManager::new(event_tx.clone(), token_registry);
 
         Self {
-            agents: Arc::new(RwLock::new(HashMap::new())),
-            event_tx,
-            history,
-            mailboxes: Arc::new(RwLock::new(HashMap::new())),
+            registry: Arc::new(RwLock::new(AgentRegistry::new())),
+            threads,
             topology: Arc::new(RwLock::new(crate::swarm::Topology::new())),
-            mcp_port: std::sync::atomic::AtomicU16::new(0),
-            token_registry,
+            mailboxes: Arc::new(RwLock::new(HashMap::new())),
             workspace_state,
+            event_tx: event_tx.clone(),
         }
     }
 
-    /// Set the MCP HTTP server port (called after HTTP server binds).
-    pub fn set_mcp_port(&self, port: u16) {
-        self.mcp_port
-            .store(port, std::sync::atomic::Ordering::Relaxed);
+    // -----------------------------------------------------------------------
+    // Agent definition CRUD (coordinator → registry)
+    // -----------------------------------------------------------------------
+
+    pub async fn create_agent(
+        &self,
+        workspace_id: WorkspaceId,
+        name: String,
+        role: String,
+        cli: String,
+    ) -> String {
+        let id = {
+            let mut reg = self.registry.write().await;
+            reg.create_agent(workspace_id, name, role, cli)
+        };
+        let _ = self
+            .event_tx
+            .send(Notification::AgentCreated(AgentCreatedPayload {
+                definition_id: id.clone(),
+            }));
+        id
     }
 
-    /// Spawn an agent subprocess asynchronously.
-    ///
-    /// Returns the agent ID immediately. The ACP handshake runs in a background
-    /// task and emits `StatusChange(Idle)` or `Error` notifications on completion.
+    pub async fn update_agent(
+        &self,
+        agent_id: &str,
+        name: Option<String>,
+        role: Option<String>,
+    ) -> Result<(), String> {
+        let mut reg = self.registry.write().await;
+        reg.update_agent(agent_id, name, role)
+    }
+
+    pub async fn delete_agent(&self, agent_id: &str) -> Result<(), String> {
+        // Kill all threads for this agent first
+        self.threads.kill_threads_for_agent(agent_id).await?;
+
+        // Remove from registry
+        let mut reg = self.registry.write().await;
+        reg.delete_agent(agent_id)?;
+        drop(reg);
+
+        let _ = self
+            .event_tx
+            .send(Notification::AgentDeleted(AgentDeletedPayload {
+                definition_id: agent_id.to_string(),
+            }));
+        Ok(())
+    }
+
+    pub async fn get_agent(&self, agent_id: &str) -> Option<AgentDefinition> {
+        let reg = self.registry.read().await;
+        reg.get_agent(agent_id).cloned()
+    }
+
+    pub async fn list_agent_definitions(&self, workspace_id: &WorkspaceId) -> Vec<AgentDefinition> {
+        let reg = self.registry.read().await;
+        reg.list_agents(workspace_id)
+            .into_iter()
+            .cloned()
+            .collect()
+    }
+
+    // -----------------------------------------------------------------------
+    // Thread lifecycle (coordinator → thread manager)
+    // -----------------------------------------------------------------------
+
+    /// Spawn a new thread under an agent definition.
+    /// Reads CLI and workspace from the definition, validates the container,
+    /// then delegates to ThreadManager.
+    pub async fn spawn_thread(&self, agent_id: &str) -> Result<String, String> {
+        // Read agent definition
+        let definition = {
+            let reg = self.registry.read().await;
+            reg.get_agent(agent_id)
+                .cloned()
+                .ok_or_else(|| format!("Agent definition '{}' not found", agent_id))?
+        };
+
+        // Validate workspace container is running and get container_id
+        let container_id = {
+            let state = self.workspace_state.read().await;
+            let ws = state
+                .workspaces
+                .get(&definition.workspace_id)
+                .ok_or_else(|| {
+                    format!("Workspace '{}' not found", definition.workspace_id)
+                })?;
+            match &ws.container_status {
+                emergent_protocol::ContainerStatus::Running => {}
+                other => {
+                    return Err(format!(
+                        "Workspace '{}' container is not running (status: {})",
+                        definition.workspace_id, other
+                    ));
+                }
+            }
+            ws.container_id
+                .clone()
+                .ok_or_else(|| {
+                    format!(
+                        "Workspace '{}' has no container_id",
+                        definition.workspace_id
+                    )
+                })?
+        };
+
+        self.threads
+            .spawn_thread(
+                agent_id.to_string(),
+                definition.workspace_id,
+                container_id,
+                definition.cli,
+                Some(definition.role),
+            )
+            .await
+    }
+
+    /// Spawn a thread the old way (without agent definition) — kept for backward
+    /// compatibility during migration. Delegates directly to ThreadManager.
     pub async fn spawn_agent(
         &self,
         workspace_id: WorkspaceId,
         agent_binary: String,
         role: Option<String>,
     ) -> Result<String, String> {
-        // Read workspace state to get the container_id
+        // Validate workspace container
         let container_id = {
             let state = self.workspace_state.read().await;
             let ws = state
@@ -181,222 +255,67 @@ impl AgentManager {
                 .ok_or_else(|| format!("Workspace '{}' has no container_id", workspace_id))?
         };
 
-        let agent_id = Self::generate_short_id();
-
-        log::info!(
-            "Spawning agent {} (cli: {}, workspace: {}, container: {})",
-            &agent_id,
-            agent_binary,
-            workspace_id,
-            container_id
-        );
-
-        // Return ID immediately — the frontend sets "initializing" status locally.
-        // Initialization (process spawn + ACP handshake) runs asynchronously.
-        let agents = self.agents.clone();
-        let event_tx = self.event_tx.clone();
-        let history = self.history.clone();
-        let id = agent_id.clone();
-
-        let bearer_token = self.token_registry.register(&id);
-        let mcp_port = self
-            .mcp_port
-            .load(std::sync::atomic::Ordering::Relaxed);
-        let role_clone = role.clone();
-
-        tokio::spawn(async move {
-            match lifecycle::initialize_agent(
-                id.clone(),
-                String::new(), // agent_definition_id — set properly in Task 6 coordinator
+        self.threads
+            .spawn_thread(
+                String::new(), // no agent definition
                 workspace_id,
                 container_id,
                 agent_binary,
-                role_clone,
-                agents,
-                event_tx.clone(),
-                history,
-                mcp_port,
-                bearer_token,
+                role,
             )
             .await
-            {
-                Ok(()) => {
-                    log::info!("Agent {} spawned successfully", &id);
-                }
-                Err(e) => {
-                    log::error!("Agent {} failed to initialize: {}", &id, e);
-                    let _ = event_tx.send(Notification::Error(AgentErrorPayload {
-                        agent_id: id,
-                        message: e,
-                    }));
-                }
-            }
-        });
-
-        Ok(agent_id)
     }
 
-    /// Queue a user prompt for an agent. The prompt loop will pick it up.
-    /// Returns a receiver that resolves when the prompt completes.
+    // -----------------------------------------------------------------------
+    // Thread operations (delegated to ThreadManager)
+    // -----------------------------------------------------------------------
+
     pub async fn queue_prompt(
         &self,
-        agent_id: &str,
+        thread_id: &str,
         text: String,
         role: Option<String>,
     ) -> Result<oneshot::Receiver<Result<(), String>>, String> {
-        let handle_arc = {
-            let agents = self.agents.read().await;
-            agents
-                .get(agent_id)
-                .cloned()
-                .ok_or_else(|| format!("Agent '{}' not found", agent_id))?
-        };
-
-        let mut handle = handle_arc.lock().await;
-
-        // Reject if a prompt is already queued or agent is working.
-        if handle.pending_prompt.is_some() {
-            return Err(format!(
-                "Agent '{}' already has a pending prompt",
-                agent_id
-            ));
-        }
-        if handle.status != AgentStatus::Idle {
-            return Err(format!(
-                "Agent '{}' is not idle (current status: {})",
-                agent_id, handle.status
-            ));
-        }
-
-        // Set role on first prompt if provided.
-        if !handle.has_prompted {
-            if let Some(r) = role {
-                handle.role = Some(r);
-            }
-        }
-
-        let (reply_tx, reply_rx) = oneshot::channel();
-        handle.pending_prompt = Some((text, reply_tx));
-        handle.prompt_notify.notify_one();
-
-        Ok(reply_rx)
+        self.threads.queue_prompt(thread_id, text, role).await
     }
 
-    /// Wake an agent's prompt loop (e.g., after delivering a mailbox message).
-    pub async fn notify_prompt_loop(&self, agent_id: &str) {
-        let agents = self.agents.read().await;
-        if let Some(handle_arc) = agents.get(agent_id) {
-            let handle = handle_arc.lock().await;
-            handle.prompt_notify.notify_one();
-        }
+    pub async fn notify_prompt_loop(&self, thread_id: &str) {
+        self.threads.notify_prompt_loop(thread_id).await
     }
 
-    /// Cancel the current prompt on an agent.
-    pub async fn cancel_prompt(&self, agent_id: &str) -> Result<(), String> {
-        let handle_arc = {
-            let agents = self.agents.read().await;
-            agents
-                .get(agent_id)
-                .cloned()
-                .ok_or_else(|| format!("Agent '{}' not found", agent_id))?
-        };
-
-        let handle = handle_arc.lock().await;
-
-        // No-op if the agent is not currently working — avoids spurious ACP errors.
-        if handle.status != AgentStatus::Working {
-            return Ok(());
-        }
-
-        let (reply_tx, reply_rx) = oneshot::channel();
-        handle
-            .command_tx
-            .send(AgentCommand::Cancel { reply: reply_tx })
-            .map_err(|_| "Agent thread has terminated".to_string())?;
-
-        drop(handle);
-
-        reply_rx
-            .await
-            .map_err(|_| "Agent thread terminated during cancel".to_string())?
+    pub async fn cancel_prompt(&self, thread_id: &str) -> Result<(), String> {
+        self.threads.cancel_prompt(thread_id).await
     }
 
-    /// Kill an agent, removing it from the map and terminating the subprocess.
-    pub async fn kill_agent(&self, agent_id: &str) -> Result<(), String> {
-        log::info!("Killing agent {}", agent_id);
-
-        // Emit the dead status notification *before* removing from the map,
-        // so the history recorder still has an entry for this agent_id.
-        let _ = self.event_tx.send(Notification::StatusChange(StatusChangePayload {
-            agent_id: agent_id.to_string(),
-            status: AgentStatus::Dead.to_string(),
-        }));
-
-        let handle_arc = {
-            let mut agents = self.agents.write().await;
-            match agents.remove(agent_id) {
-                Some(h) => h,
-                None => return Ok(()),
-            }
-        };
-
-        let mut handle = handle_arc.lock().await;
-
-        // Abort the prompt loop task.
-        if let Some(loop_handle) = handle.prompt_loop_handle.take() {
-            loop_handle.abort();
-        }
-
-        // Signal the command loop to exit — this drops the ACP connection,
-        // which closes stdin to the agent, giving it a chance to shut down
-        // its MCP children gracefully per the MCP spec.
-        let _ = handle.command_tx.send(AgentCommand::Shutdown);
-
-        // Wait briefly for the agent to exit gracefully, then force kill.
-        use crate::agent::spawner::AgentProcess;
-        let exited = tokio::time::timeout(
-            std::time::Duration::from_secs(2),
-            handle.process.wait(),
-        )
-        .await;
-        if exited.is_err() {
-            let _ = handle.process.kill().await;
-        }
-
-        // Drop the thread handle (do not join — just release ownership)
-        drop(handle.thread_handle.take());
-
-        // Notify connected peers of death before cleanup
-        let peers = self.topology.read().await.peers(agent_id);
-        let agent_name = &handle.cli;
-        for peer_id in &peers {
-            let mut mailboxes = self.mailboxes.write().await;
-            if let Some(mailbox) = mailboxes.get_mut(peer_id) {
-                mailbox.deliver(MailboxMessage {
-                    sender: "system".to_string(),
-                    timestamp: chrono::Utc::now().to_rfc3339(),
-                    body: format!("Agent {} ({}) has disconnected.", agent_id, agent_name),
-                });
-            }
-        }
-
-        // Clean up mailbox, topology, and revoke bearer token
-        self.mailboxes.write().await.remove(agent_id);
-        self.topology.write().await.remove_agent(agent_id);
-        self.token_registry.revoke_agent(agent_id);
-
+    /// Kill a thread and clean up topology.
+    pub async fn kill_agent(&self, thread_id: &str) -> Result<(), String> {
+        self.threads.kill_thread(thread_id).await?;
+        self.topology.write().await.remove_agent(thread_id);
         Ok(())
     }
 
-    /// Kill all agents in a workspace.
+    /// Kill all threads in a workspace by deleting all agent definitions.
     pub async fn kill_agents_in_workspace(
         &self,
         workspace_id: &WorkspaceId,
     ) -> Result<(), String> {
         let agent_ids: Vec<String> = {
-            let agents = self.agents.read().await;
+            let reg = self.registry.read().await;
+            reg.list_agents(workspace_id)
+                .iter()
+                .map(|a| a.id.clone())
+                .collect()
+        };
+
+        for id in agent_ids {
+            self.delete_agent(&id).await?;
+        }
+
+        // Also kill any threads without agent definitions (legacy)
+        let orphan_thread_ids: Vec<String> = {
+            let threads = self.threads.threads.read().await;
             let mut ids = Vec::new();
-            for (id, handle_arc) in agents.iter() {
+            for (id, handle_arc) in threads.iter() {
                 let handle = handle_arc.lock().await;
                 if &handle.workspace_id == workspace_id {
                     ids.push(id.clone());
@@ -404,118 +323,79 @@ impl AgentManager {
             }
             ids
         };
-
-        for id in agent_ids {
+        for id in orphan_thread_ids {
             self.kill_agent(&id).await?;
         }
 
         Ok(())
     }
 
-    /// List all running agents.
     pub async fn list_agents(&self) -> Vec<AgentSummary> {
-        let agents = self.agents.read().await;
-        let mut result = Vec::new();
-        for (id, handle_arc) in agents.iter() {
-            let handle = handle_arc.lock().await;
-            result.push(AgentSummary {
-                id: id.clone(),
-                cli: handle.cli.clone(),
-                status: handle.status.to_string(),
-                workspace_id: handle.workspace_id.clone(),
-                role: handle.role.clone(),
-            });
-        }
-        result
+        self.threads.list_all_threads().await
     }
 
-    /// Get the current config options for an agent.
-    pub async fn get_config(&self, agent_id: &str) -> Result<Vec<ConfigOption>, String> {
-        let handle_arc = {
-            let agents = self.agents.read().await;
-            agents
-                .get(agent_id)
-                .cloned()
-                .ok_or_else(|| format!("Agent '{}' not found", agent_id))?
-        };
-        let handle = handle_arc.lock().await;
-        Ok(handle.config_options.clone())
+    pub async fn list_threads(&self, agent_id: &str) -> Vec<ThreadSummary> {
+        self.threads.list_threads(agent_id).await
     }
 
-    /// Set a config option on an agent via ACP.
+    pub async fn get_config(&self, thread_id: &str) -> Result<Vec<ConfigOption>, String> {
+        self.threads.get_config(thread_id).await
+    }
+
     pub async fn set_config(
         &self,
-        agent_id: &str,
+        thread_id: &str,
         config_id: String,
         value: String,
     ) -> Result<Vec<ConfigOption>, String> {
-        let handle_arc = {
-            let agents = self.agents.read().await;
-            agents
-                .get(agent_id)
-                .cloned()
-                .ok_or_else(|| format!("Agent '{}' not found", agent_id))?
-        };
-
-        let (reply_tx, reply_rx) = oneshot::channel();
-        {
-            let handle = handle_arc.lock().await;
-            handle
-                .command_tx
-                .send(AgentCommand::SetConfig {
-                    config_id,
-                    value,
-                    reply: reply_tx,
-                })
-                .map_err(|_| "Agent thread has terminated".to_string())?;
-        }
-
-        let new_config = reply_rx
-            .await
-            .map_err(|_| "Agent thread terminated during set_config".to_string())??;
-
-        // Update stored config and emit notification with diff.
-        {
-            let mut handle = handle_arc.lock().await;
-            let old_config = std::mem::replace(&mut handle.config_options, new_config.clone());
-            let changes = crate::config::diff_config(&old_config, &new_config);
-            if !changes.is_empty() {
-                let _ = self.event_tx.send(Notification::ConfigUpdate(ConfigUpdatePayload {
-                    agent_id: agent_id.to_string(),
-                    config_options: new_config.clone(),
-                    changes,
-                }));
-            }
-        }
-
-        Ok(new_config)
+        self.threads.set_config(thread_id, config_id, value).await
     }
 
-    /// Get notification history for an agent.
-    pub async fn get_history(&self, agent_id: &str) -> Result<Vec<Notification>, String> {
-        let history = self.history.read().await;
-        history
-            .get(agent_id)
-            .cloned()
-            .ok_or_else(|| format!("Agent '{}' not found", agent_id))
+    pub async fn get_history(&self, thread_id: &str) -> Result<Vec<Notification>, String> {
+        self.threads.get_history(thread_id).await
+    }
+
+    pub async fn set_mcp_port(&self, port: u16) {
+        self.threads.set_mcp_port(port);
+    }
+
+    pub async fn has_management_permissions(&self, thread_id: &str) -> bool {
+        self.threads.has_management_permissions(thread_id).await
+    }
+
+    pub async fn set_management_permissions(
+        &self,
+        thread_id: &str,
+        enabled: bool,
+    ) -> Result<(), String> {
+        self.threads
+            .set_management_permissions(thread_id, enabled)
+            .await
+    }
+
+    pub async fn is_agent_idle(&self, thread_id: &str) -> bool {
+        self.threads.is_thread_idle(thread_id).await
     }
 
     // -----------------------------------------------------------------------
-    // Swarm: topology management
+    // Swarm: topology (stays on coordinator)
     // -----------------------------------------------------------------------
 
     pub async fn connect_agents(&self, a: &str, b: &str) -> Result<(), String> {
-        // Validate both agents are in the same workspace
-        let (ws_a, ws_b) = {
-            let agents = self.agents.read().await;
-            let handle_a = agents.get(a).ok_or_else(|| format!("Agent '{}' not found", a))?;
-            let handle_b = agents.get(b).ok_or_else(|| format!("Agent '{}' not found", b))?;
-            let ws_a = handle_a.lock().await.workspace_id.clone();
-            let ws_b = handle_b.lock().await.workspace_id.clone();
-            (ws_a, ws_b)
-        };
+        // Validate both threads are in the same workspace
+        let threads = self.threads.threads.read().await;
+        let handle_a = threads
+            .get(a)
+            .ok_or_else(|| format!("Thread '{}' not found", a))?;
+        let handle_b = threads
+            .get(b)
+            .ok_or_else(|| format!("Thread '{}' not found", b))?;
+        let ws_a = handle_a.lock().await.workspace_id.clone();
+        let ws_b = handle_b.lock().await.workspace_id.clone();
+        drop(threads);
+
         if ws_a != ws_b {
-            return Err("Cannot connect agents in different workspaces".to_string());
+            return Err("Cannot connect threads in different workspaces".to_string());
         }
 
         self.topology.write().await.connect(a, b);
@@ -538,130 +418,24 @@ impl AgentManager {
         ));
     }
 
-    pub async fn get_connections(&self, agent_id: &str) -> Vec<String> {
-        self.topology.read().await.peers(agent_id)
+    pub async fn get_connections(&self, thread_id: &str) -> Vec<String> {
+        self.topology.read().await.peers(thread_id)
     }
 
     // -----------------------------------------------------------------------
-    // Swarm: permissions
+    // Agent name lookup (for MCP handler)
     // -----------------------------------------------------------------------
 
-    pub async fn set_management_permissions(
-        &self,
-        agent_id: &str,
-        enabled: bool,
-    ) -> Result<(), String> {
-        let agents = self.agents.read().await;
-        let handle_arc = agents
-            .get(agent_id)
-            .ok_or_else(|| format!("Agent not found: {}", agent_id))?;
-        handle_arc.lock().await.has_management_permissions = enabled;
-        Ok(())
-    }
-
-    pub async fn has_management_permissions(&self, agent_id: &str) -> bool {
-        let agents = self.agents.read().await;
-        match agents.get(agent_id) {
-            Some(handle_arc) => handle_arc.lock().await.has_management_permissions,
-            None => false,
-        }
-    }
-
-    // -----------------------------------------------------------------------
-    // Swarm: mailbox
-    // -----------------------------------------------------------------------
-
-    pub async fn deliver_message(
-        &self,
-        from: &str,
-        to: &str,
-        body: String,
-    ) -> Result<(), String> {
-        // Check topology
-        if !self.topology.read().await.is_connected(from, to) {
-            return Err(format!("Agents {} and {} are not connected", from, to));
-        }
-        // Check same workspace
-        {
-            let agents = self.agents.read().await;
-            let from_handle = agents.get(from).ok_or_else(|| format!("Agent '{}' not found", from))?;
-            let to_handle = agents.get(to).ok_or_else(|| format!("Agent '{}' not found", to))?;
-            let ws_from = from_handle.lock().await.workspace_id.clone();
-            let ws_to = to_handle.lock().await.workspace_id.clone();
-            if ws_from != ws_to {
-                return Err("Cannot send messages between agents in different workspaces".to_string());
-            }
-        }
-        // Check target exists
-        if !self.agents.read().await.contains_key(to) {
-            return Err(format!("Agent not found: {}", to));
-        }
-        // Look up agent names for the notification
-        let (from_name, to_name) = {
-            let agents = self.agents.read().await;
-            let f = match agents.get(from) {
-                Some(h) => h.lock().await.cli.clone(),
-                None => from.to_string(),
-            };
-            let t = match agents.get(to) {
-                Some(h) => h.lock().await.cli.clone(),
-                None => to.to_string(),
-            };
-            (f, t)
-        };
-
-        let timestamp = chrono::Utc::now().to_rfc3339();
-
-        // Deliver
-        let mut mailboxes = self.mailboxes.write().await;
-        let mailbox = mailboxes
-            .entry(to.to_string())
-            .or_insert_with(Mailbox::new);
-        mailbox.deliver(MailboxMessage {
-            sender: from.to_string(),
-            timestamp: timestamp.clone(),
-            body: body.clone(),
-        });
-        drop(mailboxes);
-
-        // Emit swarm message notification for the communication log
-        let _ = self.event_tx.send(Notification::SwarmMessage(SwarmMessagePayload {
-            from_agent_id: from.to_string(),
-            from_agent_name: from_name,
-            to_agent_id: to.to_string(),
-            to_agent_name: to_name,
-            body,
-            timestamp,
-        }));
-
-        Ok(())
-    }
-
-    pub async fn is_agent_idle(&self, agent_id: &str) -> bool {
-        let agents = self.agents.read().await;
-        match agents.get(agent_id) {
-            Some(h) => h.lock().await.status == AgentStatus::Idle,
-            None => false,
-        }
-    }
-
-    pub async fn read_mailbox(&self, agent_id: &str) -> Vec<MailboxMessage> {
-        let mut mailboxes = self.mailboxes.write().await;
-        match mailboxes.get_mut(agent_id) {
-            Some(mailbox) => mailbox.read_and_clear(),
-            None => vec![],
-        }
-    }
-
-    pub async fn mailbox_len(&self, agent_id: &str) -> usize {
-        let mailboxes = self.mailboxes.read().await;
-        mailboxes.get(agent_id).map_or(0, |m| m.len())
+    pub async fn get_agent_name_for_thread(&self, thread_id: &str) -> Option<String> {
+        let threads = self.threads.threads.read().await;
+        let handle_arc = threads.get(thread_id)?;
+        let handle = handle_arc.lock().await;
+        let registry = self.registry.read().await;
+        registry.get_agent(&handle.agent_id).map(|d| d.name.clone())
     }
 }
 
 /// Enrich PATH with common CLI install locations.
-/// macOS bundled apps launch with a minimal PATH (/usr/bin:/bin:/usr/sbin:/sbin),
-/// so tools installed via npm, bun, cargo, etc. won't be found without this.
 fn enrich_path() {
     let home = match std::env::var("HOME") {
         Ok(h) => std::path::PathBuf::from(h),

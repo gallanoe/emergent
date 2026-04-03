@@ -102,7 +102,7 @@ pub fn run() {
                 match emergent_core::mcp::http_server::start(http_manager.clone(), http_registry).await
                 {
                     Ok(server) => {
-                        http_manager.set_mcp_port(server.port);
+                        http_manager.set_mcp_port(server.port).await;
                         log::info!(
                             "MCP HTTP server started on 127.0.0.1:{}",
                             server.port
