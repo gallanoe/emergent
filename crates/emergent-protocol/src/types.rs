@@ -260,7 +260,7 @@ pub struct AgentDefinition {
     pub id: String,
     pub workspace_id: WorkspaceId,
     pub name: String,
-    pub role: String,
+    pub role: Option<String>,
     pub cli: String,
 }
 
