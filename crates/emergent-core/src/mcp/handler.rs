@@ -14,8 +14,8 @@ use super::token_registry::TokenRegistry;
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema)]
-pub struct KillAgentParams {
-    #[schemars(description = "The name or ID of the agent to kill")]
+pub struct KillThreadParams {
+    #[schemars(description = "The ID of the thread to kill")]
     pub target: String,
 }
 
@@ -84,7 +84,7 @@ impl McpHandler {
 impl McpHandler {
     #[tool(
         name = "list_peers",
-        description = "List all agents in the swarm. Returns each agent's name, current status, and whether you're connected to them. Connected agents can exchange messages; use connect_agents to connect to unconnected peers."
+        description = "List all threads in the swarm. Returns each thread's agent name, current status, and whether you're connected to them."
     )]
     async fn list_peers(
         &self,
@@ -92,31 +92,36 @@ impl McpHandler {
             http::request::Parts,
         >,
     ) -> Result<String, String> {
-        let agent_id = self.agent_id_from_parts(&parts)?;
-        let connections = self.manager.get_connections(&agent_id).await;
-        let agents = self.manager.list_agents().await;
+        let thread_id = self.agent_id_from_parts(&parts)?;
+        let connections = self.manager.get_connections(&thread_id).await;
+        let threads = self.manager.list_agents().await;
 
         // Resolve caller's workspace_id so we only show same-workspace peers
-        let caller_workspace_id = agents
+        let caller_workspace_id = threads
             .iter()
-            .find(|a| a.id == agent_id)
+            .find(|a| a.id == thread_id)
             .map(|a| a.workspace_id.clone())
-            .ok_or_else(|| format!("Calling agent '{}' not found", agent_id))?;
+            .ok_or_else(|| format!("Calling thread '{}' not found", thread_id))?;
 
         let mut result = Vec::new();
-        for agent in &agents {
-            if agent.id == agent_id {
+        for thread in &threads {
+            if thread.id == thread_id {
                 continue;
             }
-            // Only list agents in the same workspace
-            if agent.workspace_id != caller_workspace_id {
+            if thread.workspace_id != caller_workspace_id {
                 continue;
             }
+            // Use agent definition name if available, fall back to CLI
+            let name = self
+                .manager
+                .get_agent_name_for_thread(&thread.id)
+                .await
+                .unwrap_or_else(|| thread.cli.clone());
             result.push(serde_json::json!({
-                "id": agent.id,
-                "name": agent.cli,
-                "status": agent.status,
-                "connected": connections.contains(&agent.id),
+                "id": thread.id,
+                "name": name,
+                "status": thread.status,
+                "connected": connections.contains(&thread.id),
             }));
         }
 
@@ -124,18 +129,21 @@ impl McpHandler {
     }
 
     #[tool(
-        name = "kill_agent",
-        description = "Kill an existing agent in the swarm. Requires management permissions."
+        name = "kill_thread",
+        description = "Kill a running thread by its ID. Requires management permissions. You cannot kill your own thread."
     )]
-    async fn kill_agent(
+    async fn kill_thread(
         &self,
         rmcp::handler::server::tool::Extension(parts): rmcp::handler::server::tool::Extension<
             http::request::Parts,
         >,
-        Parameters(params): Parameters<KillAgentParams>,
+        Parameters(params): Parameters<KillThreadParams>,
     ) -> Result<String, String> {
-        let agent_id = self.agent_id_from_parts(&parts)?;
-        if !self.manager.has_management_permissions(&agent_id).await {
+        let caller_thread_id = self.agent_id_from_parts(&parts)?;
+        if caller_thread_id == params.target {
+            return Err("Cannot kill your own thread".to_string());
+        }
+        if !self.manager.has_management_permissions(&caller_thread_id).await {
             return Err("Permission denied: management permissions required".to_string());
         }
         self.manager
