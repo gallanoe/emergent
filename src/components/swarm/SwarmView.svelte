@@ -9,24 +9,11 @@
     messageLog: SwarmMessageLogEntry[];
     agentConnections: Record<string, string[]>;
     demoMode: boolean;
-    knownAgents: { name: string; command: string; available: boolean }[];
     onSelectAgent: (id: string) => void;
-    onAddAgent: (
-      swarmId: string,
-      agentCommand: string,
-      agentName: string,
-    ) => void;
   }
 
-  let {
-    swarm,
-    messageLog,
-    agentConnections,
-    demoMode,
-    knownAgents,
-    onSelectAgent,
-    onAddAgent,
-  }: Props = $props();
+  let { swarm, messageLog, agentConnections, demoMode, onSelectAgent }: Props =
+    $props();
 
   function statusBadgeClass(status: string): string {
     switch (status) {
