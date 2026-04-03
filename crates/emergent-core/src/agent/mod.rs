@@ -53,8 +53,8 @@ pub(crate) struct ThreadHandle {
     pub(crate) cli: String,
     pub(crate) workspace_id: WorkspaceId,
     pub(crate) command_tx: mpsc::UnboundedSender<AgentCommand>,
-    /// Handle to the OS-level child process (for kill).
-    pub(crate) child: tokio::process::Child,
+    /// Handle to the agent process (for kill).
+    pub(crate) process: crate::agent::spawner::DockerCliProcess,
     /// Handle to the dedicated ACP thread (kept for ownership; not joined).
     pub(crate) thread_handle: Option<std::thread::JoinHandle<()>>,
     pub(crate) config_options: Vec<ConfigOption>,
@@ -353,13 +353,14 @@ impl AgentManager {
         let _ = handle.command_tx.send(AgentCommand::Shutdown);
 
         // Wait briefly for the agent to exit gracefully, then force kill.
+        use crate::agent::spawner::AgentProcess;
         let exited = tokio::time::timeout(
             std::time::Duration::from_secs(2),
-            handle.child.wait(),
+            handle.process.wait(),
         )
         .await;
         if exited.is_err() {
-            let _ = handle.child.kill().await;
+            let _ = handle.process.kill().await;
         }
 
         // Drop the thread handle (do not join — just release ownership)

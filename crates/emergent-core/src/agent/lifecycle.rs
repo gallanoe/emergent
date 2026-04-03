@@ -12,6 +12,7 @@ use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
 use super::acp_bridge::{agent_command_loop, EmergentClient};
 use super::prompt_loop::prompt_loop;
+use super::spawner::AgentProcess;
 use super::{AgentCommand, ThreadHandle};
 
 /// Perform the full agent initialization: spawn process, ACP handshake,
@@ -30,24 +31,18 @@ pub(crate) async fn initialize_agent(
     mcp_port: u16,
     bearer_token: String,
 ) -> Result<(), String> {
-    // Build docker exec command: split agent_binary into parts and prepend docker exec -i
+    // Spawn the agent process via ProcessSpawner
+    let spawner = super::spawner::DockerCliSpawner;
     let parts: Vec<&str> = agent_binary.split_whitespace().collect();
-    let mut docker_args = vec!["exec", "-i", &container_id];
-    docker_args.extend_from_slice(&parts);
+    let mut process = super::spawner::ProcessSpawner::spawn(&spawner, &container_id, &parts)
+        .await
+        .map_err(|e| format!("Failed to spawn agent '{}': {}", agent_binary, e))?;
 
-    let mut child = tokio::process::Command::new("docker")
-        .args(&docker_args)
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
-        .kill_on_drop(true)
-        .spawn()
-        .map_err(|e| format!("Failed to spawn agent '{}' via docker exec: {}", agent_binary, e))?;
-
-    let child_stdin = child.stdin.take().ok_or("Failed to capture agent stdin")?;
-    let child_stdout = child
-        .stdout
-        .take()
+    let child_stdin = process
+        .take_stdin()
+        .ok_or("Failed to capture agent stdin")?;
+    let child_stdout = process
+        .take_stdout()
         .ok_or("Failed to capture agent stdout")?;
 
     let (command_tx, command_rx) = mpsc::unbounded_channel::<AgentCommand>();
@@ -179,7 +174,7 @@ pub(crate) async fn initialize_agent(
         cli: agent_binary,
         workspace_id,
         command_tx,
-        child,
+        process,
         thread_handle: Some(thread_handle),
         config_options: initial_config.clone(),
         has_management_permissions: false,
