@@ -1,8 +1,10 @@
 mod acp_bridge;
 mod lifecycle;
 mod prompt_loop;
+pub mod registry;
 pub mod spawner;
 
+pub use registry::AgentRegistry;
 pub use spawner::{AgentProcess, DockerCliSpawner, ProcessSpawner};
 
 use std::collections::HashMap;
