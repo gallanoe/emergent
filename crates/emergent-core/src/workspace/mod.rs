@@ -34,6 +34,11 @@ ENV PATH=\"/root/.bun/bin:$PATH\"
 RUN curl -fsSL https://claude.ai/install.sh | bash
 ENV PATH=\"/root/.local/bin:$PATH\"
 
+# GitHub CLI
+RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | tee /usr/share/keyrings/githubcli-archive-keyring.gpg > /dev/null \
+    && echo \"deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main\" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+    && apt-get update && apt-get install -y gh && rm -rf /var/lib/apt/lists/*
+
 # Codex CLI
 RUN npm install -g @openai/codex
 
@@ -191,10 +196,13 @@ impl WorkspaceManager {
         let workspace_id = WorkspaceId(id.clone());
         let workspace_path = self.workspace_path(&workspace_id);
 
-        // Create directory
+        // Create directory and `home/` subdirectory (the mount point for the container)
         tokio::fs::create_dir_all(&workspace_path)
             .await
             .map_err(|e| format!("Failed to create workspace dir: {}", e))?;
+        tokio::fs::create_dir_all(workspace_path.join("home"))
+            .await
+            .map_err(|e| format!("Failed to create workspace home dir: {}", e))?;
 
         // VirtioFS workaround: touch the parent directory to force a metadata sync
         let parent = workspace_path

@@ -8,6 +8,9 @@
   import SwarmView from "./components/swarm/SwarmView.svelte";
   import SettingsView from "./components/settings/SettingsView.svelte";
   import TerminalView from "./components/terminal/TerminalView.svelte";
+  import ThreadListView from "./components/agent/ThreadListView.svelte";
+  import AgentSettingsView from "./components/agent/AgentSettingsView.svelte";
+  import AgentCreatorView from "./components/agent/AgentCreatorView.svelte";
   import ConfirmDialog from "./components/ConfirmDialog.svelte";
   import ContextMenu from "./components/sidebar/ContextMenu.svelte";
   import CreateWorkspaceDialog from "./components/CreateWorkspaceDialog.svelte";
@@ -197,7 +200,6 @@
         demoMode={appState.demoMode}
         containerRunning={appState.selectedSwarm?.containerStatus.state ===
           "running"}
-        knownAgents={appState.knownAgents}
         onSelectView={(view) => {
           if (view === "swarm" && appState.selectedSwarmId) {
             appState.selectWorkspace(appState.selectedSwarmId);
@@ -208,8 +210,7 @@
           }
         }}
         onSelectAgent={(id) => appState.selectAgent(id)}
-        onAddAgent={(swarmId, cmd, name) =>
-          appState.addAgentToWorkspace(swarmId, cmd, name)}
+        onCreateAgent={() => appState.startCreatingAgent()}
         onOverflowMenu={(x, y) => {
           if (appState.selectedSwarmId) {
             openWorkspaceMenu(appState.selectedSwarmId, x, y);
@@ -311,10 +312,86 @@
         messageLog={appState.swarmMessageLog}
         agentConnections={appState.agentConnections}
         demoMode={appState.demoMode}
-        knownAgents={appState.knownAgents}
         onSelectAgent={(id) => appState.selectAgent(id)}
-        onAddAgent={(swarmId, cmd, name) =>
-          appState.addAgentToWorkspace(swarmId, cmd, name)}
+      />
+    {:else if appState.activeView === "create-agent" && appState.selectedSwarmId}
+      <AgentCreatorView
+        knownAgents={appState.knownAgents}
+        onCreate={async (cli, name, role) => {
+          const agentId = await appState.createAgentDefinition(
+            appState.selectedSwarmId!,
+            name,
+            role,
+            cli,
+          );
+          appState.selectAgent(agentId);
+        }}
+        onCancel={() => {
+          if (appState.selectedSwarmId) {
+            appState.selectWorkspace(appState.selectedSwarmId);
+          }
+        }}
+      />
+    {:else if appState.activeView === "agent-threads" && appState.selectedAgentDef}
+      <ThreadListView
+        agentDefinition={appState.selectedAgentDef}
+        onSelectThread={(id) => appState.selectThread(id)}
+        onNewThread={async () => {
+          const threadId = await appState.spawnThread(
+            appState.selectedAgentId!,
+          );
+          appState.selectThread(threadId);
+        }}
+        onOpenSettings={() => appState.openAgentSettings()}
+        onResumeThread={(id) => appState.resumeThread(id)}
+        onStopThread={(id) => appState.stopThread(id)}
+        onDeleteThread={(id) => appState.deleteThread(id)}
+      />
+    {:else if appState.activeView === "agent-settings" && appState.selectedAgentDef}
+      <AgentSettingsView
+        agentDefinition={appState.selectedAgentDef}
+        onBack={() => appState.backToThreads()}
+        onUpdate={(name, role) =>
+          appState.updateAgentDefinition(appState.selectedAgentId!, name, role)}
+        onDelete={() =>
+          appState.deleteAgentDefinition(appState.selectedAgentId!)}
+      />
+    {:else if appState.activeView === "agent-chat" && appState.selectedThread}
+      <div
+        class="flex items-center h-[38px] px-4 border-b border-border-default flex-shrink-0 relative z-[60] gap-2"
+      >
+        <button
+          class="interactive flex items-center justify-center w-[24px] h-[24px] rounded-[5px] text-fg-muted"
+          title="Back to threads"
+          onclick={() => appState.backToThreads()}
+        >
+          ‹
+        </button>
+        <span class="text-[13px] font-semibold text-fg-heading"
+          >{appState.selectedAgentDef?.name ?? ""}</span
+        >
+        <span class="text-[12px] text-fg-disabled">/</span>
+        <span class="text-[12px] text-fg-muted"
+          >{appState.selectedThread.name}</span
+        >
+      </div>
+      <ChatArea agent={appState.selectedAgent} onEditQueue={handleEditQueue} />
+      <ChatInput
+        agent={appState.selectedAgent}
+        demoMode={appState.demoMode}
+        {externalContent}
+        onSend={(text) => {
+          const threadId = appState.selectedThreadId;
+          if (threadId) appState.sendPrompt(threadId, text);
+        }}
+        onInterrupt={() => {
+          const threadId = appState.selectedThreadId;
+          if (threadId) appState.cancelPrompt(threadId);
+        }}
+        onSetConfig={(configId, value) => {
+          const threadId = appState.selectedThreadId;
+          if (threadId) appState.setConfig(threadId, configId, value);
+        }}
       />
     {:else}
       <TopBar
@@ -340,14 +417,7 @@
           if (agent) appState.setAgentPermissions(agent.id, enabled);
         }}
       />
-      <ChatArea
-        agent={appState.selectedAgent}
-        onEditQueue={handleEditQueue}
-        onRoleChange={(role) => {
-          const agent = appState.selectedAgent;
-          if (agent) appState.setRole(agent.id, role);
-        }}
-      />
+      <ChatArea agent={appState.selectedAgent} onEditQueue={handleEditQueue} />
       <ChatInput
         agent={appState.selectedAgent}
         demoMode={appState.demoMode}

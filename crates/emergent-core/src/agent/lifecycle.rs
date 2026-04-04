@@ -12,43 +12,46 @@ use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
 use super::acp_bridge::{agent_command_loop, EmergentClient};
 use super::prompt_loop::prompt_loop;
-use super::{AgentCommand, AgentHandle};
-use crate::swarm::Mailbox;
+use super::spawner::AgentProcess;
+use super::{AgentCommand, ThreadHandle};
+
+/// Whether to create a new session or load an existing one.
+pub(crate) enum SessionInit {
+    /// Create a brand new ACP session.
+    New,
+    /// Resume an existing session by loading it with the stored session ID.
+    Load { acp_session_id: String },
+}
 
 /// Perform the full agent initialization: spawn process, ACP handshake,
 /// store handle, and emit notifications.
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn initialize_agent(
     agent_id: String,
+    agent_definition_id: String,
     workspace_id: WorkspaceId,
     container_id: String,
     agent_binary: String,
     role: Option<String>,
-    agents: Arc<RwLock<HashMap<String, Arc<Mutex<AgentHandle>>>>>,
+    session_init: SessionInit,
+    agents: Arc<RwLock<HashMap<String, Arc<Mutex<ThreadHandle>>>>>,
     event_tx: broadcast::Sender<Notification>,
     history: Arc<RwLock<HashMap<String, Vec<Notification>>>>,
-    mailboxes: Arc<RwLock<HashMap<String, Mailbox>>>,
     mcp_port: u16,
     bearer_token: String,
 ) -> Result<(), String> {
-    // Build docker exec command: split agent_binary into parts and prepend docker exec -i
+    // Spawn the agent process via ProcessSpawner
+    let spawner = super::spawner::DockerCliSpawner;
     let parts: Vec<&str> = agent_binary.split_whitespace().collect();
-    let mut docker_args = vec!["exec", "-i", &container_id];
-    docker_args.extend_from_slice(&parts);
+    let mut process = super::spawner::ProcessSpawner::spawn(&spawner, &container_id, &parts)
+        .await
+        .map_err(|e| format!("Failed to spawn agent '{}': {}", agent_binary, e))?;
 
-    let mut child = tokio::process::Command::new("docker")
-        .args(&docker_args)
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
-        .kill_on_drop(true)
-        .spawn()
-        .map_err(|e| format!("Failed to spawn agent '{}' via docker exec: {}", agent_binary, e))?;
-
-    let child_stdin = child.stdin.take().ok_or("Failed to capture agent stdin")?;
-    let child_stdout = child
-        .stdout
-        .take()
+    let child_stdin = process
+        .take_stdin()
+        .ok_or("Failed to capture agent stdin")?;
+    let child_stdout = process
+        .take_stdout()
         .ok_or("Failed to capture agent stdout")?;
 
     let (command_tx, command_rx) = mpsc::unbounded_channel::<AgentCommand>();
@@ -96,7 +99,7 @@ pub(crate) async fn initialize_agent(
                     }
                 });
 
-                // Initialize + create session
+                // Initialize + create/load session
                 log::debug!("Agent {} starting ACP handshake", &agent_id);
                 let init_result = async {
                     conn.initialize(
@@ -119,24 +122,48 @@ pub(crate) async fn initialize_agent(
                         )]),
                     );
 
-                    let session_resp = conn
-                        .new_session(
-                            acp::NewSessionRequest::new("/workspace/")
-                                .mcp_servers(vec![mcp_config]),
-                        )
-                        .await
-                        .map_err(|e| format!("ACP new_session failed: {}", e))?;
+                    match session_init {
+                        SessionInit::New => {
+                            let session_resp = conn
+                                .new_session(
+                                    acp::NewSessionRequest::new("/workspace/")
+                                        .mcp_servers(vec![mcp_config]),
+                                )
+                                .await
+                                .map_err(|e| format!("ACP new_session failed: {}", e))?;
 
-                    let initial_config = session_resp
-                        .config_options
-                        .as_deref()
-                        .map(crate::config::convert_config_options)
-                        .unwrap_or_default();
+                            let initial_config = session_resp
+                                .config_options
+                                .as_deref()
+                                .map(crate::config::convert_config_options)
+                                .unwrap_or_default();
 
-                    // Store initial config in the EmergentClient for diffing
-                    *config_state.lock().unwrap() = initial_config.clone();
+                            *config_state.lock().unwrap() = initial_config.clone();
 
-                    Ok::<_, String>((session_resp.session_id, initial_config))
+                            Ok::<_, String>((session_resp.session_id, initial_config))
+                        }
+                        SessionInit::Load { acp_session_id } => {
+                            log::info!(
+                                "Agent {} loading existing session {}",
+                                &agent_id,
+                                &acp_session_id,
+                            );
+                            let session_id = acp::SessionId::new(acp_session_id);
+
+                            let _load_resp = conn
+                                .load_session(
+                                    acp::LoadSessionRequest::new(session_id.clone(), "/workspace/")
+                                        .mcp_servers(vec![mcp_config]),
+                                )
+                                .await
+                                .map_err(|e| format!("ACP load_session failed: {}", e))?;
+
+                            // Config comes from load_session response if available
+                            let initial_config = config_state.lock().unwrap().clone();
+
+                            Ok::<_, String>((session_id, initial_config))
+                        }
+                    }
                 }
                 .await;
 
@@ -167,18 +194,20 @@ pub(crate) async fn initialize_agent(
         .map_err(|e| format!("Failed to spawn agent thread: {}", e))?;
 
     // Wait for initialization to complete
-    let (_session_id, initial_config) = init_rx
+    let (session_id, initial_config) = init_rx
         .await
         .map_err(|_| "Agent thread terminated during initialization".to_string())??;
 
     // Store the handle
     let prompt_notify = Arc::new(tokio::sync::Notify::new());
-    let handle = AgentHandle {
+    let handle = ThreadHandle {
+        agent_id: agent_definition_id,
+        acp_session_id: Some(session_id.0.to_string()),
         status: AgentStatus::Idle,
         cli: agent_binary,
         workspace_id,
         command_tx,
-        child,
+        process,
         thread_handle: Some(thread_handle),
         config_options: initial_config.clone(),
         has_management_permissions: false,
@@ -211,24 +240,17 @@ pub(crate) async fn initialize_agent(
         .await
         .insert(agent_id.clone(), handle_arc.clone());
 
-    // Initialize mailbox for this agent
-    mailboxes
-        .write()
-        .await
-        .insert(agent_id.clone(), Mailbox::new());
-
-    // Initialize history for this agent
+    // Initialize history for this thread
     history
         .write()
         .await
         .entry(agent_id.clone())
         .or_default();
 
-    // Spawn the prompt loop for this agent.
+    // Spawn the prompt loop for this thread.
     let loop_handle = tokio::spawn(prompt_loop(
         agent_id,
         handle_arc.clone(),
-        mailboxes,
         event_tx.clone(),
     ));
 

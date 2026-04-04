@@ -14,28 +14,8 @@ use super::token_registry::TokenRegistry;
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema)]
-pub struct SendMessageParams {
-    #[schemars(description = "The agent ID of the connected peer to send the message to. Use list_peers to find agent IDs.")]
-    pub target: String,
-    #[schemars(description = "The message text to send")]
-    pub body: String,
-}
-
-#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema)]
-pub struct SpawnAgentParams {
-    #[schemars(
-        description = "Name of the agent to spawn. Supported: Claude Code, Codex, Gemini, Kiro, OpenCode"
-    )]
-    pub agent_name: String,
-    #[schemars(
-        description = "Optional role for the agent (e.g. 'Code reviewer', 'Test writer'). Shapes the agent's behavior."
-    )]
-    pub role: Option<String>,
-}
-
-#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema)]
-pub struct KillAgentParams {
-    #[schemars(description = "The name or ID of the agent to kill")]
+pub struct KillThreadParams {
+    #[schemars(description = "The ID of the thread to kill")]
     pub target: String,
 }
 
@@ -104,7 +84,7 @@ impl McpHandler {
 impl McpHandler {
     #[tool(
         name = "list_peers",
-        description = "List all agents in the swarm. Returns each agent's name, current status, and whether you're connected to them. Connected agents can exchange messages; use connect_agents to connect to unconnected peers."
+        description = "List all threads in the swarm. Returns each thread's agent name, current status, and whether you're connected to them."
     )]
     async fn list_peers(
         &self,
@@ -112,31 +92,36 @@ impl McpHandler {
             http::request::Parts,
         >,
     ) -> Result<String, String> {
-        let agent_id = self.agent_id_from_parts(&parts)?;
-        let connections = self.manager.get_connections(&agent_id).await;
-        let agents = self.manager.list_agents().await;
+        let thread_id = self.agent_id_from_parts(&parts)?;
+        let connections = self.manager.get_connections(&thread_id).await;
+        let threads = self.manager.list_agents().await;
 
         // Resolve caller's workspace_id so we only show same-workspace peers
-        let caller_workspace_id = agents
+        let caller_workspace_id = threads
             .iter()
-            .find(|a| a.id == agent_id)
+            .find(|a| a.id == thread_id)
             .map(|a| a.workspace_id.clone())
-            .ok_or_else(|| format!("Calling agent '{}' not found", agent_id))?;
+            .ok_or_else(|| format!("Calling thread '{}' not found", thread_id))?;
 
         let mut result = Vec::new();
-        for agent in &agents {
-            if agent.id == agent_id {
+        for thread in &threads {
+            if thread.id == thread_id {
                 continue;
             }
-            // Only list agents in the same workspace
-            if agent.workspace_id != caller_workspace_id {
+            if thread.workspace_id != caller_workspace_id {
                 continue;
             }
+            // Use agent definition name if available, fall back to CLI
+            let name = self
+                .manager
+                .get_agent_name_for_thread(&thread.id)
+                .await
+                .unwrap_or_else(|| thread.cli.clone());
             result.push(serde_json::json!({
-                "id": agent.id,
-                "name": agent.cli,
-                "status": agent.status,
-                "connected": connections.contains(&agent.id),
+                "id": thread.id,
+                "name": name,
+                "status": thread.status,
+                "connected": connections.contains(&thread.id),
             }));
         }
 
@@ -144,114 +129,21 @@ impl McpHandler {
     }
 
     #[tool(
-        name = "send_message",
-        description = "Send a message to a connected peer agent by their agent ID (from list_peers). The message will be queued in their mailbox and they'll be notified on their next turn."
+        name = "kill_thread",
+        description = "Kill a running thread by its ID. Requires management permissions. You cannot kill your own thread."
     )]
-    async fn send_message(
+    async fn kill_thread(
         &self,
         rmcp::handler::server::tool::Extension(parts): rmcp::handler::server::tool::Extension<
             http::request::Parts,
         >,
-        Parameters(params): Parameters<SendMessageParams>,
+        Parameters(params): Parameters<KillThreadParams>,
     ) -> Result<String, String> {
-        let agent_id = self.agent_id_from_parts(&parts)?;
-        self.manager
-            .deliver_message(&agent_id, &params.target, params.body.clone())
-            .await?;
-
-        // Wake the target agent's prompt loop to process the mailbox message.
-        self.manager.notify_prompt_loop(&params.target).await;
-
-        Ok(serde_json::json!({
-            "status": "delivered",
-            "target": params.target,
-            "body": params.body,
-        })
-        .to_string())
-    }
-
-    #[tool(
-        name = "read_mailbox",
-        description = "Read and clear all pending messages from your mailbox. Returns messages with sender name, timestamp, and body. Messages are removed after reading. Call this when you receive a nudge about unread messages."
-    )]
-    async fn read_mailbox(
-        &self,
-        rmcp::handler::server::tool::Extension(parts): rmcp::handler::server::tool::Extension<
-            http::request::Parts,
-        >,
-    ) -> Result<String, String> {
-        let agent_id = self.agent_id_from_parts(&parts)?;
-        let messages = self.manager.read_mailbox(&agent_id).await;
-        serde_json::to_string(&messages).map_err(|e| e.to_string())
-    }
-
-    #[tool(
-        name = "spawn_agent",
-        description = "Spawn a new agent in the swarm. Requires management permissions. The agent starts with no connections — use connect_agents and then send_message to give it instructions."
-    )]
-    async fn spawn_agent(
-        &self,
-        rmcp::handler::server::tool::Extension(parts): rmcp::handler::server::tool::Extension<
-            http::request::Parts,
-        >,
-        Parameters(params): Parameters<SpawnAgentParams>,
-    ) -> Result<String, String> {
-        let agent_id = self.agent_id_from_parts(&parts)?;
-        if !self.manager.has_management_permissions(&agent_id).await {
-            return Err("Permission denied: management permissions required".to_string());
+        let caller_thread_id = self.agent_id_from_parts(&parts)?;
+        if caller_thread_id == params.target {
+            return Err("Cannot kill your own thread".to_string());
         }
-
-        let known = crate::detect::known_agents_unavailable();
-        let agent = known
-            .iter()
-            .find(|a| a.name.eq_ignore_ascii_case(&params.agent_name));
-        let agent = match agent {
-            Some(a) => a,
-            None => {
-                let names: Vec<&str> = known.iter().map(|a| a.name.as_str()).collect();
-                return Err(format!(
-                    "Unknown agent '{}'. Supported agents: {}",
-                    params.agent_name,
-                    if names.is_empty() {
-                        "none".to_string()
-                    } else {
-                        names.join(", ")
-                    }
-                ));
-            }
-        };
-
-        // Use the calling agent's workspace_id
-        let workspace_id = {
-            let agents = self.manager.list_agents().await;
-            agents
-                .iter()
-                .find(|a| a.id == agent_id)
-                .map(|a| a.workspace_id.clone())
-                .ok_or_else(|| format!("Calling agent '{}' not found", agent_id))?
-        };
-
-        let new_agent_id = self
-            .manager
-            .spawn_agent(workspace_id, agent.command.clone(), params.role)
-            .await
-            .map_err(|e| e.to_string())?;
-        Ok(serde_json::json!({"agent_id": new_agent_id}).to_string())
-    }
-
-    #[tool(
-        name = "kill_agent",
-        description = "Kill an existing agent in the swarm. Requires management permissions."
-    )]
-    async fn kill_agent(
-        &self,
-        rmcp::handler::server::tool::Extension(parts): rmcp::handler::server::tool::Extension<
-            http::request::Parts,
-        >,
-        Parameters(params): Parameters<KillAgentParams>,
-    ) -> Result<String, String> {
-        let agent_id = self.agent_id_from_parts(&parts)?;
-        if !self.manager.has_management_permissions(&agent_id).await {
+        if !self.manager.has_management_permissions(&caller_thread_id).await {
             return Err("Permission denied: management permissions required".to_string());
         }
         self.manager

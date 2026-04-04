@@ -4,19 +4,10 @@ You are part of an Emergent multi-agent swarm. Other agents may be working along
 
 You have access to swarm tools via MCP. Here is how to use them:
 
-Communication (always available):
 - list_peers: See all agents in the swarm and whether you're connected to them.
-- send_message: Send a message to a connected peer's mailbox. They'll be notified on their next turn.
-- read_mailbox: Read and clear your pending messages. Call this when you're told you have unread messages.
-
-Management (require management permissions):
-- spawn_agent: Create a new agent in the swarm.
-- kill_agent: Remove an agent from the swarm.
-- connect_agents: Create a bidirectional connection between two agents so they can exchange messages.
-- disconnect_agents: Remove a connection between two agents.
-
-Messages are asynchronous — send_message queues to the target's mailbox, and the target reads on their next turn. \
-You can only message agents you're connected to. Use list_peers to see your connections.";
+- kill_agent: Remove an agent from the swarm (requires management permissions).
+- connect_agents: Create a bidirectional connection between two agents (requires management permissions).
+- disconnect_agents: Remove a connection between two agents (requires management permissions).";
 
 /// Build the `<emergent-system>` block to prepend to a prompt.
 ///
@@ -92,38 +83,30 @@ mod tests {
     }
 
     #[test]
-    fn runtime_mailbox_only() {
-        let block = build_system_block(false, None, None, 3).unwrap();
-        assert!(block.contains("You have 3 unread messages"));
-        assert!(!block.contains("<swarm-tools>"));
-    }
-
-    #[test]
-    fn runtime_permission_and_mailbox() {
+    fn runtime_permission_only() {
         let block = build_system_block(
             false,
             None,
             Some("Management permissions have been granted."),
-            2,
+            0,
         )
         .unwrap();
         assert!(block.contains("Management permissions have been granted."));
-        assert!(block.contains("You have 2 unread messages"));
+        assert!(!block.contains("<swarm-tools>"));
     }
 
     #[test]
-    fn first_turn_merged_with_runtime() {
+    fn first_turn_merged_with_permission() {
         let block = build_system_block(
             true,
             Some("Architect"),
             Some("Management permissions have been revoked."),
-            1,
+            0,
         )
         .unwrap();
         assert!(block.contains("<swarm-tools>"));
         assert!(block.contains("<role>Architect</role>"));
         assert!(block.contains("Management permissions have been revoked."));
-        assert!(block.contains("You have 1 unread message in your mailbox."));
         // The wrapping tag appears once; the instruction text also mentions
         // "<emergent-system>" so substring count is 2 for opening, 1 for closing.
         assert_eq!(block.matches("<emergent-system>").count(), 2);
@@ -136,9 +119,9 @@ mod tests {
     }
 
     #[test]
-    fn single_mailbox_message_uses_singular() {
-        let block = build_system_block(false, None, None, 1).unwrap();
-        assert!(block.contains("1 unread message in your mailbox."));
-        assert!(!block.contains("messages"));
+    fn mailbox_count_still_works_if_passed() {
+        // mailbox_count parameter kept for future reconnection
+        let block = build_system_block(false, None, None, 3).unwrap();
+        assert!(block.contains("You have 3 unread messages"));
     }
 }

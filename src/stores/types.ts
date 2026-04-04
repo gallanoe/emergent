@@ -93,6 +93,72 @@ export interface TopologyChangedPayload {
 
 export type AgentStatus = "initializing" | "idle" | "working" | "error";
 
+// ── Agent/Thread remodel types ─────────────────────────────
+
+export interface AgentDefinition {
+  id: string;
+  workspace_id: string;
+  name: string;
+  role?: string;
+  cli: string;
+}
+
+export interface ThreadSummary {
+  id: string;
+  agent_id: string;
+  status: string;
+  workspace_id: string;
+  acp_session_id: string | null;
+}
+
+export interface ThreadMapping {
+  thread_id: string;
+  agent_definition_id: string;
+  acp_session_id: string | null;
+}
+
+export interface DisplayThread {
+  id: string;
+  agentId: string;
+  name: string;
+  processStatus: AgentStatus | "dead";
+  messages: DisplayMessage[];
+  activeToolCalls: DisplayToolCall[];
+  queuedMessage: string | null;
+  configOptions: ConfigOption[];
+  hasManagementPermissions: boolean;
+  errorMessage?: string;
+  updatedAt: string;
+  stopReason: string | null;
+}
+
+export interface DisplayAgentDefinition {
+  id: string;
+  name: string;
+  role?: string;
+  cli: string;
+  threads: DisplayThread[];
+}
+
+export interface AgentCreatedPayload {
+  definition_id: string;
+}
+
+export interface AgentDeletedPayload {
+  definition_id: string;
+}
+
+export type ActiveView =
+  | "swarm"
+  | "agent-threads"
+  | "agent-chat"
+  | "agent-settings"
+  | "create-agent"
+  | "settings"
+  | "terminal";
+
+// ── Legacy types (kept during migration) ───────────────────
+
 export interface DisplayAgent {
   id: string;
   workspaceId: string;
@@ -147,6 +213,7 @@ export interface DisplayWorkspace {
   collapsed: boolean;
   containerStatus: ContainerStatus;
   agents: DisplayAgent[];
+  agentDefinitions: DisplayAgentDefinition[];
 }
 
 /** @deprecated Use DisplayWorkspace instead */

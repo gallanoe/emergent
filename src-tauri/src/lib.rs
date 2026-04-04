@@ -51,10 +51,25 @@ pub fn run() {
 
             // Create the agent manager (new API: workspace_state, event_tx, token_registry)
             let manager = Arc::new(AgentManager::new(
-                workspace_state,
+                workspace_state.clone(),
                 event_tx.clone(),
                 token_registry.clone(),
             ));
+
+            // Load persisted agent definitions for all loaded workspaces
+            tauri::async_runtime::block_on(async {
+                let state = workspace_state.read().await;
+                for ws_id in state.workspaces.keys() {
+                    if let Err(e) = manager.load_agents_for_workspace(ws_id).await {
+                        log::error!(
+                            "Failed to load agent definitions for workspace '{}': {}",
+                            ws_id,
+                            e
+                        );
+                    }
+                }
+            });
+
             app.manage(manager.clone());
             app.manage(workspace_manager);
 
@@ -85,6 +100,8 @@ pub fn run() {
                                 Notification::WorkspaceStatusChange(p) => { let _ = bridge_handle.emit(event_name, p); }
                                 Notification::TerminalOutput(p) => { let _ = bridge_handle.emit(event_name, p); }
                                 Notification::TerminalExited(p) => { let _ = bridge_handle.emit(event_name, p); }
+                                Notification::AgentCreated(p) => { let _ = bridge_handle.emit(event_name, p); }
+                                Notification::AgentDeleted(p) => { let _ = bridge_handle.emit(event_name, p); }
                             }
                         }
                         Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
@@ -102,7 +119,7 @@ pub fn run() {
                 match emergent_core::mcp::http_server::start(http_manager.clone(), http_registry).await
                 {
                     Ok(server) => {
-                        http_manager.set_mcp_port(server.port);
+                        http_manager.set_mcp_port(server.port).await;
                         log::info!(
                             "MCP HTTP server started on 127.0.0.1:{}",
                             server.port
@@ -126,6 +143,16 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::known_agents,
+            commands::create_agent,
+            commands::update_agent,
+            commands::delete_agent,
+            commands::get_agent,
+            commands::list_agent_definitions,
+            commands::list_threads,
+            commands::list_thread_mappings,
+            commands::spawn_thread,
+            commands::resume_thread,
+            commands::delete_thread,
             commands::spawn_agent,
             commands::send_prompt,
             commands::cancel_prompt,

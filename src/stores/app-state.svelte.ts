@@ -3,12 +3,16 @@ import { listen } from "@tauri-apps/api/event";
 import { agentStore } from "./agents.svelte";
 import { dispose as disposeTerminal } from "../components/terminal/terminal-instances";
 import type {
+  ActiveView,
+  AgentDefinition,
   ContainerStatus,
   DisplayAgent,
+  DisplayAgentDefinition,
   DisplayWorkspace,
   DockerStatus,
   SwarmMessageLogEntry,
   SwarmMessagePayload,
+  ThreadMapping,
   TopologyChangedPayload,
   WorkspaceSummary,
   WorkspaceStatusChangePayload,
@@ -29,6 +33,7 @@ interface Workspace {
   collapsed: boolean;
   containerStatus: ContainerStatus;
   agentIds: string[];
+  agentDefinitionIds: string[];
 }
 
 function createAppState() {
@@ -38,11 +43,13 @@ function createAppState() {
   );
   let workspaces = $state<Workspace[]>([]);
   let selectedAgentId = $state<string | null>(null);
+  let selectedThreadId = $state<string | null>(null);
+  let agentDefinitions = $state<Record<string, AgentDefinition>>({});
   let knownAgents = $state<KnownAgent[]>([]);
   let agentConnections = $state<Record<string, string[]>>({});
   let swarmMessageLog = $state<SwarmMessageLogEntry[]>([]);
   let selectedWorkspaceId = $state<string | null>(null);
-  let activeView = $state<"swarm" | "agent" | "settings" | "terminal">("swarm");
+  let activeView = $state<ActiveView>("swarm");
   let dockerStatus = $state<DockerStatus | null>(null);
   let terminalSessionIds = $state<Record<string, string>>({});
 
@@ -74,11 +81,49 @@ function createAppState() {
           collapsed: false,
           containerStatus: ws.container_status,
           agentIds: [],
+          agentDefinitionIds: [],
         });
       }
       if (workspaces.length > 0 && !selectedWorkspaceId) {
         selectedWorkspaceId = workspaces[0]!.id;
       }
+      // Load agent definitions for each workspace
+      for (const ws of workspaces) {
+        try {
+          const defs = await invoke<AgentDefinition[]>("list_agent_definitions", {
+            workspaceId: ws.id,
+          });
+          for (const def of defs) {
+            agentDefinitions[def.id] = def;
+            ws.agentDefinitionIds.push(def.id);
+          }
+        } catch {
+          // Workspace may not have any definitions yet
+        }
+      }
+
+      // Load persisted thread mappings for each workspace
+      for (const ws of workspaces) {
+        try {
+          const mappings = await invoke<ThreadMapping[]>("list_thread_mappings", {
+            workspaceId: ws.id,
+          });
+          for (const mapping of mappings) {
+            const def = agentDefinitions[mapping.agent_definition_id];
+            if (def) {
+              agentStore.registerPersistedThread(
+                mapping.thread_id,
+                mapping.agent_definition_id,
+                def,
+                mapping.acp_session_id,
+              );
+            }
+          }
+        } catch {
+          // No persisted threads for this workspace
+        }
+      }
+
       // Refresh known agents for the first running workspace
       const runningWs = workspaces.find((w) => w.containerStatus.state === "running");
       if (runningWs) {
@@ -198,6 +243,7 @@ function createAppState() {
       collapsed: false,
       containerStatus: { state: "running" },
       agentIds: [],
+      agentDefinitionIds: [],
     });
     selectedWorkspaceId = id;
     activeView = "settings";
@@ -206,24 +252,6 @@ function createAppState() {
     await refreshKnownAgents(id);
 
     return id;
-  }
-
-  async function addAgentToWorkspace(
-    workspaceId: string,
-    agentBinary: string,
-    agentName: string,
-  ): Promise<string> {
-    const workspace = workspaces.find((w) => w.id === workspaceId);
-    if (!workspace) throw new Error(`Workspace ${workspaceId} not found`);
-
-    const agentId = await agentStore.spawnAgent(workspaceId, agentBinary, agentName);
-    workspace.agentIds.push(agentId);
-
-    if (!selectedAgentId) {
-      selectedAgentId = agentId;
-    }
-
-    return agentId;
   }
 
   async function killAgent(agentId: string): Promise<void> {
@@ -305,6 +333,17 @@ function createAppState() {
       name: w.name,
       collapsed: w.collapsed,
       containerStatus: w.containerStatus,
+      agentDefinitions: (w.agentDefinitionIds ?? [])
+        .map((defId): DisplayAgentDefinition | null => {
+          const def = agentDefinitions[defId];
+          if (!def) return null;
+          const threads = agentStore.getThreadsForAgent(defId);
+          return {
+            ...def,
+            threads: threads.map((t) => agentStore.toDisplayThread(t)),
+          };
+        })
+        .filter(Boolean) as DisplayAgentDefinition[],
       agents: w.agentIds
         .map((id) => agentStore.getAgent(id))
         .filter(Boolean)
@@ -347,10 +386,42 @@ function createAppState() {
 
   function selectAgent(agentId: string) {
     selectedAgentId = agentId;
+    selectedThreadId = null;
     // Find which workspace this agent belongs to and select it
-    const workspace = workspaces.find((w) => w.agentIds.includes(agentId));
+    const workspace = workspaces.find(
+      (w) => w.agentIds.includes(agentId) || w.agentDefinitionIds.includes(agentId),
+    );
     if (workspace) selectedWorkspaceId = workspace.id;
-    activeView = "agent";
+    activeView = "agent-threads";
+  }
+
+  function selectThread(threadId: string) {
+    selectedThreadId = threadId;
+    activeView = "agent-chat";
+
+    // Auto-resume dead threads that have a persisted ACP session
+    const conn = agentStore.getAgent(threadId);
+    if (conn && conn.status === "dead" && conn.acpSessionId) {
+      agentStore.resetThreadState(threadId);
+      conn.status = "initializing";
+      invoke("resume_thread", {
+        threadId,
+        agentId: conn.agentId,
+        acpSessionId: conn.acpSessionId,
+      }).catch((e: unknown) => {
+        console.error("Failed to resume thread:", e);
+      });
+    }
+  }
+
+  function backToThreads() {
+    selectedThreadId = null;
+    activeView = "agent-threads";
+  }
+
+  function openAgentSettings() {
+    selectedThreadId = null;
+    activeView = "agent-settings";
   }
 
   function getSelectedSwarm(): DisplayWorkspace | undefined {
@@ -366,8 +437,10 @@ function createAppState() {
     if (demoMode) {
       return mockState.selectedAgent;
     }
-    if (!selectedAgentId) return undefined;
-    const conn = agentStore.getAgent(selectedAgentId);
+    // In chat view, look up by thread ID (agents store is keyed by thread ID)
+    const lookupId = selectedThreadId ?? selectedAgentId;
+    if (!lookupId) return undefined;
+    const conn = agentStore.getAgent(lookupId);
     if (!conn) return undefined;
     return agentStore.toDisplayAgent(conn);
   }
@@ -405,7 +478,7 @@ function createAppState() {
     get activeView() {
       return activeView;
     },
-    set activeView(v: "swarm" | "agent" | "settings" | "terminal") {
+    set activeView(v: ActiveView) {
       activeView = v;
     },
     get selectedSwarm() {
@@ -422,7 +495,6 @@ function createAppState() {
     },
     initialize,
     createWorkspace,
-    addAgentToWorkspace,
     toggleSwarmCollapsed,
     killAgent,
     updateWorkspace,
@@ -441,6 +513,109 @@ function createAppState() {
     setAgentPermissions,
     selectWorkspace,
     selectAgent,
+    selectThread,
+    backToThreads,
+    openAgentSettings,
+    startCreatingAgent() {
+      activeView = "create-agent";
+    },
+    get selectedThreadId() {
+      return selectedThreadId;
+    },
+    get selectedThread() {
+      if (!selectedThreadId) return undefined;
+      const conn = agentStore.getAgent(selectedThreadId);
+      if (!conn) return undefined;
+      return agentStore.toDisplayThread(conn);
+    },
+    get selectedAgentDef(): DisplayAgentDefinition | undefined {
+      if (!selectedAgentId) return undefined;
+      const def = agentDefinitions[selectedAgentId];
+      if (!def) return undefined;
+      const threads = agentStore.getThreadsForAgent(selectedAgentId);
+      return {
+        ...def,
+        threads: threads.map((t) => agentStore.toDisplayThread(t)),
+      };
+    },
+    get agentDefinitionsMap() {
+      return agentDefinitions;
+    },
+    async createAgentDefinition(
+      workspaceId: string,
+      name: string,
+      role: string | undefined,
+      cli: string,
+    ): Promise<string> {
+      const agentId = await invoke<string>("create_agent", {
+        workspaceId,
+        name,
+        ...(role !== undefined && { role }),
+        cli,
+      });
+      agentDefinitions[agentId] = {
+        id: agentId,
+        workspace_id: workspaceId,
+        name,
+        ...(role !== undefined && { role }),
+        cli,
+      };
+      const ws = workspaces.find((w) => w.id === workspaceId);
+      if (ws) ws.agentDefinitionIds.push(agentId);
+      return agentId;
+    },
+    async updateAgentDefinition(agentId: string, name?: string, role?: string): Promise<void> {
+      await invoke("update_agent", { agentId, name, role });
+      const def = agentDefinitions[agentId];
+      if (def) {
+        if (name !== undefined) def.name = name;
+        if (role !== undefined) def.role = role;
+      }
+    },
+    async deleteAgentDefinition(agentId: string): Promise<void> {
+      await invoke("delete_agent", { agentId });
+      delete agentDefinitions[agentId];
+      for (const ws of workspaces) {
+        ws.agentDefinitionIds = ws.agentDefinitionIds.filter((id) => id !== agentId);
+      }
+      if (selectedAgentId === agentId) {
+        selectedAgentId = null;
+        activeView = "swarm";
+      }
+    },
+    async spawnThread(agentId: string): Promise<string> {
+      const def = agentDefinitions[agentId];
+      if (!def) throw new Error(`Agent ${agentId} not found`);
+      return agentStore.spawnThread(agentId, def);
+    },
+    async stopThread(threadId: string): Promise<void> {
+      await agentStore.stopThread(threadId);
+    },
+    async deleteThread(threadId: string): Promise<void> {
+      const conn = agentStore.getAgent(threadId);
+      const workspaceId = conn?.workspaceId ?? selectedWorkspaceId;
+      if (!workspaceId) return;
+      // Kill on backend and remove persisted mapping
+      await invoke("delete_thread", { threadId, workspaceId });
+      // Remove from frontend store
+      agentStore.deleteThread(threadId);
+      // If we're viewing this thread, go back to thread list
+      if (selectedThreadId === threadId) {
+        selectedThreadId = null;
+        activeView = "agent-threads";
+      }
+    },
+    async resumeThread(threadId: string): Promise<void> {
+      const conn = agentStore.getAgent(threadId);
+      if (!conn || !conn.acpSessionId) return;
+      agentStore.resetThreadState(threadId);
+      conn.status = "initializing";
+      await invoke("resume_thread", {
+        threadId,
+        agentId: conn.agentId,
+        acpSessionId: conn.acpSessionId,
+      });
+    },
     refreshConnections,
     get terminalSessionIds() {
       return terminalSessionIds;

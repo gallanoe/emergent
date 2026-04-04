@@ -28,6 +28,7 @@ function makeSwarm(overrides?: Partial<DisplayWorkspace>): DisplayWorkspace {
     name: "Research Swarm",
     collapsed: false,
     containerStatus: { state: "running" },
+    agentDefinitions: [],
     agents: [
       makeAgent(),
       makeAgent({ id: "agent-2", name: "Gemini", role: "Analyst", status: "idle" }),
@@ -43,9 +44,7 @@ function renderSwarmView(overrides: Record<string, unknown> = {}) {
       messageLog: (overrides.messageLog as SwarmMessageLogEntry[]) ?? [],
       agentConnections: (overrides.agentConnections as Record<string, string[]>) ?? {},
       demoMode: false,
-      knownAgents: [],
       onSelectAgent: (overrides.onSelectAgent as (id: string) => void) ?? (() => {}),
-      onAddAgent: (overrides.onAddAgent as (s: string, c: string, n: string) => void) ?? (() => {}),
     },
   });
 }

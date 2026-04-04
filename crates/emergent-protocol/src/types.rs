@@ -252,7 +252,34 @@ pub struct KnownAgent {
 }
 
 // ---------------------------------------------------------------------------
-// Agent summary (for list_agents response)
+// Agent definition (template for creating threads)
+// ---------------------------------------------------------------------------
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AgentDefinition {
+    pub id: String,
+    pub workspace_id: WorkspaceId,
+    pub name: String,
+    pub role: Option<String>,
+    pub cli: String,
+}
+
+// ---------------------------------------------------------------------------
+// Thread summary (for list_threads response)
+// ---------------------------------------------------------------------------
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ThreadSummary {
+    pub id: String,
+    pub agent_id: String,
+    pub status: String,
+    pub workspace_id: WorkspaceId,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub acp_session_id: Option<String>,
+}
+
+// ---------------------------------------------------------------------------
+// Agent summary (for list_agents response — kept for backward compat)
 // ---------------------------------------------------------------------------
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -316,6 +343,20 @@ pub struct ConfigUpdatePayload {
 }
 
 // ---------------------------------------------------------------------------
+// Agent definition notification payloads
+// ---------------------------------------------------------------------------
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AgentCreatedPayload {
+    pub definition_id: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AgentDeletedPayload {
+    pub definition_id: String,
+}
+
+// ---------------------------------------------------------------------------
 // Notification enum (wraps all daemon-to-client events)
 // ---------------------------------------------------------------------------
 
@@ -350,6 +391,10 @@ pub enum Notification {
     TerminalOutput(TerminalOutputPayload),
     #[serde(rename = "terminal:exited")]
     TerminalExited(TerminalExitedPayload),
+    #[serde(rename = "agent:definition-created")]
+    AgentCreated(AgentCreatedPayload),
+    #[serde(rename = "agent:definition-deleted")]
+    AgentDeleted(AgentDeletedPayload),
 }
 
 impl Notification {
@@ -369,6 +414,8 @@ impl Notification {
             Notification::WorkspaceStatusChange(_) => "workspace:status-change",
             Notification::TerminalOutput(_) => "terminal:output",
             Notification::TerminalExited(_) => "terminal:exited",
+            Notification::AgentCreated(_) => "agent:definition-created",
+            Notification::AgentDeleted(_) => "agent:definition-deleted",
         }
     }
 
@@ -388,6 +435,8 @@ impl Notification {
             Notification::WorkspaceStatusChange(_) => None,
             Notification::TerminalOutput(_) => None,
             Notification::TerminalExited(_) => None,
+            Notification::AgentCreated(_) => None,
+            Notification::AgentDeleted(_) => None,
         }
     }
 }

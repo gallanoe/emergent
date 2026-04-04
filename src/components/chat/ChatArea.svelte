@@ -10,10 +10,9 @@
   interface Props {
     agent: DisplayAgent | undefined;
     onEditQueue?: () => void;
-    onRoleChange?: (role: string) => void;
   }
 
-  let { agent, onEditQueue, onRoleChange }: Props = $props();
+  let { agent, onEditQueue }: Props = $props();
 
   // ── Auto-scroll ────────────────────────────────────────────────
   let scrollContainer: HTMLDivElement | undefined = $state();
@@ -136,38 +135,11 @@
             {agent.name}
           </div>
           <div class="text-[12px] text-fg-muted leading-relaxed">Ready</div>
-          <!-- Role pill (editable) -->
-          <div
-            class="relative inline-flex items-center px-3 py-1 bg-accent-soft border border-[rgba(124,106,78,0.12)] rounded-full cursor-text"
-          >
-            <Pencil
-              size={11}
-              class="absolute left-2.5 text-fg-disabled shrink-0 pointer-events-none"
-            />
-            <input
-              type="text"
-              value={agent.role ?? ""}
-              placeholder="Role..."
-              class="bg-transparent border-none outline-none text-[11px] text-center w-32
-                {agent.role ? 'text-accent-text' : 'text-fg-disabled italic'}"
-              oninput={(e) => onRoleChange?.(e.currentTarget.value)}
-            />
-          </div>
         </div>
       </div>
     {:else}
       <!-- Normal chat flow -->
       <div class="flex flex-col gap-[6px]">
-        <!-- Locked role pill -->
-        {#if agent.role}
-          <div class="flex justify-center mb-3.5">
-            <div
-              class="inline-flex items-center px-3 py-1 bg-accent-soft border border-[rgba(124,106,78,0.12)] rounded-full text-[11px] text-accent-text"
-            >
-              {agent.role}
-            </div>
-          </div>
-        {/if}
         {#each agent.messages as message, i (message.id)}
           {#if message.role === "thinking"}
             <div>
