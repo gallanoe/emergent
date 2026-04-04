@@ -152,6 +152,7 @@ pub fn run() {
             commands::list_thread_mappings,
             commands::spawn_thread,
             commands::resume_thread,
+            commands::delete_thread,
             commands::spawn_agent,
             commands::send_prompt,
             commands::cancel_prompt,

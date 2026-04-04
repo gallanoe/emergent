@@ -402,6 +402,7 @@ function createAppState() {
     // Auto-resume dead threads that have a persisted ACP session
     const conn = agentStore.getAgent(threadId);
     if (conn && conn.status === "dead" && conn.acpSessionId) {
+      agentStore.resetThreadState(threadId);
       conn.status = "initializing";
       invoke("resume_thread", {
         threadId,
@@ -586,6 +587,34 @@ function createAppState() {
       const def = agentDefinitions[agentId];
       if (!def) throw new Error(`Agent ${agentId} not found`);
       return agentStore.spawnThread(agentId, def);
+    },
+    async stopThread(threadId: string): Promise<void> {
+      await agentStore.stopThread(threadId);
+    },
+    async deleteThread(threadId: string): Promise<void> {
+      const conn = agentStore.getAgent(threadId);
+      const workspaceId = conn?.workspaceId ?? selectedWorkspaceId;
+      if (!workspaceId) return;
+      // Kill on backend and remove persisted mapping
+      await invoke("delete_thread", { threadId, workspaceId });
+      // Remove from frontend store
+      agentStore.deleteThread(threadId);
+      // If we're viewing this thread, go back to thread list
+      if (selectedThreadId === threadId) {
+        selectedThreadId = null;
+        activeView = "agent-threads";
+      }
+    },
+    async resumeThread(threadId: string): Promise<void> {
+      const conn = agentStore.getAgent(threadId);
+      if (!conn || !conn.acpSessionId) return;
+      agentStore.resetThreadState(threadId);
+      conn.status = "initializing";
+      await invoke("resume_thread", {
+        threadId,
+        agentId: conn.agentId,
+        acpSessionId: conn.acpSessionId,
+      });
     },
     refreshConnections,
     get terminalSessionIds() {

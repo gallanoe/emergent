@@ -307,7 +307,13 @@ function createAgentStore() {
 
   function handleStatusChange(payload: StatusChangePayload) {
     if (payload.status === "dead") {
-      delete agents[payload.agent_id];
+      const agent = agents[payload.agent_id];
+      if (agent?.acpSessionId) {
+        // Persisted thread — keep as dead stub for future resumption
+        agent.status = "dead";
+      } else {
+        delete agents[payload.agent_id];
+      }
       return;
     }
     const agent = agents[payload.agent_id];
@@ -562,6 +568,37 @@ function createAgentStore() {
     delete agents[agentId];
   }
 
+  /** Reset a thread's chat state before resuming (avoids duplicate history on replay). */
+  function resetThreadState(threadId: string): void {
+    const agent = agents[threadId];
+    if (!agent) return;
+    agent.messages = [];
+    agent.activeToolCalls = {};
+    agent.queuedContent = "";
+    agent.stopReason = null;
+    delete agent.errorMessage;
+  }
+
+  /** Stop a thread — kills the process but keeps the dead stub for resumption. */
+  async function stopThread(threadId: string): Promise<void> {
+    const agent = agents[threadId];
+    if (!agent || agent.status === "dead") return;
+    try {
+      await invoke("kill_agent", { agentId: threadId });
+    } catch (err) {
+      console.error("kill_agent RPC failed (marking dead anyway):", err);
+    }
+    // Keep the stub with dead status (handleStatusChange may have already done this)
+    if (agents[threadId]) {
+      agents[threadId].status = "dead";
+    }
+  }
+
+  /** Delete a thread — kills and removes from the store entirely. */
+  function deleteThread(threadId: string): void {
+    delete agents[threadId];
+  }
+
   function setRole(agentId: string, role: string): void {
     const agent = agents[agentId];
     if (!agent || agent.hasPrompted) return;
@@ -729,6 +766,9 @@ function createAgentStore() {
     sendPrompt,
     cancelPrompt,
     killAgent,
+    resetThreadState,
+    stopThread,
+    deleteThread,
     setConfig,
     editQueue,
     registerQueueDumpHandler,

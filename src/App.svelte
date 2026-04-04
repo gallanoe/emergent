@@ -343,6 +343,9 @@
           appState.selectThread(threadId);
         }}
         onOpenSettings={() => appState.openAgentSettings()}
+        onResumeThread={(id) => appState.resumeThread(id)}
+        onStopThread={(id) => appState.stopThread(id)}
+        onDeleteThread={(id) => appState.deleteThread(id)}
       />
     {:else if appState.activeView === "agent-settings" && appState.selectedAgentDef}
       <AgentSettingsView

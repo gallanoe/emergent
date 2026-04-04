@@ -108,6 +108,16 @@ pub async fn spawn_thread(
 }
 
 #[tauri::command]
+pub async fn delete_thread(
+    manager: State<'_, Arc<AgentManager>>,
+    thread_id: String,
+    workspace_id: String,
+) -> Result<(), String> {
+    let ws_id = emergent_protocol::WorkspaceId::from(workspace_id);
+    manager.delete_thread(&thread_id, &ws_id).await
+}
+
+#[tauri::command]
 pub async fn resume_thread(
     manager: State<'_, Arc<AgentManager>>,
     thread_id: String,

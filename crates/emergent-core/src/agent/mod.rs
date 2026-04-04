@@ -334,6 +334,21 @@ impl AgentManager {
             .await
     }
 
+    /// Delete a thread: kill if running and remove its persisted mapping.
+    pub async fn delete_thread(
+        &self,
+        thread_id: &str,
+        workspace_id: &WorkspaceId,
+    ) -> Result<(), String> {
+        // Kill the thread if it's currently running
+        self.threads.kill_thread(thread_id).await?;
+        // Re-persist to remove the mapping from threads.json
+        self.threads
+            .persist_threads_for_workspace(workspace_id)
+            .await;
+        Ok(())
+    }
+
     /// Spawn a thread the old way (without agent definition) — kept for backward
     /// compatibility during migration. Delegates directly to ThreadManager.
     pub async fn spawn_agent(
