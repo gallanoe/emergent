@@ -731,42 +731,153 @@ function createAgentStore() {
     | ({ type: "agent:session-ready" } & SessionReadyPayload);
 
   function replayNotifications(notifications: DaemonNotification[]) {
+    // Local tool call accumulator — keeps live activeToolCalls clean
+    const replayToolCalls: Record<string, Record<string, DisplayToolCall>> = {};
+
     for (const n of notifications) {
+      const agent = agents[n.agent_id];
+      if (!agent) continue;
+
       switch (n.type) {
-        case "agent:message-chunk":
-          handleMessageChunk(n);
+        case "agent:message-chunk": {
+          const role = roleForKind(n.kind);
+          const lastMsg = agent.messages.at(-1);
+          if (lastMsg && lastMsg.role === role && !lastMsg.toolCalls?.length) {
+            lastMsg.content += n.content;
+          } else {
+            agent.messages.push({
+              id: crypto.randomUUID(),
+              role,
+              content: n.content,
+              timestamp: new Date().toLocaleTimeString([], {
+                hour: "numeric",
+                minute: "2-digit",
+              }),
+            });
+          }
           break;
-        case "agent:tool-call-update":
-          handleToolCallUpdate(n);
-          break;
-        case "agent:prompt-complete":
-          handlePromptComplete(n);
-          break;
-        case "agent:status-change":
-          handleStatusChange(n);
-          break;
-        case "agent:config-update":
-          handleConfigUpdate(n);
-          break;
+        }
+
         case "agent:user-message":
-          handleUserMessage(n);
+          agent.messages.push({
+            id: crypto.randomUUID(),
+            role: "user",
+            content: n.content,
+            timestamp: new Date().toLocaleTimeString([], {
+              hour: "numeric",
+              minute: "2-digit",
+            }),
+          });
           break;
-        case "agent:error":
-          handleError(n);
+
+        case "agent:tool-call-update": {
+          const agentTCs = (replayToolCalls[n.agent_id] ??= {});
+          const existing = agentTCs[n.tool_call_id];
+          agentTCs[n.tool_call_id] = {
+            id: n.tool_call_id,
+            name: n.title ?? existing?.name ?? "Tool call",
+            kind: (n.kind ?? existing?.kind ?? "other") as ToolKind,
+            status: (n.status ?? existing?.status ?? "pending") as DisplayToolCall["status"],
+            locations: n.locations ?? existing?.locations ?? [],
+            content: n.content ? mapToolCallContent(n.content) : (existing?.content ?? []),
+          };
+
+          if (n.status === "completed" || n.status === "failed") {
+            const allDone = Object.values(agentTCs).every(
+              (t) => t.status === "completed" || t.status === "failed",
+            );
+            if (allDone && Object.keys(agentTCs).length > 0) {
+              agent.messages.push({
+                id: crypto.randomUUID(),
+                role: "tool-group",
+                content: "",
+                toolCalls: Object.values(agentTCs),
+                timestamp: new Date().toLocaleTimeString([], {
+                  hour: "numeric",
+                  minute: "2-digit",
+                }),
+              });
+              replayToolCalls[n.agent_id] = {};
+            }
+          }
           break;
-        case "agent:nudge-delivered":
-          handleNudgeDelivered(n);
-          break;
+        }
+
         case "agent:system-message":
-          handleSystemMessage(n);
+          agent.messages.push({
+            id: crypto.randomUUID(),
+            role: "system",
+            content: n.content,
+            timestamp: new Date().toLocaleTimeString([], {
+              hour: "numeric",
+              minute: "2-digit",
+            }),
+          });
           break;
+
+        case "agent:config-update":
+          agent.configOptions = n.config_options;
+          if (n.changes.length > 0) {
+            const text = n.changes
+              .map((c) => `${c.option_name} changed to ${c.new_value_name}`)
+              .join(", ");
+            agent.messages.push({
+              id: crypto.randomUUID(),
+              role: "system",
+              content: text,
+              timestamp: new Date().toLocaleTimeString([], {
+                hour: "numeric",
+                minute: "2-digit",
+              }),
+            });
+          }
+          break;
+
+        case "agent:nudge-delivered": {
+          const lastMsg = agent.messages.at(-1);
+          if (lastMsg?.role === "user") {
+            lastMsg.nudgeCount = n.count;
+          } else {
+            agent.messages.push({
+              id: crypto.randomUUID(),
+              role: "nudge",
+              content: "",
+              nudgeCount: n.count,
+              timestamp: new Date().toLocaleTimeString([], {
+                hour: "numeric",
+                minute: "2-digit",
+              }),
+            });
+          }
+          break;
+        }
+
+        // No-ops: no side effects during replay
+        case "agent:prompt-complete":
+        case "agent:status-change":
+        case "agent:error":
         case "agent:session-ready":
-          handleSessionReady(n);
           break;
       }
     }
-    // Force flush any buffered chunks after replay
-    flushChunkBuffers();
+
+    // Flush any remaining in-progress tool calls so the user can see
+    // what was running when the session ended
+    for (const agentId of Object.keys(replayToolCalls)) {
+      const agentTCs = replayToolCalls[agentId];
+      const agent = agents[agentId];
+      if (!agent || !agentTCs || Object.keys(agentTCs).length === 0) continue;
+      agent.messages.push({
+        id: crypto.randomUUID(),
+        role: "tool-group",
+        content: "",
+        toolCalls: Object.values(agentTCs),
+        timestamp: new Date().toLocaleTimeString([], {
+          hour: "numeric",
+          minute: "2-digit",
+        }),
+      });
+    }
   }
 
   return {
