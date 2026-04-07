@@ -75,6 +75,12 @@ pub struct StatusChangePayload {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SessionReadyPayload {
+    pub agent_id: String,
+    pub acp_session_id: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NudgeDeliveredPayload {
     pub agent_id: String,
     pub count: usize,
@@ -383,6 +389,8 @@ pub enum Notification {
     AgentCreated(AgentCreatedPayload),
     #[serde(rename = "agent:definition-deleted")]
     AgentDeleted(AgentDeletedPayload),
+    #[serde(rename = "agent:session-ready")]
+    SessionReady(SessionReadyPayload),
 }
 
 impl Notification {
@@ -403,6 +411,7 @@ impl Notification {
             Notification::TerminalExited(_) => "terminal:exited",
             Notification::AgentCreated(_) => "agent:definition-created",
             Notification::AgentDeleted(_) => "agent:definition-deleted",
+            Notification::SessionReady(_) => "agent:session-ready",
         }
     }
 
@@ -423,6 +432,7 @@ impl Notification {
             Notification::TerminalExited(_) => None,
             Notification::AgentCreated(_) => None,
             Notification::AgentDeleted(_) => None,
+            Notification::SessionReady(p) => Some(&p.agent_id),
         }
     }
 }
@@ -558,5 +568,24 @@ mod tests {
         let restored: Notification = serde_json::from_str(&json).unwrap();
         assert_eq!(restored.event_name(), "workspace:status-change");
         assert!(restored.agent_id().is_none());
+    }
+
+    #[test]
+    fn session_ready_notification_roundtrips() {
+        let n = Notification::SessionReady(SessionReadyPayload {
+            agent_id: "thread-abc".into(),
+            acp_session_id: "sess-xyz-123".into(),
+        });
+        let json = serde_json::to_string(&n).unwrap();
+        assert!(json.contains("agent:session-ready"));
+        assert!(json.contains("sess-xyz-123"));
+        let restored: Notification = serde_json::from_str(&json).unwrap();
+        match restored {
+            Notification::SessionReady(p) => {
+                assert_eq!(p.agent_id, "thread-abc");
+                assert_eq!(p.acp_session_id, "sess-xyz-123");
+            }
+            _ => panic!("Wrong variant"),
+        }
     }
 }

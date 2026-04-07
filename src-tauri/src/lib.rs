@@ -101,6 +101,7 @@ pub fn run() {
                                 Notification::TerminalExited(p) => { let _ = bridge_handle.emit(event_name, p); }
                                 Notification::AgentCreated(p) => { let _ = bridge_handle.emit(event_name, p); }
                                 Notification::AgentDeleted(p) => { let _ = bridge_handle.emit(event_name, p); }
+                                Notification::SessionReady(p) => { let _ = bridge_handle.emit(event_name, p); }
                             }
                         }
                         Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {

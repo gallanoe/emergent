@@ -4,8 +4,8 @@ use std::sync::Arc;
 use acp::Agent as _;
 use agent_client_protocol as acp;
 use emergent_protocol::{
-    AgentStatus, ConfigOption, ConfigUpdatePayload, Notification, StatusChangePayload,
-    WorkspaceId,
+    AgentStatus, ConfigOption, ConfigUpdatePayload, Notification, SessionReadyPayload,
+    StatusChangePayload, WorkspaceId,
 };
 use tokio::sync::{broadcast, mpsc, oneshot, Mutex, RwLock};
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
@@ -171,6 +171,12 @@ pub(crate) async fn initialize_agent(
                     Ok((sid, config)) => {
                         log::debug!("Agent {} ACP session established: {:?}", &agent_id, sid);
                         let _ = init_tx.send(Ok((sid.clone(), config)));
+                        let _ = event_tx_clone.send(Notification::SessionReady(
+                            SessionReadyPayload {
+                                agent_id: agent_id.clone(),
+                                acp_session_id: sid.0.to_string(),
+                            },
+                        ));
                         sid
                     }
                     Err(e) => {

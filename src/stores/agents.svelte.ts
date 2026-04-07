@@ -83,6 +83,11 @@ interface StatusChangePayload {
   status: string;
 }
 
+interface SessionReadyPayload {
+  agent_id: string;
+  acp_session_id: string;
+}
+
 interface ConfigUpdatePayload {
   agent_id: string;
   config_options: ConfigOption[];
@@ -305,6 +310,13 @@ function createAgentStore() {
     });
   }
 
+  function handleSessionReady(payload: SessionReadyPayload) {
+    const agent = agents[payload.agent_id];
+    if (agent) {
+      agent.acpSessionId = payload.acp_session_id;
+    }
+  }
+
   function handleStatusChange(payload: StatusChangePayload) {
     if (payload.status === "dead") {
       const agent = agents[payload.agent_id];
@@ -396,6 +408,7 @@ function createAgentStore() {
     );
     await listen<AgentErrorPayload>("agent:error", (e) => handleError(e.payload));
     await listen<StatusChangePayload>("agent:status-change", (e) => handleStatusChange(e.payload));
+    await listen<SessionReadyPayload>("agent:session-ready", (e) => handleSessionReady(e.payload));
     await listen<ConfigUpdatePayload>("agent:config-update", (e) => handleConfigUpdate(e.payload));
     await listen<NudgeDeliveredPayload>("agent:nudge-delivered", (e) =>
       handleNudgeDelivered(e.payload),
@@ -713,7 +726,8 @@ function createAgentStore() {
     | ({ type: "agent:user-message" } & UserMessagePayload)
     | ({ type: "agent:error" } & AgentErrorPayload)
     | ({ type: "agent:nudge-delivered" } & NudgeDeliveredPayload)
-    | ({ type: "agent:system-message" } & SystemMessagePayload);
+    | ({ type: "agent:system-message" } & SystemMessagePayload)
+    | ({ type: "agent:session-ready" } & SessionReadyPayload);
 
   function replayNotifications(notifications: DaemonNotification[]) {
     for (const n of notifications) {
@@ -744,6 +758,9 @@ function createAgentStore() {
           break;
         case "agent:system-message":
           handleSystemMessage(n);
+          break;
+        case "agent:session-ready":
+          handleSessionReady(n);
           break;
       }
     }
