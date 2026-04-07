@@ -7,8 +7,8 @@ A Tauri 2 desktop application for running LLM agents in parallel inside containe
 The Tauri app embeds the agent manager and workspace manager directly — there is no separate daemon process. MCP sidecars connect back to the app via an HTTP server.
 
 - **Tauri app** (in `src-tauri/`) — desktop app that owns the `AgentManager` and `WorkspaceManager`, spawns agent processes over ACP inside Docker containers, and runs an MCP HTTP server for sidecar tool calls
-- **`emergent-core`** (in `crates/emergent-core/`) — core library containing agent orchestration, workspace/container management, terminal sessions, MCP server, swarm coordination, and system prompt logic
-- **`emergent-protocol`** (in `crates/emergent-protocol/`) — shared types and notification definitions used by both the Tauri app and core library
+- `**emergent-core`** (in `crates/emergent-core/`) — core library containing agent orchestration, workspace/container management, terminal sessions, MCP server, swarm coordination, and system prompt logic
+- `**emergent-protocol`** (in `crates/emergent-protocol/`) — shared types and notification definitions used by both the Tauri app and core library
 
 At startup, the Tauri app connects to Docker, creates the `WorkspaceManager` (which loads persisted workspaces and inspects container states), creates the `AgentManager`, starts an MCP HTTP server, and bridges notifications to the Svelte frontend via Tauri events.
 
@@ -149,3 +149,4 @@ Or run the combined pre-build check (lint + fmt:check + typecheck):
 ```bash
 bun run prebuild
 ```
+
