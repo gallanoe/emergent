@@ -1,24 +1,23 @@
 # Emergent
 
-A desktop application for running LLM agents in parallel inside containerized workspaces. Spawn multiple AI agents, orchestrate them as swarms, and watch them work on tasks concurrently — all through a native chat interface.
+A desktop app for running ACP-compatible LLM agents inside Docker-backed workspaces. Create isolated environments, define agents with optional roles, open multiple conversation threads per agent, and watch several agents work side-by-side from a native desktop UI.
 
 ![Preview](assets/preview.png)
 
 ## Features
 
-- **Containerized Workspaces** — Each workspace runs inside a Docker container with its own filesystem, tools, and terminal. Create, stop, start, and delete workspaces from the sidebar
-- **Agent Swarms** — Run multiple LLM agents side-by-side within a workspace, each working independently on tasks
-- **Agent Roles** — Assign optional roles to agents (e.g. "Code reviewer", "Test writer") to shape their behavior
-- **Swarm Communication** — Agents can discover peers, send messages, and collaborate through built-in mailbox tools
-- **Management Permissions** — Grant agents the ability to spawn, kill, and connect other agents in the swarm
-- **Integrated Terminal** — Open terminal sessions directly into workspace containers from the sidebar
+- **Docker-backed Workspaces** — Each workspace runs in its own container with an isolated filesystem, toolchain, and terminal
+- **Configured Agents + Threads** — Define agents once, give them optional roles, and create multiple conversation threads per agent
+- **Swarm Coordination** — Connect running threads inside a workspace and expose peer-aware MCP tools such as `list_peers` and `send_message`
+- **Workspace Tools** — Start, stop, rebuild, and manage workspace containers from the desktop UI
+- **Integrated Terminal** — Open terminal sessions directly into running workspace containers
 - **Multi-Provider Support** — Works with Claude Code, Gemini CLI, Codex, Kiro, OpenCode, and other ACP-compatible agents
-- **Real-Time Streaming** — Watch agent responses stream in with markdown rendering and thinking block display
+- **Real-Time Streaming Chat** — Watch responses stream live with markdown rendering, thinking blocks, and tool call output
 - **Native Desktop App** — Built with Tauri 2 for a fast, lightweight experience on macOS, Windows, and Linux
 
 ## Architecture
 
-The Tauri app embeds the agent manager directly — there is no separate daemon process. An HTTP server runs inside the app to serve MCP tool calls from agent sidecars.
+The Tauri app embeds the orchestration layer directly. There is no separate daemon process: the app owns the `AgentManager`, `WorkspaceManager`, and an embedded MCP HTTP server used by agent threads.
 
 ```mermaid
 graph TD
@@ -27,12 +26,15 @@ graph TD
         TR[Tauri Rust Backend]
         AM[Agent Manager]
         WM[Workspace Manager]
-        HS[HTTP Server]
+        HS[Embedded MCP HTTP Server]
+        TOK[Token Registry]
     end
 
     UI -- "Tauri IPC<br/>(invoke commands)" --> TR
     TR --> AM
     TR --> WM
+    TR --> HS
+    HS --> TOK
 
     WM -- "Docker API<br/>(bollard)" --> D[Docker Engine]
     D --> C1[Container: Workspace 1]
@@ -44,36 +46,29 @@ graph TD
     AM -. "notifications<br/>(broadcast)" .-> TR
     TR -. "Tauri events" .-> UI
 
-    subgraph MCP Sidecars
-        MCP1[emergentd --mcp-stdio]
-        MCP2[emergentd --mcp-stdio]
-    end
-
-    A1 -- "MCP tools<br/>(list_peers, send_message, ...)" --> MCP1
-    A2 -- "MCP tools" --> MCP2
-
-    MCP1 -- "JSON-RPC<br/>(HTTP)" --> HS
-    MCP2 -- "JSON-RPC<br/>(HTTP)" --> HS
+    A1 -- "MCP over HTTP<br/>host.docker.internal:{port}/mcp" --> HS
+    A2 -- "MCP over HTTP" --> HS
     HS --> AM
 ```
 
 **How it works:**
 
-1. The user creates a **workspace**, which builds a Docker image from a Dockerfile and starts a container
-2. The **Svelte frontend** communicates with the **Tauri backend** via IPC commands
-3. The Tauri backend owns the **agent manager** and **workspace manager**. Agents are spawned inside workspace containers via `docker exec` and communicate over **ACP** (stdio)
-4. Each agent is injected with an **MCP sidecar** (`emergentd --mcp-stdio`) that provides swarm tools — `list_peers`, `send_message`, `read_mailbox`, `spawn_agent`, etc.
-5. MCP tool calls route back to the app's **HTTP server** over JSON-RPC, enabling agents to discover and message each other
-6. On the first prompt, the app prepends an invisible **system prompt** with a swarm collaboration guide, the agent's role (if set), and instructions for using swarm tools
-7. The agent manager pushes **notifications** (status changes, messages, permission changes) through Tauri events to the UI
+1. The user creates a **workspace**, which builds a Docker image from a Dockerfile and starts a container.
+2. The **Svelte frontend** communicates with the **Tauri backend** through IPC commands.
+3. The Tauri backend owns the **agent manager** and **workspace manager**. Agents are started inside workspace containers via `docker exec` and communicate over **ACP** (stdio).
+4. Each running thread is registered with the app's embedded **MCP HTTP server**, exposed to containers through `host.docker.internal:{port}/mcp` and authenticated with a per-thread bearer token.
+5. On the first prompt, the app can prepend an invisible **system block** with Emergent-specific instructions such as swarm guidance and the agent's configured role.
+6. Agent and workspace notifications flow through the Tauri backend and are emitted to the frontend as live UI updates.
+7. Agent definitions, thread mappings, and workspace state are persisted locally so sessions can be restored.
 
 ## Tech Stack
 
-- **Frontend:** Svelte 5, TypeScript, Tailwind CSS 4
-- **Backend:** Rust, Tauri 2, Tokio
+- **Frontend:** Svelte 5, TypeScript, Tailwind CSS 4, Vite 7
+- **Backend:** Rust, Tauri 2, Tokio, Axum
 - **Containers:** Docker (via bollard), per-workspace isolation
 - **Protocol:** [Agent Client Protocol (ACP)](https://github.com/anthropics/agent-client-protocol) for agent communication
-- **IPC:** JSON-RPC 2.0 over HTTP (MCP sidecars to app)
+- **MCP transport:** Streamable HTTP served by the embedded app
+- **Tooling:** Bun, Vitest, Playwright, oxlint, svelte-check, Clippy
 
 ## Getting Started
 
@@ -81,8 +76,10 @@ graph TD
 
 - [Rust](https://rustup.rs/) (1.77.2+)
 - [Bun](https://bun.sh/)
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (required for workspace containers)
-- At least one supported agent CLI installed (e.g. Claude Code, Gemini CLI, Codex, Kiro, OpenCode)
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) for workspace containers
+- A workspace image that includes at least one supported agent CLI
+
+The app can launch without Docker, but workspace creation and container-backed features will be unavailable until Docker is running.
 
 ### Development
 
@@ -97,11 +94,20 @@ bun run dev
 ### Pre-commit checks
 
 ```bash
-bun run prebuild          # lint + clippy + format check + typecheck
+bun run prebuild          # oxlint + clippy (-D warnings) + format check + typecheck
+bun run lint              # frontend / TypeScript linting
+bun run lint:rust         # cargo clippy --workspace -- -D warnings
+bun run fmt:check         # Prettier + oxfmt check
+bun run typecheck         # svelte-check
 bun run test              # Vitest unit/component tests
 bun run test:rust         # Rust unit + integration tests
 bun run test:e2e          # Playwright E2E tests
 ```
+
+### Development notes
+
+- The Cargo workspace uses `default-members = ["crates/*"]`, so prefer `bun run test:rust`, `cargo test --workspace`, and `cargo check --workspace` over bare root `cargo test` commands when you want full coverage including `src-tauri`.
+- Playwright starts `bunx vite` on port `1420` and uses mocked Tauri IPC, so the E2E suite exercises the web UI layer rather than full desktop shell automation.
 
 ### Build
 
@@ -111,13 +117,15 @@ bun run build             # Tauri desktop app (includes agent manager)
 
 ### Supported agents
 
-| Agent       | Command                     |
-| ----------- | --------------------------- |
-| Claude Code | `claude-agent-acp`          |
-| Codex       | `codex-acp`                 |
-| Gemini      | `gemini --experimental-acp` |
-| Kiro        | `kiro-cli acp`              |
-| OpenCode    | `opencode acp`              |
+Availability is detected inside each running workspace container.
+
+| Agent       | Command                               |
+| ----------- | ------------------------------------- |
+| Claude Code | `bunx @zed-industries/claude-agent-acp` |
+| Codex       | `bunx @zed-industries/codex-acp`        |
+| Gemini      | `gemini --experimental-acp`             |
+| Kiro        | `kiro-cli acp`                          |
+| OpenCode    | `opencode acp`                          |
 
 ## License
 
