@@ -2,12 +2,7 @@
 <script lang="ts">
   import { ChevronRight, ChevronDown } from "@lucide/svelte";
   import { slide } from "svelte/transition";
-  import type {
-    DisplayToolCall,
-    MailboxMessage,
-    ToolKind,
-  } from "../../stores/types";
-  import MailboxToolRender from "./MailboxToolRender.svelte";
+  import type { DisplayToolCall, ToolKind } from "../../stores/types";
   import PeersToolRender from "./PeersToolRender.svelte";
   import SendToolRender from "./SendToolRender.svelte";
 
@@ -55,7 +50,6 @@
   }
 
   // ── Tool type detection ────────────────────────────────────────
-  let isMailboxTool = $derived(toolCall.name.endsWith("read_mailbox"));
   let isSendTool = $derived(toolCall.name.endsWith("send_message"));
   let isPeersTool = $derived(toolCall.name.endsWith("list_peers"));
   let isSpawnTool = $derived(toolCall.name.endsWith("spawn_agent"));
@@ -63,8 +57,7 @@
   let isConnectTool = $derived(toolCall.name.endsWith("connect_agents"));
   let isDisconnectTool = $derived(toolCall.name.endsWith("disconnect_agents"));
   let isSwarmTool = $derived(
-    isMailboxTool ||
-      isSendTool ||
+    isSendTool ||
       isPeersTool ||
       isSpawnTool ||
       isKillTool ||
@@ -84,32 +77,22 @@
 
   // ── Derived display values ─────────────────────────────────────
   let verb = $derived(
-    isMailboxTool
-      ? "Inbox"
-      : isSendTool
-        ? "Send"
-        : isPeersTool
-          ? "Peers"
-          : isSpawnTool
-            ? "Spawn"
-            : isKillTool
-              ? "Kill"
-              : isConnectTool
-                ? "Connect"
-                : isDisconnectTool
-                  ? "Disconnect"
-                  : (kindVerb[toolCall.kind] ?? "Tool"),
+    isSendTool
+      ? "Send"
+      : isPeersTool
+        ? "Peers"
+        : isSpawnTool
+          ? "Spawn"
+          : isKillTool
+            ? "Kill"
+            : isConnectTool
+              ? "Connect"
+              : isDisconnectTool
+                ? "Disconnect"
+                : (kindVerb[toolCall.kind] ?? "Tool"),
   );
 
   let target = $derived.by(() => {
-    if (isMailboxTool) {
-      const parsed = parseTextContent();
-      const msgs: MailboxMessage[] = Array.isArray(parsed)
-        ? parsed
-        : (((parsed as Record<string, unknown>)
-            ?.messages as MailboxMessage[]) ?? []);
-      return `${msgs.length} message${msgs.length === 1 ? "" : "s"}`;
-    }
     if (isSendTool) {
       const parsed = parseTextContent() as Record<string, string> | null;
       return parsed?.target ?? toolCall.locations[0] ?? "";
@@ -149,7 +132,6 @@
     if (toolCall.status === "in_progress") return "running";
     if (toolCall.status === "pending") return "pending";
     if (isSendTool && toolCall.status === "completed") return "delivered";
-    if (isMailboxTool && toolCall.status === "completed") return "completed";
     return null;
   });
 
@@ -162,8 +144,7 @@
   );
 
   let hasPreview = $derived(
-    isMailboxTool ||
-      isSendTool ||
+    isSendTool ||
       isPeersTool ||
       (toolCall.content.length > 0 &&
         toolCall.kind !== "read" &&
@@ -172,20 +153,6 @@
   );
 
   // ── Parsed content for expanded views ──────────────────────────
-  let mailboxMessages = $derived.by(() => {
-    if (!isMailboxTool) return [];
-    try {
-      const text = toolCall.content.find((c) => c.type === "text");
-      if (text?.type === "text") {
-        const parsed = JSON.parse(text.text);
-        return Array.isArray(parsed) ? parsed : (parsed.messages ?? []);
-      }
-    } catch {
-      /* */
-    }
-    return [] as MailboxMessage[];
-  });
-
   let sendBody = $derived.by(() => {
     if (!isSendTool) return "";
     const text = toolCall.content.find((c) => c.type === "text");
@@ -248,9 +215,7 @@
 
   {#if expanded}
     <div transition:slide={{ duration: 150 }}>
-      {#if isMailboxTool}
-        <MailboxToolRender messages={mailboxMessages} />
-      {:else if isSendTool}
+      {#if isSendTool}
         <SendToolRender body={sendBody} />
       {:else if isPeersTool}
         <PeersToolRender peers={peersList} />

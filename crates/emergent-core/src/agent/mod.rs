@@ -9,7 +9,6 @@ pub use registry::AgentRegistry;
 pub use spawner::{AgentProcess, DockerCliSpawner, ProcessSpawner};
 pub use thread_manager::{ThreadManager, ThreadMapping};
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use emergent_protocol::{
@@ -17,8 +16,6 @@ use emergent_protocol::{
     Notification, ThreadSummary, WorkspaceId,
 };
 use tokio::sync::{broadcast, mpsc, oneshot, RwLock};
-
-use crate::swarm::Mailbox;
 
 // ---------------------------------------------------------------------------
 // Commands sent to the dedicated ACP thread
@@ -82,8 +79,6 @@ pub struct AgentManager {
     registry: Arc<RwLock<AgentRegistry>>,
     pub(crate) threads: ThreadManager,
     topology: Arc<RwLock<crate::swarm::Topology>>,
-    #[allow(dead_code)] // Kept for future mailbox reconnection
-    mailboxes: Arc<RwLock<HashMap<String, Mailbox>>>,
     workspace_state: crate::workspace::SharedWorkspaceState,
     event_tx: broadcast::Sender<Notification>,
 }
@@ -102,7 +97,6 @@ impl AgentManager {
             registry: Arc::new(RwLock::new(AgentRegistry::new())),
             threads,
             topology: Arc::new(RwLock::new(crate::swarm::Topology::new())),
-            mailboxes: Arc::new(RwLock::new(HashMap::new())),
             workspace_state,
             event_tx: event_tx.clone(),
         }

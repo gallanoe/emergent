@@ -309,7 +309,6 @@
     {:else if appState.activeView === "swarm" && appState.selectedSwarm}
       <SwarmView
         swarm={appState.selectedSwarm}
-        messageLog={appState.swarmMessageLog}
         agentConnections={appState.agentConnections}
         demoMode={appState.demoMode}
         onSelectAgent={(id) => appState.selectAgent(id)}

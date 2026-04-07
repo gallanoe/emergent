@@ -63,29 +63,6 @@ export interface NudgeDeliveredPayload {
   count: number;
 }
 
-export interface MailboxMessage {
-  sender: string;
-  timestamp: string;
-  body: string;
-}
-
-export interface SwarmMessagePayload {
-  from_agent_id: string;
-  from_agent_name: string;
-  to_agent_id: string;
-  to_agent_name: string;
-  body: string;
-  timestamp: string;
-}
-
-export interface SwarmMessageLogEntry {
-  id: string;
-  fromName: string;
-  toName: string;
-  preview: string;
-  timestamp: string;
-}
-
 export interface TopologyChangedPayload {
   agent_id_a: string;
   agent_id_b: string;

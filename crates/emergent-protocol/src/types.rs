@@ -81,16 +81,6 @@ pub struct NudgeDeliveredPayload {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct SwarmMessagePayload {
-    pub from_agent_id: String,
-    pub from_agent_name: String,
-    pub to_agent_id: String,
-    pub to_agent_name: String,
-    pub body: String,
-    pub timestamp: String,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TopologyChangedPayload {
     pub agent_id_a: String,
     pub agent_id_b: String,
@@ -381,8 +371,6 @@ pub enum Notification {
     NudgeDelivered(NudgeDeliveredPayload),
     #[serde(rename = "agent:system-message")]
     SystemMessage(SystemMessagePayload),
-    #[serde(rename = "swarm:message")]
-    SwarmMessage(SwarmMessagePayload),
     #[serde(rename = "swarm:topology-changed")]
     TopologyChanged(TopologyChangedPayload),
     #[serde(rename = "workspace:status-change")]
@@ -409,7 +397,6 @@ impl Notification {
             Notification::Error(_) => "agent:error",
             Notification::NudgeDelivered(_) => "agent:nudge-delivered",
             Notification::SystemMessage(_) => "agent:system-message",
-            Notification::SwarmMessage(_) => "swarm:message",
             Notification::TopologyChanged(_) => "swarm:topology-changed",
             Notification::WorkspaceStatusChange(_) => "workspace:status-change",
             Notification::TerminalOutput(_) => "terminal:output",
@@ -430,7 +417,6 @@ impl Notification {
             Notification::Error(p) => Some(&p.agent_id),
             Notification::NudgeDelivered(p) => Some(&p.agent_id),
             Notification::SystemMessage(p) => Some(&p.agent_id),
-            Notification::SwarmMessage(_) => None, // not agent-specific
             Notification::TopologyChanged(_) => None, // not agent-specific
             Notification::WorkspaceStatusChange(_) => None,
             Notification::TerminalOutput(_) => None,

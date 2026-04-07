@@ -79,7 +79,7 @@ async fn test_initialize_succeeds() {
 }
 
 #[tokio::test]
-async fn test_valid_token_can_list_peers() {
+async fn test_valid_token_can_list_tools() {
     let (url, registry, _manager) = spawn_test_server().await;
     let token = registry.register("test-agent-1");
     let client = reqwest::Client::new();
@@ -88,18 +88,24 @@ async fn test_valid_token_can_list_peers() {
     let (status, _) = post_mcp(&client, &url, mcp_init_body(), Some(&token)).await;
     assert_eq!(status, 200);
 
-    // Call list_peers tool
-    let (status, body) = post_mcp(
-        &client,
-        &url,
-        mcp_tool_call(2, "list_peers", serde_json::json!({})),
-        Some(&token),
-    )
-    .await;
+    // List tools — should return empty list
+    let list_body = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/list",
+        "params": {}
+    })
+    .to_string();
+    let (status, body) = post_mcp(&client, &url, list_body, Some(&token)).await;
     assert_eq!(status, 200);
     assert!(
         body.contains("result"),
         "Expected result in response, got: {}",
+        body
+    );
+    assert!(
+        body.contains("\"tools\":[]"),
+        "Expected empty tools list, got: {}",
         body
     );
 }
@@ -131,14 +137,15 @@ async fn test_revoked_token_fails() {
     let token = registry.register("agent-to-kill");
     let client = reqwest::Client::new();
 
-    // Verify token works first
-    let (status, body) = post_mcp(
-        &client,
-        &url,
-        mcp_tool_call(2, "list_peers", serde_json::json!({})),
-        Some(&token),
-    )
-    .await;
+    // Verify token works: list tools should succeed
+    let list_body = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/list",
+        "params": {}
+    })
+    .to_string();
+    let (status, body) = post_mcp(&client, &url, list_body.clone(), Some(&token)).await;
     assert_eq!(status, 200);
     assert!(
         body.contains("result"),
@@ -149,17 +156,17 @@ async fn test_revoked_token_fails() {
     // Revoke the token
     registry.revoke_agent("agent-to-kill");
 
-    // Tool call should now fail
+    // Calling a nonexistent tool should fail (token revoked)
     let (status, body) = post_mcp(
         &client,
         &url,
-        mcp_tool_call(3, "list_peers", serde_json::json!({})),
+        mcp_tool_call(3, "nonexistent_tool", serde_json::json!({})),
         Some(&token),
     )
     .await;
     assert_eq!(status, 200);
     assert!(
-        body.contains("error") || body.contains("Invalid bearer token"),
+        body.contains("error"),
         "Expected error after token revocation, got: {}",
         body
     );

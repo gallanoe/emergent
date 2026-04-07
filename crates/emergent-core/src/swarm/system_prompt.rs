@@ -1,3 +1,6 @@
+// TODO: Update swarm tools guide to reflect the agent/session refactor.
+// The tool names and descriptions here are stale — MCP tools were removed
+// and need to be redesigned for the new session-based model.
 /// Swarm tools behavioral guide — injected on first turn.
 const SWARM_TOOLS_GUIDE: &str = "\
 You are part of an Emergent multi-agent swarm. Other agents may be working alongside you.
@@ -16,7 +19,6 @@ pub fn build_system_block(
     is_first_turn: bool,
     role: Option<&str>,
     permission_change: Option<&str>,
-    mailbox_count: usize,
 ) -> Option<String> {
     let mut sections = Vec::new();
     let mut has_content = false;
@@ -40,16 +42,6 @@ pub fn build_system_block(
         has_content = true;
     }
 
-    if mailbox_count > 0 {
-        let nudge = if mailbox_count == 1 {
-            "You have 1 unread message in your mailbox.".to_string()
-        } else {
-            format!("You have {} unread messages in your mailbox.", mailbox_count)
-        };
-        sections.push(nudge);
-        has_content = true;
-    }
-
     if !has_content {
         return None;
     }
@@ -66,7 +58,7 @@ mod tests {
 
     #[test]
     fn first_turn_with_role() {
-        let block = build_system_block(true, Some("Code reviewer"), None, 0).unwrap();
+        let block = build_system_block(true, Some("Code reviewer"), None).unwrap();
         assert!(block.starts_with("<emergent-system>"));
         assert!(block.ends_with("</emergent-system>"));
         assert!(block.contains("<swarm-tools>"));
@@ -77,7 +69,7 @@ mod tests {
 
     #[test]
     fn first_turn_no_role() {
-        let block = build_system_block(true, None, None, 0).unwrap();
+        let block = build_system_block(true, None, None).unwrap();
         assert!(block.contains("<swarm-tools>"));
         assert!(!block.contains("<role>"));
     }
@@ -88,7 +80,6 @@ mod tests {
             false,
             None,
             Some("Management permissions have been granted."),
-            0,
         )
         .unwrap();
         assert!(block.contains("Management permissions have been granted."));
@@ -101,7 +92,6 @@ mod tests {
             true,
             Some("Architect"),
             Some("Management permissions have been revoked."),
-            0,
         )
         .unwrap();
         assert!(block.contains("<swarm-tools>"));
@@ -115,13 +105,7 @@ mod tests {
 
     #[test]
     fn nothing_to_inject() {
-        assert!(build_system_block(false, None, None, 0).is_none());
+        assert!(build_system_block(false, None, None).is_none());
     }
 
-    #[test]
-    fn mailbox_count_still_works_if_passed() {
-        // mailbox_count parameter kept for future reconnection
-        let block = build_system_block(false, None, None, 3).unwrap();
-        assert!(block.contains("You have 3 unread messages"));
-    }
 }

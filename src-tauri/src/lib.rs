@@ -95,7 +95,6 @@ pub fn run() {
                                 Notification::Error(p) => { let _ = bridge_handle.emit(event_name, p); }
                                 Notification::NudgeDelivered(p) => { let _ = bridge_handle.emit(event_name, p); }
                                 Notification::SystemMessage(p) => { let _ = bridge_handle.emit(event_name, p); }
-                                Notification::SwarmMessage(p) => { let _ = bridge_handle.emit(event_name, p); }
                                 Notification::TopologyChanged(p) => { let _ = bridge_handle.emit(event_name, p); }
                                 Notification::WorkspaceStatusChange(p) => { let _ = bridge_handle.emit(event_name, p); }
                                 Notification::TerminalOutput(p) => { let _ = bridge_handle.emit(event_name, p); }

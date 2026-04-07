@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/svelte";
 import SwarmView from "./SwarmView.svelte";
-import type { DisplayWorkspace, DisplayAgent, SwarmMessageLogEntry } from "../../stores/types";
+import type { DisplayWorkspace, DisplayAgent } from "../../stores/types";
 
 function makeAgent(overrides?: Partial<DisplayAgent>): DisplayAgent {
   return {
@@ -41,7 +41,6 @@ function renderSwarmView(overrides: Record<string, unknown> = {}) {
   return render(SwarmView, {
     props: {
       swarm: (overrides.swarm as DisplayWorkspace) ?? makeSwarm(),
-      messageLog: (overrides.messageLog as SwarmMessageLogEntry[]) ?? [],
       agentConnections: (overrides.agentConnections as Record<string, string[]>) ?? {},
       demoMode: false,
       onSelectAgent: (overrides.onSelectAgent as (id: string) => void) ?? (() => {}),
@@ -67,10 +66,5 @@ describe("SwarmView", () => {
     renderSwarmView({ onSelectAgent });
     await fireEvent.click(screen.getByText("Gemini"));
     expect(onSelectAgent).toHaveBeenCalledWith("agent-2");
-  });
-
-  it("renders activity feed", () => {
-    renderSwarmView();
-    expect(screen.getByText("Activity")).toBeTruthy();
   });
 });

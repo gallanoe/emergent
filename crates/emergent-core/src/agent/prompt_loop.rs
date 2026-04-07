@@ -57,12 +57,10 @@ pub(crate) async fn prompt_loop(
             (first, role_ref, perm_change)
         };
 
-        // Build the system block (mailbox disconnected — always pass 0)
         let system_block = build_system_block(
             is_first_turn,
             role.as_deref(),
             permission_change.as_deref(),
-            0,
         );
 
         // Emit permission change system message to frontend
@@ -81,8 +79,7 @@ pub(crate) async fn prompt_loop(
             (None, true) => String::new(),
         };
 
-        // Edge case: empty prompt (shouldn't happen with mailbox disconnected,
-        // but guard against it).
+        // Edge case: empty prompt — guard against it.
         if prompt_text.is_empty() {
             if let Some(reply) = reply_tx {
                 let _ = reply.send(Err("Empty prompt".to_string()));

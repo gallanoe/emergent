@@ -10,8 +10,6 @@ import type {
   DisplayAgentDefinition,
   DisplayWorkspace,
   DockerStatus,
-  SwarmMessageLogEntry,
-  SwarmMessagePayload,
   ThreadMapping,
   TopologyChangedPayload,
   WorkspaceSummary,
@@ -47,7 +45,6 @@ function createAppState() {
   let agentDefinitions = $state<Record<string, AgentDefinition>>({});
   let knownAgents = $state<KnownAgent[]>([]);
   let agentConnections = $state<Record<string, string[]>>({});
-  let swarmMessageLog = $state<SwarmMessageLogEntry[]>([]);
   let selectedWorkspaceId = $state<string | null>(null);
   let activeView = $state<ActiveView>("swarm");
   let dockerStatus = $state<DockerStatus | null>(null);
@@ -148,25 +145,6 @@ function createAppState() {
       // Clear terminal session when container stops
       if (e.payload.status.state !== "running") {
         delete terminalSessionIds[e.payload.workspace_id];
-      }
-    });
-
-    // Listen for swarm messages (global, not per-agent)
-    await listen<SwarmMessagePayload>("swarm:message", (e) => {
-      const p = e.payload;
-      swarmMessageLog.push({
-        id: crypto.randomUUID(),
-        fromName: p.from_agent_name,
-        toName: p.to_agent_name,
-        preview: p.body.length > 40 ? p.body.slice(0, 40) + "…" : p.body,
-        timestamp: new Date(p.timestamp).toLocaleTimeString([], {
-          hour: "numeric",
-          minute: "2-digit",
-        }),
-      });
-      // Keep last 50 entries
-      if (swarmMessageLog.length > 50) {
-        swarmMessageLog.splice(0, swarmMessageLog.length - 50);
       }
     });
 
@@ -486,9 +464,6 @@ function createAppState() {
     },
     get agentConnections() {
       return agentConnections;
-    },
-    get swarmMessageLog() {
-      return swarmMessageLog;
     },
     get dockerStatus() {
       return dockerStatus;

@@ -1,19 +1,13 @@
 <script lang="ts">
-  import type {
-    DisplayWorkspace,
-    SwarmMessageLogEntry,
-  } from "../../stores/types";
-  import ActivityFeed from "./ActivityFeed.svelte";
+  import type { DisplayWorkspace } from "../../stores/types";
   interface Props {
     swarm: DisplayWorkspace;
-    messageLog: SwarmMessageLogEntry[];
     agentConnections: Record<string, string[]>;
     demoMode: boolean;
     onSelectAgent: (id: string) => void;
   }
 
-  let { swarm, messageLog, agentConnections, demoMode, onSelectAgent }: Props =
-    $props();
+  let { swarm, agentConnections, demoMode, onSelectAgent }: Props = $props();
 
   function statusBadgeClass(status: string): string {
     switch (status) {
@@ -96,7 +90,4 @@
       </button>
     {/each}
   </div>
-
-  <!-- Activity feed -->
-  <ActivityFeed entries={messageLog} />
 </div>
