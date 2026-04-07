@@ -52,7 +52,7 @@
   // ── Tool type detection ────────────────────────────────────────
   let isSendTool = $derived(toolCall.name.endsWith("send_message"));
   let isPeersTool = $derived(toolCall.name.endsWith("list_peers"));
-  let isSpawnTool = $derived(toolCall.name.endsWith("spawn_agent"));
+  let isSpawnTool = $derived(toolCall.name.endsWith("spawn_thread"));
   let isKillTool = $derived(toolCall.name.endsWith("kill_agent"));
   let isConnectTool = $derived(toolCall.name.endsWith("connect_agents"));
   let isDisconnectTool = $derived(toolCall.name.endsWith("disconnect_agents"));

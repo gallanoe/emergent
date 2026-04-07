@@ -395,7 +395,7 @@
     {:else}
       <TopBar
         agent={appState.selectedAgent}
-        allAgents={appState.swarms.flatMap((s) => s.agents)}
+        allAgents={[]}
         connections={appState.selectedAgent
           ? (appState.agentConnections[appState.selectedAgent.id] ?? [])
           : []}

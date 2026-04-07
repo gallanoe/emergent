@@ -1,26 +1,7 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/svelte";
+import { describe, it, expect } from "vitest";
+import { render } from "@testing-library/svelte";
 import SwarmView from "./SwarmView.svelte";
-import type { DisplayWorkspace, DisplayAgent } from "../../stores/types";
-
-function makeAgent(overrides?: Partial<DisplayAgent>): DisplayAgent {
-  return {
-    id: "agent-1",
-    workspaceId: "swarm-1",
-    cli: "claude-agent-acp",
-    name: "Claude",
-    status: "working",
-    preview: "Researching papers...",
-    updatedAt: "2m ago",
-    messages: [],
-    activeToolCalls: [],
-    queuedMessage: null,
-    configOptions: [],
-    hasManagementPermissions: false,
-    role: "Researcher",
-    ...overrides,
-  };
-}
+import type { DisplayWorkspace } from "../../stores/types";
 
 function makeSwarm(overrides?: Partial<DisplayWorkspace>): DisplayWorkspace {
   return {
@@ -29,10 +10,6 @@ function makeSwarm(overrides?: Partial<DisplayWorkspace>): DisplayWorkspace {
     collapsed: false,
     containerStatus: { state: "running" },
     agentDefinitions: [],
-    agents: [
-      makeAgent(),
-      makeAgent({ id: "agent-2", name: "Gemini", role: "Analyst", status: "idle" }),
-    ],
     ...overrides,
   };
 }
@@ -49,22 +26,8 @@ function renderSwarmView(overrides: Record<string, unknown> = {}) {
 }
 
 describe("SwarmView", () => {
-  it("renders agent cards with names", () => {
-    renderSwarmView();
-    expect(screen.getByText("Claude")).toBeTruthy();
-    expect(screen.getByText("Gemini")).toBeTruthy();
-  });
-
-  it("renders agent roles", () => {
-    renderSwarmView();
-    expect(screen.getByText("Researcher")).toBeTruthy();
-    expect(screen.getByText("Analyst")).toBeTruthy();
-  });
-
-  it("calls onSelectAgent when card clicked", async () => {
-    const onSelectAgent = vi.fn();
-    renderSwarmView({ onSelectAgent });
-    await fireEvent.click(screen.getByText("Gemini"));
-    expect(onSelectAgent).toHaveBeenCalledWith("agent-2");
+  it("renders without crashing", () => {
+    const { container } = renderSwarmView();
+    expect(container).toBeTruthy();
   });
 });

@@ -275,20 +275,6 @@ pub struct ThreadSummary {
 }
 
 // ---------------------------------------------------------------------------
-// Agent summary (for list_agents response — kept for backward compat)
-// ---------------------------------------------------------------------------
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct AgentSummary {
-    pub id: String,
-    pub cli: String,
-    pub status: String,
-    pub workspace_id: WorkspaceId,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub role: Option<String>,
-}
-
-// ---------------------------------------------------------------------------
 // Config option types (ACP session config → daemon-to-client)
 // ---------------------------------------------------------------------------
 
@@ -507,20 +493,6 @@ mod tests {
             }
             _ => panic!("Wrong variant"),
         }
-    }
-
-    #[test]
-    fn agent_summary_serializes() {
-        let s = AgentSummary {
-            id: "abc".into(),
-            cli: "mock-agent".into(),
-            status: "idle".into(),
-            workspace_id: WorkspaceId::from("ws-123"),
-            role: None,
-        };
-        let json = serde_json::to_string(&s).unwrap();
-        assert!(json.contains("workspace_id"));
-        assert!(!json.contains("working_directory"));
     }
 
     #[test]

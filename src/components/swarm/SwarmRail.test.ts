@@ -10,7 +10,6 @@ function makeSwarm(overrides?: Partial<DisplayWorkspace>): DisplayWorkspace {
     collapsed: false,
     containerStatus: { state: "running" },
     agentDefinitions: [],
-    agents: [],
     ...overrides,
   };
 }

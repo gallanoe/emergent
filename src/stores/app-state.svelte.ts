@@ -30,7 +30,6 @@ interface Workspace {
   name: string;
   collapsed: boolean;
   containerStatus: ContainerStatus;
-  agentIds: string[];
   agentDefinitionIds: string[];
 }
 
@@ -52,14 +51,6 @@ function createAppState() {
 
   // ── Initialization ────────────────────────────────────────────
 
-  interface AgentSummary {
-    id: string;
-    cli: string;
-    status: string;
-    workspace_id: string;
-    role?: string;
-  }
-
   async function setupAfterConnect() {
     // Detect Docker availability
     try {
@@ -77,7 +68,6 @@ function createAppState() {
           name: ws.name,
           collapsed: false,
           containerStatus: ws.container_status,
-          agentIds: [],
           agentDefinitionIds: [],
         });
       }
@@ -154,11 +144,6 @@ function createAppState() {
       refreshConnections(e.payload.agent_id_b);
     });
 
-    // When an agent is spawned externally (e.g. via MCP tool), pick it up
-    agentStore.registerUnknownAgentHandler(() => reconnectToExistingAgents());
-
-    // Reconnect to any existing agents from the daemon
-    await reconnectToExistingAgents();
   }
 
   async function initialize() {
@@ -179,38 +164,6 @@ function createAppState() {
     }
   }
 
-  async function reconnectToExistingAgents() {
-    const agents = await invoke<AgentSummary[]>("list_agents");
-    const newAgents = [];
-    for (const agent of agents) {
-      // Skip agents already in the local store
-      if (agentStore.getAgent(agent.id)) continue;
-
-      // Find workspace by workspace_id
-      const workspace = workspaces.find((w) => w.id === agent.workspace_id);
-      if (!workspace) continue; // Skip agents with unknown workspaces
-
-      // Register agent in store without spawning (it already exists on daemon)
-      const agentName = knownAgents.find((k) => k.command === agent.cli)?.name ?? agent.cli;
-      agentStore.registerExistingAgent(agent.id, workspace.id, agent.cli, agentName, agent.role);
-      workspace.agentIds.push(agent.id);
-
-      // Replay history — notifications are typed via DaemonNotification union in agent store
-      const history = await invoke<Parameters<typeof agentStore.replayNotifications>[0]>(
-        "get_history",
-        { agentId: agent.id },
-      );
-      agentStore.replayNotifications(history);
-
-      if (!selectedAgentId) selectedAgentId = agent.id;
-      newAgents.push(agent);
-    }
-
-    // Refresh connections for all agents (new agents need initial state,
-    // existing agents may have gained peers from external connect calls)
-    await Promise.all(agents.map((agent) => refreshConnections(agent.id)));
-  }
-
   // ── Workspace management ──────────────────────────────────────
 
   async function createWorkspace(name: string): Promise<string> {
@@ -220,7 +173,6 @@ function createAppState() {
       name,
       collapsed: false,
       containerStatus: { state: "running" },
-      agentIds: [],
       agentDefinitionIds: [],
     });
     selectedWorkspaceId = id;
@@ -233,34 +185,10 @@ function createAppState() {
   }
 
   async function killAgent(agentId: string): Promise<void> {
-    // Find the agent's position before removing it (for selection logic)
-    let nextSelection: string | null = null;
-    for (const workspace of workspaces) {
-      const idx = workspace.agentIds.indexOf(agentId);
-      if (idx === -1) continue;
-
-      // Determine next selection: prefer above, then below, then other workspaces
-      if (idx > 0) {
-        nextSelection = workspace.agentIds[idx - 1] ?? null;
-      } else if (workspace.agentIds.length > 1) {
-        nextSelection = workspace.agentIds[idx + 1] ?? null;
-      } else {
-        // Workspace will be empty — find first agent in any other workspace
-        const otherAgent = workspaces
-          .filter((w) => w.id !== workspace.id)
-          .flatMap((w) => w.agentIds)[0];
-        nextSelection = otherAgent ?? null;
-      }
-
-      // Remove from workspace
-      workspace.agentIds.splice(idx, 1);
-      break;
-    }
-
     await agentStore.killAgent(agentId);
 
     if (selectedAgentId === agentId) {
-      selectedAgentId = nextSelection;
+      selectedAgentId = null;
     }
   }
 
@@ -322,10 +250,6 @@ function createAppState() {
           };
         })
         .filter(Boolean) as DisplayAgentDefinition[],
-      agents: w.agentIds
-        .map((id) => agentStore.getAgent(id))
-        .filter(Boolean)
-        .map((conn) => agentStore.toDisplayAgent(conn!)),
     }));
   }
 
@@ -367,7 +291,7 @@ function createAppState() {
     selectedThreadId = null;
     // Find which workspace this agent belongs to and select it
     const workspace = workspaces.find(
-      (w) => w.agentIds.includes(agentId) || w.agentDefinitionIds.includes(agentId),
+      (w) => w.agentDefinitionIds.includes(agentId),
     );
     if (workspace) selectedWorkspaceId = workspace.id;
     activeView = "agent-threads";

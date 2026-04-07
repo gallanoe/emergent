@@ -189,7 +189,6 @@ export interface DisplayWorkspace {
   name: string;
   collapsed: boolean;
   containerStatus: ContainerStatus;
-  agents: DisplayAgent[];
   agentDefinitions: DisplayAgentDefinition[];
 }
 

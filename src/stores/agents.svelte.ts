@@ -112,15 +112,8 @@ function createAgentStore() {
   // Callback for dumping queued content to the input on error
   let onQueueDump: ((agentId: string, content: string) => void) | null = null;
 
-  // Callback when a notification arrives for an agent not in the local store
-  let onUnknownAgent: (() => void) | null = null;
-
   function registerQueueDumpHandler(handler: (agentId: string, content: string) => void) {
     onQueueDump = handler;
-  }
-
-  function registerUnknownAgentHandler(handler: () => void) {
-    onUnknownAgent = handler;
   }
 
   function getAgent(agentId: string): AgentConnection | undefined {
@@ -169,6 +162,32 @@ function createAgentStore() {
   // ── Message assembly ──────────────────────────────────────────
 
   function handleMessageChunk(payload: MessageChunkPayload) {
+    const agent = agents[payload.agent_id];
+    if (!agent) return;
+
+    // During session resume (initializing), write immediately to preserve
+    // message ordering. rAF buffering defers agent messages while user
+    // messages are pushed synchronously, causing out-of-order rendering.
+    if (agent.status === "initializing") {
+      const role = roleForKind(payload.kind);
+      const lastMsg = agent.messages.at(-1);
+      if (lastMsg && lastMsg.role === role && !lastMsg.toolCalls?.length) {
+        lastMsg.content += payload.content;
+      } else {
+        agent.messages.push({
+          id: crypto.randomUUID(),
+          role,
+          content: payload.content,
+          timestamp: new Date().toLocaleTimeString([], {
+            hour: "numeric",
+            minute: "2-digit",
+          }),
+        });
+      }
+      return;
+    }
+
+    // Live streaming: buffer chunks and flush once per animation frame
     const existing = chunkBuffers[payload.agent_id];
 
     // If the kind changed mid-frame, flush first so thinking and message
@@ -330,7 +349,6 @@ function createAgentStore() {
     }
     const agent = agents[payload.agent_id];
     if (!agent) {
-      onUnknownAgent?.();
       return;
     }
     agent.status = payload.status as AgentConnection["status"];
@@ -479,34 +497,6 @@ function createAgentStore() {
     };
 
     return threadId;
-  }
-
-  async function spawnAgent(
-    workspaceId: string,
-    agentCli: string,
-    agentName: string,
-  ): Promise<string> {
-    const agentId = await invoke<string>("spawn_agent", {
-      workspaceId,
-      agentCli,
-    });
-
-    agents[agentId] = {
-      id: agentId,
-      agentId: "",
-      workspaceId,
-      cli: agentCli,
-      agentName,
-      status: "initializing",
-      messages: [],
-      activeToolCalls: {},
-      stopReason: null,
-      queuedContent: "",
-      configOptions: [],
-      hasManagementPermissions: false,
-    };
-
-    return agentId;
   }
 
   async function sendPrompt(agentId: string, text: string): Promise<void> {
@@ -669,31 +659,6 @@ function createAgentStore() {
       hasManagementPermissions: conn.hasManagementPermissions,
       ...(conn.errorMessage !== undefined && { errorMessage: conn.errorMessage }),
       ...(conn.role !== undefined && { role: conn.role }),
-    };
-  }
-
-  function registerExistingAgent(
-    agentId: string,
-    workspaceId: string,
-    cli: string,
-    agentName: string,
-    role?: string,
-    agentDefinitionId?: string,
-  ) {
-    agents[agentId] = {
-      id: agentId,
-      agentId: agentDefinitionId ?? "",
-      workspaceId,
-      cli,
-      agentName,
-      status: "idle",
-      messages: [],
-      activeToolCalls: {},
-      stopReason: null,
-      queuedContent: "",
-      configOptions: [],
-      hasManagementPermissions: false,
-      ...(role !== undefined && { role }),
     };
   }
 
@@ -891,7 +856,6 @@ function createAgentStore() {
     setupListeners,
     registerPersistedThread,
     spawnThread,
-    spawnAgent,
     sendPrompt,
     cancelPrompt,
     killAgent,
@@ -901,8 +865,6 @@ function createAgentStore() {
     setConfig,
     editQueue,
     registerQueueDumpHandler,
-    registerUnknownAgentHandler,
-    registerExistingAgent,
     replayNotifications,
     setManagementPermissions,
     setRole,

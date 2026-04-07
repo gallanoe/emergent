@@ -12,8 +12,8 @@ pub use thread_manager::{ThreadManager, ThreadMapping};
 use std::sync::Arc;
 
 use emergent_protocol::{
-    AgentCreatedPayload, AgentDefinition, AgentDeletedPayload, AgentSummary, ConfigOption,
-    Notification, ThreadSummary, WorkspaceId,
+    AgentCreatedPayload, AgentDefinition, AgentDeletedPayload, ConfigOption, Notification,
+    ThreadSummary, WorkspaceId,
 };
 use tokio::sync::{broadcast, mpsc, oneshot, RwLock};
 
@@ -48,7 +48,6 @@ pub(crate) struct ThreadHandle {
     #[allow(dead_code)] // Used for future session resumption
     pub(crate) acp_session_id: Option<String>,
     pub(crate) status: emergent_protocol::AgentStatus,
-    pub(crate) cli: String,
     pub(crate) workspace_id: WorkspaceId,
     pub(crate) command_tx: mpsc::UnboundedSender<AgentCommand>,
     /// Handle to the agent process (for kill).
@@ -343,46 +342,6 @@ impl AgentManager {
         Ok(())
     }
 
-    /// Spawn a thread the old way (without agent definition) — kept for backward
-    /// compatibility during migration. Delegates directly to ThreadManager.
-    pub async fn spawn_agent(
-        &self,
-        workspace_id: WorkspaceId,
-        agent_binary: String,
-        role: Option<String>,
-    ) -> Result<String, String> {
-        // Validate workspace container
-        let container_id = {
-            let state = self.workspace_state.read().await;
-            let ws = state
-                .workspaces
-                .get(&workspace_id)
-                .ok_or_else(|| format!("Workspace '{}' not found", workspace_id))?;
-            match &ws.container_status {
-                emergent_protocol::ContainerStatus::Running => {}
-                other => {
-                    return Err(format!(
-                        "Workspace '{}' container is not running (status: {})",
-                        workspace_id, other
-                    ));
-                }
-            }
-            ws.container_id
-                .clone()
-                .ok_or_else(|| format!("Workspace '{}' has no container_id", workspace_id))?
-        };
-
-        self.threads
-            .spawn_thread(
-                String::new(), // no agent definition
-                workspace_id,
-                container_id,
-                agent_binary,
-                role,
-            )
-            .await
-    }
-
     // -----------------------------------------------------------------------
     // Thread operations (delegated to ThreadManager)
     // -----------------------------------------------------------------------
@@ -447,8 +406,8 @@ impl AgentManager {
         Ok(())
     }
 
-    pub async fn list_agents(&self) -> Vec<AgentSummary> {
-        self.threads.list_all_threads().await
+    pub async fn thread_count_by_workspace(&self) -> std::collections::HashMap<WorkspaceId, usize> {
+        self.threads.thread_count_by_workspace().await
     }
 
     pub async fn list_threads(&self, agent_id: &str) -> Vec<ThreadSummary> {

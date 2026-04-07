@@ -5,8 +5,8 @@ use emergent_core::agent::{AgentManager, ThreadMapping};
 use emergent_core::detect;
 use emergent_core::workspace::WorkspaceManager;
 use emergent_protocol::{
-    AgentDefinition, AgentSummary, ConfigOption, DockerStatus, KnownAgent, Notification,
-    ThreadSummary, WorkspaceInfo, WorkspaceSummary,
+    AgentDefinition, ConfigOption, DockerStatus, KnownAgent, Notification, ThreadSummary,
+    WorkspaceInfo, WorkspaceSummary,
 };
 
 #[tauri::command]
@@ -130,17 +130,6 @@ pub async fn resume_thread(
 }
 
 #[tauri::command]
-pub async fn spawn_agent(
-    manager: State<'_, Arc<AgentManager>>,
-    workspace_id: String,
-    agent_cli: String,
-    role: Option<String>,
-) -> Result<String, String> {
-    let ws_id = emergent_protocol::WorkspaceId::from(workspace_id.as_str());
-    manager.spawn_agent(ws_id, agent_cli, role).await
-}
-
-#[tauri::command]
 pub async fn send_prompt(
     manager: State<'_, Arc<AgentManager>>,
     agent_id: String,
@@ -172,13 +161,6 @@ pub async fn kill_agent(
 #[tauri::command]
 pub async fn get_daemon_status() -> Result<String, String> {
     Ok("connected".into())
-}
-
-#[tauri::command]
-pub async fn list_agents(
-    manager: State<'_, Arc<AgentManager>>,
-) -> Result<Vec<AgentSummary>, String> {
-    Ok(manager.list_agents().await)
 }
 
 #[tauri::command]
@@ -276,11 +258,11 @@ pub async fn list_workspaces(
     agent_manager: State<'_, Arc<AgentManager>>,
 ) -> Result<Vec<WorkspaceSummary>, String> {
     let entries = workspace_manager.list_workspaces().await;
-    let agents = agent_manager.list_agents().await;
+    let thread_counts = agent_manager.thread_count_by_workspace().await;
     let summaries = entries
         .into_iter()
         .map(|entry| {
-            let agent_count = agents.iter().filter(|a| a.workspace_id == entry.id).count();
+            let agent_count = thread_counts.get(&entry.id).copied().unwrap_or(0);
             WorkspaceSummary {
                 id: entry.id,
                 name: entry.name,

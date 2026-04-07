@@ -3,7 +3,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use emergent_protocol::{
-    AgentErrorPayload, AgentStatus, AgentSummary, ConfigOption, ConfigUpdatePayload, Notification,
+    AgentErrorPayload, AgentStatus, ConfigOption, ConfigUpdatePayload, Notification,
     StatusChangePayload, ThreadSummary, WorkspaceId,
 };
 use tokio::sync::{broadcast, oneshot, Mutex, RwLock};
@@ -404,21 +404,15 @@ impl ThreadManager {
         Ok(())
     }
 
-    /// List all running threads as summaries.
-    pub async fn list_all_threads(&self) -> Vec<AgentSummary> {
+    /// Count running threads grouped by workspace.
+    pub async fn thread_count_by_workspace(&self) -> HashMap<WorkspaceId, usize> {
         let threads = self.threads.read().await;
-        let mut result = Vec::new();
-        for (id, handle_arc) in threads.iter() {
+        let mut counts: HashMap<WorkspaceId, usize> = HashMap::new();
+        for handle_arc in threads.values() {
             let handle = handle_arc.lock().await;
-            result.push(AgentSummary {
-                id: id.clone(),
-                cli: handle.cli.clone(),
-                status: handle.status.to_string(),
-                workspace_id: handle.workspace_id.clone(),
-                role: handle.role.clone(),
-            });
+            *counts.entry(handle.workspace_id.clone()).or_default() += 1;
         }
-        result
+        counts
     }
 
     /// List threads for a specific agent definition.

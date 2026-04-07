@@ -28,7 +28,6 @@ function makeSwarm(overrides?: Partial<DisplayWorkspace>): DisplayWorkspace {
         role: "Analyst",
       }),
     ],
-    agents: [],
     ...overrides,
   };
 }

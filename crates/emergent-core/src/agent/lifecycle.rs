@@ -210,7 +210,6 @@ pub(crate) async fn initialize_agent(
         agent_id: agent_definition_id,
         acp_session_id: Some(session_id.0.to_string()),
         status: AgentStatus::Idle,
-        cli: agent_binary,
         workspace_id,
         command_tx,
         process,

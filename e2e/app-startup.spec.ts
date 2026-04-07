@@ -26,7 +26,6 @@ const emptyStateMock = `
           { name: "Kiro", command: "kiro-cli acp", available: false },
           { name: "OpenCode", command: "opencode acp", available: false },
         ],
-        list_agents: [],
         list_workspaces: [],
       };
       if (cmd in responses) return Promise.resolve(responses[cmd]);
