@@ -2,7 +2,7 @@ use acp::Agent as _;
 use agent_client_protocol as acp;
 use emergent_protocol::{
     AgentErrorPayload, ConfigOption, ConfigUpdatePayload, MessageChunkPayload, Notification,
-    PromptCompletePayload, ToolCallContentPayload, ToolCallUpdatePayload,
+    PromptCompletePayload, ToolCallContentPayload, ToolCallUpdatePayload, UserMessagePayload,
 };
 use tokio::sync::{broadcast, mpsc};
 
@@ -178,6 +178,13 @@ impl acp::Client for EmergentClient {
                         .content
                         .as_ref()
                         .and_then(|c| Self::extract_tool_call_content(c)),
+                }));
+            }
+            acp::SessionUpdate::UserMessageChunk(chunk) => {
+                let text = Self::extract_text(&chunk.content);
+                self.emit(Notification::UserMessage(UserMessagePayload {
+                    agent_id: self.agent_id.clone(),
+                    content: text,
                 }));
             }
             acp::SessionUpdate::AgentThoughtChunk(chunk) => {

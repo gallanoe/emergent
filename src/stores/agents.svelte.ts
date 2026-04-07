@@ -409,6 +409,7 @@ function createAgentStore() {
     await listen<AgentErrorPayload>("agent:error", (e) => handleError(e.payload));
     await listen<StatusChangePayload>("agent:status-change", (e) => handleStatusChange(e.payload));
     await listen<SessionReadyPayload>("agent:session-ready", (e) => handleSessionReady(e.payload));
+    await listen<UserMessagePayload>("agent:user-message", (e) => handleUserMessage(e.payload));
     await listen<ConfigUpdatePayload>("agent:config-update", (e) => handleConfigUpdate(e.payload));
     await listen<NudgeDeliveredPayload>("agent:nudge-delivered", (e) =>
       handleNudgeDelivered(e.payload),

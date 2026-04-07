@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use emergent_protocol::{
-    AgentStatus, Notification, StatusChangePayload, SystemMessagePayload, UserMessagePayload,
+    AgentStatus, Notification, StatusChangePayload, SystemMessagePayload,
 };
 use tokio::sync::{broadcast, oneshot, Mutex};
 
@@ -106,14 +106,6 @@ pub(crate) async fn prompt_loop(
                 ))
             } else {
                 handle.status = AgentStatus::Working;
-
-                // Emit UserMessage for non-empty user text.
-                if !user_text.is_empty() {
-                    let _ = event_tx.send(Notification::UserMessage(UserMessagePayload {
-                        agent_id: agent_id.clone(),
-                        content: user_text.clone(),
-                    }));
-                }
 
                 let (prompt_reply_tx, prompt_reply_rx) = oneshot::channel();
                 let cmd_result = handle.command_tx.send(AgentCommand::Prompt {
