@@ -54,6 +54,7 @@ pub(crate) async fn initialize_agent(
         .take_stdout()
         .ok_or("Failed to capture agent stdout")?;
 
+    let is_resume = matches!(session_init, SessionInit::Load { .. });
     let (command_tx, command_rx) = mpsc::unbounded_channel::<AgentCommand>();
 
     let agent_id_for_thread = agent_id.clone();
@@ -216,7 +217,7 @@ pub(crate) async fn initialize_agent(
         thread_handle: Some(thread_handle),
         config_options: initial_config.clone(),
         has_management_permissions: false,
-        has_prompted: false,
+        has_prompted: is_resume,
         role,
         last_prompted_permissions: false,
         prompt_notify,
