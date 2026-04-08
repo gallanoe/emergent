@@ -105,6 +105,12 @@ function roleForKind(kind: "message" | "thinking"): "assistant" | "thinking" {
   return kind === "thinking" ? "thinking" : "assistant";
 }
 
+const EMERGENT_SYSTEM_RE = /<emergent-system>[\s\S]*?<\/emergent-system>\s*/g;
+
+function stripSystemBlock(content: string): string {
+  return content.replace(EMERGENT_SYSTEM_RE, "").trim();
+}
+
 function createAgentStore() {
   // Plain object instead of Map — Svelte 5 reliably deep-proxies plain objects
   let agents: Record<string, AgentConnection> = $state({});
@@ -321,7 +327,7 @@ function createAgentStore() {
     agent.messages.push({
       id: crypto.randomUUID(),
       role: "user",
-      content: payload.content,
+      content: stripSystemBlock(payload.content),
       timestamp: new Date().toLocaleTimeString([], {
         hour: "numeric",
         minute: "2-digit",
@@ -727,7 +733,7 @@ function createAgentStore() {
           agent.messages.push({
             id: crypto.randomUUID(),
             role: "user",
-            content: n.content,
+            content: stripSystemBlock(n.content),
             timestamp: new Date().toLocaleTimeString([], {
               hour: "numeric",
               minute: "2-digit",
