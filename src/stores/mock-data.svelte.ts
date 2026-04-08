@@ -1,6 +1,6 @@
 // src/stores/mock-data.svelte.ts
 
-import type { DisplayAgent, DisplayWorkspace } from "./types";
+import type { DisplayThread, DisplayWorkspace } from "./types";
 
 const swarms: DisplayWorkspace[] = [
   {
@@ -20,13 +20,15 @@ const swarms: DisplayWorkspace[] = [
 ];
 
 // Mock agents kept separately for demo mode selection
-const mockAgents: DisplayAgent[] = [
+const mockAgents: DisplayThread[] = [
   {
     id: "agent-1",
+    agentId: "def-1",
     workspaceId: "swarm-1",
     cli: "claude-agent-acp",
     name: "Refactoring the navigation component",
     status: "working",
+    processStatus: "working",
     preview: "Refactoring the nav compo...",
     updatedAt: "2m ago",
     messages: [
@@ -126,13 +128,16 @@ const mockAgents: DisplayAgent[] = [
     queuedMessage: null,
     configOptions: [],
     hasManagementPermissions: false,
+    stopReason: null,
   },
   {
     id: "agent-2",
+    agentId: "def-2",
     workspaceId: "swarm-1",
     cli: "claude-agent-acp",
     name: "Set up Tailwind config",
     status: "idle",
+    processStatus: "idle",
     preview: "Set up Tailwind config wi...",
     updatedAt: "8m ago",
     messages: [
@@ -184,6 +189,7 @@ const mockAgents: DisplayAgent[] = [
     queuedMessage: null,
     configOptions: [],
     hasManagementPermissions: false,
+    stopReason: null,
   },
 ];
 
@@ -202,7 +208,7 @@ function createAppState() {
       _selectedAgentId = id;
     },
 
-    get selectedAgent(): DisplayAgent | undefined {
+    get selectedAgent(): DisplayThread | undefined {
       return mockAgents.find((a) => a.id === _selectedAgentId);
     },
 

@@ -1,8 +1,8 @@
 use acp::Agent as _;
 use agent_client_protocol as acp;
 use emergent_protocol::{
-    AgentErrorPayload, ConfigOption, ConfigUpdatePayload, MessageChunkPayload, Notification,
-    PromptCompletePayload, ToolCallContentPayload, ToolCallUpdatePayload, UserMessagePayload,
+    ConfigOption, ConfigUpdatePayload, MessageChunkPayload, Notification, PromptCompletePayload,
+    ThreadErrorPayload, ToolCallContentPayload, ToolCallUpdatePayload, UserMessagePayload,
 };
 use tokio::sync::{broadcast, mpsc};
 
@@ -138,7 +138,7 @@ impl acp::Client for EmergentClient {
             acp::SessionUpdate::AgentMessageChunk(chunk) => {
                 let text = Self::extract_text(&chunk.content);
                 self.emit(Notification::MessageChunk(MessageChunkPayload {
-                    agent_id: self.agent_id.clone(),
+                    thread_id: self.agent_id.clone(),
                     content: text,
                     kind: "message".into(),
                 }));
@@ -152,7 +152,7 @@ impl acp::Client for EmergentClient {
                     tc.status
                 );
                 self.emit(Notification::ToolCallUpdate(ToolCallUpdatePayload {
-                    agent_id: self.agent_id.clone(),
+                    thread_id: self.agent_id.clone(),
                     tool_call_id: tc.tool_call_id.to_string(),
                     title: Some(tc.title.clone()),
                     kind: Some(Self::tool_kind_str(&tc.kind)),
@@ -163,7 +163,7 @@ impl acp::Client for EmergentClient {
             }
             acp::SessionUpdate::ToolCallUpdate(tcu) => {
                 self.emit(Notification::ToolCallUpdate(ToolCallUpdatePayload {
-                    agent_id: self.agent_id.clone(),
+                    thread_id: self.agent_id.clone(),
                     tool_call_id: tcu.tool_call_id.to_string(),
                     title: tcu.fields.title.clone(),
                     kind: tcu.fields.kind.map(|k| Self::tool_kind_str(&k)),
@@ -183,14 +183,14 @@ impl acp::Client for EmergentClient {
             acp::SessionUpdate::UserMessageChunk(chunk) => {
                 let text = Self::extract_text(&chunk.content);
                 self.emit(Notification::UserMessage(UserMessagePayload {
-                    agent_id: self.agent_id.clone(),
+                    thread_id: self.agent_id.clone(),
                     content: text,
                 }));
             }
             acp::SessionUpdate::AgentThoughtChunk(chunk) => {
                 let text = Self::extract_text(&chunk.content);
                 self.emit(Notification::MessageChunk(MessageChunkPayload {
-                    agent_id: self.agent_id.clone(),
+                    thread_id: self.agent_id.clone(),
                     content: text,
                     kind: "thinking".into(),
                 }));
@@ -217,7 +217,7 @@ impl acp::Client for EmergentClient {
                 };
                 let changes = crate::config::diff_config(&old_config, &new_config);
                 self.emit(Notification::ConfigUpdate(ConfigUpdatePayload {
-                    agent_id: self.agent_id.clone(),
+                    thread_id: self.agent_id.clone(),
                     config_options: new_config,
                     changes,
                 }));
@@ -323,7 +323,7 @@ pub(crate) async fn agent_command_loop(
                         );
                         let _ =
                             event_tx.send(Notification::PromptComplete(PromptCompletePayload {
-                                agent_id: agent_id.clone(),
+                                thread_id: agent_id.clone(),
                                 stop_reason,
                             }));
                         let _ = reply.send(Ok(()));
@@ -331,8 +331,8 @@ pub(crate) async fn agent_command_loop(
                     Err(e) => {
                         log::error!("Agent {} prompt failed: {}", &agent_id, e);
                         let msg = format!("Prompt failed: {}", e);
-                        let _ = event_tx.send(Notification::Error(AgentErrorPayload {
-                            agent_id: agent_id.clone(),
+                        let _ = event_tx.send(Notification::Error(ThreadErrorPayload {
+                            thread_id: agent_id.clone(),
                             message: msg.clone(),
                         }));
                         let _ = reply.send(Err(msg));

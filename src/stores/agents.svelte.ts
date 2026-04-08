@@ -3,7 +3,6 @@ import { listen } from "@tauri-apps/api/event";
 import type {
   AgentDefinition,
   ConfigOption,
-  DisplayAgent,
   DisplayMessage,
   DisplayThread,
   DisplayToolCall,
@@ -13,11 +12,11 @@ import type {
   ToolKind,
 } from "./types";
 
-// ── Internal state per agent ────────────────────────────────────
+// ── Internal state per thread ────────────────────────────────────
 
-interface AgentConnection {
+interface ThreadState {
   id: string;
-  agentId: string;
+  agentDefinitionId: string;
   workspaceId: string;
   cli: string;
   agentName: string;
@@ -37,7 +36,7 @@ interface AgentConnection {
 // ── Event payloads from Rust ────────────────────────────────────
 
 interface MessageChunkPayload {
-  agent_id: string;
+  thread_id: string;
   content: string;
   kind: "message" | "thinking";
 }
@@ -54,7 +53,7 @@ interface ToolCallContentPayload {
 }
 
 interface ToolCallUpdatePayload {
-  agent_id: string;
+  thread_id: string;
   tool_call_id: string;
   title: string;
   kind?: string;
@@ -64,32 +63,32 @@ interface ToolCallUpdatePayload {
 }
 
 interface PromptCompletePayload {
-  agent_id: string;
+  thread_id: string;
   stop_reason: string;
 }
 
 interface UserMessagePayload {
-  agent_id: string;
+  thread_id: string;
   content: string;
 }
 
-interface AgentErrorPayload {
-  agent_id: string;
+interface ThreadErrorPayload {
+  thread_id: string;
   message: string;
 }
 
 interface StatusChangePayload {
-  agent_id: string;
+  thread_id: string;
   status: string;
 }
 
 interface SessionReadyPayload {
-  agent_id: string;
+  thread_id: string;
   acp_session_id: string;
 }
 
 interface ConfigUpdatePayload {
-  agent_id: string;
+  thread_id: string;
   config_options: ConfigOption[];
   changes: { option_name: string; new_value_name: string }[];
 }
@@ -113,17 +112,17 @@ function stripSystemBlock(content: string): string {
 
 function createAgentStore() {
   // Plain object instead of Map — Svelte 5 reliably deep-proxies plain objects
-  let agents: Record<string, AgentConnection> = $state({});
+  let threads: Record<string, ThreadState> = $state({});
 
   // Callback for dumping queued content to the input on error
-  let onQueueDump: ((agentId: string, content: string) => void) | null = null;
+  let onQueueDump: ((threadId: string, content: string) => void) | null = null;
 
-  function registerQueueDumpHandler(handler: (agentId: string, content: string) => void) {
+  function registerQueueDumpHandler(handler: (threadId: string, content: string) => void) {
     onQueueDump = handler;
   }
 
-  function getAgent(agentId: string): AgentConnection | undefined {
-    return agents[agentId];
+  function getThread(threadId: string): ThreadState | undefined {
+    return threads[threadId];
   }
 
   // ── Chunk buffering ─────────────────────────────────────────
@@ -134,19 +133,19 @@ function createAgentStore() {
   let flushScheduled = false;
 
   function flushChunkBuffers() {
-    for (const agentId of Object.keys(chunkBuffers)) {
-      const buffer = chunkBuffers[agentId];
-      const agent = agents[agentId];
-      if (!agent || !buffer?.content) continue;
+    for (const threadId of Object.keys(chunkBuffers)) {
+      const buffer = chunkBuffers[threadId];
+      const thread = threads[threadId];
+      if (!thread || !buffer?.content) continue;
 
       const role = roleForKind(buffer.kind);
-      const lastMsg = agent.messages.at(-1);
+      const lastMsg = thread.messages.at(-1);
 
       // Append to the last message only if it matches the same role
       if (lastMsg && lastMsg.role === role && !lastMsg.toolCalls?.length) {
         lastMsg.content += buffer.content;
       } else {
-        agent.messages.push({
+        thread.messages.push({
           id: crypto.randomUUID(),
           role,
           content: buffer.content,
@@ -168,19 +167,19 @@ function createAgentStore() {
   // ── Message assembly ──────────────────────────────────────────
 
   function handleMessageChunk(payload: MessageChunkPayload) {
-    const agent = agents[payload.agent_id];
-    if (!agent) return;
+    const thread = threads[payload.thread_id];
+    if (!thread) return;
 
     // During session resume (initializing), write immediately to preserve
     // message ordering. rAF buffering defers agent messages while user
     // messages are pushed synchronously, causing out-of-order rendering.
-    if (agent.status === "initializing") {
+    if (thread.status === "initializing") {
       const role = roleForKind(payload.kind);
-      const lastMsg = agent.messages.at(-1);
+      const lastMsg = thread.messages.at(-1);
       if (lastMsg && lastMsg.role === role && !lastMsg.toolCalls?.length) {
         lastMsg.content += payload.content;
       } else {
-        agent.messages.push({
+        thread.messages.push({
           id: crypto.randomUUID(),
           role,
           content: payload.content,
@@ -194,7 +193,7 @@ function createAgentStore() {
     }
 
     // Live streaming: buffer chunks and flush once per animation frame
-    const existing = chunkBuffers[payload.agent_id];
+    const existing = chunkBuffers[payload.thread_id];
 
     // If the kind changed mid-frame, flush first so thinking and message
     // don't merge into the same buffer.
@@ -202,11 +201,11 @@ function createAgentStore() {
       flushChunkBuffers();
     }
 
-    const buffer = chunkBuffers[payload.agent_id];
+    const buffer = chunkBuffers[payload.thread_id];
     if (buffer) {
       buffer.content += payload.content;
     } else {
-      chunkBuffers[payload.agent_id] = { content: payload.content, kind: payload.kind };
+      chunkBuffers[payload.thread_id] = { content: payload.content, kind: payload.kind };
     }
 
     if (!flushScheduled) {
@@ -239,10 +238,10 @@ function createAgentStore() {
   }
 
   function handleToolCallUpdate(payload: ToolCallUpdatePayload) {
-    const agent = agents[payload.agent_id];
-    if (!agent) return;
+    const thread = threads[payload.thread_id];
+    if (!thread) return;
 
-    const existing = agent.activeToolCalls[payload.tool_call_id];
+    const existing = thread.activeToolCalls[payload.tool_call_id];
     const tc: DisplayToolCall = {
       id: payload.tool_call_id,
       name: payload.title ?? existing?.name ?? "Tool call",
@@ -252,17 +251,17 @@ function createAgentStore() {
       content: payload.content ? mapToolCallContent(payload.content) : (existing?.content ?? []),
     };
 
-    agent.activeToolCalls[payload.tool_call_id] = tc;
+    thread.activeToolCalls[payload.tool_call_id] = tc;
 
     if (payload.status === "completed" || payload.status === "failed") {
-      const allDone = Object.values(agent.activeToolCalls).every(
+      const allDone = Object.values(thread.activeToolCalls).every(
         (t) => t.status === "completed" || t.status === "failed",
       );
-      const count = Object.keys(agent.activeToolCalls).length;
+      const count = Object.keys(thread.activeToolCalls).length;
 
       if (allDone && count > 0) {
-        const toolCalls = Object.values(agent.activeToolCalls);
-        agent.messages.push({
+        const toolCalls = Object.values(thread.activeToolCalls);
+        thread.messages.push({
           id: crypto.randomUUID(),
           role: "tool-group",
           content: "",
@@ -273,58 +272,58 @@ function createAgentStore() {
           }),
         });
         // Clear by replacing with empty object
-        agent.activeToolCalls = {};
+        thread.activeToolCalls = {};
       }
     }
   }
 
   function handlePromptComplete(payload: PromptCompletePayload) {
     // Flush any buffered chunks before finalizing
-    if (chunkBuffers[payload.agent_id]) {
+    if (chunkBuffers[payload.thread_id]) {
       flushChunkBuffers();
     }
 
-    const agent = agents[payload.agent_id];
-    if (!agent) return;
+    const thread = threads[payload.thread_id];
+    if (!thread) return;
 
-    agent.stopReason = payload.stop_reason;
+    thread.stopReason = payload.stop_reason;
 
     // Flush queue: if content is queued, submit it as the next prompt.
     // Set status to "idle" first so sendPrompt takes the normal send path
     // (it checks status !== "working"). This is synchronous — no visible
     // flicker since Svelte batches reactive updates within the same microtask.
-    if (agent.queuedContent) {
-      const queued = agent.queuedContent;
-      agent.queuedContent = "";
-      agent.status = "idle";
-      sendPrompt(agent.id, queued);
+    if (thread.queuedContent) {
+      const queued = thread.queuedContent;
+      thread.queuedContent = "";
+      thread.status = "idle";
+      sendPrompt(thread.id, queued);
       return;
     }
 
-    if (agent.status === "working") {
-      agent.status = "idle";
+    if (thread.status === "working") {
+      thread.status = "idle";
     }
   }
 
-  function handleError(payload: AgentErrorPayload) {
-    const agent = agents[payload.agent_id];
-    if (!agent) return;
+  function handleError(payload: ThreadErrorPayload) {
+    const thread = threads[payload.thread_id];
+    if (!thread) return;
 
-    if (agent.queuedContent && onQueueDump) {
-      const queued = agent.queuedContent;
-      agent.queuedContent = "";
-      onQueueDump(payload.agent_id, queued);
+    if (thread.queuedContent && onQueueDump) {
+      const queued = thread.queuedContent;
+      thread.queuedContent = "";
+      onQueueDump(payload.thread_id, queued);
     }
 
-    agent.status = "error";
-    agent.errorMessage = payload.message;
+    thread.status = "error";
+    thread.errorMessage = payload.message;
   }
 
   function handleUserMessage(payload: UserMessagePayload) {
-    const agent = agents[payload.agent_id];
-    if (!agent) return;
+    const thread = threads[payload.thread_id];
+    if (!thread) return;
 
-    agent.messages.push({
+    thread.messages.push({
       id: crypto.randomUUID(),
       role: "user",
       content: stripSystemBlock(payload.content),
@@ -336,41 +335,41 @@ function createAgentStore() {
   }
 
   function handleSessionReady(payload: SessionReadyPayload) {
-    const agent = agents[payload.agent_id];
-    if (agent) {
-      agent.acpSessionId = payload.acp_session_id;
+    const thread = threads[payload.thread_id];
+    if (thread) {
+      thread.acpSessionId = payload.acp_session_id;
     }
   }
 
   function handleStatusChange(payload: StatusChangePayload) {
     if (payload.status === "dead") {
-      const agent = agents[payload.agent_id];
-      if (agent?.acpSessionId) {
+      const thread = threads[payload.thread_id];
+      if (thread?.acpSessionId) {
         // Persisted thread — keep as dead stub for future resumption
-        agent.status = "dead";
+        thread.status = "dead";
       } else {
-        delete agents[payload.agent_id];
+        delete threads[payload.thread_id];
       }
       return;
     }
-    const agent = agents[payload.agent_id];
-    if (!agent) {
+    const thread = threads[payload.thread_id];
+    if (!thread) {
       return;
     }
-    agent.status = payload.status as AgentConnection["status"];
+    thread.status = payload.status as ThreadState["status"];
   }
 
   function handleNudgeDelivered(payload: NudgeDeliveredPayload) {
-    const agent = agents[payload.agent_id];
-    if (!agent) return;
+    const thread = threads[payload.thread_id];
+    if (!thread) return;
 
     // Check if the most recent message is a user message (coalesced case)
-    const lastMsg = agent.messages.at(-1);
+    const lastMsg = thread.messages.at(-1);
     if (lastMsg?.role === "user") {
       lastMsg.nudgeCount = payload.count;
     } else {
       // Standalone nudge — add as its own message
-      agent.messages.push({
+      thread.messages.push({
         id: crypto.randomUUID(),
         role: "nudge",
         content: "",
@@ -384,9 +383,9 @@ function createAgentStore() {
   }
 
   function handleSystemMessage(payload: SystemMessagePayload) {
-    const agent = agents[payload.agent_id];
-    if (!agent) return;
-    agent.messages.push({
+    const thread = threads[payload.thread_id];
+    if (!thread) return;
+    thread.messages.push({
       id: crypto.randomUUID(),
       role: "system",
       content: payload.content,
@@ -398,17 +397,17 @@ function createAgentStore() {
   }
 
   function handleConfigUpdate(payload: ConfigUpdatePayload) {
-    const agent = agents[payload.agent_id];
-    if (!agent) return;
+    const thread = threads[payload.thread_id];
+    if (!thread) return;
 
-    agent.configOptions = payload.config_options;
+    thread.configOptions = payload.config_options;
 
     // Insert system message for agent-initiated changes (non-empty changes)
     if (payload.changes.length > 0) {
       const text = payload.changes
         .map((c) => `${c.option_name} changed to ${c.new_value_name}`)
         .join(", ");
-      agent.messages.push({
+      thread.messages.push({
         id: crypto.randomUUID(),
         role: "system",
         content: text,
@@ -423,22 +422,22 @@ function createAgentStore() {
   // ── Event listener setup ──────────────────────────────────────
 
   async function setupListeners() {
-    await listen<MessageChunkPayload>("agent:message-chunk", (e) => handleMessageChunk(e.payload));
-    await listen<ToolCallUpdatePayload>("agent:tool-call-update", (e) =>
+    await listen<MessageChunkPayload>("thread:message-chunk", (e) => handleMessageChunk(e.payload));
+    await listen<ToolCallUpdatePayload>("thread:tool-call-update", (e) =>
       handleToolCallUpdate(e.payload),
     );
-    await listen<PromptCompletePayload>("agent:prompt-complete", (e) =>
+    await listen<PromptCompletePayload>("thread:prompt-complete", (e) =>
       handlePromptComplete(e.payload),
     );
-    await listen<AgentErrorPayload>("agent:error", (e) => handleError(e.payload));
-    await listen<StatusChangePayload>("agent:status-change", (e) => handleStatusChange(e.payload));
-    await listen<SessionReadyPayload>("agent:session-ready", (e) => handleSessionReady(e.payload));
-    await listen<UserMessagePayload>("agent:user-message", (e) => handleUserMessage(e.payload));
-    await listen<ConfigUpdatePayload>("agent:config-update", (e) => handleConfigUpdate(e.payload));
-    await listen<NudgeDeliveredPayload>("agent:nudge-delivered", (e) =>
+    await listen<ThreadErrorPayload>("thread:error", (e) => handleError(e.payload));
+    await listen<StatusChangePayload>("thread:status-change", (e) => handleStatusChange(e.payload));
+    await listen<SessionReadyPayload>("thread:session-ready", (e) => handleSessionReady(e.payload));
+    await listen<UserMessagePayload>("thread:user-message", (e) => handleUserMessage(e.payload));
+    await listen<ConfigUpdatePayload>("thread:config-update", (e) => handleConfigUpdate(e.payload));
+    await listen<NudgeDeliveredPayload>("thread:nudge-delivered", (e) =>
       handleNudgeDelivered(e.payload),
     );
-    await listen<SystemMessagePayload>("agent:system-message", (e) =>
+    await listen<SystemMessagePayload>("thread:system-message", (e) =>
       handleSystemMessage(e.payload),
     );
   }
@@ -454,14 +453,14 @@ function createAgentStore() {
     agentDefinition: AgentDefinition,
     acpSessionId: string | null,
   ) {
-    if (agents[threadId]) return; // Already known (live thread)
+    if (threads[threadId]) return; // Already known (live thread)
 
     const count = (threadCounters[agentDefinitionId] ?? 0) + 1;
     threadCounters[agentDefinitionId] = count;
 
-    agents[threadId] = {
+    threads[threadId] = {
       id: threadId,
-      agentId: agentDefinitionId,
+      agentDefinitionId,
       workspaceId: agentDefinition.workspace_id,
       cli: agentDefinition.cli,
       agentName: `Thread ${count}`,
@@ -487,9 +486,9 @@ function createAgentStore() {
     const count = (threadCounters[agentDefinitionId] ?? 0) + 1;
     threadCounters[agentDefinitionId] = count;
 
-    agents[threadId] = {
+    threads[threadId] = {
       id: threadId,
-      agentId: agentDefinitionId,
+      agentDefinitionId,
       workspaceId: agentDefinition.workspace_id,
       cli: agentDefinition.cli,
       agentName: `Thread ${count}`,
@@ -505,19 +504,19 @@ function createAgentStore() {
     return threadId;
   }
 
-  async function sendPrompt(agentId: string, text: string): Promise<void> {
-    const agent = agents[agentId];
-    if (!agent) throw new Error(`Agent ${agentId} not found`);
+  async function sendPrompt(threadId: string, text: string): Promise<void> {
+    const thread = threads[threadId];
+    if (!thread) throw new Error(`Thread ${threadId} not found`);
 
-    // Queue path: agent is busy, accumulate content
-    if (agent.status === "working") {
-      agent.queuedContent = agent.queuedContent ? agent.queuedContent + "\n\n" + text : text;
+    // Queue path: thread is busy, accumulate content
+    if (thread.status === "working") {
+      thread.queuedContent = thread.queuedContent ? thread.queuedContent + "\n\n" + text : text;
       return;
     }
 
-    agent.hasPrompted = true;
+    thread.hasPrompted = true;
 
-    agent.messages.push({
+    thread.messages.push({
       id: crypto.randomUUID(),
       role: "user",
       content: text,
@@ -527,137 +526,120 @@ function createAgentStore() {
       }),
     });
 
-    agent.status = "working";
+    thread.status = "working";
 
-    invoke("send_prompt", { agentId, text }).catch((err) => {
-      agent.status = "error";
+    invoke("send_prompt", { threadId, text }).catch((err) => {
+      thread.status = "error";
       console.error("send_prompt failed:", err);
     });
   }
 
-  async function cancelPrompt(agentId: string): Promise<void> {
-    await invoke("cancel_prompt", { agentId });
+  async function cancelPrompt(threadId: string): Promise<void> {
+    await invoke("cancel_prompt", { threadId });
   }
 
-  function editQueue(agentId: string): string {
-    const agent = agents[agentId];
-    if (!agent) return "";
-    const content = agent.queuedContent;
-    agent.queuedContent = "";
+  function editQueue(threadId: string): string {
+    const thread = threads[threadId];
+    if (!thread) return "";
+    const content = thread.queuedContent;
+    thread.queuedContent = "";
     return content;
   }
 
-  async function setConfig(agentId: string, configId: string, value: string): Promise<void> {
-    const agent = agents[agentId];
-    if (!agent) throw new Error(`Agent ${agentId} not found`);
+  async function setConfig(threadId: string, configId: string, value: string): Promise<void> {
+    const thread = threads[threadId];
+    if (!thread) throw new Error(`Thread ${threadId} not found`);
 
     // Optimistic update — use $state.snapshot to clone the reactive proxy
-    const previousConfig = $state.snapshot(agent.configOptions);
-    const opt = agent.configOptions.find((o) => o.id === configId);
+    const previousConfig = $state.snapshot(thread.configOptions);
+    const opt = thread.configOptions.find((o) => o.id === configId);
     if (opt) opt.current_value = value;
 
     try {
-      await invoke<ConfigOption[]>("set_agent_config", {
-        agentId,
+      await invoke<ConfigOption[]>("set_thread_config", {
+        threadId,
         configId,
         value,
       });
     } catch (err) {
       // Revert on error
-      agent.configOptions = previousConfig;
-      console.error("set_agent_config failed:", err);
+      thread.configOptions = previousConfig;
+      console.error("set_thread_config failed:", err);
     }
   }
 
-  async function killAgent(agentId: string): Promise<void> {
+  async function killThread(threadId: string): Promise<void> {
     try {
-      await invoke("kill_agent", { agentId });
+      await invoke("kill_thread", { threadId });
     } catch (err) {
-      console.error("kill_agent RPC failed (cleaning up anyway):", err);
+      console.error("kill_thread RPC failed (cleaning up anyway):", err);
     }
-    delete agents[agentId];
+    delete threads[threadId];
   }
 
   /** Reset a thread's chat state before resuming (avoids duplicate history on replay). */
   function resetThreadState(threadId: string): void {
-    const agent = agents[threadId];
-    if (!agent) return;
-    agent.messages = [];
-    agent.activeToolCalls = {};
-    agent.queuedContent = "";
-    agent.stopReason = null;
-    delete agent.errorMessage;
+    const thread = threads[threadId];
+    if (!thread) return;
+    thread.messages = [];
+    thread.activeToolCalls = {};
+    thread.queuedContent = "";
+    thread.stopReason = null;
+    delete thread.errorMessage;
   }
 
   /** Stop a thread — kills the process but keeps the dead stub for resumption. */
   async function stopThread(threadId: string): Promise<void> {
-    const agent = agents[threadId];
-    if (!agent || agent.status === "dead") return;
+    const thread = threads[threadId];
+    if (!thread || thread.status === "dead") return;
     try {
-      await invoke("kill_agent", { agentId: threadId });
+      await invoke("kill_thread", { threadId });
     } catch (err) {
-      console.error("kill_agent RPC failed (marking dead anyway):", err);
+      console.error("kill_thread RPC failed (marking dead anyway):", err);
     }
     // Keep the stub with dead status (handleStatusChange may have already done this)
-    if (agents[threadId]) {
-      agents[threadId].status = "dead";
+    if (threads[threadId]) {
+      threads[threadId].status = "dead";
     }
   }
 
   /** Delete a thread — kills and removes from the store entirely. */
   function deleteThread(threadId: string): void {
-    delete agents[threadId];
+    delete threads[threadId];
   }
 
-  function setRole(agentId: string, role: string): void {
-    const agent = agents[agentId];
-    if (!agent || agent.hasPrompted) return;
+  function setRole(threadId: string, role: string): void {
+    const thread = threads[threadId];
+    if (!thread || thread.hasPrompted) return;
     if (role) {
-      agent.role = role;
+      thread.role = role;
     } else {
-      delete agent.role;
+      delete thread.role;
     }
   }
 
-  function setManagementPermissions(agentId: string, enabled: boolean) {
-    const agent = agents[agentId];
-    if (agent) {
-      agent.hasManagementPermissions = enabled;
+  function setManagementPermissions(threadId: string, enabled: boolean) {
+    const thread = threads[threadId];
+    if (thread) {
+      thread.hasManagementPermissions = enabled;
     }
   }
 
-  function getAgentDisplayName(conn: AgentConnection): string {
-    const typeName = conn.agentName;
-
-    // Count how many agents of the same type exist in the same swarm
-    const siblings = Object.values(agents).filter(
-      (a) => a.workspaceId === conn.workspaceId && a.agentName === conn.agentName,
-    );
-
-    if (siblings.length <= 1) return typeName;
-
-    // Assign a stable sequential number based on insertion order
-    const index = siblings.findIndex((a) => a.id === conn.id);
-    return `${typeName} #${index + 1}`;
+  function getThreadsForAgent(agentDefinitionId: string): ThreadState[] {
+    return Object.values(threads).filter((t) => t.agentDefinitionId === agentDefinitionId);
   }
 
-  function toDisplayAgent(conn: AgentConnection): DisplayAgent {
+  function toDisplayThread(conn: ThreadState): DisplayThread {
     const lastMsg = conn.messages.at(-1);
-    const statusMap: Record<AgentConnection["status"], DisplayAgent["status"]> = {
-      initializing: "initializing",
-      idle: "idle",
-      working: "working",
-      error: "error",
-      dead: "error", // dead agents are removed from the store; this is a fallback
-    };
     return {
       id: conn.id,
+      agentId: conn.agentDefinitionId,
       workspaceId: conn.workspaceId,
       cli: conn.cli,
-      name: getAgentDisplayName(conn),
-      status: statusMap[conn.status],
+      name: conn.agentName,
+      status: conn.status,
+      processStatus: conn.status,
       preview: conn.role ?? (lastMsg?.content ? lastMsg.content.slice(0, 30) + "..." : ""),
-      updatedAt: "just now",
       messages: conn.messages,
       activeToolCalls: Object.values(conn.activeToolCalls),
       queuedMessage: conn.queuedContent || null,
@@ -665,58 +647,39 @@ function createAgentStore() {
       hasManagementPermissions: conn.hasManagementPermissions,
       ...(conn.errorMessage !== undefined && { errorMessage: conn.errorMessage }),
       ...(conn.role !== undefined && { role: conn.role }),
-    };
-  }
-
-  function getThreadsForAgent(agentDefinitionId: string): AgentConnection[] {
-    return Object.values(agents).filter((a) => a.agentId === agentDefinitionId);
-  }
-
-  function toDisplayThread(conn: AgentConnection): DisplayThread {
-    return {
-      id: conn.id,
-      agentId: conn.agentId,
-      name: conn.agentName,
-      processStatus: conn.status,
-      messages: conn.messages,
-      activeToolCalls: Object.values(conn.activeToolCalls),
-      queuedMessage: conn.queuedContent || null,
-      configOptions: conn.configOptions,
-      hasManagementPermissions: conn.hasManagementPermissions,
-      ...(conn.errorMessage !== undefined && { errorMessage: conn.errorMessage }),
       updatedAt: conn.messages.at(-1)?.timestamp ?? "just now",
       stopReason: conn.stopReason,
     };
   }
 
   type DaemonNotification =
-    | ({ type: "agent:message-chunk" } & MessageChunkPayload)
-    | ({ type: "agent:tool-call-update" } & ToolCallUpdatePayload)
-    | ({ type: "agent:prompt-complete" } & PromptCompletePayload)
-    | ({ type: "agent:status-change" } & StatusChangePayload)
-    | ({ type: "agent:config-update" } & ConfigUpdatePayload)
-    | ({ type: "agent:user-message" } & UserMessagePayload)
-    | ({ type: "agent:error" } & AgentErrorPayload)
-    | ({ type: "agent:nudge-delivered" } & NudgeDeliveredPayload)
-    | ({ type: "agent:system-message" } & SystemMessagePayload)
-    | ({ type: "agent:session-ready" } & SessionReadyPayload);
+    | ({ type: "thread:message-chunk" } & MessageChunkPayload)
+    | ({ type: "thread:tool-call-update" } & ToolCallUpdatePayload)
+    | ({ type: "thread:prompt-complete" } & PromptCompletePayload)
+    | ({ type: "thread:status-change" } & StatusChangePayload)
+    | ({ type: "thread:config-update" } & ConfigUpdatePayload)
+    | ({ type: "thread:user-message" } & UserMessagePayload)
+    | ({ type: "thread:error" } & ThreadErrorPayload)
+    | ({ type: "thread:nudge-delivered" } & NudgeDeliveredPayload)
+    | ({ type: "thread:system-message" } & SystemMessagePayload)
+    | ({ type: "thread:session-ready" } & SessionReadyPayload);
 
   function replayNotifications(notifications: DaemonNotification[]) {
     // Local tool call accumulator — keeps live activeToolCalls clean
     const replayToolCalls: Record<string, Record<string, DisplayToolCall>> = {};
 
     for (const n of notifications) {
-      const agent = agents[n.agent_id];
-      if (!agent) continue;
+      const thread = threads[n.thread_id];
+      if (!thread) continue;
 
       switch (n.type) {
-        case "agent:message-chunk": {
+        case "thread:message-chunk": {
           const role = roleForKind(n.kind);
-          const lastMsg = agent.messages.at(-1);
+          const lastMsg = thread.messages.at(-1);
           if (lastMsg && lastMsg.role === role && !lastMsg.toolCalls?.length) {
             lastMsg.content += n.content;
           } else {
-            agent.messages.push({
+            thread.messages.push({
               id: crypto.randomUUID(),
               role,
               content: n.content,
@@ -729,8 +692,8 @@ function createAgentStore() {
           break;
         }
 
-        case "agent:user-message":
-          agent.messages.push({
+        case "thread:user-message":
+          thread.messages.push({
             id: crypto.randomUUID(),
             role: "user",
             content: stripSystemBlock(n.content),
@@ -741,10 +704,10 @@ function createAgentStore() {
           });
           break;
 
-        case "agent:tool-call-update": {
-          const agentTCs = (replayToolCalls[n.agent_id] ??= {});
-          const existing = agentTCs[n.tool_call_id];
-          agentTCs[n.tool_call_id] = {
+        case "thread:tool-call-update": {
+          const threadTCs = (replayToolCalls[n.thread_id] ??= {});
+          const existing = threadTCs[n.tool_call_id];
+          threadTCs[n.tool_call_id] = {
             id: n.tool_call_id,
             name: n.title ?? existing?.name ?? "Tool call",
             kind: (n.kind ?? existing?.kind ?? "other") as ToolKind,
@@ -754,28 +717,28 @@ function createAgentStore() {
           };
 
           if (n.status === "completed" || n.status === "failed") {
-            const allDone = Object.values(agentTCs).every(
+            const allDone = Object.values(threadTCs).every(
               (t) => t.status === "completed" || t.status === "failed",
             );
-            if (allDone && Object.keys(agentTCs).length > 0) {
-              agent.messages.push({
+            if (allDone && Object.keys(threadTCs).length > 0) {
+              thread.messages.push({
                 id: crypto.randomUUID(),
                 role: "tool-group",
                 content: "",
-                toolCalls: Object.values(agentTCs),
+                toolCalls: Object.values(threadTCs),
                 timestamp: new Date().toLocaleTimeString([], {
                   hour: "numeric",
                   minute: "2-digit",
                 }),
               });
-              replayToolCalls[n.agent_id] = {};
+              replayToolCalls[n.thread_id] = {};
             }
           }
           break;
         }
 
-        case "agent:system-message":
-          agent.messages.push({
+        case "thread:system-message":
+          thread.messages.push({
             id: crypto.randomUUID(),
             role: "system",
             content: n.content,
@@ -786,13 +749,13 @@ function createAgentStore() {
           });
           break;
 
-        case "agent:config-update":
-          agent.configOptions = n.config_options;
+        case "thread:config-update":
+          thread.configOptions = n.config_options;
           if (n.changes.length > 0) {
             const text = n.changes
               .map((c) => `${c.option_name} changed to ${c.new_value_name}`)
               .join(", ");
-            agent.messages.push({
+            thread.messages.push({
               id: crypto.randomUUID(),
               role: "system",
               content: text,
@@ -804,12 +767,12 @@ function createAgentStore() {
           }
           break;
 
-        case "agent:nudge-delivered": {
-          const lastMsg = agent.messages.at(-1);
+        case "thread:nudge-delivered": {
+          const lastMsg = thread.messages.at(-1);
           if (lastMsg?.role === "user") {
             lastMsg.nudgeCount = n.count;
           } else {
-            agent.messages.push({
+            thread.messages.push({
               id: crypto.randomUUID(),
               role: "nudge",
               content: "",
@@ -824,25 +787,25 @@ function createAgentStore() {
         }
 
         // No-ops: no side effects during replay
-        case "agent:prompt-complete":
-        case "agent:status-change":
-        case "agent:error":
-        case "agent:session-ready":
+        case "thread:prompt-complete":
+        case "thread:status-change":
+        case "thread:error":
+        case "thread:session-ready":
           break;
       }
     }
 
     // Flush any remaining in-progress tool calls so the user can see
     // what was running when the session ended
-    for (const agentId of Object.keys(replayToolCalls)) {
-      const agentTCs = replayToolCalls[agentId];
-      const agent = agents[agentId];
-      if (!agent || !agentTCs || Object.keys(agentTCs).length === 0) continue;
-      agent.messages.push({
+    for (const threadId of Object.keys(replayToolCalls)) {
+      const threadTCs = replayToolCalls[threadId];
+      const thread = threads[threadId];
+      if (!thread || !threadTCs || Object.keys(threadTCs).length === 0) continue;
+      thread.messages.push({
         id: crypto.randomUUID(),
         role: "tool-group",
         content: "",
-        toolCalls: Object.values(agentTCs),
+        toolCalls: Object.values(threadTCs),
         timestamp: new Date().toLocaleTimeString([], {
           hour: "numeric",
           minute: "2-digit",
@@ -852,11 +815,10 @@ function createAgentStore() {
   }
 
   return {
-    get agents() {
-      return agents;
+    get threads() {
+      return threads;
     },
-    getAgent,
-    toDisplayAgent,
+    getThread,
     toDisplayThread,
     getThreadsForAgent,
     setupListeners,
@@ -864,7 +826,7 @@ function createAgentStore() {
     spawnThread,
     sendPrompt,
     cancelPrompt,
-    killAgent,
+    killThread,
     resetThreadState,
     stopThread,
     deleteThread,

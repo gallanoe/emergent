@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MessageChunkPayload {
-    pub agent_id: String,
+    pub thread_id: String,
     pub content: String,
     /// "message" or "thinking"
     pub kind: String,
@@ -35,7 +35,7 @@ pub enum ToolCallContentPayload {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ToolCallUpdatePayload {
-    pub agent_id: String,
+    pub thread_id: String,
     pub tool_call_id: String,
     pub title: Option<String>,
     pub kind: Option<String>,
@@ -46,50 +46,50 @@ pub struct ToolCallUpdatePayload {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PromptCompletePayload {
-    pub agent_id: String,
+    pub thread_id: String,
     pub stop_reason: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct UserMessagePayload {
-    pub agent_id: String,
+    pub thread_id: String,
     pub content: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SystemMessagePayload {
-    pub agent_id: String,
+    pub thread_id: String,
     pub content: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct AgentErrorPayload {
-    pub agent_id: String,
+pub struct ThreadErrorPayload {
+    pub thread_id: String,
     pub message: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct StatusChangePayload {
-    pub agent_id: String,
+    pub thread_id: String,
     pub status: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SessionReadyPayload {
-    pub agent_id: String,
+    pub thread_id: String,
     pub acp_session_id: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NudgeDeliveredPayload {
-    pub agent_id: String,
+    pub thread_id: String,
     pub count: usize,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TopologyChangedPayload {
-    pub agent_id_a: String,
-    pub agent_id_b: String,
+    pub thread_id_a: String,
+    pub thread_id_b: String,
 }
 
 // ---------------------------------------------------------------------------
@@ -319,7 +319,7 @@ pub struct ConfigChangeEntry {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ConfigUpdatePayload {
-    pub agent_id: String,
+    pub thread_id: String,
     pub config_options: Vec<ConfigOption>,
     pub changes: Vec<ConfigChangeEntry>,
 }
@@ -345,23 +345,23 @@ pub struct AgentDeletedPayload {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum Notification {
-    #[serde(rename = "agent:message-chunk")]
+    #[serde(rename = "thread:message-chunk")]
     MessageChunk(MessageChunkPayload),
-    #[serde(rename = "agent:tool-call-update")]
+    #[serde(rename = "thread:tool-call-update")]
     ToolCallUpdate(ToolCallUpdatePayload),
-    #[serde(rename = "agent:prompt-complete")]
+    #[serde(rename = "thread:prompt-complete")]
     PromptComplete(PromptCompletePayload),
-    #[serde(rename = "agent:status-change")]
+    #[serde(rename = "thread:status-change")]
     StatusChange(StatusChangePayload),
-    #[serde(rename = "agent:config-update")]
+    #[serde(rename = "thread:config-update")]
     ConfigUpdate(ConfigUpdatePayload),
-    #[serde(rename = "agent:user-message")]
+    #[serde(rename = "thread:user-message")]
     UserMessage(UserMessagePayload),
-    #[serde(rename = "agent:error")]
-    Error(AgentErrorPayload),
-    #[serde(rename = "agent:nudge-delivered")]
+    #[serde(rename = "thread:error")]
+    Error(ThreadErrorPayload),
+    #[serde(rename = "thread:nudge-delivered")]
     NudgeDelivered(NudgeDeliveredPayload),
-    #[serde(rename = "agent:system-message")]
+    #[serde(rename = "thread:system-message")]
     SystemMessage(SystemMessagePayload),
     #[serde(rename = "swarm:topology-changed")]
     TopologyChanged(TopologyChangedPayload),
@@ -375,50 +375,50 @@ pub enum Notification {
     AgentCreated(AgentCreatedPayload),
     #[serde(rename = "agent:definition-deleted")]
     AgentDeleted(AgentDeletedPayload),
-    #[serde(rename = "agent:session-ready")]
+    #[serde(rename = "thread:session-ready")]
     SessionReady(SessionReadyPayload),
 }
 
 impl Notification {
     pub fn event_name(&self) -> &'static str {
         match self {
-            Notification::MessageChunk(_) => "agent:message-chunk",
-            Notification::ToolCallUpdate(_) => "agent:tool-call-update",
-            Notification::PromptComplete(_) => "agent:prompt-complete",
-            Notification::StatusChange(_) => "agent:status-change",
-            Notification::ConfigUpdate(_) => "agent:config-update",
-            Notification::UserMessage(_) => "agent:user-message",
-            Notification::Error(_) => "agent:error",
-            Notification::NudgeDelivered(_) => "agent:nudge-delivered",
-            Notification::SystemMessage(_) => "agent:system-message",
+            Notification::MessageChunk(_) => "thread:message-chunk",
+            Notification::ToolCallUpdate(_) => "thread:tool-call-update",
+            Notification::PromptComplete(_) => "thread:prompt-complete",
+            Notification::StatusChange(_) => "thread:status-change",
+            Notification::ConfigUpdate(_) => "thread:config-update",
+            Notification::UserMessage(_) => "thread:user-message",
+            Notification::Error(_) => "thread:error",
+            Notification::NudgeDelivered(_) => "thread:nudge-delivered",
+            Notification::SystemMessage(_) => "thread:system-message",
             Notification::TopologyChanged(_) => "swarm:topology-changed",
             Notification::WorkspaceStatusChange(_) => "workspace:status-change",
             Notification::TerminalOutput(_) => "terminal:output",
             Notification::TerminalExited(_) => "terminal:exited",
             Notification::AgentCreated(_) => "agent:definition-created",
             Notification::AgentDeleted(_) => "agent:definition-deleted",
-            Notification::SessionReady(_) => "agent:session-ready",
+            Notification::SessionReady(_) => "thread:session-ready",
         }
     }
 
-    pub fn agent_id(&self) -> Option<&str> {
+    pub fn thread_id(&self) -> Option<&str> {
         match self {
-            Notification::MessageChunk(p) => Some(&p.agent_id),
-            Notification::ToolCallUpdate(p) => Some(&p.agent_id),
-            Notification::PromptComplete(p) => Some(&p.agent_id),
-            Notification::StatusChange(p) => Some(&p.agent_id),
-            Notification::ConfigUpdate(p) => Some(&p.agent_id),
-            Notification::UserMessage(p) => Some(&p.agent_id),
-            Notification::Error(p) => Some(&p.agent_id),
-            Notification::NudgeDelivered(p) => Some(&p.agent_id),
-            Notification::SystemMessage(p) => Some(&p.agent_id),
-            Notification::TopologyChanged(_) => None, // not agent-specific
+            Notification::MessageChunk(p) => Some(&p.thread_id),
+            Notification::ToolCallUpdate(p) => Some(&p.thread_id),
+            Notification::PromptComplete(p) => Some(&p.thread_id),
+            Notification::StatusChange(p) => Some(&p.thread_id),
+            Notification::ConfigUpdate(p) => Some(&p.thread_id),
+            Notification::UserMessage(p) => Some(&p.thread_id),
+            Notification::Error(p) => Some(&p.thread_id),
+            Notification::NudgeDelivered(p) => Some(&p.thread_id),
+            Notification::SystemMessage(p) => Some(&p.thread_id),
+            Notification::TopologyChanged(_) => None, // not thread-specific
             Notification::WorkspaceStatusChange(_) => None,
             Notification::TerminalOutput(_) => None,
             Notification::TerminalExited(_) => None,
             Notification::AgentCreated(_) => None,
             Notification::AgentDeleted(_) => None,
-            Notification::SessionReady(p) => Some(&p.agent_id),
+            Notification::SessionReady(p) => Some(&p.thread_id),
         }
     }
 }
@@ -434,18 +434,18 @@ mod tests {
     #[test]
     fn notification_serializes_with_event_name() {
         let n = Notification::MessageChunk(MessageChunkPayload {
-            agent_id: "abc".into(),
+            thread_id: "abc".into(),
             content: "hello".into(),
             kind: "message".into(),
         });
         let json = serde_json::to_string(&n).unwrap();
-        assert!(json.contains("agent:message-chunk"));
+        assert!(json.contains("thread:message-chunk"));
     }
 
     #[test]
     fn config_update_notification_roundtrips() {
         let n = Notification::ConfigUpdate(ConfigUpdatePayload {
-            agent_id: "abc".into(),
+            thread_id: "abc".into(),
             config_options: vec![ConfigOption {
                 id: "model".into(),
                 name: "Model".into(),
@@ -466,7 +466,7 @@ mod tests {
             changes: vec![],
         });
         let json = serde_json::to_string(&n).unwrap();
-        assert!(json.contains("agent:config-update"));
+        assert!(json.contains("thread:config-update"));
         let restored: Notification = serde_json::from_str(&json).unwrap();
         match restored {
             Notification::ConfigUpdate(p) => {
@@ -480,15 +480,15 @@ mod tests {
     #[test]
     fn system_message_notification_roundtrips() {
         let n = Notification::SystemMessage(SystemMessagePayload {
-            agent_id: "abc".into(),
+            thread_id: "abc".into(),
             content: "Management permissions have been granted.".into(),
         });
         let json = serde_json::to_string(&n).unwrap();
-        assert!(json.contains("agent:system-message"));
+        assert!(json.contains("thread:system-message"));
         let restored: Notification = serde_json::from_str(&json).unwrap();
         match restored {
             Notification::SystemMessage(p) => {
-                assert_eq!(p.agent_id, "abc");
+                assert_eq!(p.thread_id, "abc");
                 assert!(p.content.contains("Management permissions"));
             }
             _ => panic!("Wrong variant"),
@@ -539,22 +539,22 @@ mod tests {
         assert!(json.contains("workspace:status-change"));
         let restored: Notification = serde_json::from_str(&json).unwrap();
         assert_eq!(restored.event_name(), "workspace:status-change");
-        assert!(restored.agent_id().is_none());
+        assert!(restored.thread_id().is_none());
     }
 
     #[test]
     fn session_ready_notification_roundtrips() {
         let n = Notification::SessionReady(SessionReadyPayload {
-            agent_id: "thread-abc".into(),
+            thread_id: "thread-abc".into(),
             acp_session_id: "sess-xyz-123".into(),
         });
         let json = serde_json::to_string(&n).unwrap();
-        assert!(json.contains("agent:session-ready"));
+        assert!(json.contains("thread:session-ready"));
         assert!(json.contains("sess-xyz-123"));
         let restored: Notification = serde_json::from_str(&json).unwrap();
         match restored {
             Notification::SessionReady(p) => {
-                assert_eq!(p.agent_id, "thread-abc");
+                assert_eq!(p.thread_id, "thread-abc");
                 assert_eq!(p.acp_session_id, "sess-xyz-123");
             }
             _ => panic!("Wrong variant"),

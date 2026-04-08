@@ -66,7 +66,7 @@ pub(crate) async fn prompt_loop(
         // Emit permission change system message to frontend
         if let Some(ref perm_msg) = permission_change {
             let _ = event_tx.send(Notification::SystemMessage(SystemMessagePayload {
-                agent_id: agent_id.clone(),
+                thread_id: agent_id.clone(),
                 content: perm_msg.clone(),
             }));
         }
@@ -135,7 +135,7 @@ pub(crate) async fn prompt_loop(
                 Err(_) => {
                     handle.status = AgentStatus::Error;
                     let _ = event_tx.send(Notification::StatusChange(StatusChangePayload {
-                        agent_id: agent_id.clone(),
+                        thread_id: agent_id.clone(),
                         status: AgentStatus::Error.to_string(),
                     }));
                 }

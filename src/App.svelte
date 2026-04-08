@@ -129,7 +129,7 @@
     if (!shutdownTarget) return;
     const id = shutdownTarget.id;
     shutdownTarget = null;
-    await appState.killAgent(id);
+    await appState.killThread(id);
   }
 
   onMount(() => {

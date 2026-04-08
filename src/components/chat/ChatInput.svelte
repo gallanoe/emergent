@@ -8,10 +8,10 @@
     Square,
   } from "@lucide/svelte";
   import ConfigPopover from "./ConfigPopover.svelte";
-  import type { ConfigOption, DisplayAgent } from "../../stores/types";
+  import type { ConfigOption, DisplayThread } from "../../stores/types";
 
   interface Props {
-    agent: DisplayAgent | undefined;
+    agent: DisplayThread | undefined;
     demoMode: boolean;
     onSend: (text: string) => void;
     onInterrupt?: () => void;

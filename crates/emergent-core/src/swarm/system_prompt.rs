@@ -1,16 +1,6 @@
-// TODO: Update swarm tools guide to reflect the agent/session refactor.
-// The tool names and descriptions here are stale — MCP tools were removed
-// and need to be redesigned for the new session-based model.
-/// Swarm tools behavioral guide — injected on first turn.
-const SWARM_TOOLS_GUIDE: &str = "\
-You are part of an Emergent multi-agent swarm. Other agents may be working alongside you.
-
-You have access to swarm tools via MCP. Here is how to use them:
-
-- list_peers: See all agents in the swarm and whether you're connected to them.
-- kill_agent: Remove an agent from the swarm (requires management permissions).
-- connect_agents: Create a bidirectional connection between two agents (requires management permissions).
-- disconnect_agents: Remove a connection between two agents (requires management permissions).";
+/// Swarm awareness guide — injected on first turn.
+const SWARM_GUIDE: &str = "\
+You are part of an Emergent multi-agent swarm. Other agents may be working alongside you in the same workspace.";
 
 /// Build the `<emergent-system>` block to prepend to a prompt.
 ///
@@ -24,10 +14,7 @@ pub fn build_system_block(
     let mut has_content = false;
 
     if is_first_turn {
-        sections.push(format!(
-            "<swarm-tools>\n{}\n</swarm-tools>",
-            SWARM_TOOLS_GUIDE
-        ));
+        sections.push(SWARM_GUIDE.to_string());
         if let Some(r) = role {
             sections.push(format!("<role>{}</role>", r));
         }
@@ -61,8 +48,7 @@ mod tests {
         let block = build_system_block(true, Some("Code reviewer"), None).unwrap();
         assert!(block.starts_with("<emergent-system>"));
         assert!(block.ends_with("</emergent-system>"));
-        assert!(block.contains("<swarm-tools>"));
-        assert!(block.contains("</swarm-tools>"));
+        assert!(block.contains("multi-agent swarm"));
         assert!(block.contains("<role>Code reviewer</role>"));
         assert!(block.contains("Messages wrapped in <emergent-system>"));
     }
@@ -70,7 +56,7 @@ mod tests {
     #[test]
     fn first_turn_no_role() {
         let block = build_system_block(true, None, None).unwrap();
-        assert!(block.contains("<swarm-tools>"));
+        assert!(block.contains("multi-agent swarm"));
         assert!(!block.contains("<role>"));
     }
 
@@ -83,7 +69,7 @@ mod tests {
         )
         .unwrap();
         assert!(block.contains("Management permissions have been granted."));
-        assert!(!block.contains("<swarm-tools>"));
+        assert!(!block.contains("multi-agent swarm"));
     }
 
     #[test]
@@ -94,7 +80,7 @@ mod tests {
             Some("Management permissions have been revoked."),
         )
         .unwrap();
-        assert!(block.contains("<swarm-tools>"));
+        assert!(block.contains("multi-agent swarm"));
         assert!(block.contains("<role>Architect</role>"));
         assert!(block.contains("Management permissions have been revoked."));
         // The wrapping tag appears once; the instruction text also mentions

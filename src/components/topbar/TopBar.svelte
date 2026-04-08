@@ -1,11 +1,11 @@
 <script lang="ts">
   import { Pencil, Settings, Power } from "@lucide/svelte";
-  import type { DisplayAgent } from "../../stores/types";
+  import type { DisplayThread } from "../../stores/types";
   import SettingsPopover from "./SettingsPopover.svelte";
 
   interface Props {
-    agent: DisplayAgent | undefined;
-    allAgents: DisplayAgent[];
+    agent: DisplayThread | undefined;
+    allAgents: DisplayThread[];
     connections: string[];
     onShutdown?: () => void;
     onConnect?: (agentId: string) => void;

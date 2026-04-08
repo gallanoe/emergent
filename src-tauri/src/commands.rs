@@ -132,11 +132,11 @@ pub async fn resume_thread(
 #[tauri::command]
 pub async fn send_prompt(
     manager: State<'_, Arc<AgentManager>>,
-    agent_id: String,
+    thread_id: String,
     text: String,
     role: Option<String>,
 ) -> Result<(), String> {
-    let reply_rx = manager.queue_prompt(&agent_id, text, role).await?;
+    let reply_rx = manager.queue_prompt(&thread_id, text, role).await?;
     reply_rx
         .await
         .map_err(|_| "Agent prompt loop terminated".to_string())?
@@ -145,17 +145,17 @@ pub async fn send_prompt(
 #[tauri::command]
 pub async fn cancel_prompt(
     manager: State<'_, Arc<AgentManager>>,
-    agent_id: String,
+    thread_id: String,
 ) -> Result<(), String> {
-    manager.cancel_prompt(&agent_id).await
+    manager.cancel_prompt(&thread_id).await
 }
 
 #[tauri::command]
-pub async fn kill_agent(
+pub async fn kill_thread(
     manager: State<'_, Arc<AgentManager>>,
-    agent_id: String,
+    thread_id: String,
 ) -> Result<(), String> {
-    manager.kill_agent(&agent_id).await
+    manager.kill_thread(&thread_id).await
 }
 
 #[tauri::command]
@@ -166,27 +166,27 @@ pub async fn get_daemon_status() -> Result<String, String> {
 #[tauri::command]
 pub async fn get_history(
     manager: State<'_, Arc<AgentManager>>,
-    agent_id: String,
+    thread_id: String,
 ) -> Result<Vec<Notification>, String> {
-    manager.get_history(&agent_id).await
+    manager.get_history(&thread_id).await
 }
 
 #[tauri::command]
-pub async fn get_agent_config(
+pub async fn get_thread_config(
     manager: State<'_, Arc<AgentManager>>,
-    agent_id: String,
+    thread_id: String,
 ) -> Result<Vec<ConfigOption>, String> {
-    manager.get_config(&agent_id).await
+    manager.get_config(&thread_id).await
 }
 
 #[tauri::command]
-pub async fn set_agent_config(
+pub async fn set_thread_config(
     manager: State<'_, Arc<AgentManager>>,
-    agent_id: String,
+    thread_id: String,
     config_id: String,
     value: String,
 ) -> Result<Vec<ConfigOption>, String> {
-    manager.set_config(&agent_id, config_id, value).await
+    manager.set_config(&thread_id, config_id, value).await
 }
 
 // ── Swarm management commands ──────────────────────────────
@@ -211,23 +211,23 @@ pub async fn disconnect_agents(
 }
 
 #[tauri::command]
-pub async fn set_agent_permissions(
+pub async fn set_thread_permissions(
     manager: State<'_, Arc<AgentManager>>,
-    agent_id: String,
+    thread_id: String,
     enabled: bool,
 ) -> Result<(), String> {
     manager
-        .set_management_permissions(&agent_id, enabled)
+        .set_management_permissions(&thread_id, enabled)
         .await
         .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub async fn get_agent_connections(
+pub async fn get_thread_connections(
     manager: State<'_, Arc<AgentManager>>,
-    agent_id: String,
+    thread_id: String,
 ) -> Result<Vec<String>, String> {
-    Ok(manager.get_connections(&agent_id).await)
+    Ok(manager.get_connections(&thread_id).await)
 }
 
 // ── Workspace commands ─────────────────────────────────────
@@ -248,7 +248,7 @@ pub async fn delete_workspace(
     workspace_id: String,
 ) -> Result<(), String> {
     let id = emergent_protocol::WorkspaceId::from(workspace_id.as_str());
-    agent_manager.kill_agents_in_workspace(&id).await?;
+    agent_manager.kill_threads_in_workspace(&id).await?;
     workspace_manager.delete_workspace(&id).await
 }
 
@@ -345,7 +345,7 @@ pub async fn stop_container(
     workspace_id: String,
 ) -> Result<(), String> {
     let id = emergent_protocol::WorkspaceId::from(workspace_id.as_str());
-    agent_manager.kill_agents_in_workspace(&id).await?;
+    agent_manager.kill_threads_in_workspace(&id).await?;
     workspace_manager.stop_container(&id).await
 }
 
@@ -356,7 +356,7 @@ pub async fn rebuild_container(
     workspace_id: String,
 ) -> Result<(), String> {
     let id = emergent_protocol::WorkspaceId::from(workspace_id.as_str());
-    agent_manager.kill_agents_in_workspace(&id).await?;
+    agent_manager.kill_threads_in_workspace(&id).await?;
     workspace_manager.rebuild_container(&id).await
 }
 

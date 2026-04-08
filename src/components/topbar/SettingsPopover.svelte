@@ -1,10 +1,10 @@
 <script lang="ts">
-  import type { DisplayAgent } from "../../stores/types";
+  import type { DisplayThread } from "../../stores/types";
 
   interface Props {
-    agent: DisplayAgent;
+    agent: DisplayThread;
     connections: string[];
-    allAgents: DisplayAgent[];
+    allAgents: DisplayThread[];
     onConnect: (agentId: string) => void;
     onDisconnect: (agentId: string) => void;
     onSetPermissions: (enabled: boolean) => void;

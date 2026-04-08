@@ -1,15 +1,17 @@
 import { describe, it, expect } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/svelte";
 import ChatArea from "./ChatArea.svelte";
-import type { DisplayAgent, DisplayMessage } from "../../stores/types";
+import type { DisplayThread, DisplayMessage } from "../../stores/types";
 
-function makeAgent(messages: DisplayMessage[], overrides?: Partial<DisplayAgent>): DisplayAgent {
+function makeAgent(messages: DisplayMessage[], overrides?: Partial<DisplayThread>): DisplayThread {
   return {
     id: "agent-1",
+    agentId: "def-1",
     workspaceId: "swarm-1",
     cli: "claude-agent-acp",
     name: "Test Agent",
     status: "idle",
+    processStatus: "idle",
     preview: "test...",
     updatedAt: "1m ago",
     messages,
@@ -17,6 +19,7 @@ function makeAgent(messages: DisplayMessage[], overrides?: Partial<DisplayAgent>
     queuedMessage: null,
     configOptions: [],
     hasManagementPermissions: false,
+    stopReason: null,
     ...overrides,
   };
 }

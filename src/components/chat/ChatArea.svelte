@@ -4,11 +4,11 @@
   import StreamingText from "./StreamingText.svelte";
   import ToolCallGroup from "./ToolCallGroup.svelte";
   import ThinkingBlock from "./ThinkingBlock.svelte";
-  import type { DisplayAgent } from "../../stores/types";
+  import type { DisplayThread } from "../../stores/types";
   import { renderMarkdown } from "../../lib/render-markdown";
 
   interface Props {
-    agent: DisplayAgent | undefined;
+    agent: DisplayThread | undefined;
     onEditQueue?: () => void;
   }
 

@@ -3,8 +3,8 @@ use std::path::Path;
 use std::sync::Arc;
 
 use emergent_protocol::{
-    AgentErrorPayload, AgentStatus, ConfigOption, ConfigUpdatePayload, Notification,
-    StatusChangePayload, ThreadSummary, WorkspaceId,
+    AgentStatus, ConfigOption, ConfigUpdatePayload, Notification, StatusChangePayload,
+    ThreadErrorPayload, ThreadSummary, WorkspaceId,
 };
 use tokio::sync::{broadcast, oneshot, Mutex, RwLock};
 
@@ -45,9 +45,9 @@ impl ThreadManager {
             loop {
                 match recorder_rx.recv().await {
                     Ok(notification) => {
-                        if let Some(agent_id) = notification.agent_id() {
+                        if let Some(thread_id) = notification.thread_id() {
                             let mut h = history_clone.write().await;
-                            h.entry(agent_id.to_string())
+                            h.entry(thread_id.to_string())
                                 .or_default()
                                 .push(notification);
                         }
@@ -162,8 +162,8 @@ impl ThreadManager {
                 }
                 Err(e) => {
                     log::error!("Thread {} failed to initialize: {}", &id, e);
-                    let _ = event_tx.send(Notification::Error(AgentErrorPayload {
-                        agent_id: id,
+                    let _ = event_tx.send(Notification::Error(ThreadErrorPayload {
+                        thread_id: id,
                         message: e,
                     }));
                 }
@@ -236,8 +236,8 @@ impl ThreadManager {
                 }
                 Err(e) => {
                     log::error!("Thread {} failed to resume: {}", &id, e);
-                    let _ = event_tx.send(Notification::Error(AgentErrorPayload {
-                        agent_id: id,
+                    let _ = event_tx.send(Notification::Error(ThreadErrorPayload {
+                        thread_id: id,
                         message: e,
                     }));
                 }
@@ -337,7 +337,7 @@ impl ThreadManager {
         let _ = self
             .event_tx
             .send(Notification::StatusChange(StatusChangePayload {
-                agent_id: thread_id.to_string(),
+                thread_id: thread_id.to_string(),
                 status: AgentStatus::Dead.to_string(),
             }));
 
@@ -487,7 +487,7 @@ impl ThreadManager {
                 let _ = self
                     .event_tx
                     .send(Notification::ConfigUpdate(ConfigUpdatePayload {
-                        agent_id: thread_id.to_string(),
+                        thread_id: thread_id.to_string(),
                         config_options: new_config.clone(),
                         changes,
                     }));

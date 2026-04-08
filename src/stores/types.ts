@@ -59,13 +59,13 @@ export interface DisplayMessage {
 }
 
 export interface NudgeDeliveredPayload {
-  agent_id: string;
+  thread_id: string;
   count: number;
 }
 
 export interface TopologyChangedPayload {
-  agent_id_a: string;
-  agent_id_b: string;
+  thread_id_a: string;
+  thread_id_b: string;
 }
 
 export type AgentStatus = "initializing" | "idle" | "working" | "error";
@@ -97,14 +97,19 @@ export interface ThreadMapping {
 export interface DisplayThread {
   id: string;
   agentId: string;
+  workspaceId: string;
+  cli: string;
   name: string;
+  status: AgentStatus | "dead";
   processStatus: AgentStatus | "dead";
+  preview: string;
   messages: DisplayMessage[];
   activeToolCalls: DisplayToolCall[];
   queuedMessage: string | null;
   configOptions: ConfigOption[];
   hasManagementPermissions: boolean;
   errorMessage?: string;
+  role?: string;
   updatedAt: string;
   stopReason: string | null;
 }
@@ -133,25 +138,6 @@ export type ActiveView =
   | "create-agent"
   | "settings"
   | "terminal";
-
-// ── Legacy types (kept during migration) ───────────────────
-
-export interface DisplayAgent {
-  id: string;
-  workspaceId: string;
-  cli: string;
-  name: string;
-  status: AgentStatus;
-  preview: string;
-  updatedAt: string;
-  messages: DisplayMessage[];
-  activeToolCalls: DisplayToolCall[];
-  queuedMessage: string | null;
-  configOptions: ConfigOption[];
-  hasManagementPermissions: boolean;
-  errorMessage?: string;
-  role?: string;
-}
 
 export type ContainerStatus =
   | { state: "stopped" }
@@ -196,7 +182,7 @@ export interface DisplayWorkspace {
 export type DisplaySwarm = DisplayWorkspace;
 
 export interface SystemMessagePayload {
-  agent_id: string;
+  thread_id: string;
   content: string;
 }
 

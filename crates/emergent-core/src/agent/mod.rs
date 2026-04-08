@@ -210,7 +210,7 @@ impl AgentManager {
 
     pub async fn list_agent_definitions(&self, workspace_id: &WorkspaceId) -> Vec<AgentDefinition> {
         let reg = self.registry.read().await;
-        reg.list_agents(workspace_id)
+        reg.list_definitions(workspace_id)
             .into_iter()
             .cloned()
             .collect()
@@ -364,15 +364,14 @@ impl AgentManager {
     }
 
     /// Kill a thread and clean up topology.
-    pub async fn kill_agent(&self, thread_id: &str) -> Result<(), String> {
+    pub async fn kill_thread(&self, thread_id: &str) -> Result<(), String> {
         self.threads.kill_thread(thread_id).await?;
-        self.topology.write().await.remove_agent(thread_id);
+        self.topology.write().await.remove_node(thread_id);
         Ok(())
     }
 
-    /// Kill all threads in a workspace by deleting all agent definitions.
     /// Kill all running threads in a workspace without deleting agent definitions.
-    pub async fn kill_agents_in_workspace(
+    pub async fn kill_threads_in_workspace(
         &self,
         workspace_id: &WorkspaceId,
     ) -> Result<(), String> {
@@ -466,8 +465,8 @@ impl AgentManager {
         self.topology.write().await.connect(a, b);
         let _ = self.event_tx.send(Notification::TopologyChanged(
             emergent_protocol::TopologyChangedPayload {
-                agent_id_a: a.to_string(),
-                agent_id_b: b.to_string(),
+                thread_id_a: a.to_string(),
+                thread_id_b: b.to_string(),
             },
         ));
         Ok(())
@@ -477,8 +476,8 @@ impl AgentManager {
         self.topology.write().await.disconnect(a, b);
         let _ = self.event_tx.send(Notification::TopologyChanged(
             emergent_protocol::TopologyChangedPayload {
-                agent_id_a: a.to_string(),
-                agent_id_b: b.to_string(),
+                thread_id_a: a.to_string(),
+                thread_id_b: b.to_string(),
             },
         ));
     }

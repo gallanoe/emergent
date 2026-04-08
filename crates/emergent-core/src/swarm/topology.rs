@@ -33,12 +33,12 @@ impl Topology {
         self.edges.contains(&Self::canonical(a, b))
     }
 
-    pub fn peers(&self, agent_id: &str) -> Vec<String> {
+    pub fn peers(&self, node_id: &str) -> Vec<String> {
         let mut result = Vec::new();
         for (a, b) in &self.edges {
-            if a == agent_id {
+            if a == node_id {
                 result.push(b.clone());
-            } else if b == agent_id {
+            } else if b == node_id {
                 result.push(a.clone());
             }
         }
@@ -46,8 +46,8 @@ impl Topology {
         result
     }
 
-    pub fn remove_agent(&mut self, agent_id: &str) {
-        self.edges.retain(|(a, b)| a != agent_id && b != agent_id);
+    pub fn remove_node(&mut self, node_id: &str) {
+        self.edges.retain(|(a, b)| a != node_id && b != node_id);
     }
 
     pub fn edges(&self) -> Vec<(String, String)> {
@@ -88,11 +88,11 @@ mod tests {
     }
 
     #[test]
-    fn test_remove_agent_cleans_edges() {
+    fn test_remove_node_cleans_edges() {
         let mut topology = Topology::new();
         topology.connect("a", "b");
         topology.connect("a", "c");
-        topology.remove_agent("a");
+        topology.remove_node("a");
         assert!(topology.peers("b").is_empty());
         assert!(topology.peers("c").is_empty());
     }

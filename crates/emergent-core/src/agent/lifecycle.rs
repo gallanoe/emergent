@@ -174,7 +174,7 @@ pub(crate) async fn initialize_agent(
                         let _ = init_tx.send(Ok((sid.clone(), config)));
                         let _ = event_tx_clone.send(Notification::SessionReady(
                             SessionReadyPayload {
-                                agent_id: agent_id.clone(),
+                                thread_id: agent_id.clone(),
                                 acp_session_id: sid.0.to_string(),
                             },
                         ));
@@ -226,14 +226,14 @@ pub(crate) async fn initialize_agent(
     };
 
     let _ = event_tx.send(Notification::StatusChange(StatusChangePayload {
-        agent_id: agent_id.clone(),
+        thread_id: agent_id.clone(),
         status: AgentStatus::Idle.to_string(),
     }));
 
     // Emit initial config if the agent advertised any
     if !initial_config.is_empty() {
         let _ = event_tx.send(Notification::ConfigUpdate(ConfigUpdatePayload {
-            agent_id: agent_id.clone(),
+            thread_id: agent_id.clone(),
             config_options: initial_config,
             changes: vec![],
         }));
@@ -260,7 +260,7 @@ pub(crate) async fn initialize_agent(
         event_tx.clone(),
     ));
 
-    // Store the loop handle so kill_agent can abort it.
+    // Store the loop handle so kill_thread can abort it.
     handle_arc.lock().await.prompt_loop_handle = Some(loop_handle);
 
     Ok(())

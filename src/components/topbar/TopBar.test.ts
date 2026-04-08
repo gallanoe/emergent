@@ -1,15 +1,17 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/svelte";
 import TopBar from "./TopBar.svelte";
-import type { DisplayAgent } from "../../stores/types";
+import type { DisplayThread } from "../../stores/types";
 
-function makeAgent(overrides?: Partial<DisplayAgent>): DisplayAgent {
+function makeAgent(overrides?: Partial<DisplayThread>): DisplayThread {
   return {
     id: "agent-1",
+    agentId: "def-1",
     workspaceId: "swarm-1",
     cli: "claude-agent-acp",
     name: "Claude Code #2",
     status: "idle",
+    processStatus: "idle",
     preview: "",
     updatedAt: "5m ago",
     messages: [],
@@ -17,6 +19,7 @@ function makeAgent(overrides?: Partial<DisplayAgent>): DisplayAgent {
     queuedMessage: null,
     configOptions: [],
     hasManagementPermissions: false,
+    stopReason: null,
     ...overrides,
   };
 }
@@ -25,7 +28,7 @@ const noop = () => {};
 
 function renderTopBar(
   overrides: Partial<{
-    agent: DisplayAgent | undefined;
+    agent: DisplayThread | undefined;
     onShutdown: () => void;
   }> = {},
 ) {

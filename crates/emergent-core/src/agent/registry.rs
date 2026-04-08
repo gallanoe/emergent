@@ -72,14 +72,14 @@ impl AgentRegistry {
             .ok_or_else(|| format!("Agent definition '{}' not found", agent_id))
     }
 
-    pub fn list_agents(&self, workspace_id: &WorkspaceId) -> Vec<&AgentDefinition> {
+    pub fn list_definitions(&self, workspace_id: &WorkspaceId) -> Vec<&AgentDefinition> {
         self.agents
             .values()
             .filter(|a| &a.workspace_id == workspace_id)
             .collect()
     }
 
-    pub fn list_all_agents(&self) -> Vec<&AgentDefinition> {
+    pub fn list_all_definitions(&self) -> Vec<&AgentDefinition> {
         self.agents.values().collect()
     }
 
@@ -94,7 +94,7 @@ impl AgentRegistry {
         workspace_id: &WorkspaceId,
         workspace_dir: &Path,
     ) -> Result<(), String> {
-        let defs: Vec<&AgentDefinition> = self.list_agents(workspace_id);
+        let defs: Vec<&AgentDefinition> = self.list_definitions(workspace_id);
         let json = serde_json::to_string_pretty(&defs)
             .map_err(|e| format!("Failed to serialize agent definitions: {}", e))?;
         let path = workspace_dir.join("agents.json");
@@ -170,11 +170,11 @@ mod tests {
     }
 
     #[test]
-    fn test_list_agents_filters_by_workspace() {
+    fn test_list_definitions_filters_by_workspace() {
         let mut reg = AgentRegistry::new();
         reg.create_agent(ws_id(), "A".into(), None, "c".into());
         reg.create_agent(WorkspaceId::from("other"), "B".into(), Some("r".into()), "c".into());
-        let list = reg.list_agents(&ws_id());
+        let list = reg.list_definitions(&ws_id());
         assert_eq!(list.len(), 1);
         assert_eq!(list[0].name, "A");
     }
