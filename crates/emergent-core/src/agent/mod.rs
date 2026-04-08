@@ -371,24 +371,12 @@ impl AgentManager {
     }
 
     /// Kill all threads in a workspace by deleting all agent definitions.
+    /// Kill all running threads in a workspace without deleting agent definitions.
     pub async fn kill_agents_in_workspace(
         &self,
         workspace_id: &WorkspaceId,
     ) -> Result<(), String> {
-        let agent_ids: Vec<String> = {
-            let reg = self.registry.read().await;
-            reg.list_agents(workspace_id)
-                .iter()
-                .map(|a| a.id.clone())
-                .collect()
-        };
-
-        for id in agent_ids {
-            self.delete_agent(&id).await?;
-        }
-
-        // Also kill any threads without agent definitions (legacy)
-        let orphan_thread_ids: Vec<String> = {
+        let thread_ids: Vec<String> = {
             let threads = self.threads.threads.read().await;
             let mut ids = Vec::new();
             for (id, handle_arc) in threads.iter() {
@@ -399,8 +387,9 @@ impl AgentManager {
             }
             ids
         };
-        for id in orphan_thread_ids {
-            self.kill_agent(&id).await?;
+
+        for id in thread_ids {
+            self.threads.kill_thread(&id).await?;
         }
 
         Ok(())
