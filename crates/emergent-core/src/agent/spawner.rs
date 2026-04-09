@@ -23,6 +23,7 @@ pub trait ProcessSpawner: Send + Sync {
         &self,
         container_id: &str,
         command: &[&str],
+        workdir: Option<&str>,
     ) -> Result<Self::Process, String>;
 }
 
@@ -82,9 +83,14 @@ impl ProcessSpawner for DockerCliSpawner {
         &self,
         container_id: &str,
         command: &[&str],
+        workdir: Option<&str>,
     ) -> Result<Self::Process, String> {
         let mut cmd = tokio::process::Command::new("docker");
-        cmd.arg("exec").arg("-i").arg(container_id);
+        cmd.arg("exec").arg("-i");
+        if let Some(dir) = workdir {
+            cmd.arg("-w").arg(dir);
+        }
+        cmd.arg(container_id);
         for arg in command {
             cmd.arg(arg);
         }

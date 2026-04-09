@@ -43,9 +43,11 @@ pub(crate) async fn initialize_agent(
     // Spawn the agent process via ProcessSpawner
     let spawner = super::spawner::DockerCliSpawner;
     let parts: Vec<&str> = agent_binary.split_whitespace().collect();
-    let mut process = super::spawner::ProcessSpawner::spawn(&spawner, &container_id, &parts)
-        .await
-        .map_err(|e| format!("Failed to spawn agent '{}': {}", agent_binary, e))?;
+    let agent_workdir = format!("/home/.agents/{}/", agent_definition_id);
+    let mut process =
+        super::spawner::ProcessSpawner::spawn(&spawner, &container_id, &parts, Some(&agent_workdir))
+            .await
+            .map_err(|e| format!("Failed to spawn agent '{}': {}", agent_binary, e))?;
 
     let child_stdin = process
         .take_stdin()
