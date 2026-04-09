@@ -158,6 +158,31 @@ impl AgentManager {
             reg.create_agent(workspace_id.clone(), name, role, cli)
         };
         self.persist_agents(&workspace_id).await;
+
+        // Create the agent's host-side directory
+        if let Some(ws_path) = self.workspace_path(&workspace_id).await {
+            let agent_dir = ws_path.join("home/.agents").join(&id);
+            if let Err(e) = tokio::fs::create_dir_all(&agent_dir).await {
+                log::error!("Failed to create agent directory: {}", e);
+            }
+
+            // If the container is running, create the symlink inside it
+            let container_id = {
+                let state = self.workspace_state.read().await;
+                state
+                    .workspaces
+                    .get(&workspace_id)
+                    .and_then(|ws| ws.container_id.clone())
+            };
+            if let Some(cid) = container_id {
+                if let Err(e) =
+                    crate::workspace::container::setup_agent_symlink(&cid, &id).await
+                {
+                    log::warn!("Failed to create agent symlink in container: {}", e);
+                }
+            }
+        }
+
         let _ = self
             .event_tx
             .send(Notification::AgentCreated(AgentCreatedPayload {
@@ -194,6 +219,16 @@ impl AgentManager {
             def.workspace_id
         };
         self.persist_agents(&workspace_id).await;
+
+        // Remove the agent's host-side directory
+        if let Some(ws_path) = self.workspace_path(&workspace_id).await {
+            let agent_dir = ws_path.join("home/.agents").join(agent_id);
+            if agent_dir.exists() {
+                if let Err(e) = tokio::fs::remove_dir_all(&agent_dir).await {
+                    log::error!("Failed to remove agent directory: {}", e);
+                }
+            }
+        }
 
         let _ = self
             .event_tx
