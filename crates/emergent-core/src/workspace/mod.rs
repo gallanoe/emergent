@@ -200,9 +200,12 @@ impl WorkspaceManager {
         tokio::fs::create_dir_all(&workspace_path)
             .await
             .map_err(|e| format!("Failed to create workspace dir: {}", e))?;
-        tokio::fs::create_dir_all(workspace_path.join("home"))
+        tokio::fs::create_dir_all(workspace_path.join("home/workspace"))
             .await
-            .map_err(|e| format!("Failed to create workspace home dir: {}", e))?;
+            .map_err(|e| format!("Failed to create workspace dir: {}", e))?;
+        tokio::fs::create_dir_all(workspace_path.join("home/.agents"))
+            .await
+            .map_err(|e| format!("Failed to create agents dir: {}", e))?;
 
         // VirtioFS workaround: touch the parent directory to force a metadata sync
         let parent = workspace_path
@@ -423,6 +426,11 @@ impl WorkspaceManager {
 
         let container_id =
             container::create_and_start_container(docker, id, &workspace_path).await?;
+
+        // Set up workspace symlinks in all existing agent directories
+        if let Err(e) = container::setup_agent_symlinks(&container_id).await {
+            log::warn!("Failed to set up agent symlinks for workspace '{}': {}", id, e);
+        }
 
         {
             let mut state = self.state.write().await;
