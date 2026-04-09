@@ -60,6 +60,8 @@ pub(crate) struct ThreadHandle {
     pub(crate) has_prompted: bool,
     /// Optional role for this thread. Read from parent AgentDefinition.
     pub(crate) role: Option<String>,
+    /// Optional task ID linking this thread to a task.
+    pub(crate) task_id: Option<String>,
     /// Permission state at time of last prompt — used to detect changes.
     pub(crate) last_prompted_permissions: bool,
     /// Wakes the prompt loop when work is available.
@@ -256,7 +258,7 @@ impl AgentManager {
     /// Spawn a new thread under an agent definition.
     /// Reads CLI and workspace from the definition, validates the container,
     /// then delegates to ThreadManager.
-    pub async fn spawn_thread(&self, agent_id: &str) -> Result<String, String> {
+    pub async fn spawn_thread(&self, agent_id: &str, task_id: Option<String>) -> Result<String, String> {
         // Read agent definition
         let definition = {
             let reg = self.registry.read().await;
@@ -296,6 +298,7 @@ impl AgentManager {
                 container_id,
                 definition.cli,
                 definition.role,
+                task_id,
             )
             .await
     }

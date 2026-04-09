@@ -18,9 +18,7 @@ pub async fn known_agents(
     let info = workspace_manager.get_workspace(&ws_id).await?;
 
     match workspace_manager.docker() {
-        Some(docker)
-            if info.container_status == emergent_protocol::ContainerStatus::Running =>
-        {
+        Some(docker) if info.container_status == emergent_protocol::ContainerStatus::Running => {
             let name = emergent_core::workspace::container::container_name(&ws_id);
             Ok(detect::known_agents_in_container(docker, &name).await)
         }
@@ -104,7 +102,7 @@ pub async fn spawn_thread(
     manager: State<'_, Arc<AgentManager>>,
     agent_id: String,
 ) -> Result<String, String> {
-    manager.spawn_thread(&agent_id).await
+    manager.spawn_thread(&agent_id, None).await
 }
 
 #[tauri::command]

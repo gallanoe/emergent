@@ -18,6 +18,8 @@ pub struct ThreadMapping {
     pub thread_id: String,
     pub agent_definition_id: String,
     pub acp_session_id: Option<String>,
+    #[serde(default)]
+    pub task_id: Option<String>,
 }
 
 pub struct ThreadManager {
@@ -92,6 +94,7 @@ impl ThreadManager {
     ///
     /// Returns the thread ID immediately. The ACP handshake runs in a background
     /// task and emits `StatusChange(Idle)` or `Error` notifications on completion.
+    #[allow(clippy::too_many_arguments)]
     pub async fn spawn_thread(
         &self,
         agent_definition_id: String,
@@ -99,6 +102,7 @@ impl ThreadManager {
         container_id: String,
         agent_binary: String,
         role: Option<String>,
+        task_id: Option<String>,
     ) -> Result<String, String> {
         let thread_id = Self::generate_short_id();
 
@@ -118,9 +122,7 @@ impl ThreadManager {
         let ws_state = self.workspace_state.clone();
 
         let bearer_token = self.token_registry.register(&id);
-        let mcp_port = self
-            .mcp_port
-            .load(std::sync::atomic::Ordering::Relaxed);
+        let mcp_port = self.mcp_port.load(std::sync::atomic::Ordering::Relaxed);
 
         let ws_id_for_persist = workspace_id.clone();
         let threads_for_persist = self.threads.clone();
@@ -133,6 +135,7 @@ impl ThreadManager {
                 container_id,
                 agent_binary,
                 role,
+                task_id,
                 SessionInit::New,
                 threads,
                 event_tx.clone(),
@@ -147,14 +150,15 @@ impl ThreadManager {
                     // Persist thread mappings after successful init
                     let workspace_dir = {
                         let state = ws_state.read().await;
-                        state.workspaces.get(&ws_id_for_persist).map(|ws| ws.path.clone())
+                        state
+                            .workspaces
+                            .get(&ws_id_for_persist)
+                            .map(|ws| ws.path.clone())
                     };
                     if let Some(dir) = workspace_dir {
-                        let mappings = Self::collect_mappings_static(
-                            &threads_for_persist,
-                            &ws_id_for_persist,
-                        )
-                        .await;
+                        let mappings =
+                            Self::collect_mappings_static(&threads_for_persist, &ws_id_for_persist)
+                                .await;
                         if let Err(e) = Self::save_to_dir(&mappings, &dir).await {
                             log::error!("Failed to persist thread mappings: {}", e);
                         }
@@ -210,9 +214,7 @@ impl ThreadManager {
         let id = thread_id.clone();
 
         let bearer_token = self.token_registry.register(&id);
-        let mcp_port = self
-            .mcp_port
-            .load(std::sync::atomic::Ordering::Relaxed);
+        let mcp_port = self.mcp_port.load(std::sync::atomic::Ordering::Relaxed);
 
         tokio::spawn(async move {
             match lifecycle::initialize_agent(
@@ -222,6 +224,7 @@ impl ThreadManager {
                 container_id,
                 agent_binary,
                 role,
+                None, // task_id not available during resume
                 SessionInit::Load { acp_session_id },
                 threads,
                 event_tx.clone(),
@@ -358,11 +361,8 @@ impl ThreadManager {
 
         let _ = handle.command_tx.send(AgentCommand::Shutdown);
 
-        let exited = tokio::time::timeout(
-            std::time::Duration::from_secs(2),
-            handle.process.wait(),
-        )
-        .await;
+        let exited =
+            tokio::time::timeout(std::time::Duration::from_secs(2), handle.process.wait()).await;
         if exited.is_err() {
             let _ = handle.process.kill().await;
         }
@@ -572,6 +572,7 @@ impl ThreadManager {
                     thread_id: id.clone(),
                     agent_definition_id: handle.agent_id.clone(),
                     acp_session_id: handle.acp_session_id.clone(),
+                    task_id: handle.task_id.clone(),
                 });
             }
         }
