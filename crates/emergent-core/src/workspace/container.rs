@@ -205,6 +205,48 @@ fn create_build_context(path: &Path) -> Result<Vec<u8>, std::io::Error> {
     archive.into_inner()
 }
 
+/// Create `workspace -> /home/workspace` symlinks in all agent directories
+/// that don't already have one. Called after container start.
+pub async fn setup_agent_symlinks(container_id: &str) -> Result<(), String> {
+    let output = tokio::process::Command::new("docker")
+        .args([
+            "exec", container_id, "sh", "-c",
+            "[ -d /home/.agents ] && for d in /home/.agents/*/; do [ -d \"$d\" ] && [ ! -e \"$d/workspace\" ] && ln -s /home/workspace \"$d/workspace\"; done; true",
+        ])
+        .output()
+        .await
+        .map_err(|e| format!("Failed to run symlink setup: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        log::warn!("Symlink setup had errors: {}", stderr);
+    }
+
+    Ok(())
+}
+
+/// Create a `workspace -> /home/workspace` symlink for a single agent directory.
+/// Also ensures the directory exists inside the container (avoids VirtioFS sync delay).
+pub async fn setup_agent_symlink(container_id: &str, agent_id: &str) -> Result<(), String> {
+    let cmd = format!(
+        "mkdir -p /home/.agents/{} && ln -sf /home/workspace /home/.agents/{}/workspace",
+        agent_id, agent_id
+    );
+
+    let output = tokio::process::Command::new("docker")
+        .args(["exec", container_id, "sh", "-c", &cmd])
+        .output()
+        .await
+        .map_err(|e| format!("Failed to create agent symlink: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("Failed to create agent symlink: {}", stderr));
+    }
+
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Naming conventions
 // ---------------------------------------------------------------------------
