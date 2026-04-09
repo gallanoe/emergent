@@ -41,7 +41,9 @@
       const statusDiff =
         (statusOrder[a.status] ?? 99) - (statusOrder[b.status] ?? 99);
       if (statusDiff !== 0) return statusDiff;
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      return (
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
     }),
   );
 
@@ -84,7 +86,9 @@
   <!-- Header -->
   <div
     class="grid items-center bg-bg-elevated border-b border-border-default text-[10px] font-medium text-fg-muted"
-    style="grid-template-columns: 72px 62px 1fr {agentScoped ? '' : '72px '}80px;"
+    style="grid-template-columns: 72px 62px 1fr {agentScoped
+      ? ''
+      : '72px '}80px;"
   >
     <div class="px-2.5 py-2">Task</div>
     <div class="py-2 px-1">Status</div>
@@ -97,27 +101,30 @@
 
   <!-- Rows -->
   {#each sortedTasks as task (task.id)}
-    {@const isCompleted = task.status === "completed" || task.status === "failed"}
+    {@const isCompleted =
+      task.status === "completed" || task.status === "failed"}
     <button
       class="grid items-center w-full border-b border-border-default last:border-b-0 cursor-pointer transition-colors
-             {task.id === selectedTaskId ? 'bg-bg-selected' : 'hover:bg-bg-hover'}
+             {task.id === selectedTaskId
+        ? 'bg-bg-selected'
+        : 'hover:bg-bg-hover'}
              {isCompleted ? 'opacity-50' : ''}"
-      style="grid-template-columns: 72px 62px 1fr {agentScoped ? '' : '72px '}80px;"
+      style="grid-template-columns: 72px 62px 1fr {agentScoped
+        ? ''
+        : '72px '}80px;"
       onclick={() => handleRowClick(task)}
     >
-      <div
-        class="px-2.5 py-2 text-[10px] font-mono text-fg-disabled truncate"
-      >
+      <div class="px-2.5 py-2 text-[10px] font-mono text-fg-disabled truncate">
         {task.id}
       </div>
       <div class="py-2 px-1">
         <span
-          class="inline-flex items-center gap-1 text-[9px] font-medium border rounded-full px-1.5 py-0.5 {statusClasses(task.status)}"
+          class="inline-flex items-center gap-1 text-[9px] font-medium border rounded-full px-1.5 py-0.5 {statusClasses(
+            task.status,
+          )}"
         >
           {#if task.status === "working"}
-            <span
-              class="w-1 h-1 rounded-full bg-success animate-pulse"
-            ></span>
+            <span class="w-1 h-1 rounded-full bg-success animate-pulse"></span>
           {:else if task.status === "pending"}
             <span class="w-1 h-1 rounded-full bg-fg-disabled"></span>
           {:else if task.status === "completed"}
@@ -128,8 +135,7 @@
               fill="none"
               stroke="currentColor"
               stroke-width="2.5"
-              class="text-success"
-              ><polyline points="20 6 9 17 4 12" /></svg
+              class="text-success"><polyline points="20 6 9 17 4 12" /></svg
             >
           {:else}
             <span class="w-1 h-1 rounded-full bg-error"></span>
@@ -139,7 +145,9 @@
       </div>
       <div class="px-2 py-2 min-w-0">
         <div
-          class="text-[11px] truncate {isCompleted ? 'text-fg-muted' : 'text-fg-heading'}"
+          class="text-[11px] truncate {isCompleted
+            ? 'text-fg-muted'
+            : 'text-fg-heading'}"
         >
           {task.title}
         </div>

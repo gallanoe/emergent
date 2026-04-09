@@ -39,7 +39,12 @@
 
   function handleSubmit() {
     if (!canSubmit || !selectedAgentId) return;
-    onCreate(title.trim(), description.trim(), selectedAgentId, selectedBlockerIds);
+    onCreate(
+      title.trim(),
+      description.trim(),
+      selectedAgentId,
+      selectedBlockerIds,
+    );
   }
 </script>
 
@@ -123,7 +128,9 @@
               class="inline-flex items-center gap-1 text-[10px] text-fg-muted bg-bg-elevated border border-border-default rounded-[5px] px-2 py-1"
             >
               {blockerTask?.title ?? bid}
-              <span class="font-mono text-fg-disabled text-[9px]">{bid.slice(0, 8)}</span>
+              <span class="font-mono text-fg-disabled text-[9px]"
+                >{bid.slice(0, 8)}</span
+              >
               <button
                 class="text-fg-disabled hover:text-fg-muted ml-0.5"
                 onclick={() => removeBlocker(bid)}

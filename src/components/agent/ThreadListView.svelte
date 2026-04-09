@@ -127,24 +127,38 @@
 
   <!-- Segmented control -->
   <div class="px-5 pt-3">
-    <div class="inline-flex items-center bg-bg-elevated border border-border-default rounded-lg p-[3px]">
+    <div
+      class="inline-flex items-center bg-bg-elevated border border-border-default rounded-lg p-[3px]"
+    >
       <button
         class="px-4 py-[5px] rounded-md text-[11px] font-medium transition-colors
-               {activeTab === 'threads' ? 'bg-bg-hover text-fg-heading shadow-sm' : 'text-fg-disabled'}"
+               {activeTab === 'threads'
+          ? 'bg-bg-hover text-fg-heading shadow-sm'
+          : 'text-fg-disabled'}"
         onclick={() => (activeTab = "threads")}
       >
         Threads
-        <span class="ml-1 text-[10px] {activeTab === 'threads' ? 'text-fg-muted' : 'text-fg-disabled'}">
+        <span
+          class="ml-1 text-[10px] {activeTab === 'threads'
+            ? 'text-fg-muted'
+            : 'text-fg-disabled'}"
+        >
           {agentDefinition.threads.length}
         </span>
       </button>
       <button
         class="px-4 py-[5px] rounded-md text-[11px] font-medium transition-colors
-               {activeTab === 'tasks' ? 'bg-bg-hover text-fg-heading shadow-sm' : 'text-fg-disabled'}"
+               {activeTab === 'tasks'
+          ? 'bg-bg-hover text-fg-heading shadow-sm'
+          : 'text-fg-disabled'}"
         onclick={() => (activeTab = "tasks")}
       >
         Tasks
-        <span class="ml-1 text-[10px] {activeTab === 'tasks' ? 'text-fg-muted' : 'text-fg-disabled'}">
+        <span
+          class="ml-1 text-[10px] {activeTab === 'tasks'
+            ? 'text-fg-muted'
+            : 'text-fg-disabled'}"
+        >
           {tasks.length}
         </span>
       </button>
@@ -152,88 +166,89 @@
   </div>
 
   {#if activeTab === "threads"}
-  <!-- Thread list -->
-  <div class="flex-1 overflow-y-auto p-3">
-    <div class="flex items-center justify-between px-2.5 pb-2">
-      <span class="text-[11px] text-fg-disabled">
-        {agentDefinition.threads.length} thread{agentDefinition.threads
-          .length !== 1
-          ? "s"
-          : ""}
-      </span>
-      <button
-        class="text-[11px] text-fg-muted border border-border-default rounded-md px-3 py-1 hover:bg-bg-hover transition-colors"
-        onclick={onNewThread}
-      >
-        <span class="flex items-center gap-1.5">
-          <Plus size={12} />
-          New thread
+    <!-- Thread list -->
+    <div class="flex-1 overflow-y-auto p-3">
+      <div class="flex items-center justify-between px-2.5 pb-2">
+        <span class="text-[11px] text-fg-disabled">
+          {agentDefinition.threads.length} thread{agentDefinition.threads
+            .length !== 1
+            ? "s"
+            : ""}
         </span>
-      </button>
-    </div>
-
-    <div
-      class="text-[10px] font-medium uppercase tracking-wider text-fg-disabled px-2.5 pt-3 pb-1"
-    >
-      Conversations
-    </div>
-
-    {#if agentDefinition.threads.length === 0}
-      <div class="px-2.5 py-4 text-[11px] text-fg-disabled text-center">
-        No threads yet. Create one to start a conversation.
+        <button
+          class="text-[11px] text-fg-muted border border-border-default rounded-md px-3 py-1 hover:bg-bg-hover transition-colors"
+          onclick={onNewThread}
+        >
+          <span class="flex items-center gap-1.5">
+            <Plus size={12} />
+            New thread
+          </span>
+        </button>
       </div>
-    {:else}
-      <div class="max-h-[280px] overflow-y-auto relative">
-        {#each agentDefinition.threads as thread (thread.id)}
-          <div
-            class="relative group mt-0.5 flex items-center rounded-md hover:bg-bg-hover transition-colors"
-          >
-            <button
-              class="flex items-center gap-2 flex-1 min-w-0 px-2.5 py-[7px] text-[12px] text-fg-muted hover:text-fg-heading transition-colors"
-              onclick={() => onSelectThread(thread.id)}
-            >
-              <span
-                class="w-[6px] h-[6px] rounded-full flex-shrink-0 {statusColor(
-                  thread.processStatus,
-                )}"
-              ></span>
-              <span class="text-[12px] flex-shrink-0 opacity-70 w-4 text-center"
-                >💬</span
-              >
-              <span class="flex-1 truncate text-left">{thread.name}</span>
-              <span
-                class="text-[11px] text-fg-disabled flex-shrink-0 group-hover:hidden"
-                >{relativeTime(thread.updatedAt)}</span
-              >
-            </button>
-            <!-- Kebab menu trigger -->
-            <button
-              class="flex items-center justify-center w-[26px] h-[26px] flex-shrink-0 rounded-[4px] text-fg-disabled opacity-0 group-hover:opacity-100 hover:text-fg-muted transition-all mr-0.5"
-              title="Thread actions"
-              onclick={(e) => openMenu(e, thread.id)}
-            >
-              <EllipsisVertical size={13} />
-            </button>
-          </div>
-        {/each}
-        <!-- Fade hint for overflow -->
-        {#if agentDefinition.threads.length > 5}
-          <div
-            class="absolute bottom-0 left-0 right-1.5 h-6 bg-gradient-to-t from-bg-base to-transparent pointer-events-none"
-          ></div>
-        {/if}
+
+      <div
+        class="text-[10px] font-medium uppercase tracking-wider text-fg-disabled px-2.5 pt-3 pb-1"
+      >
+        Conversations
       </div>
-    {/if}
-  </div>
+
+      {#if agentDefinition.threads.length === 0}
+        <div class="px-2.5 py-4 text-[11px] text-fg-disabled text-center">
+          No threads yet. Create one to start a conversation.
+        </div>
+      {:else}
+        <div class="max-h-[280px] overflow-y-auto relative">
+          {#each agentDefinition.threads as thread (thread.id)}
+            <div
+              class="relative group mt-0.5 flex items-center rounded-md hover:bg-bg-hover transition-colors"
+            >
+              <button
+                class="flex items-center gap-2 flex-1 min-w-0 px-2.5 py-[7px] text-[12px] text-fg-muted hover:text-fg-heading transition-colors"
+                onclick={() => onSelectThread(thread.id)}
+              >
+                <span
+                  class="w-[6px] h-[6px] rounded-full flex-shrink-0 {statusColor(
+                    thread.processStatus,
+                  )}"
+                ></span>
+                <span
+                  class="text-[12px] flex-shrink-0 opacity-70 w-4 text-center"
+                  >💬</span
+                >
+                <span class="flex-1 truncate text-left">{thread.name}</span>
+                <span
+                  class="text-[11px] text-fg-disabled flex-shrink-0 group-hover:hidden"
+                  >{relativeTime(thread.updatedAt)}</span
+                >
+              </button>
+              <!-- Kebab menu trigger -->
+              <button
+                class="flex items-center justify-center w-[26px] h-[26px] flex-shrink-0 rounded-[4px] text-fg-disabled opacity-0 group-hover:opacity-100 hover:text-fg-muted transition-all mr-0.5"
+                title="Thread actions"
+                onclick={(e) => openMenu(e, thread.id)}
+              >
+                <EllipsisVertical size={13} />
+              </button>
+            </div>
+          {/each}
+          <!-- Fade hint for overflow -->
+          {#if agentDefinition.threads.length > 5}
+            <div
+              class="absolute bottom-0 left-0 right-1.5 h-6 bg-gradient-to-t from-bg-base to-transparent pointer-events-none"
+            ></div>
+          {/if}
+        </div>
+      {/if}
+    </div>
   {:else}
-  <div class="p-3">
-    <TaskTableView
-      {tasks}
-      selectedTaskId={null}
-      agentScoped={true}
-      onSelectTask={onSelectTask}
-    />
-  </div>
+    <div class="p-3">
+      <TaskTableView
+        {tasks}
+        selectedTaskId={null}
+        agentScoped={true}
+        {onSelectTask}
+      />
+    </div>
   {/if}
 </div>
 

@@ -347,7 +347,9 @@
         </div>
         <div
           class="flex-1 min-h-0"
-          style="display:grid; grid-template-columns: {appState.taskSidebarMode ? '1fr 320px' : '1fr'};"
+          style="display:grid; grid-template-columns: {appState.taskSidebarMode
+            ? '1fr 320px'
+            : '1fr'};"
         >
           <!-- Table -->
           <div class="overflow-y-auto p-3.5">
@@ -367,10 +369,14 @@
               tasks={appState.workspaceTasks}
               selectedTaskId={appState.selectedTaskId}
               agentNames={Object.fromEntries(
-                Object.values(appState.agentDefinitionsMap ?? {}).map((d) => [d.id, d.name]),
+                Object.values(appState.agentDefinitionsMap ?? {}).map((d) => [
+                  d.id,
+                  d.name,
+                ]),
               )}
               onSelectTask={(id) => appState.selectTask(id)}
-              onNavigateToSession={(threadId) => appState.selectThread(threadId)}
+              onNavigateToSession={(threadId) =>
+                appState.selectThread(threadId)}
             />
           </div>
           <!-- Sidebar -->
@@ -381,16 +387,22 @@
                 {task}
                 allTasks={appState.tasks}
                 agentNames={Object.fromEntries(
-                  Object.values(appState.agentDefinitionsMap ?? {}).map((d) => [d.id, d.name]),
+                  Object.values(appState.agentDefinitionsMap ?? {}).map((d) => [
+                    d.id,
+                    d.name,
+                  ]),
                 )}
                 onClose={() => appState.closeTaskSidebar()}
                 onSelectTask={(id) => appState.selectTask(id)}
-                onNavigateToSession={(threadId) => appState.selectThread(threadId)}
+                onNavigateToSession={(threadId) =>
+                  appState.selectThread(threadId)}
               />
             {/if}
           {:else if appState.taskSidebarMode === "create"}
             <CreateTaskSidebar
-              agentDefinitions={Object.values(appState.agentDefinitionsMap ?? {})}
+              agentDefinitions={Object.values(
+                appState.agentDefinitionsMap ?? {},
+              )}
               existingTasks={appState.workspaceTasks}
               onClose={() => appState.closeTaskSidebar()}
               onCreate={async (title, desc, agentId, blockerIds) => {

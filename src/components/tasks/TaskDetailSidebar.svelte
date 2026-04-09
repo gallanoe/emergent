@@ -11,8 +11,14 @@
     onNavigateToSession: (threadId: string) => void;
   }
 
-  let { task, allTasks, agentNames, onClose, onSelectTask, onNavigateToSession }: Props =
-    $props();
+  let {
+    task,
+    allTasks,
+    agentNames,
+    onClose,
+    onSelectTask,
+    onNavigateToSession,
+  }: Props = $props();
 
   const blockerTasks = $derived(
     task.blocker_ids
@@ -72,7 +78,9 @@
     <!-- Status badges -->
     <div class="flex items-center gap-2 mb-2.5">
       <span
-        class="inline-flex items-center gap-1.5 text-[10px] font-medium border rounded-full px-2 py-0.5 {statusClasses(task.status)}"
+        class="inline-flex items-center gap-1.5 text-[10px] font-medium border rounded-full px-2 py-0.5 {statusClasses(
+          task.status,
+        )}"
       >
         {task.status.charAt(0).toUpperCase() + task.status.slice(1)}
       </span>
@@ -108,7 +116,8 @@
       {#if task.session_id}
         <button
           class="text-fg-muted hover:text-fg-heading text-left"
-          onclick={() => task.session_id && onNavigateToSession(task.session_id)}
+          onclick={() =>
+            task.session_id && onNavigateToSession(task.session_id)}
         >
           {task.session_id}
         </button>
@@ -153,7 +162,9 @@
                 </div>
               </div>
               <span
-                class="text-[9px] font-medium border rounded-full px-1.5 py-0.5 {statusClasses(blocker.status)}"
+                class="text-[9px] font-medium border rounded-full px-1.5 py-0.5 {statusClasses(
+                  blocker.status,
+                )}"
               >
                 {blocker.status}
               </span>
@@ -186,7 +197,9 @@
                 </div>
               </div>
               <span
-                class="text-[9px] font-medium border rounded-full px-1.5 py-0.5 {statusClasses(child.status)}"
+                class="text-[9px] font-medium border rounded-full px-1.5 py-0.5 {statusClasses(
+                  child.status,
+                )}"
               >
                 {child.status}
               </span>
