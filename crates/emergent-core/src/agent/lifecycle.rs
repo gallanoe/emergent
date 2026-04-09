@@ -60,6 +60,7 @@ pub(crate) async fn initialize_agent(
     let (command_tx, command_rx) = mpsc::unbounded_channel::<AgentCommand>();
 
     let agent_id_for_thread = agent_id.clone();
+    let agent_workdir_for_thread = agent_workdir.clone();
     let event_tx_clone = event_tx.clone();
 
     // Use a oneshot to receive the session_id + initial config (or error) from the LocalSet thread.
@@ -129,7 +130,7 @@ pub(crate) async fn initialize_agent(
                         SessionInit::New => {
                             let session_resp = conn
                                 .new_session(
-                                    acp::NewSessionRequest::new("/workspace/")
+                                    acp::NewSessionRequest::new(&agent_workdir_for_thread)
                                         .mcp_servers(vec![mcp_config]),
                                 )
                                 .await
@@ -155,7 +156,7 @@ pub(crate) async fn initialize_agent(
 
                             let _load_resp = conn
                                 .load_session(
-                                    acp::LoadSessionRequest::new(session_id.clone(), "/workspace/")
+                                    acp::LoadSessionRequest::new(session_id.clone(), &agent_workdir_for_thread)
                                         .mcp_servers(vec![mcp_config]),
                                 )
                                 .await
