@@ -107,8 +107,8 @@ impl AgentManager {
     // Agent definition CRUD (coordinator → registry)
     // -----------------------------------------------------------------------
 
-    /// Look up the on-disk path for a workspace (for persisting agents.json).
-    async fn workspace_path(&self, workspace_id: &WorkspaceId) -> Option<std::path::PathBuf> {
+    /// Look up the on-disk path for a workspace (for persisting agents.json / tasks.json).
+    pub async fn workspace_path(&self, workspace_id: &WorkspaceId) -> Option<std::path::PathBuf> {
         let state = self.workspace_state.read().await;
         state.workspaces.get(workspace_id).map(|ws| ws.path.clone())
     }
@@ -524,6 +524,28 @@ impl AgentManager {
         let handle = handle_arc.lock().await;
         let registry = self.registry.read().await;
         registry.get_agent(&handle.agent_id).map(|d| d.name.clone())
+    }
+
+    /// Return the set of all live (in-memory) thread IDs.
+    pub async fn live_thread_ids(&self) -> std::collections::HashSet<String> {
+        let threads = self.threads.threads.read().await;
+        threads.keys().cloned().collect()
+    }
+
+    /// Return the task_id associated with a thread, if any.
+    pub async fn get_thread_task_id(&self, thread_id: &str) -> Option<String> {
+        let threads = self.threads.threads.read().await;
+        let handle_arc = threads.get(thread_id)?;
+        let handle = handle_arc.lock().await;
+        handle.task_id.clone()
+    }
+
+    /// Return the workspace_id for a given thread.
+    pub async fn get_thread_workspace_id(&self, thread_id: &str) -> Option<WorkspaceId> {
+        let threads = self.threads.threads.read().await;
+        let handle_arc = threads.get(thread_id)?;
+        let handle = handle_arc.lock().await;
+        Some(handle.workspace_id.clone())
     }
 }
 
