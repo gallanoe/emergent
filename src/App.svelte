@@ -410,6 +410,8 @@
     {:else if appState.activeView === "agent-threads" && appState.selectedAgentDef}
       <ThreadListView
         agentDefinition={appState.selectedAgentDef}
+        tasks={appState.agentTasks}
+        onSelectTask={(id) => appState.selectTask(id)}
         onSelectThread={(id) => appState.selectThread(id)}
         onNewThread={async () => {
           const threadId = await appState.spawnThread(

@@ -2,30 +2,38 @@
   import type {
     DisplayAgentDefinition,
     DisplayThread,
+    DisplayTask,
     AgentStatus,
   } from "../../stores/types";
   import { Settings, Plus, EllipsisVertical } from "@lucide/svelte";
   import ConfirmDialog from "../ConfirmDialog.svelte";
+  import TaskTableView from "../tasks/TaskTableView.svelte";
 
   interface Props {
     agentDefinition: DisplayAgentDefinition;
+    tasks: DisplayTask[];
     onSelectThread: (threadId: string) => void;
     onNewThread: () => void;
     onOpenSettings: () => void;
     onResumeThread: (threadId: string) => void;
     onStopThread: (threadId: string) => void;
     onDeleteThread: (threadId: string) => void;
+    onSelectTask: (taskId: string) => void;
   }
 
   let {
     agentDefinition,
+    tasks,
     onSelectThread,
     onNewThread,
     onOpenSettings,
     onResumeThread,
     onStopThread,
     onDeleteThread,
+    onSelectTask,
   }: Props = $props();
+
+  let activeTab = $state<"threads" | "tasks">("threads");
 
   let menuThreadId = $state<string | null>(null);
   let menuPos = $state({ x: 0, y: 0 });
@@ -117,6 +125,33 @@
     </button>
   </div>
 
+  <!-- Segmented control -->
+  <div class="px-5 pt-3">
+    <div class="inline-flex items-center bg-bg-elevated border border-border-default rounded-lg p-[3px]">
+      <button
+        class="px-4 py-[5px] rounded-md text-[11px] font-medium transition-colors
+               {activeTab === 'threads' ? 'bg-bg-hover text-fg-heading shadow-sm' : 'text-fg-disabled'}"
+        onclick={() => (activeTab = "threads")}
+      >
+        Threads
+        <span class="ml-1 text-[10px] {activeTab === 'threads' ? 'text-fg-muted' : 'text-fg-disabled'}">
+          {agentDefinition.threads.length}
+        </span>
+      </button>
+      <button
+        class="px-4 py-[5px] rounded-md text-[11px] font-medium transition-colors
+               {activeTab === 'tasks' ? 'bg-bg-hover text-fg-heading shadow-sm' : 'text-fg-disabled'}"
+        onclick={() => (activeTab = "tasks")}
+      >
+        Tasks
+        <span class="ml-1 text-[10px] {activeTab === 'tasks' ? 'text-fg-muted' : 'text-fg-disabled'}">
+          {tasks.length}
+        </span>
+      </button>
+    </div>
+  </div>
+
+  {#if activeTab === "threads"}
   <!-- Thread list -->
   <div class="flex-1 overflow-y-auto p-3">
     <div class="flex items-center justify-between px-2.5 pb-2">
@@ -190,6 +225,16 @@
       </div>
     {/if}
   </div>
+  {:else}
+  <div class="p-3">
+    <TaskTableView
+      {tasks}
+      selectedTaskId={null}
+      agentScoped={true}
+      onSelectTask={onSelectTask}
+    />
+  </div>
+  {/if}
 </div>
 
 {#if menuThreadId}
