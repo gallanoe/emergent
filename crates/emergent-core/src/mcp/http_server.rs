@@ -6,9 +6,10 @@ use rmcp::transport::streamable_http_server::{
 };
 use tokio_util::sync::CancellationToken;
 
-use crate::agent::AgentManager;
 use super::handler::McpHandler;
 use super::token_registry::TokenRegistry;
+use crate::agent::AgentManager;
+use crate::task::TaskManager;
 
 /// Handle returned after starting the HTTP server.
 pub struct McpHttpServer {
@@ -23,6 +24,7 @@ pub struct McpHttpServer {
 pub async fn start(
     manager: Arc<AgentManager>,
     token_registry: Arc<TokenRegistry>,
+    task_manager: Arc<TaskManager>,
 ) -> Result<McpHttpServer, String> {
     let ct = CancellationToken::new();
 
@@ -36,10 +38,11 @@ pub async fn start(
 
     let mgr = manager.clone();
     let reg = token_registry.clone();
+    let task_mgr = task_manager.clone();
 
     let service: StreamableHttpService<McpHandler, LocalSessionManager> =
         StreamableHttpService::new(
-            move || Ok(McpHandler::new(mgr.clone(), reg.clone())),
+            move || Ok(McpHandler::new(mgr.clone(), reg.clone(), task_mgr.clone())),
             Default::default(),
             config,
         );
