@@ -375,6 +375,10 @@ pub enum Notification {
     AgentCreated(AgentCreatedPayload),
     #[serde(rename = "agent:definition-deleted")]
     AgentDeleted(AgentDeletedPayload),
+    #[serde(rename = "task:created")]
+    TaskCreated(crate::TaskPayload),
+    #[serde(rename = "task:updated")]
+    TaskUpdated(crate::TaskPayload),
     #[serde(rename = "thread:session-ready")]
     SessionReady(SessionReadyPayload),
 }
@@ -397,6 +401,8 @@ impl Notification {
             Notification::TerminalExited(_) => "terminal:exited",
             Notification::AgentCreated(_) => "agent:definition-created",
             Notification::AgentDeleted(_) => "agent:definition-deleted",
+            Notification::TaskCreated(_) => "task:created",
+            Notification::TaskUpdated(_) => "task:updated",
             Notification::SessionReady(_) => "thread:session-ready",
         }
     }
@@ -418,6 +424,8 @@ impl Notification {
             Notification::TerminalExited(_) => None,
             Notification::AgentCreated(_) => None,
             Notification::AgentDeleted(_) => None,
+            Notification::TaskCreated(_) => None,
+            Notification::TaskUpdated(_) => None,
             Notification::SessionReady(p) => Some(&p.thread_id),
         }
     }
