@@ -54,8 +54,8 @@ pub async fn create_and_start_container(
     let name = container_name(workspace_id);
     let tag = image_tag(workspace_id);
 
-    // Mount the `home/` subdirectory — keeps metadata.json, agents.json,
-    // and Dockerfile out of the container's /workspace.
+    // Mount the `home/` subdirectory as /home in the container. Metadata,
+    // agents.json, and Dockerfile remain outside the mount at the workspace root.
     let mount_path = host_path.join("home");
     let mount_path_str = mount_path
         .to_str()
@@ -70,11 +70,11 @@ pub async fn create_and_start_container(
     let config = Config {
         image: Some(tag.as_str()),
         host_config: Some(HostConfig {
-            binds: Some(vec![format!("{}:/workspace", mount_path_str)]),
+            binds: Some(vec![format!("{}:/home", mount_path_str)]),
             extra_hosts,
             ..Default::default()
         }),
-        working_dir: Some("/workspace"),
+        working_dir: Some("/home/workspace"),
         open_stdin: Some(true),
         tty: Some(false),
         ..Default::default()
