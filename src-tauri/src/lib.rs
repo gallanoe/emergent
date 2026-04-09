@@ -3,6 +3,7 @@ mod tray;
 
 use emergent_core::agent::AgentManager;
 use emergent_core::mcp::TokenRegistry;
+use emergent_core::task::TaskManager;
 use emergent_core::workspace::WorkspaceManager;
 use emergent_protocol::Notification;
 use std::sync::Arc;
@@ -34,12 +35,8 @@ pub fn run() {
 
             // Create workspace manager (async — use block_on)
             let workspace_manager = tauri::async_runtime::block_on(async {
-                let wm = WorkspaceManager::new(
-                    workspace_state.clone(),
-                    event_tx.clone(),
-                    docker,
-                )
-                .await;
+                let wm =
+                    WorkspaceManager::new(workspace_state.clone(), event_tx.clone(), docker).await;
                 if let Err(e) = wm.load_workspaces().await {
                     log::error!("Failed to load workspaces: {}", e);
                 }
@@ -56,10 +53,18 @@ pub fn run() {
                 token_registry.clone(),
             ));
 
-            // Load persisted agent definitions for all loaded workspaces
+            // Create task manager
+            let task_manager = Arc::new(TaskManager::new(
+                manager.clone(),
+                event_tx.clone(),
+            ));
+            let event_rx = event_tx.subscribe();
+            task_manager.start_event_loop(event_rx);
+
+            // Load persisted agent definitions, thread mappings, and tasks for all workspaces
             tauri::async_runtime::block_on(async {
                 let state = workspace_state.read().await;
-                for ws_id in state.workspaces.keys() {
+                for (ws_id, ws) in state.workspaces.iter() {
                     if let Err(e) = manager.load_agents_for_workspace(ws_id).await {
                         log::error!(
                             "Failed to load agent definitions for workspace '{}': {}",
@@ -67,10 +72,17 @@ pub fn run() {
                             e
                         );
                     }
+
+                    let workspace_path = &ws.path;
+                    task_manager.load_tasks(workspace_path).await.ok();
                 }
+
+                let live_thread_ids = manager.live_thread_ids().await;
+                task_manager.recover_stale_tasks(&live_thread_ids).await;
             });
 
             app.manage(manager.clone());
+            app.manage(task_manager.clone());
             app.manage(workspace_manager);
 
             // Set up system tray icon
@@ -86,22 +98,60 @@ pub fn run() {
                         Ok(notification) => {
                             let event_name = notification.event_name();
                             match &notification {
-                                Notification::MessageChunk(p) => { let _ = bridge_handle.emit(event_name, p); }
-                                Notification::ToolCallUpdate(p) => { let _ = bridge_handle.emit(event_name, p); }
-                                Notification::PromptComplete(p) => { let _ = bridge_handle.emit(event_name, p); }
-                                Notification::StatusChange(p) => { let _ = bridge_handle.emit(event_name, p); }
-                                Notification::ConfigUpdate(p) => { let _ = bridge_handle.emit(event_name, p); }
-                                Notification::UserMessage(p) => { let _ = bridge_handle.emit(event_name, p); }
-                                Notification::Error(p) => { let _ = bridge_handle.emit(event_name, p); }
-                                Notification::NudgeDelivered(p) => { let _ = bridge_handle.emit(event_name, p); }
-                                Notification::SystemMessage(p) => { let _ = bridge_handle.emit(event_name, p); }
-                                Notification::TopologyChanged(p) => { let _ = bridge_handle.emit(event_name, p); }
-                                Notification::WorkspaceStatusChange(p) => { let _ = bridge_handle.emit(event_name, p); }
-                                Notification::TerminalOutput(p) => { let _ = bridge_handle.emit(event_name, p); }
-                                Notification::TerminalExited(p) => { let _ = bridge_handle.emit(event_name, p); }
-                                Notification::AgentCreated(p) => { let _ = bridge_handle.emit(event_name, p); }
-                                Notification::AgentDeleted(p) => { let _ = bridge_handle.emit(event_name, p); }
-                                Notification::SessionReady(p) => { let _ = bridge_handle.emit(event_name, p); }
+                                Notification::MessageChunk(p) => {
+                                    let _ = bridge_handle.emit(event_name, p);
+                                }
+                                Notification::ToolCallUpdate(p) => {
+                                    let _ = bridge_handle.emit(event_name, p);
+                                }
+                                Notification::PromptComplete(p) => {
+                                    let _ = bridge_handle.emit(event_name, p);
+                                }
+                                Notification::StatusChange(p) => {
+                                    let _ = bridge_handle.emit(event_name, p);
+                                }
+                                Notification::ConfigUpdate(p) => {
+                                    let _ = bridge_handle.emit(event_name, p);
+                                }
+                                Notification::UserMessage(p) => {
+                                    let _ = bridge_handle.emit(event_name, p);
+                                }
+                                Notification::Error(p) => {
+                                    let _ = bridge_handle.emit(event_name, p);
+                                }
+                                Notification::NudgeDelivered(p) => {
+                                    let _ = bridge_handle.emit(event_name, p);
+                                }
+                                Notification::SystemMessage(p) => {
+                                    let _ = bridge_handle.emit(event_name, p);
+                                }
+                                Notification::TopologyChanged(p) => {
+                                    let _ = bridge_handle.emit(event_name, p);
+                                }
+                                Notification::WorkspaceStatusChange(p) => {
+                                    let _ = bridge_handle.emit(event_name, p);
+                                }
+                                Notification::TerminalOutput(p) => {
+                                    let _ = bridge_handle.emit(event_name, p);
+                                }
+                                Notification::TerminalExited(p) => {
+                                    let _ = bridge_handle.emit(event_name, p);
+                                }
+                                Notification::AgentCreated(p) => {
+                                    let _ = bridge_handle.emit(event_name, p);
+                                }
+                                Notification::AgentDeleted(p) => {
+                                    let _ = bridge_handle.emit(event_name, p);
+                                }
+                                Notification::SessionReady(p) => {
+                                    let _ = bridge_handle.emit(event_name, p);
+                                }
+                                Notification::TaskCreated(ref p) => {
+                                    let _ = bridge_handle.emit(event_name, p);
+                                }
+                                Notification::TaskUpdated(ref p) => {
+                                    let _ = bridge_handle.emit(event_name, p);
+                                }
                             }
                         }
                         Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
@@ -115,15 +165,18 @@ pub fn run() {
             // Start MCP HTTP server
             let http_manager = manager.clone();
             let http_registry = token_registry.clone();
+            let http_task_manager = task_manager.clone();
             tauri::async_runtime::spawn(async move {
-                match emergent_core::mcp::http_server::start(http_manager.clone(), http_registry).await
+                match emergent_core::mcp::http_server::start(
+                    http_manager.clone(),
+                    http_registry,
+                    http_task_manager,
+                )
+                .await
                 {
                     Ok(server) => {
                         http_manager.set_mcp_port(server.port).await;
-                        log::info!(
-                            "MCP HTTP server started on 127.0.0.1:{}",
-                            server.port
-                        );
+                        log::info!("MCP HTTP server started on 127.0.0.1:{}", server.port);
                         // Keep cancellation token alive until app exits
                         std::future::pending::<()>().await;
                     }
@@ -179,6 +232,10 @@ pub fn run() {
             commands::write_terminal,
             commands::resize_terminal,
             commands::close_terminal_session,
+            commands::create_task,
+            commands::list_tasks,
+            commands::get_task,
+            commands::list_tasks_for_agent,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

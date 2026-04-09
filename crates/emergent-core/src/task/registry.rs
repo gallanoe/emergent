@@ -82,7 +82,7 @@ impl TaskRegistry {
                 t.blocker_ids.iter().all(|bid| {
                     self.tasks
                         .get(bid)
-                        .map_or(false, |b| b.status == TaskStatus::Completed)
+                        .is_some_and(|b| b.status == TaskStatus::Completed)
                 })
             })
             .map(|t| t.id.clone())

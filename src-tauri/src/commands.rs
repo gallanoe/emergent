@@ -3,6 +3,7 @@ use tauri::State;
 
 use emergent_core::agent::{AgentManager, ThreadMapping};
 use emergent_core::detect;
+use emergent_core::task::TaskManager;
 use emergent_core::workspace::WorkspaceManager;
 use emergent_protocol::{
     AgentDefinition, ConfigOption, DockerStatus, KnownAgent, Notification, ThreadSummary,
@@ -53,8 +54,12 @@ pub async fn update_agent(
 #[tauri::command]
 pub async fn delete_agent(
     manager: State<'_, Arc<AgentManager>>,
+    task_manager: State<'_, Arc<TaskManager>>,
     agent_id: String,
 ) -> Result<(), String> {
+    if task_manager.agent_has_active_tasks(&agent_id).await {
+        return Err("Cannot delete agent with active tasks (Pending or Working)".to_string());
+    }
     manager.delete_agent(&agent_id).await
 }
 
@@ -401,4 +406,52 @@ pub async fn close_terminal_session(
     session_id: String,
 ) -> Result<(), String> {
     workspace_manager.close_terminal_session(&session_id).await
+}
+
+// ── Task commands ─────────────────────────────────────────
+
+#[tauri::command]
+pub async fn create_task(
+    task_manager: State<'_, Arc<TaskManager>>,
+    workspace_id: String,
+    title: String,
+    description: String,
+    agent_id: String,
+    blocker_ids: Vec<String>,
+    parent_id: Option<String>,
+) -> Result<String, String> {
+    task_manager
+        .create_task(
+            workspace_id.into(),
+            title,
+            description,
+            agent_id,
+            blocker_ids,
+            parent_id,
+        )
+        .await
+}
+
+#[tauri::command]
+pub async fn list_tasks(
+    task_manager: State<'_, Arc<TaskManager>>,
+    workspace_id: String,
+) -> Result<Vec<emergent_protocol::Task>, String> {
+    Ok(task_manager.list_tasks(&workspace_id.into()).await)
+}
+
+#[tauri::command]
+pub async fn get_task(
+    task_manager: State<'_, Arc<TaskManager>>,
+    task_id: String,
+) -> Result<emergent_protocol::Task, String> {
+    task_manager.get_task(&task_id).await
+}
+
+#[tauri::command]
+pub async fn list_tasks_for_agent(
+    task_manager: State<'_, Arc<TaskManager>>,
+    agent_id: String,
+) -> Result<Vec<emergent_protocol::Task>, String> {
+    Ok(task_manager.list_tasks_for_agent(&agent_id).await)
 }
