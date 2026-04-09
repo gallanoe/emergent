@@ -122,6 +122,27 @@ export interface DisplayAgentDefinition {
   threads: DisplayThread[];
 }
 
+export interface DisplayTask {
+  id: string;
+  title: string;
+  description: string;
+  status: "pending" | "working" | "completed" | "failed";
+  parent_id: string | null;
+  blocker_ids: string[];
+  agent_id: string;
+  session_id: string | null;
+  workspace_id: string;
+  created_at: string;
+}
+
+export interface TaskCreatedPayload {
+  task: DisplayTask;
+}
+
+export interface TaskUpdatedPayload {
+  task: DisplayTask;
+}
+
 export interface AgentCreatedPayload {
   definition_id: string;
 }
@@ -137,7 +158,9 @@ export type ActiveView =
   | "agent-settings"
   | "create-agent"
   | "settings"
-  | "terminal";
+  | "terminal"
+  | "tasks"
+  | "agent-tasks";
 
 export type ContainerStatus =
   | { state: "stopped" }

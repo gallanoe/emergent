@@ -7,9 +7,12 @@ import type {
   AgentDefinition,
   ContainerStatus,
   DisplayAgentDefinition,
+  DisplayTask,
   DisplayThread,
   DisplayWorkspace,
   DockerStatus,
+  TaskCreatedPayload,
+  TaskUpdatedPayload,
   ThreadMapping,
   TopologyChangedPayload,
   WorkspaceSummary,
@@ -48,6 +51,9 @@ function createAppState() {
   let activeView = $state<ActiveView>("swarm");
   let dockerStatus = $state<DockerStatus | null>(null);
   let terminalSessionIds = $state<Record<string, string>>({});
+  let tasks = $state<Record<string, DisplayTask>>({});
+  let selectedTaskId = $state<string | null>(null);
+  let taskSidebarMode = $state<"detail" | "create" | null>(null);
 
   // ── Initialization ────────────────────────────────────────────
 
@@ -111,6 +117,18 @@ function createAppState() {
         }
       }
 
+      // Load tasks for each workspace
+      for (const ws of workspaces) {
+        try {
+          const taskList = await invoke<DisplayTask[]>("list_tasks", { workspaceId: ws.id });
+          for (const task of taskList) {
+            tasks[task.id] = task;
+          }
+        } catch (e) {
+          console.warn("Failed to load tasks:", e);
+        }
+      }
+
       // Refresh known agents for the first running workspace
       const runningWs = workspaces.find((w) => w.containerStatus.state === "running");
       if (runningWs) {
@@ -142,6 +160,15 @@ function createAppState() {
     await listen<TopologyChangedPayload>("swarm:topology-changed", (e) => {
       refreshConnections(e.payload.thread_id_a);
       refreshConnections(e.payload.thread_id_b);
+    });
+
+    // Listen for task events
+    await listen<TaskCreatedPayload>("task:created", (e) => {
+      tasks[e.payload.task.id] = e.payload.task;
+    });
+
+    await listen<TaskUpdatedPayload>("task:updated", (e) => {
+      tasks[e.payload.task.id] = e.payload.task;
     });
 
   }
@@ -251,6 +278,55 @@ function createAppState() {
         })
         .filter(Boolean) as DisplayAgentDefinition[],
     }));
+  }
+
+  // ── Task management ──────────────────────────────────────────
+
+  const workspaceTasks = $derived(
+    Object.values(tasks).filter((t) => t.workspace_id === selectedWorkspaceId),
+  );
+
+  const agentTasks = $derived(
+    Object.values(tasks).filter((t) => t.agent_id === selectedAgentId),
+  );
+
+  function selectTask(taskId: string) {
+    selectedTaskId = taskId;
+    taskSidebarMode = "detail";
+  }
+
+  function openCreateTask() {
+    selectedTaskId = null;
+    taskSidebarMode = "create";
+  }
+
+  function closeTaskSidebar() {
+    selectedTaskId = null;
+    taskSidebarMode = null;
+  }
+
+  function showTasks() {
+    activeView = "tasks";
+    selectedTaskId = null;
+    taskSidebarMode = null;
+  }
+
+  async function createTask(
+    workspaceId: string,
+    title: string,
+    description: string,
+    agentId: string,
+    blockerIds: string[],
+    parentId?: string,
+  ): Promise<string> {
+    return invoke<string>("create_task", {
+      workspaceId,
+      title,
+      description,
+      agentId,
+      blockerIds,
+      parentId: parentId ?? null,
+    });
   }
 
   // ── Swarm connection management ──────────────────────────────
@@ -516,6 +592,26 @@ function createAppState() {
       });
     },
     refreshConnections,
+    get tasks() {
+      return tasks;
+    },
+    get selectedTaskId() {
+      return selectedTaskId;
+    },
+    get taskSidebarMode() {
+      return taskSidebarMode;
+    },
+    get workspaceTasks() {
+      return workspaceTasks;
+    },
+    get agentTasks() {
+      return agentTasks;
+    },
+    selectTask,
+    openCreateTask,
+    closeTaskSidebar,
+    showTasks,
+    createTask,
     get terminalSessionIds() {
       return terminalSessionIds;
     },
