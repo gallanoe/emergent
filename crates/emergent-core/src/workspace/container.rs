@@ -113,12 +113,11 @@ pub async fn create_and_start_container(
 }
 
 /// Stop and remove a container.
-pub async fn stop_and_remove_container(
-    docker: &Docker,
-    container_id: &str,
-) -> Result<(), String> {
+pub async fn stop_and_remove_container(docker: &Docker, container_id: &str) -> Result<(), String> {
     let stop_options = StopContainerOptions { t: 2 };
-    let _ = docker.stop_container(container_id, Some(stop_options)).await;
+    let _ = docker
+        .stop_container(container_id, Some(stop_options))
+        .await;
 
     let remove_options = RemoveContainerOptions {
         force: true,
@@ -147,11 +146,7 @@ pub async fn inspect_container_status(
     let name = container_name(workspace_id);
     match docker.inspect_container(&name, None).await {
         Ok(info) => {
-            let running = info
-                .state
-                .as_ref()
-                .and_then(|s| s.running)
-                .unwrap_or(false);
+            let running = info.state.as_ref().and_then(|s| s.running).unwrap_or(false);
             if running {
                 ContainerStatus::Running
             } else {

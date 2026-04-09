@@ -44,10 +44,14 @@ pub(crate) async fn initialize_agent(
     let spawner = super::spawner::DockerCliSpawner;
     let parts: Vec<&str> = agent_binary.split_whitespace().collect();
     let agent_workdir = format!("/home/.agents/{}/", agent_definition_id);
-    let mut process =
-        super::spawner::ProcessSpawner::spawn(&spawner, &container_id, &parts, Some(&agent_workdir))
-            .await
-            .map_err(|e| format!("Failed to spawn agent '{}': {}", agent_binary, e))?;
+    let mut process = super::spawner::ProcessSpawner::spawn(
+        &spawner,
+        &container_id,
+        &parts,
+        Some(&agent_workdir),
+    )
+    .await
+    .map_err(|e| format!("Failed to spawn agent '{}': {}", agent_binary, e))?;
 
     let child_stdin = process
         .take_stdin()
@@ -156,8 +160,11 @@ pub(crate) async fn initialize_agent(
 
                             let _load_resp = conn
                                 .load_session(
-                                    acp::LoadSessionRequest::new(session_id.clone(), &agent_workdir_for_thread)
-                                        .mcp_servers(vec![mcp_config]),
+                                    acp::LoadSessionRequest::new(
+                                        session_id.clone(),
+                                        &agent_workdir_for_thread,
+                                    )
+                                    .mcp_servers(vec![mcp_config]),
                                 )
                                 .await
                                 .map_err(|e| format!("ACP load_session failed: {}", e))?;
@@ -175,12 +182,11 @@ pub(crate) async fn initialize_agent(
                     Ok((sid, config)) => {
                         log::debug!("Agent {} ACP session established: {:?}", &agent_id, sid);
                         let _ = init_tx.send(Ok((sid.clone(), config)));
-                        let _ = event_tx_clone.send(Notification::SessionReady(
-                            SessionReadyPayload {
+                        let _ =
+                            event_tx_clone.send(Notification::SessionReady(SessionReadyPayload {
                                 thread_id: agent_id.clone(),
                                 acp_session_id: sid.0.to_string(),
-                            },
-                        ));
+                            }));
                         sid
                     }
                     Err(e) => {
@@ -191,14 +197,7 @@ pub(crate) async fn initialize_agent(
                 };
 
                 // Command loop: receive commands from the main thread
-                agent_command_loop(
-                    conn,
-                    session_id,
-                    command_rx,
-                    agent_id,
-                    event_tx_clone,
-                )
-                .await;
+                agent_command_loop(conn, session_id, command_rx, agent_id, event_tx_clone).await;
             });
         })
         .map_err(|e| format!("Failed to spawn agent thread: {}", e))?;
@@ -250,18 +249,10 @@ pub(crate) async fn initialize_agent(
         .insert(agent_id.clone(), handle_arc.clone());
 
     // Initialize history for this thread
-    history
-        .write()
-        .await
-        .entry(agent_id.clone())
-        .or_default();
+    history.write().await.entry(agent_id.clone()).or_default();
 
     // Spawn the prompt loop for this thread.
-    let loop_handle = tokio::spawn(prompt_loop(
-        agent_id,
-        handle_arc.clone(),
-        event_tx.clone(),
-    ));
+    let loop_handle = tokio::spawn(prompt_loop(agent_id, handle_arc.clone(), event_tx.clone()));
 
     // Store the loop handle so kill_thread can abort it.
     handle_arc.lock().await.prompt_loop_handle = Some(loop_handle);

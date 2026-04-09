@@ -97,12 +97,12 @@ impl WorkspaceManager {
     }
 
     fn emit_status(&self, workspace_id: &WorkspaceId, status: ContainerStatus) {
-        let _ = self
-            .event_tx
-            .send(Notification::WorkspaceStatusChange(WorkspaceStatusChangePayload {
+        let _ = self.event_tx.send(Notification::WorkspaceStatusChange(
+            WorkspaceStatusChangePayload {
                 workspace_id: workspace_id.clone(),
                 status,
-            }));
+            },
+        ));
     }
 
     fn generate_id() -> String {
@@ -375,8 +375,8 @@ impl WorkspaceManager {
             .await
             .map_err(|e| format!("Failed to read metadata: {}", e))?;
 
-        let mut metadata: WorkspaceMetadata = serde_json::from_str(&raw)
-            .map_err(|e| format!("Failed to parse metadata: {}", e))?;
+        let mut metadata: WorkspaceMetadata =
+            serde_json::from_str(&raw).map_err(|e| format!("Failed to parse metadata: {}", e))?;
 
         metadata.name = name;
 
@@ -429,7 +429,11 @@ impl WorkspaceManager {
 
         // Set up workspace symlinks in all existing agent directories
         if let Err(e) = container::setup_agent_symlinks(&container_id).await {
-            log::warn!("Failed to set up agent symlinks for workspace '{}': {}", id, e);
+            log::warn!(
+                "Failed to set up agent symlinks for workspace '{}': {}",
+                id,
+                e
+            );
         }
 
         {
@@ -538,18 +542,12 @@ impl WorkspaceManager {
                 .workspaces
                 .get(workspace_id)
                 .and_then(|ws| ws.container_id.clone())
-                .ok_or_else(|| {
-                    format!("No running container for workspace '{}'", workspace_id)
-                })?
+                .ok_or_else(|| format!("No running container for workspace '{}'", workspace_id))?
         };
 
-        let session = terminal::create_session(
-            docker,
-            &container_id,
-            workspace_id.clone(),
-            &self.event_tx,
-        )
-        .await?;
+        let session =
+            terminal::create_session(docker, &container_id, workspace_id.clone(), &self.event_tx)
+                .await?;
 
         let session_id = session.session_id.clone();
         self.terminal_sessions

@@ -175,9 +175,7 @@ impl AgentManager {
                     .and_then(|ws| ws.container_id.clone())
             };
             if let Some(cid) = container_id {
-                if let Err(e) =
-                    crate::workspace::container::setup_agent_symlink(&cid, &id).await
-                {
+                if let Err(e) = crate::workspace::container::setup_agent_symlink(&cid, &id).await {
                     log::warn!("Failed to create agent symlink in container: {}", e);
                 }
             }
@@ -273,9 +271,7 @@ impl AgentManager {
             let ws = state
                 .workspaces
                 .get(&definition.workspace_id)
-                .ok_or_else(|| {
-                    format!("Workspace '{}' not found", definition.workspace_id)
-                })?;
+                .ok_or_else(|| format!("Workspace '{}' not found", definition.workspace_id))?;
             match &ws.container_status {
                 emergent_protocol::ContainerStatus::Running => {}
                 other => {
@@ -285,14 +281,12 @@ impl AgentManager {
                     ));
                 }
             }
-            ws.container_id
-                .clone()
-                .ok_or_else(|| {
-                    format!(
-                        "Workspace '{}' has no container_id",
-                        definition.workspace_id
-                    )
-                })?
+            ws.container_id.clone().ok_or_else(|| {
+                format!(
+                    "Workspace '{}' has no container_id",
+                    definition.workspace_id
+                )
+            })?
         };
 
         self.threads
@@ -327,9 +321,7 @@ impl AgentManager {
             let ws = state
                 .workspaces
                 .get(&definition.workspace_id)
-                .ok_or_else(|| {
-                    format!("Workspace '{}' not found", definition.workspace_id)
-                })?;
+                .ok_or_else(|| format!("Workspace '{}' not found", definition.workspace_id))?;
             match &ws.container_status {
                 emergent_protocol::ContainerStatus::Running => {}
                 other => {
@@ -339,14 +331,12 @@ impl AgentManager {
                     ));
                 }
             }
-            ws.container_id
-                .clone()
-                .ok_or_else(|| {
-                    format!(
-                        "Workspace '{}' has no container_id",
-                        definition.workspace_id
-                    )
-                })?
+            ws.container_id.clone().ok_or_else(|| {
+                format!(
+                    "Workspace '{}' has no container_id",
+                    definition.workspace_id
+                )
+            })?
         };
 
         self.threads
