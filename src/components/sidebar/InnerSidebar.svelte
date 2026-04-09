@@ -17,7 +17,7 @@
     selectedAgentId: string | null;
     demoMode: boolean;
     containerRunning: boolean;
-    onSelectView: (view: "swarm" | "settings" | "terminal") => void;
+    onSelectView: (view: "swarm" | "settings" | "terminal" | "tasks") => void;
     onSelectAgent: (id: string) => void;
     onOverflowMenu?: (x: number, y: number) => void;
     onCreateAgent: () => void;
@@ -47,7 +47,7 @@
       enabled: containerRunning,
     },
     { id: "skills", label: "Skills", icon: Sparkles, enabled: false },
-    { id: "tasks", label: "Tasks", icon: ListChecks, enabled: false },
+    { id: "tasks", label: "Tasks", icon: ListChecks, enabled: true },
   ]);
 
   function aggregateStatus(threads: { processStatus: string }[]): string {
@@ -101,7 +101,8 @@
             ? (item.id === 'settings' && activeView === 'settings') ||
               (item.id === 'swarm' &&
                 (activeView === 'swarm' || activeView.startsWith('agent'))) ||
-              (item.id === 'terminal' && activeView === 'terminal')
+              (item.id === 'terminal' && activeView === 'terminal') ||
+              (item.id === 'tasks' && activeView === 'tasks')
               ? 'bg-bg-hover text-fg-heading'
               : 'text-fg-muted hover:bg-bg-hover'
             : 'text-fg-disabled cursor-default'}"
@@ -111,6 +112,7 @@
               if (item.id === "swarm") onSelectView("swarm");
               else if (item.id === "settings") onSelectView("settings");
               else if (item.id === "terminal") onSelectView("terminal");
+              else if (item.id === "tasks") onSelectView("tasks");
             }
           }}
         >

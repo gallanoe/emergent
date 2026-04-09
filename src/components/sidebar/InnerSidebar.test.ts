@@ -41,7 +41,7 @@ function renderSidebar(overrides: Record<string, unknown> = {}) {
       demoMode: (overrides.demoMode as boolean) ?? false,
       containerRunning: (overrides.containerRunning as boolean) ?? false,
       onSelectView:
-        (overrides.onSelectView as (view: "swarm" | "settings" | "terminal") => void) ?? (() => {}),
+        (overrides.onSelectView as (view: "swarm" | "settings" | "terminal" | "tasks") => void) ?? (() => {}),
       onSelectAgent: (overrides.onSelectAgent as (id: string) => void) ?? (() => {}),
       onCreateAgent: (overrides.onCreateAgent as () => void) ?? (() => {}),
       onOverflowMenu: (overrides.onOverflowMenu as (x: number, y: number) => void) ?? (() => {}),

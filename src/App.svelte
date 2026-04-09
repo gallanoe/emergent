@@ -11,6 +11,9 @@
   import ThreadListView from "./components/agent/ThreadListView.svelte";
   import AgentSettingsView from "./components/agent/AgentSettingsView.svelte";
   import AgentCreatorView from "./components/agent/AgentCreatorView.svelte";
+  import TaskTableView from "./components/tasks/TaskTableView.svelte";
+  import TaskDetailSidebar from "./components/tasks/TaskDetailSidebar.svelte";
+  import CreateTaskSidebar from "./components/tasks/CreateTaskSidebar.svelte";
   import ConfirmDialog from "./components/ConfirmDialog.svelte";
   import ContextMenu from "./components/sidebar/ContextMenu.svelte";
   import CreateWorkspaceDialog from "./components/CreateWorkspaceDialog.svelte";
@@ -207,6 +210,8 @@
             appState.activeView = "settings";
           } else if (view === "terminal") {
             appState.activeView = "terminal";
+          } else if (view === "tasks") {
+            appState.showTasks();
           }
         }}
         onSelectAgent={(id) => appState.selectAgent(id)}
@@ -331,6 +336,77 @@
           }
         }}
       />
+    {:else if appState.activeView === "tasks" && appState.selectedSwarmId}
+      <div class="flex flex-col h-full min-h-0">
+        <div
+          class="flex items-center h-[38px] px-5 border-b border-border-default flex-shrink-0 relative z-[60]"
+        >
+          <span class="text-[13px] font-semibold text-fg-heading"
+            >{appState.selectedSwarm?.name ?? ""}</span
+          >
+        </div>
+        <div
+          class="flex-1 min-h-0"
+          style="display:grid; grid-template-columns: {appState.taskSidebarMode ? '1fr 320px' : '1fr'};"
+        >
+          <!-- Table -->
+          <div class="overflow-y-auto p-3.5">
+            <div class="flex items-center justify-between mb-3 px-1">
+              <div class="text-[11px] text-fg-disabled">
+                {appState.workspaceTasks.length} tasks
+              </div>
+              <button
+                class="flex items-center gap-1.5 text-[11px] font-medium text-bg-base bg-accent hover:bg-accent-hover rounded-md px-3 py-1.5"
+                onclick={() => appState.openCreateTask()}
+              >
+                <Plus size={11} />
+                New task
+              </button>
+            </div>
+            <TaskTableView
+              tasks={appState.workspaceTasks}
+              selectedTaskId={appState.selectedTaskId}
+              agentNames={Object.fromEntries(
+                Object.values(appState.agentDefinitionsMap ?? {}).map((d) => [d.id, d.name]),
+              )}
+              onSelectTask={(id) => appState.selectTask(id)}
+              onNavigateToSession={(threadId) => appState.selectThread(threadId)}
+            />
+          </div>
+          <!-- Sidebar -->
+          {#if appState.taskSidebarMode === "detail" && appState.selectedTaskId}
+            {@const task = appState.tasks[appState.selectedTaskId]}
+            {#if task}
+              <TaskDetailSidebar
+                {task}
+                allTasks={appState.tasks}
+                agentNames={Object.fromEntries(
+                  Object.values(appState.agentDefinitionsMap ?? {}).map((d) => [d.id, d.name]),
+                )}
+                onClose={() => appState.closeTaskSidebar()}
+                onSelectTask={(id) => appState.selectTask(id)}
+                onNavigateToSession={(threadId) => appState.selectThread(threadId)}
+              />
+            {/if}
+          {:else if appState.taskSidebarMode === "create"}
+            <CreateTaskSidebar
+              agentDefinitions={Object.values(appState.agentDefinitionsMap ?? {})}
+              existingTasks={appState.workspaceTasks}
+              onClose={() => appState.closeTaskSidebar()}
+              onCreate={async (title, desc, agentId, blockerIds) => {
+                await appState.createTask(
+                  appState.selectedSwarmId!,
+                  title,
+                  desc,
+                  agentId,
+                  blockerIds,
+                );
+                appState.closeTaskSidebar();
+              }}
+            />
+          {/if}
+        </div>
+      </div>
     {:else if appState.activeView === "agent-threads" && appState.selectedAgentDef}
       <ThreadListView
         agentDefinition={appState.selectedAgentDef}
