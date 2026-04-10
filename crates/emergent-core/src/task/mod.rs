@@ -194,7 +194,15 @@ impl TaskManager {
         self.persist_tasks(&workspace_id).await;
 
         if blocker_ids.is_empty() {
-            self.start_task(&task_id).await?;
+            if let Err(e) = self.start_task(&task_id).await {
+                log::error!("Failed to start task {} at creation: {}", task_id, e);
+                // Mark the orphaned task Failed so it is visible to the user
+                // and not retried on every subsequent completion in the workspace.
+                if let Err(fe) = self.fail_task(&task_id).await {
+                    log::error!("Failed to mark task {} as failed: {}", task_id, fe);
+                }
+                return Err(e);
+            }
         }
 
         Ok(task_id)
