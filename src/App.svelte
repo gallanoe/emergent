@@ -453,7 +453,9 @@
         <ThreadListView
           agentDefinition={appState.selectedAgentDef}
           tasks={appState.agentTasks}
+          activeTab={appState.agentViewTab}
           onSelectTask={(id) => appState.selectTask(id)}
+          onSelectTab={(tab) => appState.setAgentViewTab(tab)}
           onSelectThread={(id) => appState.selectThread(id)}
           onNewThread={async () => {
             const threadId = await appState.spawnThread(

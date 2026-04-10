@@ -12,6 +12,7 @@
   interface Props {
     agentDefinition: DisplayAgentDefinition;
     tasks: DisplayTask[];
+    activeTab: "threads" | "tasks";
     onSelectThread: (threadId: string) => void;
     onNewThread: () => void;
     onOpenSettings: () => void;
@@ -19,11 +20,13 @@
     onStopThread: (threadId: string) => void;
     onDeleteThread: (threadId: string) => void;
     onSelectTask: (taskId: string) => void;
+    onSelectTab: (tab: "threads" | "tasks") => void;
   }
 
   let {
     agentDefinition,
     tasks,
+    activeTab,
     onSelectThread,
     onNewThread,
     onOpenSettings,
@@ -31,9 +34,8 @@
     onStopThread,
     onDeleteThread,
     onSelectTask,
+    onSelectTab,
   }: Props = $props();
-
-  let activeTab = $state<"threads" | "tasks">("threads");
 
   const conversationThreads = $derived(
     agentDefinition.threads.filter((t) => !t.taskId),
@@ -142,7 +144,7 @@
                {activeTab === 'threads'
           ? 'bg-bg-hover text-fg-heading shadow-sm'
           : 'text-fg-disabled'}"
-        onclick={() => (activeTab = "threads")}
+        onclick={() => onSelectTab("threads")}
       >
         Threads
         <span
@@ -158,7 +160,7 @@
                {activeTab === 'tasks'
           ? 'bg-bg-hover text-fg-heading shadow-sm'
           : 'text-fg-disabled'}"
-        onclick={() => (activeTab = "tasks")}
+        onclick={() => onSelectTab("tasks")}
       >
         Tasks
         <span

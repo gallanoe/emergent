@@ -52,6 +52,9 @@ function createAppState() {
   // Previous view stashed when navigating to agent-chat from the tasks view,
   // so the back button returns to where the user came from.
   let chatReturnView = $state<ActiveView | null>(null);
+  // Which segmented-control tab is active inside ThreadListView. Persisted in
+  // appState so it survives the agent-chat round-trip (the component remounts).
+  let agentViewTab = $state<"threads" | "tasks">("threads");
   let dockerStatus = $state<DockerStatus | null>(null);
   let terminalSessionIds = $state<Record<string, string>>({});
   let tasks = $state<Record<string, DisplayTask>>({});
@@ -387,6 +390,11 @@ function createAppState() {
   }
 
   function selectAgent(agentId: string) {
+    if (agentId !== selectedAgentId) {
+      // Reset the segmented tab when switching to a different agent so the
+      // user lands on Threads by default.
+      agentViewTab = "threads";
+    }
     selectedAgentId = agentId;
     selectedThreadId = null;
     // Find which workspace this agent belongs to and select it
@@ -638,6 +646,12 @@ function createAppState() {
     },
     get activeWorkspaceTaskCount() {
       return activeWorkspaceTaskCount;
+    },
+    get agentViewTab() {
+      return agentViewTab;
+    },
+    setAgentViewTab(tab: "threads" | "tasks") {
+      agentViewTab = tab;
     },
     get agentTasks() {
       return agentTasks;
