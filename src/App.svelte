@@ -420,22 +420,48 @@
         </div>
       </div>
     {:else if appState.activeView === "agent-threads" && appState.selectedAgentDef}
-      <ThreadListView
-        agentDefinition={appState.selectedAgentDef}
-        tasks={appState.agentTasks}
-        onSelectTask={(id) => appState.selectTask(id)}
-        onSelectThread={(id) => appState.selectThread(id)}
-        onNewThread={async () => {
-          const threadId = await appState.spawnThread(
-            appState.selectedAgentId!,
-          );
-          appState.selectThread(threadId);
-        }}
-        onOpenSettings={() => appState.openAgentSettings()}
-        onResumeThread={(id) => appState.resumeThread(id)}
-        onStopThread={(id) => appState.stopThread(id)}
-        onDeleteThread={(id) => appState.deleteThread(id)}
-      />
+      <div
+        class="flex-1 min-h-0"
+        style="display:grid; grid-template-columns: {appState.taskSidebarMode
+          ? '1fr 320px'
+          : '1fr'};"
+      >
+        <ThreadListView
+          agentDefinition={appState.selectedAgentDef}
+          tasks={appState.agentTasks}
+          onSelectTask={(id) => appState.selectTask(id)}
+          onSelectThread={(id) => appState.selectThread(id)}
+          onNewThread={async () => {
+            const threadId = await appState.spawnThread(
+              appState.selectedAgentId!,
+            );
+            appState.selectThread(threadId);
+          }}
+          onOpenSettings={() => appState.openAgentSettings()}
+          onResumeThread={(id) => appState.resumeThread(id)}
+          onStopThread={(id) => appState.stopThread(id)}
+          onDeleteThread={(id) => appState.deleteThread(id)}
+        />
+        {#if appState.taskSidebarMode === "detail" && appState.selectedTaskId}
+          {@const task = appState.tasks[appState.selectedTaskId]}
+          {#if task}
+            <TaskDetailSidebar
+              {task}
+              allTasks={appState.tasks}
+              agentNames={Object.fromEntries(
+                Object.values(appState.agentDefinitionsMap ?? {}).map((d) => [
+                  d.id,
+                  d.name,
+                ]),
+              )}
+              onClose={() => appState.closeTaskSidebar()}
+              onSelectTask={(id) => appState.selectTask(id)}
+              onNavigateToSession={(threadId) =>
+                appState.selectThread(threadId)}
+            />
+          {/if}
+        {/if}
+      </div>
     {:else if appState.activeView === "agent-settings" && appState.selectedAgentDef}
       <AgentSettingsView
         agentDefinition={appState.selectedAgentDef}
