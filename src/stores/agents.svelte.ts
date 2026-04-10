@@ -31,6 +31,7 @@ interface ThreadState {
   role?: string;
   hasPrompted?: boolean;
   acpSessionId?: string | null;
+  taskId?: string | null;
 }
 
 // ── Event payloads from Rust ────────────────────────────────────
@@ -452,6 +453,7 @@ function createAgentStore() {
     agentDefinitionId: string,
     agentDefinition: AgentDefinition,
     acpSessionId: string | null,
+    taskId?: string | null,
   ) {
     if (threads[threadId]) return; // Already known (live thread)
 
@@ -472,6 +474,7 @@ function createAgentStore() {
       configOptions: [],
       hasManagementPermissions: false,
       acpSessionId,
+      taskId: taskId ?? null,
     };
   }
 
@@ -649,6 +652,7 @@ function createAgentStore() {
       ...(conn.role !== undefined && { role: conn.role }),
       updatedAt: conn.messages.at(-1)?.timestamp ?? "just now",
       stopReason: conn.stopReason,
+      taskId: conn.taskId ?? null,
     };
   }
 

@@ -109,6 +109,7 @@ function createAppState() {
                 mapping.agent_definition_id,
                 def,
                 mapping.acp_session_id,
+                mapping.task_id,
               );
             }
           }
@@ -181,6 +182,7 @@ function createAppState() {
             task.agent_id,
             def,
             null,
+            task.id,
           );
         }
       }

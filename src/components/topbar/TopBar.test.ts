@@ -20,6 +20,7 @@ function makeAgent(overrides?: Partial<DisplayThread>): DisplayThread {
     configOptions: [],
     hasManagementPermissions: false,
     stopReason: null,
+    taskId: null,
     ...overrides,
   };
 }

@@ -92,6 +92,7 @@ export interface ThreadMapping {
   thread_id: string;
   agent_definition_id: string;
   acp_session_id: string | null;
+  task_id?: string | null;
 }
 
 export interface DisplayThread {
@@ -112,6 +113,7 @@ export interface DisplayThread {
   role?: string;
   updatedAt: string;
   stopReason: string | null;
+  taskId: string | null;
 }
 
 export interface DisplayAgentDefinition {

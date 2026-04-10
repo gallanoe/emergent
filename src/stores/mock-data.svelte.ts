@@ -129,6 +129,7 @@ const mockAgents: DisplayThread[] = [
     configOptions: [],
     hasManagementPermissions: false,
     stopReason: null,
+    taskId: null,
   },
   {
     id: "agent-2",
@@ -190,6 +191,7 @@ const mockAgents: DisplayThread[] = [
     configOptions: [],
     hasManagementPermissions: false,
     stopReason: null,
+    taskId: null,
   },
 ];
 

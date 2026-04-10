@@ -35,6 +35,13 @@
 
   let activeTab = $state<"threads" | "tasks">("threads");
 
+  const conversationThreads = $derived(
+    agentDefinition.threads.filter((t) => !t.taskId),
+  );
+  const taskSessionThreads = $derived(
+    agentDefinition.threads.filter((t) => t.taskId),
+  );
+
   let menuThreadId = $state<string | null>(null);
   let menuPos = $state({ x: 0, y: 0 });
   let deleteThreadId = $state<string | null>(null);
@@ -192,13 +199,13 @@
         Conversations
       </div>
 
-      {#if agentDefinition.threads.length === 0}
+      {#if conversationThreads.length === 0}
         <div class="px-2.5 py-4 text-[11px] text-fg-disabled text-center">
           No threads yet. Create one to start a conversation.
         </div>
       {:else}
         <div class="max-h-[280px] overflow-y-auto relative">
-          {#each agentDefinition.threads as thread (thread.id)}
+          {#each conversationThreads as thread (thread.id)}
             <div
               class="relative group mt-0.5 flex items-center rounded-md hover:bg-bg-hover transition-colors"
             >
@@ -232,12 +239,62 @@
             </div>
           {/each}
           <!-- Fade hint for overflow -->
-          {#if agentDefinition.threads.length > 5}
+          {#if conversationThreads.length > 5}
             <div
               class="absolute bottom-0 left-0 right-1.5 h-6 bg-gradient-to-t from-bg-base to-transparent pointer-events-none"
             ></div>
           {/if}
         </div>
+      {/if}
+
+      {#if taskSessionThreads.length > 0}
+        <div
+          class="text-[10px] font-medium uppercase tracking-wider text-fg-disabled px-2.5 pt-4 pb-1"
+        >
+          Task Sessions
+        </div>
+
+        {#each taskSessionThreads as thread (thread.id)}
+          <div
+            class="relative group mt-0.5 flex items-center rounded-md hover:bg-bg-hover transition-colors"
+          >
+            <button
+              class="flex items-center gap-2 flex-1 min-w-0 px-2.5 py-[7px] text-[12px] text-fg-muted hover:text-fg-heading transition-colors"
+              onclick={() => onSelectThread(thread.id)}
+            >
+              <span
+                class="w-[6px] h-[6px] rounded-full flex-shrink-0 {statusColor(
+                  thread.processStatus,
+                )}"
+              ></span>
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                class="flex-shrink-0 opacity-70"
+                ><path d="m3 17 2 2 4-4" /><path d="m3 7 2 2 4-4" /><path
+                  d="M13 6h8"
+                /><path d="M13 12h8" /><path d="M13 18h8" /></svg
+              >
+              <span class="flex-1 truncate text-left">{thread.name}</span>
+              <span
+                class="text-[10px] font-mono text-fg-disabled flex-shrink-0"
+                >{thread.taskId}</span
+              >
+            </button>
+            <!-- Kebab menu trigger -->
+            <button
+              class="flex items-center justify-center w-[26px] h-[26px] flex-shrink-0 rounded-[4px] text-fg-disabled opacity-0 group-hover:opacity-100 hover:text-fg-muted transition-all mr-0.5"
+              title="Thread actions"
+              onclick={(e) => openMenu(e, thread.id)}
+            >
+              <EllipsisVertical size={13} />
+            </button>
+          </div>
+        {/each}
       {/if}
     </div>
   {:else}

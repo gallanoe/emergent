@@ -20,6 +20,7 @@ function makeAgent(messages: DisplayMessage[], overrides?: Partial<DisplayThread
     configOptions: [],
     hasManagementPermissions: false,
     stopReason: null,
+    taskId: null,
     ...overrides,
   };
 }
