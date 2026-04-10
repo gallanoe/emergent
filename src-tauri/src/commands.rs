@@ -337,10 +337,15 @@ pub async fn open_dockerfile_editor(
 #[tauri::command]
 pub async fn start_container(
     workspace_manager: State<'_, Arc<WorkspaceManager>>,
+    task_manager: State<'_, Arc<emergent_core::task::TaskManager>>,
     workspace_id: String,
 ) -> Result<(), String> {
     let id = emergent_protocol::WorkspaceId::from(workspace_id.as_str());
-    workspace_manager.start_container(&id).await
+    workspace_manager.start_container(&id).await?;
+    // Container is now running — resume any Working task threads and kick
+    // off any Pending tasks whose blockers are all Completed.
+    task_manager.resume_workspace_tasks(&id).await;
+    Ok(())
 }
 
 #[tauri::command]

@@ -70,6 +70,10 @@ pub fn run() {
                 let mut recoverable_thread_ids: std::collections::HashSet<String> =
                     manager.live_thread_ids().await;
 
+                // Workspaces whose containers are running — candidates for
+                // eager task resume + start-unblocked after recovery.
+                let mut running_workspaces: Vec<emergent_protocol::WorkspaceId> = Vec::new();
+
                 let state = workspace_state.read().await;
                 for (ws_id, ws) in state.workspaces.iter() {
                     if let Err(e) = manager.load_agents_for_workspace(ws_id).await {
@@ -93,12 +97,28 @@ pub fn run() {
                             recoverable_thread_ids.insert(m.thread_id);
                         }
                     }
+
+                    if matches!(
+                        ws.container_status,
+                        emergent_protocol::ContainerStatus::Running
+                    ) {
+                        running_workspaces.push(ws_id.clone());
+                    }
                 }
                 drop(state);
 
                 task_manager
                     .recover_stale_tasks(&recoverable_thread_ids)
                     .await;
+
+                // For each workspace whose container is already running, resume
+                // any Working task threads and start any Pending tasks with all
+                // blockers Completed. Workspaces whose containers are stopped
+                // are deferred until the user brings the container up via
+                // start_container, which triggers the same logic.
+                for ws_id in running_workspaces {
+                    task_manager.resume_workspace_tasks(&ws_id).await;
+                }
             });
 
             app.manage(manager.clone());
