@@ -3,7 +3,7 @@ pub mod registry;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use emergent_protocol::{Notification, Task, TaskPayload, TaskStatus, WorkspaceId};
+use emergent_protocol::{Notification, Task, TaskPayload, TaskState, WorkspaceId};
 use tokio::sync::{broadcast, RwLock};
 
 use crate::agent::AgentManager;
@@ -31,15 +31,16 @@ impl TaskManagerRef {
         {
             let mut reg = self.registry.write().await;
             for task in reg.all_tasks_mut() {
-                if task.status == TaskStatus::Working {
-                    if let Some(ref sid) = task.session_id {
-                        if !live.contains(sid) {
-                            task.status = TaskStatus::Failed;
-                            affected_workspaces.insert(task.workspace_id.clone());
-                            let _ = self.event_tx.send(Notification::TaskUpdated(TaskPayload {
-                                task: task.clone(),
-                            }));
-                        }
+                if let TaskState::Working { session_id } = &task.state {
+                    if !live.contains(session_id) {
+                        let sid = session_id.clone();
+                        task.state = TaskState::Failed {
+                            session_id: Some(sid),
+                        };
+                        affected_workspaces.insert(task.workspace_id.clone());
+                        let _ = self.event_tx.send(Notification::TaskUpdated(TaskPayload {
+                            task: task.clone(),
+                        }));
                     }
                 }
             }
@@ -134,11 +135,12 @@ impl TaskManager {
             let reg = registry.read().await;
             let mut found = None;
             for task in reg.all_tasks() {
-                if task.session_id.as_deref() == Some(thread_id)
-                    && task.status == TaskStatus::Working
-                {
-                    found = Some((task.id.clone(), task.title.clone(), task.description.clone()));
-                    break;
+                if let TaskState::Working { session_id } = &task.state {
+                    if session_id == thread_id {
+                        found =
+                            Some((task.id.clone(), task.title.clone(), task.description.clone()));
+                        break;
+                    }
                 }
             }
             found
@@ -178,10 +180,15 @@ impl TaskManager {
         let workspace_id = {
             let mut reg = registry.write().await;
             let task = reg.all_tasks_mut().find(|t| {
-                t.session_id.as_deref() == Some(thread_id) && t.status == TaskStatus::Working
+                matches!(
+                    &t.state,
+                    TaskState::Working { session_id } if session_id == thread_id
+                )
             });
             if let Some(task) = task {
-                task.status = TaskStatus::Failed;
+                task.state = TaskState::Failed {
+                    session_id: Some(thread_id.to_string()),
+                };
                 let ws_id = task.workspace_id.clone();
                 let _ = event_tx.send(Notification::TaskUpdated(TaskPayload {
                     task: task.clone(),
@@ -266,24 +273,26 @@ impl TaskManager {
             let task = reg
                 .get_task_mut(task_id)
                 .ok_or_else(|| format!("Task '{}' not found", task_id))?;
-            if task.status != TaskStatus::Working {
-                return Err(format!(
-                    "Task '{}' is not in Working status (current: {:?})",
-                    task_id, task.status
-                ));
-            }
-            task.status = TaskStatus::Completed;
+            let session_id = match &task.state {
+                TaskState::Working { session_id } => session_id.clone(),
+                other => {
+                    return Err(format!(
+                        "Task '{}' is not in Working status (current: {:?})",
+                        task_id, other
+                    ));
+                }
+            };
+            task.state = TaskState::Completed {
+                session_id: session_id.clone(),
+            };
             let workspace_id = task.workspace_id.clone();
-            let session_id = task.session_id.clone();
             let _ = self.event_tx.send(Notification::TaskUpdated(TaskPayload {
                 task: task.clone(),
             }));
             (workspace_id, session_id)
         };
 
-        if let Some(sid) = session_id {
-            self.prompted_sessions.write().await.remove(&sid);
-        }
+        self.prompted_sessions.write().await.remove(&session_id);
 
         self.persist_tasks(&workspace_id).await;
         self.start_unblocked_tasks(&workspace_id).await;
@@ -297,9 +306,13 @@ impl TaskManager {
             let task = reg
                 .get_task_mut(task_id)
                 .ok_or_else(|| format!("Task '{}' not found", task_id))?;
-            task.status = TaskStatus::Failed;
+            // Preserve the existing session_id (if any) across the transition:
+            // a Pending task has none, Working/Completed/Failed may have one.
+            let session_id = task.state.session_id().map(str::to_string);
+            task.state = TaskState::Failed {
+                session_id: session_id.clone(),
+            };
             let workspace_id = task.workspace_id.clone();
-            let session_id = task.session_id.clone();
             let _ = self.event_tx.send(Notification::TaskUpdated(TaskPayload {
                 task: task.clone(),
             }));
@@ -360,8 +373,14 @@ impl TaskManager {
         {
             let mut reg = self.registry.write().await;
             for task in reg.all_tasks_mut() {
-                if &task.workspace_id == workspace_id && task.status == TaskStatus::Working {
-                    task.status = TaskStatus::Failed;
+                if &task.workspace_id != workspace_id {
+                    continue;
+                }
+                if let TaskState::Working { session_id } = &task.state {
+                    let sid = session_id.clone();
+                    task.state = TaskState::Failed {
+                        session_id: Some(sid),
+                    };
                     persisted = true;
                     let _ = self.event_tx.send(Notification::TaskUpdated(TaskPayload {
                         task: task.clone(),
@@ -379,15 +398,16 @@ impl TaskManager {
         {
             let mut reg = self.registry.write().await;
             for task in reg.all_tasks_mut() {
-                if task.status == TaskStatus::Working {
-                    if let Some(ref sid) = task.session_id {
-                        if !live_thread_ids.contains(sid) {
-                            task.status = TaskStatus::Failed;
-                            affected_workspaces.insert(task.workspace_id.clone());
-                            let _ = self.event_tx.send(Notification::TaskUpdated(TaskPayload {
-                                task: task.clone(),
-                            }));
-                        }
+                if let TaskState::Working { session_id } = &task.state {
+                    if !live_thread_ids.contains(session_id) {
+                        let sid = session_id.clone();
+                        task.state = TaskState::Failed {
+                            session_id: Some(sid),
+                        };
+                        affected_workspaces.insert(task.workspace_id.clone());
+                        let _ = self.event_tx.send(Notification::TaskUpdated(TaskPayload {
+                            task: task.clone(),
+                        }));
                     }
                 }
             }
@@ -414,8 +434,11 @@ impl TaskManager {
         {
             let mut reg = self.registry.write().await;
             if let Some(task) = reg.get_task_mut(task_id) {
-                task.session_id = Some(thread_id);
-                task.status = TaskStatus::Working;
+                // Atomic transition: state and session_id move together so the
+                // task is never observed in an invalid intermediate shape.
+                task.state = TaskState::Working {
+                    session_id: thread_id,
+                };
                 let _ = self.event_tx.send(Notification::TaskUpdated(TaskPayload {
                     task: task.clone(),
                 }));

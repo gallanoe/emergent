@@ -3,7 +3,7 @@ use std::fmt::Write;
 use std::path::Path;
 
 use chrono::Utc;
-use emergent_protocol::{Task, TaskStatus, WorkspaceId};
+use emergent_protocol::{Task, TaskState, WorkspaceId};
 
 fn generate_id() -> String {
     let mut buf = [0u8; 4];
@@ -39,11 +39,10 @@ impl TaskRegistry {
             id: id.clone(),
             title,
             description,
-            status: TaskStatus::Pending,
+            state: TaskState::Pending,
             parent_id,
             blocker_ids,
             agent_id,
-            session_id: None,
             workspace_id,
             created_at: Utc::now(),
         };
@@ -77,13 +76,11 @@ impl TaskRegistry {
     pub fn find_unblocked_tasks(&self, workspace_id: &WorkspaceId) -> Vec<String> {
         self.tasks
             .values()
-            .filter(|t| &t.workspace_id == workspace_id && t.status == TaskStatus::Pending)
+            .filter(|t| &t.workspace_id == workspace_id && t.state.is_pending())
             .filter(|t| {
-                t.blocker_ids.iter().all(|bid| {
-                    self.tasks
-                        .get(bid)
-                        .is_some_and(|b| b.status == TaskStatus::Completed)
-                })
+                t.blocker_ids
+                    .iter()
+                    .all(|bid| self.tasks.get(bid).is_some_and(|b| b.state.is_completed()))
             })
             .map(|t| t.id.clone())
             .collect()
@@ -91,10 +88,9 @@ impl TaskRegistry {
 
     /// Check if an agent has any Pending or Working tasks.
     pub fn agent_has_active_tasks(&self, agent_id: &str) -> bool {
-        self.tasks.values().any(|t| {
-            t.agent_id == agent_id
-                && (t.status == TaskStatus::Pending || t.status == TaskStatus::Working)
-        })
+        self.tasks
+            .values()
+            .any(|t| t.agent_id == agent_id && t.state.is_active())
     }
 
     pub fn all_tasks(&self) -> impl Iterator<Item = &Task> {
@@ -167,8 +163,8 @@ mod tests {
         );
         let task = reg.get_task(&id).unwrap();
         assert_eq!(task.title, "Build auth");
-        assert_eq!(task.status, TaskStatus::Pending);
-        assert!(task.session_id.is_none());
+        assert!(task.state.is_pending());
+        assert_eq!(task.session_id(), None);
         assert!(task.parent_id.is_none());
     }
 
@@ -238,7 +234,9 @@ mod tests {
             vec![blocker_id.clone()],
             None,
         );
-        reg.get_task_mut(&blocker_id).unwrap().status = TaskStatus::Completed;
+        reg.get_task_mut(&blocker_id).unwrap().state = TaskState::Completed {
+            session_id: "t1".into(),
+        };
         let unblocked = reg.find_unblocked_tasks(&ws_id());
         assert!(unblocked.contains(&blocked_id));
     }
@@ -249,7 +247,9 @@ mod tests {
         let id = reg.create_task(ws_id(), "A".into(), "d".into(), "agent-1".into(), vec![], None);
         assert!(reg.agent_has_active_tasks("agent-1"));
         assert!(!reg.agent_has_active_tasks("agent-2"));
-        reg.get_task_mut(&id).unwrap().status = TaskStatus::Completed;
+        reg.get_task_mut(&id).unwrap().state = TaskState::Completed {
+            session_id: "t1".into(),
+        };
         assert!(!reg.agent_has_active_tasks("agent-1"));
     }
 

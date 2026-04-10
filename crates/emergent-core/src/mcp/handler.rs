@@ -142,11 +142,11 @@ impl McpHandler {
         let mut tasks = self.task_manager.list_tasks(&workspace_id).await;
 
         if let Some(ref s) = params.status {
-            let filter_status = match s.as_str() {
-                "pending" => emergent_protocol::TaskStatus::Pending,
-                "working" => emergent_protocol::TaskStatus::Working,
-                "completed" => emergent_protocol::TaskStatus::Completed,
-                "failed" => emergent_protocol::TaskStatus::Failed,
+            let predicate: fn(&emergent_protocol::TaskState) -> bool = match s.as_str() {
+                "pending" => emergent_protocol::TaskState::is_pending,
+                "working" => emergent_protocol::TaskState::is_working,
+                "completed" => emergent_protocol::TaskState::is_completed,
+                "failed" => emergent_protocol::TaskState::is_failed,
                 _ => {
                     return Err(rmcp::model::ErrorData::invalid_params(
                         format!("Invalid status: {}", s),
@@ -154,7 +154,7 @@ impl McpHandler {
                     ))
                 }
             };
-            tasks.retain(|t| t.status == filter_status);
+            tasks.retain(|t| predicate(&t.state));
         }
         if let Some(ref aid) = params.agent_id {
             tasks.retain(|t| &t.agent_id == aid);
