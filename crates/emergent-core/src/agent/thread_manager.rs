@@ -389,23 +389,25 @@ impl ThreadManager {
 
     /// Kill all threads belonging to a given agent definition.
     pub async fn kill_threads_for_agent(&self, agent_definition_id: &str) -> Result<(), String> {
-        let thread_ids: Vec<String> = {
+        let candidates: Vec<(String, Arc<Mutex<ThreadHandle>>)> = {
             let threads = self.threads.read().await;
             threads
                 .iter()
-                .filter_map(|(id, handle_arc)| {
-                    // We need to check without async — use try_lock
-                    if let Ok(handle) = handle_arc.try_lock() {
-                        if handle.agent_id == agent_definition_id {
-                            return Some(id.clone());
-                        }
-                    }
-                    None
-                })
+                .map(|(id, handle_arc)| (id.clone(), handle_arc.clone()))
                 .collect()
         };
 
-        for id in thread_ids {
+        let mut to_kill = Vec::new();
+        for (id, handle_arc) in candidates {
+            // Use .lock().await so we do not silently skip threads whose
+            // mutex is temporarily held by the prompt loop.
+            let handle = handle_arc.lock().await;
+            if handle.agent_id == agent_definition_id {
+                to_kill.push(id);
+            }
+        }
+
+        for id in to_kill {
             self.kill_thread(&id).await?;
         }
 
