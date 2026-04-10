@@ -342,6 +342,30 @@ impl AgentManager {
             })?
         };
 
+        // Recover persisted task_id so that task sessions remain callable
+        // via complete_task after resume.
+        let task_id = {
+            let workspace_dir = {
+                let state = self.workspace_state.read().await;
+                state
+                    .workspaces
+                    .get(&definition.workspace_id)
+                    .map(|ws| ws.path.clone())
+            };
+            match workspace_dir {
+                Some(dir) => crate::agent::thread_manager::ThreadManager::load_from_dir(&dir)
+                    .await
+                    .ok()
+                    .and_then(|mappings| {
+                        mappings
+                            .into_iter()
+                            .find(|m| m.thread_id == thread_id)
+                            .and_then(|m| m.task_id)
+                    }),
+                None => None,
+            }
+        };
+
         self.threads
             .resume_thread(
                 thread_id.to_string(),
@@ -351,6 +375,7 @@ impl AgentManager {
                 definition.cli,
                 definition.role,
                 acp_session_id.to_string(),
+                task_id,
             )
             .await
     }

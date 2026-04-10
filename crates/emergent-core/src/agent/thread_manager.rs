@@ -191,6 +191,7 @@ impl ThreadManager {
         agent_binary: String,
         role: Option<String>,
         acp_session_id: String,
+        task_id: Option<String>,
     ) -> Result<(), String> {
         // Check if thread is already live
         {
@@ -224,7 +225,7 @@ impl ThreadManager {
                 container_id,
                 agent_binary,
                 role,
-                None, // task_id not available during resume
+                task_id,
                 SessionInit::Load { acp_session_id },
                 threads,
                 event_tx.clone(),
