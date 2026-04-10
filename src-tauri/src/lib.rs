@@ -63,6 +63,13 @@ pub fn run() {
 
             // Load persisted agent definitions, thread mappings, and tasks for all workspaces
             tauri::async_runtime::block_on(async {
+                // Build the set of "recoverable" thread IDs — threads that either
+                // are currently live or have a persisted mapping that the frontend
+                // can later resume. Tasks whose session_id is not in this set
+                // cannot possibly make progress and should be marked Failed.
+                let mut recoverable_thread_ids: std::collections::HashSet<String> =
+                    manager.live_thread_ids().await;
+
                 let state = workspace_state.read().await;
                 for (ws_id, ws) in state.workspaces.iter() {
                     if let Err(e) = manager.load_agents_for_workspace(ws_id).await {
@@ -75,10 +82,23 @@ pub fn run() {
 
                     let workspace_path = &ws.path;
                     task_manager.load_tasks(workspace_path).await.ok();
-                }
 
-                let live_thread_ids = manager.live_thread_ids().await;
-                task_manager.recover_stale_tasks(&live_thread_ids).await;
+                    if let Ok(mappings) =
+                        emergent_core::agent::thread_manager::ThreadManager::load_from_dir(
+                            workspace_path,
+                        )
+                        .await
+                    {
+                        for m in mappings {
+                            recoverable_thread_ids.insert(m.thread_id);
+                        }
+                    }
+                }
+                drop(state);
+
+                task_manager
+                    .recover_stale_tasks(&recoverable_thread_ids)
+                    .await;
             });
 
             app.manage(manager.clone());
