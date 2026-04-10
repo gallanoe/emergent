@@ -86,13 +86,14 @@
   <!-- Header -->
   <div
     class="grid items-center bg-bg-elevated border-b border-border-default text-[10px] font-medium text-fg-muted"
-    style="grid-template-columns: 72px 62px 1fr {agentScoped
+    style="grid-template-columns: 72px 62px 1fr 72px {agentScoped
       ? ''
       : '72px '}80px;"
   >
     <div class="px-2.5 py-2">Task</div>
     <div class="py-2 px-1">Status</div>
     <div class="px-2 py-2">Title</div>
+    <div class="px-1.5 py-2">Parent</div>
     {#if !agentScoped}
       <div class="px-1.5 py-2">Agent</div>
     {/if}
@@ -109,7 +110,7 @@
         ? 'bg-bg-selected'
         : 'hover:bg-bg-hover'}
              {isCompleted ? 'opacity-50' : ''}"
-      style="grid-template-columns: 72px 62px 1fr {agentScoped
+      style="grid-template-columns: 72px 62px 1fr 72px {agentScoped
         ? ''
         : '72px '}80px;"
       onclick={() => handleRowClick(task)}
@@ -151,6 +152,9 @@
         >
           {task.title}
         </div>
+      </div>
+      <div class="px-1.5 py-2 text-[10px] font-mono text-fg-disabled truncate">
+        {task.parent_id ?? "—"}
       </div>
       {#if !agentScoped}
         <div class="px-1.5 py-2 text-[10px] text-fg-muted truncate">
