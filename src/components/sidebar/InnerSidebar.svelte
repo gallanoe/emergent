@@ -17,6 +17,7 @@
     selectedAgentId: string | null;
     demoMode: boolean;
     containerRunning: boolean;
+    activeTaskCount?: number;
     onSelectView: (view: "swarm" | "settings" | "terminal" | "tasks") => void;
     onSelectAgent: (id: string) => void;
     onOverflowMenu?: (x: number, y: number) => void;
@@ -29,6 +30,7 @@
     selectedAgentId,
     demoMode,
     containerRunning,
+    activeTaskCount = 0,
     onSelectView,
     onSelectAgent,
     onOverflowMenu,
@@ -36,7 +38,13 @@
   }: Props = $props();
 
   const navItems = $derived<
-    { id: string; label: string; icon: Component; enabled: boolean }[]
+    {
+      id: string;
+      label: string;
+      icon: Component;
+      enabled: boolean;
+      badge?: number;
+    }[]
   >([
     { id: "swarm", label: "Swarm", icon: LayoutGrid, enabled: true },
     { id: "settings", label: "Settings", icon: Settings, enabled: true },
@@ -47,7 +55,15 @@
       enabled: containerRunning,
     },
     { id: "skills", label: "Skills", icon: Sparkles, enabled: false },
-    { id: "tasks", label: "Tasks", icon: ListChecks, enabled: true },
+    activeTaskCount > 0
+      ? {
+          id: "tasks",
+          label: "Tasks",
+          icon: ListChecks,
+          enabled: true,
+          badge: activeTaskCount,
+        }
+      : { id: "tasks", label: "Tasks", icon: ListChecks, enabled: true },
   ]);
 
   function aggregateStatus(threads: { processStatus: string }[]): string {
@@ -120,7 +136,14 @@
             size={14}
             class={item.enabled ? "opacity-70" : "opacity-40"}
           />
-          {item.label}
+          <span class="flex-1 text-left">{item.label}</span>
+          {#if item.badge !== undefined}
+            <span
+              class="text-[10px] font-medium text-fg-muted bg-bg-elevated border border-border-default rounded-full px-1.5 min-w-[18px] text-center"
+            >
+              {item.badge}
+            </span>
+          {/if}
         </button>
       {/each}
     </div>

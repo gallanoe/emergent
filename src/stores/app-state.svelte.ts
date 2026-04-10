@@ -302,6 +302,10 @@ function createAppState() {
     Object.values(tasks).filter((t) => t.workspace_id === selectedWorkspaceId),
   );
 
+  const activeWorkspaceTaskCount = $derived(
+    workspaceTasks.filter((t) => t.status === "working" || t.status === "pending").length,
+  );
+
   const agentTasks = $derived(Object.values(tasks).filter((t) => t.agent_id === selectedAgentId));
 
   function selectTask(taskId: string) {
@@ -623,6 +627,9 @@ function createAppState() {
     },
     get workspaceTasks() {
       return workspaceTasks;
+    },
+    get activeWorkspaceTaskCount() {
+      return activeWorkspaceTaskCount;
     },
     get agentTasks() {
       return agentTasks;

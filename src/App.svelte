@@ -37,6 +37,14 @@
   let seq = 0;
   let shutdownTarget = $state<{ id: string; name: string } | null>(null);
   let showCreateWorkspace = $state(false);
+  let taskStatusFilter = $state<"all" | "working" | "pending" | "completed" | "failed">(
+    "all",
+  );
+  const filteredWorkspaceTasks = $derived(
+    taskStatusFilter === "all"
+      ? appState.workspaceTasks
+      : appState.workspaceTasks.filter((t) => t.status === taskStatusFilter),
+  );
   let workspaceMenu = $state<{
     x: number;
     y: number;
@@ -203,6 +211,7 @@
         demoMode={appState.demoMode}
         containerRunning={appState.selectedSwarm?.containerStatus.state ===
           "running"}
+        activeTaskCount={appState.activeWorkspaceTaskCount}
         onSelectView={(view) => {
           if (view === "swarm" && appState.selectedSwarmId) {
             appState.selectWorkspace(appState.selectedSwarmId);
@@ -355,7 +364,8 @@
           <div class="overflow-y-auto p-3.5">
             <div class="flex items-center justify-between mb-3 px-1">
               <div class="text-[11px] text-fg-disabled">
-                {appState.workspaceTasks.length} tasks
+                {filteredWorkspaceTasks.length} of {appState.workspaceTasks
+                  .length} tasks
               </div>
               <button
                 class="flex items-center gap-1.5 text-[11px] font-medium text-bg-base bg-accent hover:bg-accent-hover rounded-md px-3 py-1.5"
@@ -365,8 +375,22 @@
                 New task
               </button>
             </div>
+            <div class="flex items-center gap-1 mb-3 px-1">
+              {#each ["all", "working", "pending", "completed", "failed"] as f (f)}
+                <button
+                  class="px-2.5 py-1 rounded-md text-[10px] font-medium capitalize border transition-colors
+                    {taskStatusFilter === f
+                    ? 'bg-bg-selected text-fg-heading border-border-strong'
+                    : 'text-fg-muted border-border-default hover:bg-bg-hover'}"
+                  onclick={() =>
+                    (taskStatusFilter = f as typeof taskStatusFilter)}
+                >
+                  {f}
+                </button>
+              {/each}
+            </div>
             <TaskTableView
-              tasks={appState.workspaceTasks}
+              tasks={filteredWorkspaceTasks}
               selectedTaskId={appState.selectedTaskId}
               agentNames={Object.fromEntries(
                 Object.values(appState.agentDefinitionsMap ?? {}).map((d) => [
