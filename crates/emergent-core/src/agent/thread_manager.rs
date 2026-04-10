@@ -584,9 +584,13 @@ impl ThreadManager {
         let json = serde_json::to_string_pretty(mappings)
             .map_err(|e| format!("Failed to serialize thread mappings: {}", e))?;
         let path = workspace_dir.join("threads.json");
-        tokio::fs::write(&path, json)
+        let tmp_path = workspace_dir.join("threads.json.tmp");
+        tokio::fs::write(&tmp_path, json)
             .await
-            .map_err(|e| format!("Failed to write threads.json: {}", e))?;
+            .map_err(|e| format!("Failed to write threads.json.tmp: {}", e))?;
+        tokio::fs::rename(&tmp_path, &path)
+            .await
+            .map_err(|e| format!("Failed to rename threads.json.tmp: {}", e))?;
         Ok(())
     }
 

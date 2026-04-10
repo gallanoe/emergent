@@ -119,9 +119,13 @@ impl TaskRegistry {
         let json = serde_json::to_string_pretty(&tasks)
             .map_err(|e| format!("Failed to serialize tasks: {}", e))?;
         let path = workspace_dir.join("tasks.json");
-        tokio::fs::write(&path, json)
+        let tmp_path = workspace_dir.join("tasks.json.tmp");
+        tokio::fs::write(&tmp_path, json)
             .await
-            .map_err(|e| format!("Failed to write tasks.json: {}", e))?;
+            .map_err(|e| format!("Failed to write tasks.json.tmp: {}", e))?;
+        tokio::fs::rename(&tmp_path, &path)
+            .await
+            .map_err(|e| format!("Failed to rename tasks.json.tmp: {}", e))?;
         Ok(())
     }
 
