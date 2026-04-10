@@ -158,6 +158,12 @@ impl TaskManager {
         blocker_ids: Vec<String>,
         parent_id: Option<String>,
     ) -> Result<String, String> {
+        // Validate agent exists
+        if self.agent_manager.get_agent(&agent_id).await.is_none() {
+            return Err(format!("Agent definition '{}' not found", agent_id));
+        }
+
+        // Validate all blocker IDs exist
         {
             let reg = self.registry.read().await;
             for bid in &blocker_ids {
