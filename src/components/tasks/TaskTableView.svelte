@@ -152,6 +152,11 @@
         >
           {task.title}
         </div>
+        {#if task.description}
+          <div class="text-[10px] text-fg-disabled truncate">
+            {task.description}
+          </div>
+        {/if}
       </div>
       <div class="px-1.5 py-2 text-[10px] font-mono text-fg-disabled truncate">
         {task.parent_id ?? "—"}
