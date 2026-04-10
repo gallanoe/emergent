@@ -145,7 +145,7 @@
           {statusLabel(task.status)}
         </span>
       </div>
-      <div class="px-2 py-2 min-w-0">
+      <div class="px-2 py-2 min-w-0 text-left">
         <div
           class="text-[11px] truncate {isCompleted
             ? 'text-fg-muted'
@@ -153,11 +153,6 @@
         >
           {task.title}
         </div>
-        {#if task.description}
-          <div class="text-[10px] text-fg-disabled truncate">
-            {task.description}
-          </div>
-        {/if}
       </div>
       <div class="px-1.5 py-2 text-[10px] font-mono text-fg-disabled truncate">
         {task.parent_id ?? "—"}
