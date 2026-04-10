@@ -282,6 +282,29 @@ impl TaskManager {
         reg.delete_tasks_for_workspace(workspace_id);
     }
 
+    /// Transition every Working task in a workspace to Failed.
+    ///
+    /// Call this when the workspace's container is about to stop, so tasks
+    /// whose threads may have crashed externally are not left stuck.
+    pub async fn fail_working_tasks_in_workspace(&self, workspace_id: &WorkspaceId) {
+        let mut persisted = false;
+        {
+            let mut reg = self.registry.write().await;
+            for task in reg.all_tasks_mut() {
+                if &task.workspace_id == workspace_id && task.status == TaskStatus::Working {
+                    task.status = TaskStatus::Failed;
+                    persisted = true;
+                    let _ = self.event_tx.send(Notification::TaskUpdated(TaskPayload {
+                        task: task.clone(),
+                    }));
+                }
+            }
+        }
+        if persisted {
+            self.persist_tasks(workspace_id).await;
+        }
+    }
+
     pub async fn recover_stale_tasks(&self, live_thread_ids: &HashSet<String>) {
         let mut affected_workspaces: HashSet<WorkspaceId> = HashSet::new();
         {
