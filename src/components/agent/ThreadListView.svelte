@@ -246,7 +246,8 @@
         {tasks}
         selectedTaskId={null}
         agentScoped={true}
-        {onSelectTask}
+        onSelectTask={onSelectTask}
+        onNavigateToSession={onSelectThread}
       />
     </div>
   {/if}

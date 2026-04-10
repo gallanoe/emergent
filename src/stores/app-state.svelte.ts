@@ -170,7 +170,6 @@ function createAppState() {
     await listen<TaskUpdatedPayload>("task:updated", (e) => {
       tasks[e.payload.task.id] = e.payload.task;
     });
-
   }
 
   async function initialize() {
@@ -286,9 +285,7 @@ function createAppState() {
     Object.values(tasks).filter((t) => t.workspace_id === selectedWorkspaceId),
   );
 
-  const agentTasks = $derived(
-    Object.values(tasks).filter((t) => t.agent_id === selectedAgentId),
-  );
+  const agentTasks = $derived(Object.values(tasks).filter((t) => t.agent_id === selectedAgentId));
 
   function selectTask(taskId: string) {
     selectedTaskId = taskId;
@@ -366,9 +363,7 @@ function createAppState() {
     selectedAgentId = agentId;
     selectedThreadId = null;
     // Find which workspace this agent belongs to and select it
-    const workspace = workspaces.find(
-      (w) => w.agentDefinitionIds.includes(agentId),
-    );
+    const workspace = workspaces.find((w) => w.agentDefinitionIds.includes(agentId));
     if (workspace) selectedWorkspaceId = workspace.id;
     activeView = "agent-threads";
   }
@@ -377,8 +372,13 @@ function createAppState() {
     selectedThreadId = threadId;
     activeView = "agent-chat";
 
-    // Auto-resume dead threads that have a persisted ACP session
+    // Ensure the agent is selected (needed when navigating from task views)
     const conn = agentStore.getThread(threadId);
+    if (conn && conn.agentDefinitionId && conn.agentDefinitionId !== selectedAgentId) {
+      selectedAgentId = conn.agentDefinitionId;
+    }
+
+    // Auto-resume dead threads that have a persisted ACP session
     if (conn && conn.status === "dead" && conn.acpSessionId) {
       agentStore.resetThreadState(threadId);
       conn.status = "initializing";
