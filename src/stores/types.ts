@@ -161,8 +161,7 @@ export type ActiveView =
   | "create-agent"
   | "settings"
   | "terminal"
-  | "tasks"
-  | "agent-tasks";
+  | "tasks";
 
 export type ContainerStatus =
   | { state: "stopped" }
