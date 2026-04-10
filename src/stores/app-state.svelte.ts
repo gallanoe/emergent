@@ -168,7 +168,22 @@ function createAppState() {
     });
 
     await listen<TaskUpdatedPayload>("task:updated", (e) => {
-      tasks[e.payload.task.id] = e.payload.task;
+      const task = e.payload.task;
+      tasks[task.id] = task;
+
+      // When a task session is spawned server-side, register the thread
+      // in the agent store so the frontend can navigate to it
+      if (task.session_id && !agentStore.getThread(task.session_id)) {
+        const def = agentDefinitions[task.agent_id];
+        if (def) {
+          agentStore.registerPersistedThread(
+            task.session_id,
+            task.agent_id,
+            def,
+            null,
+          );
+        }
+      }
     });
   }
 
