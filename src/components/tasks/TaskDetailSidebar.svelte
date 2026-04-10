@@ -126,12 +126,16 @@
       {/if}
 
       {#if task.parent_id}
+        {@const parentTask = allTasks[task.parent_id]}
         <span class="text-fg-disabled">Parent</span>
         <button
-          class="text-fg-muted hover:text-fg-heading font-mono text-[11px] text-left"
+          class="text-fg-muted hover:text-fg-heading text-left flex items-center gap-1.5 min-w-0"
           onclick={() => task.parent_id && onSelectTask(task.parent_id)}
         >
-          {task.parent_id}
+          <span class="truncate">{parentTask?.title ?? task.parent_id}</span>
+          <span class="font-mono text-[10px] text-fg-disabled flex-shrink-0">
+            {task.parent_id}
+          </span>
         </button>
       {/if}
 
