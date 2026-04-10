@@ -11,7 +11,7 @@
       description: string,
       agentId: string,
       blockerIds: string[],
-    ) => void;
+    ) => void | Promise<void>;
   }
 
   let { agentDefinitions, existingTasks, onClose, onCreate }: Props = $props();
@@ -20,11 +20,13 @@
   let description = $state("");
   let selectedAgentId = $state<string | null>(null);
   let selectedBlockerIds = $state<string[]>([]);
+  let submitting = $state(false);
 
   const canSubmit = $derived(
     title.trim().length > 0 &&
       description.trim().length > 0 &&
-      selectedAgentId != null,
+      selectedAgentId != null &&
+      !submitting,
   );
 
   function addBlocker(taskId: string) {
@@ -37,14 +39,19 @@
     selectedBlockerIds = selectedBlockerIds.filter((id) => id !== taskId);
   }
 
-  function handleSubmit() {
-    if (!canSubmit || !selectedAgentId) return;
-    onCreate(
-      title.trim(),
-      description.trim(),
-      selectedAgentId,
-      selectedBlockerIds,
-    );
+  async function handleSubmit() {
+    if (!canSubmit || !selectedAgentId || submitting) return;
+    submitting = true;
+    try {
+      await onCreate(
+        title.trim(),
+        description.trim(),
+        selectedAgentId,
+        selectedBlockerIds,
+      );
+    } finally {
+      submitting = false;
+    }
   }
 </script>
 
@@ -174,7 +181,7 @@
         disabled={!canSubmit}
         onclick={handleSubmit}
       >
-        Create
+        {submitting ? "Creating..." : "Create"}
       </button>
     </div>
   </div>
