@@ -126,6 +126,7 @@ impl ThreadManager {
 
         let ws_id_for_persist = workspace_id.clone();
         let threads_for_persist = self.threads.clone();
+        let token_registry_for_cleanup = self.token_registry.clone();
 
         tokio::spawn(async move {
             match lifecycle::initialize_agent(
@@ -166,6 +167,10 @@ impl ThreadManager {
                 }
                 Err(e) => {
                     log::error!("Thread {} failed to initialize: {}", &id, e);
+                    // Revoke the bearer token registered before spawn. Otherwise
+                    // the token remains valid in the registry for a thread that
+                    // does not exist.
+                    token_registry_for_cleanup.revoke_agent(&id);
                     let _ = event_tx.send(Notification::Error(ThreadErrorPayload {
                         thread_id: id,
                         message: e,
@@ -216,6 +221,7 @@ impl ThreadManager {
 
         let bearer_token = self.token_registry.register(&id);
         let mcp_port = self.mcp_port.load(std::sync::atomic::Ordering::Relaxed);
+        let token_registry_for_cleanup = self.token_registry.clone();
 
         tokio::spawn(async move {
             match lifecycle::initialize_agent(
@@ -240,6 +246,7 @@ impl ThreadManager {
                 }
                 Err(e) => {
                     log::error!("Thread {} failed to resume: {}", &id, e);
+                    token_registry_for_cleanup.revoke_agent(&id);
                     let _ = event_tx.send(Notification::Error(ThreadErrorPayload {
                         thread_id: id,
                         message: e,
