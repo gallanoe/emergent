@@ -105,6 +105,18 @@ impl TaskManager {
                             prompted.write().await.remove(&payload.thread_id);
                         }
                     }
+                    Ok(Notification::Error(ref payload)) => {
+                        // Thread initialization (spawn or resume) failed; fail
+                        // any Working task waiting on this session.
+                        Self::handle_session_failure(
+                            &registry,
+                            &event_tx,
+                            &agent_manager,
+                            &payload.thread_id,
+                        )
+                        .await;
+                        prompted.write().await.remove(&payload.thread_id);
+                    }
                     Err(broadcast::error::RecvError::Lagged(n)) => {
                         log::warn!(
                             "TaskManager event loop lagged by {} messages, reconciling",
@@ -391,6 +403,113 @@ impl TaskManager {
         if persisted {
             self.persist_tasks(workspace_id).await;
         }
+    }
+
+    /// Resume Working task threads and start unblocked Pending tasks for a workspace.
+    ///
+    /// Called at startup for each workspace with a running container and
+    /// after `start_container` brings one up later. Assumes the workspace's
+    /// container is running — if it is not, the resume and spawn attempts
+    /// will fail and the affected tasks will be marked Failed.
+    ///
+    /// For each Working task:
+    ///   - If its thread is already live, skip it.
+    ///   - If the persisted thread mapping is missing or lacks an ACP session,
+    ///     the task cannot be recovered — mark it Failed.
+    ///   - Otherwise call `resume_thread` to reattach. The thread's
+    ///     `session_id` is pre-inserted into `prompted_sessions` so the
+    ///     existing dedup guard prevents the initial task prompt from being
+    ///     re-sent when `SessionReady` fires post-resume.
+    ///
+    /// After the resume pass, `start_unblocked_tasks` spawns any Pending
+    /// tasks whose blockers are all Completed.
+    pub async fn resume_workspace_tasks(&self, workspace_id: &WorkspaceId) {
+        let workspace_path = match self.agent_manager.workspace_path(workspace_id).await {
+            Some(p) => p,
+            None => return,
+        };
+
+        let mappings =
+            crate::agent::thread_manager::ThreadManager::load_from_dir(&workspace_path)
+                .await
+                .unwrap_or_default();
+        let mapping_by_thread: std::collections::HashMap<String, _> = mappings
+            .into_iter()
+            .map(|m| (m.thread_id.clone(), m))
+            .collect();
+
+        // Snapshot Working tasks for this workspace under the read lock.
+        let working: Vec<(String, String, String)> = {
+            let reg = self.registry.read().await;
+            reg.list_tasks(workspace_id)
+                .into_iter()
+                .filter_map(|t| {
+                    if let TaskState::Working { session_id } = &t.state {
+                        Some((t.id.clone(), t.agent_id.clone(), session_id.clone()))
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        };
+
+        let live = self.agent_manager.live_thread_ids().await;
+
+        for (task_id, agent_id, thread_id) in working {
+            if live.contains(&thread_id) {
+                continue;
+            }
+            let mapping = match mapping_by_thread.get(&thread_id) {
+                Some(m) => m,
+                None => {
+                    log::warn!(
+                        "Task {} Working but thread mapping {} is missing; marking Failed",
+                        task_id,
+                        thread_id
+                    );
+                    let _ = self.fail_task(&task_id).await;
+                    continue;
+                }
+            };
+            let acp_session_id = match mapping.acp_session_id.clone() {
+                Some(sid) => sid,
+                None => {
+                    log::warn!(
+                        "Task {} Working but thread {} has no ACP session; marking Failed",
+                        task_id,
+                        thread_id
+                    );
+                    let _ = self.fail_task(&task_id).await;
+                    continue;
+                }
+            };
+
+            // Pre-populate the prompted guard so the initial task prompt is not
+            // re-sent after the ACP session is reloaded.
+            self.prompted_sessions
+                .write()
+                .await
+                .insert(thread_id.clone());
+
+            if let Err(e) = self
+                .agent_manager
+                .resume_thread(&thread_id, &agent_id, &acp_session_id)
+                .await
+            {
+                log::error!(
+                    "Failed to resume thread {} for task {}: {}",
+                    thread_id,
+                    task_id,
+                    e
+                );
+                self.prompted_sessions.write().await.remove(&thread_id);
+                let _ = self.fail_task(&task_id).await;
+            }
+        }
+
+        // Kick off any Pending tasks whose blockers are all Completed. Safe to
+        // call now that we know the container is running.
+        self.start_unblocked_tasks(workspace_id).await;
     }
 
     pub async fn recover_stale_tasks(&self, live_thread_ids: &HashSet<String>) {
