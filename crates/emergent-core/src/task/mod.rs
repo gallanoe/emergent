@@ -274,18 +274,25 @@ impl TaskManager {
     }
 
     pub async fn recover_stale_tasks(&self, live_thread_ids: &HashSet<String>) {
-        let mut reg = self.registry.write().await;
-        for task in reg.all_tasks_mut() {
-            if task.status == TaskStatus::Working {
-                if let Some(ref sid) = task.session_id {
-                    if !live_thread_ids.contains(sid) {
-                        task.status = TaskStatus::Failed;
-                        let _ = self.event_tx.send(Notification::TaskUpdated(TaskPayload {
-                            task: task.clone(),
-                        }));
+        let mut affected_workspaces: HashSet<WorkspaceId> = HashSet::new();
+        {
+            let mut reg = self.registry.write().await;
+            for task in reg.all_tasks_mut() {
+                if task.status == TaskStatus::Working {
+                    if let Some(ref sid) = task.session_id {
+                        if !live_thread_ids.contains(sid) {
+                            task.status = TaskStatus::Failed;
+                            affected_workspaces.insert(task.workspace_id.clone());
+                            let _ = self.event_tx.send(Notification::TaskUpdated(TaskPayload {
+                                task: task.clone(),
+                            }));
+                        }
                     }
                 }
             }
+        }
+        for ws_id in affected_workspaces {
+            self.persist_tasks(&ws_id).await;
         }
     }
 
