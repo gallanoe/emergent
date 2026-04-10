@@ -374,6 +374,9 @@ function createAppState() {
   function selectWorkspace(workspaceId: string) {
     selectedWorkspaceId = workspaceId;
     activeView = "swarm";
+    // Clear any task sidebar state scoped to the previous workspace
+    selectedTaskId = null;
+    taskSidebarMode = null;
   }
 
   function selectAgent(agentId: string) {
