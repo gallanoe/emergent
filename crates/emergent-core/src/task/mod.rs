@@ -273,6 +273,15 @@ impl TaskManager {
         reg.load_from_dir(workspace_dir).await
     }
 
+    /// Remove all tasks for a workspace from the in-memory registry.
+    ///
+    /// Call this when a workspace is deleted. The on-disk tasks.json is
+    /// already removed with the workspace directory.
+    pub async fn delete_tasks_for_workspace(&self, workspace_id: &WorkspaceId) {
+        let mut reg = self.registry.write().await;
+        reg.delete_tasks_for_workspace(workspace_id);
+    }
+
     pub async fn recover_stale_tasks(&self, live_thread_ids: &HashSet<String>) {
         let mut affected_workspaces: HashSet<WorkspaceId> = HashSet::new();
         {

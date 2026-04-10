@@ -248,10 +248,12 @@ pub async fn create_workspace(
 pub async fn delete_workspace(
     workspace_manager: State<'_, Arc<WorkspaceManager>>,
     agent_manager: State<'_, Arc<AgentManager>>,
+    task_manager: State<'_, Arc<emergent_core::task::TaskManager>>,
     workspace_id: String,
 ) -> Result<(), String> {
     let id = emergent_protocol::WorkspaceId::from(workspace_id.as_str());
     agent_manager.kill_threads_in_workspace(&id).await?;
+    task_manager.delete_tasks_for_workspace(&id).await;
     workspace_manager.delete_workspace(&id).await
 }
 

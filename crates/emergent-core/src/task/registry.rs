@@ -105,6 +105,11 @@ impl TaskRegistry {
         self.tasks.values_mut()
     }
 
+    /// Remove all tasks for a given workspace from the in-memory registry.
+    pub fn delete_tasks_for_workspace(&mut self, workspace_id: &WorkspaceId) {
+        self.tasks.retain(|_, t| &t.workspace_id != workspace_id);
+    }
+
     pub async fn save_to_dir(
         &self,
         workspace_id: &WorkspaceId,
