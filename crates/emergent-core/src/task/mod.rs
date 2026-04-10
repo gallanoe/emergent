@@ -325,6 +325,11 @@ impl TaskManager {
         for task_id in unblocked {
             if let Err(e) = self.start_task(&task_id).await {
                 log::error!("Failed to start unblocked task {}: {}", task_id, e);
+                // Mark the task Failed so it is not retried on every subsequent
+                // completion in the workspace.
+                if let Err(fe) = self.fail_task(&task_id).await {
+                    log::error!("Failed to mark task {} as failed: {}", task_id, fe);
+                }
             }
         }
     }
