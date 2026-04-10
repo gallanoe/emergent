@@ -16,6 +16,45 @@ pub struct TaskManager {
     prompted_sessions: Arc<RwLock<HashSet<String>>>,
 }
 
+/// Lightweight clone of TaskManager fields needed inside the spawned event
+/// loop for reconciliation on broadcast lag.
+struct TaskManagerRef {
+    registry: Arc<RwLock<TaskRegistry>>,
+    agent_manager: Arc<AgentManager>,
+    event_tx: broadcast::Sender<Notification>,
+}
+
+impl TaskManagerRef {
+    async fn reconcile_after_lag(&self) {
+        let live = self.agent_manager.live_thread_ids().await;
+        let mut affected_workspaces: HashSet<WorkspaceId> = HashSet::new();
+        {
+            let mut reg = self.registry.write().await;
+            for task in reg.all_tasks_mut() {
+                if task.status == TaskStatus::Working {
+                    if let Some(ref sid) = task.session_id {
+                        if !live.contains(sid) {
+                            task.status = TaskStatus::Failed;
+                            affected_workspaces.insert(task.workspace_id.clone());
+                            let _ = self.event_tx.send(Notification::TaskUpdated(TaskPayload {
+                                task: task.clone(),
+                            }));
+                        }
+                    }
+                }
+            }
+        }
+        for ws_id in affected_workspaces {
+            if let Some(path) = self.agent_manager.workspace_path(&ws_id).await {
+                let reg = self.registry.read().await;
+                if let Err(e) = reg.save_to_dir(&ws_id, &path).await {
+                    log::error!("Failed to persist tasks after lag reconcile: {}", e);
+                }
+            }
+        }
+    }
+}
+
 impl TaskManager {
     pub fn new(
         agent_manager: Arc<AgentManager>,
@@ -34,6 +73,11 @@ impl TaskManager {
         let prompted = self.prompted_sessions.clone();
         let agent_manager = self.agent_manager.clone();
         let event_tx = self.event_tx.clone();
+        let self_ref = Arc::new(TaskManagerRef {
+            registry: registry.clone(),
+            agent_manager: agent_manager.clone(),
+            event_tx: event_tx.clone(),
+        });
 
         tokio::spawn(async move {
             loop {
@@ -60,7 +104,14 @@ impl TaskManager {
                         }
                     }
                     Err(broadcast::error::RecvError::Lagged(n)) => {
-                        log::warn!("TaskManager event loop lagged by {} messages", n);
+                        log::warn!(
+                            "TaskManager event loop lagged by {} messages, reconciling",
+                            n
+                        );
+                        // Events may have been lost. Fail any Working task
+                        // whose thread is no longer live so tasks do not get
+                        // stuck after a missed StatusChange(dead).
+                        self_ref.reconcile_after_lag().await;
                     }
                     Err(broadcast::error::RecvError::Closed) => {
                         log::info!("TaskManager event loop: channel closed, exiting");
