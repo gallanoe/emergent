@@ -41,8 +41,9 @@
       const statusDiff =
         (statusOrder[a.status] ?? 99) - (statusOrder[b.status] ?? 99);
       if (statusDiff !== 0) return statusDiff;
+      // Oldest first within each group (natural creation order).
       return (
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
       );
     }),
   );
