@@ -101,6 +101,7 @@ impl TaskManager {
                                 &payload.thread_id,
                             )
                             .await;
+                            prompted.write().await.remove(&payload.thread_id);
                         }
                     }
                     Err(broadcast::error::RecvError::Lagged(n)) => {
@@ -260,7 +261,7 @@ impl TaskManager {
     }
 
     pub async fn complete_task(&self, task_id: &str) -> Result<(), String> {
-        let workspace_id = {
+        let (workspace_id, session_id) = {
             let mut reg = self.registry.write().await;
             let task = reg
                 .get_task_mut(task_id)
@@ -273,11 +274,16 @@ impl TaskManager {
             }
             task.status = TaskStatus::Completed;
             let workspace_id = task.workspace_id.clone();
+            let session_id = task.session_id.clone();
             let _ = self.event_tx.send(Notification::TaskUpdated(TaskPayload {
                 task: task.clone(),
             }));
-            workspace_id
+            (workspace_id, session_id)
         };
+
+        if let Some(sid) = session_id {
+            self.prompted_sessions.write().await.remove(&sid);
+        }
 
         self.persist_tasks(&workspace_id).await;
         self.start_unblocked_tasks(&workspace_id).await;
@@ -286,18 +292,22 @@ impl TaskManager {
     }
 
     pub async fn fail_task(&self, task_id: &str) -> Result<(), String> {
-        let workspace_id = {
+        let (workspace_id, session_id) = {
             let mut reg = self.registry.write().await;
             let task = reg
                 .get_task_mut(task_id)
                 .ok_or_else(|| format!("Task '{}' not found", task_id))?;
             task.status = TaskStatus::Failed;
             let workspace_id = task.workspace_id.clone();
+            let session_id = task.session_id.clone();
             let _ = self.event_tx.send(Notification::TaskUpdated(TaskPayload {
                 task: task.clone(),
             }));
-            workspace_id
+            (workspace_id, session_id)
         };
+        if let Some(sid) = session_id {
+            self.prompted_sessions.write().await.remove(&sid);
+        }
         self.persist_tasks(&workspace_id).await;
         Ok(())
     }
