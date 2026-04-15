@@ -41,20 +41,15 @@ function renderSidebar(overrides: Record<string, unknown> = {}) {
       demoMode: (overrides.demoMode as boolean) ?? false,
       containerRunning: (overrides.containerRunning as boolean) ?? false,
       onSelectView:
-        (overrides.onSelectView as (view: "swarm" | "settings" | "terminal" | "tasks") => void) ?? (() => {}),
+        (overrides.onSelectView as (view: "swarm" | "settings" | "terminal" | "tasks") => void) ??
+        (() => {}),
       onSelectAgent: (overrides.onSelectAgent as (id: string) => void) ?? (() => {}),
       onCreateAgent: (overrides.onCreateAgent as () => void) ?? (() => {}),
-      onOverflowMenu: (overrides.onOverflowMenu as (x: number, y: number) => void) ?? (() => {}),
     },
   });
 }
 
 describe("InnerSidebar", () => {
-  it("renders swarm name as header", () => {
-    renderSidebar();
-    expect(screen.getByText("Research Swarm")).toBeTruthy();
-  });
-
   it("renders nav items with Skills and Tasks greyed out", () => {
     renderSidebar();
     expect(screen.getByText("Swarm")).toBeTruthy();
@@ -67,6 +62,12 @@ describe("InnerSidebar", () => {
     renderSidebar();
     expect(screen.getByText("Claude")).toBeTruthy();
     expect(screen.getByText("Gemini")).toBeTruthy();
+  });
+
+  it("renders the agent CLI icon for known CLIs", () => {
+    const { container } = renderSidebar();
+    const icons = container.querySelectorAll("img[src]");
+    expect(icons.length).toBe(2);
   });
 
   it("calls onSelectView when Swarm nav clicked", async () => {
@@ -97,15 +98,10 @@ describe("InnerSidebar", () => {
     expect(onSelectView).not.toHaveBeenCalled();
   });
 
-  it("renders overflow menu button next to workspace name", () => {
-    renderSidebar();
-    expect(screen.getByTitle("Workspace actions")).toBeTruthy();
-  });
-
-  it("calls onOverflowMenu when overflow button clicked", async () => {
-    const onOverflowMenu = vi.fn();
-    renderSidebar({ onOverflowMenu });
-    await fireEvent.click(screen.getByTitle("Workspace actions"));
-    expect(onOverflowMenu).toHaveBeenCalled();
+  it("does not render stopped container helper text", () => {
+    renderSidebar({ containerRunning: false });
+    expect(
+      screen.queryByText("Container stopped — start it to spawn threads."),
+    ).toBeNull();
   });
 });

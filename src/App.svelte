@@ -225,11 +225,6 @@
         }}
         onSelectAgent={(id) => appState.selectAgent(id)}
         onCreateAgent={() => appState.startCreatingAgent()}
-        onOverflowMenu={(x, y) => {
-          if (appState.selectedSwarmId) {
-            openWorkspaceMenu(appState.selectedSwarmId, x, y);
-          }
-        }}
       />
     </div>
   </div>
