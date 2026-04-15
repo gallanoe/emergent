@@ -6,7 +6,7 @@ use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{ServerCapabilities, ServerInfo};
 use rmcp::{tool, tool_router, ServerHandler};
 use schemars::JsonSchema;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use super::token_registry::TokenRegistry;
 use crate::agent::AgentManager;
@@ -46,6 +46,12 @@ pub struct ListTasksParams {
     pub status: Option<String>,
     /// Filter by agent definition ID
     pub agent_id: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct AvailableAgent {
+    id: String,
+    name: String,
 }
 
 impl McpHandler {
@@ -161,6 +167,40 @@ impl McpHandler {
         }
 
         let json = serde_json::to_string_pretty(&tasks)
+            .map_err(|e| rmcp::model::ErrorData::internal_error(e.to_string(), None))?;
+        Ok(rmcp::model::CallToolResult::success(vec![
+            rmcp::model::Content::text(json),
+        ]))
+    }
+
+    /// List agent definitions available in the caller's workspace.
+    #[tool]
+    async fn list_agents(
+        &self,
+        Extension(parts): Extension<http::request::Parts>,
+    ) -> Result<rmcp::model::CallToolResult, rmcp::model::ErrorData> {
+        let thread_id = self
+            .agent_id_from_parts(&parts)
+            .map_err(|e| rmcp::model::ErrorData::internal_error(e, None))?;
+        let workspace_id = self
+            .manager
+            .get_thread_workspace_id(&thread_id)
+            .await
+            .ok_or_else(|| rmcp::model::ErrorData::internal_error("Thread not found", None))?;
+
+        let mut agents: Vec<AvailableAgent> = self
+            .manager
+            .list_agent_definitions(&workspace_id)
+            .await
+            .into_iter()
+            .map(|agent| AvailableAgent {
+                id: agent.id,
+                name: agent.name,
+            })
+            .collect();
+        agents.sort_by(|a, b| a.name.cmp(&b.name).then_with(|| a.id.cmp(&b.id)));
+
+        let json = serde_json::to_string_pretty(&agents)
             .map_err(|e| rmcp::model::ErrorData::internal_error(e.to_string(), None))?;
         Ok(rmcp::model::CallToolResult::success(vec![
             rmcp::model::Content::text(json),
