@@ -417,17 +417,24 @@ function createAppState() {
       selectedAgentId = conn.agentDefinitionId;
     }
 
-    // Auto-resume dead threads that have a persisted ACP session
+    // Auto-resume dead threads that have a persisted ACP session, but only
+    // when the owning workspace's container is actually running — otherwise
+    // the backend returns Err synchronously and we'd get stuck in
+    // "initializing".
     if (conn && conn.status === "dead" && conn.acpSessionId) {
-      agentStore.resetThreadState(threadId);
-      conn.status = "initializing";
-      invoke("resume_thread", {
-        threadId,
-        agentId: conn.agentDefinitionId,
-        acpSessionId: conn.acpSessionId,
-      }).catch((e: unknown) => {
-        console.error("Failed to resume thread:", e);
-      });
+      const ws = workspaces.find((w) => w.id === conn.workspaceId);
+      if (ws?.containerStatus.state === "running") {
+        agentStore.resetThreadState(threadId);
+        conn.status = "initializing";
+        invoke("resume_thread", {
+          threadId,
+          agentId: conn.agentDefinitionId,
+          acpSessionId: conn.acpSessionId,
+        }).catch((e: unknown) => {
+          console.error("Failed to resume thread:", e);
+          conn.status = "dead";
+        });
+      }
     }
   }
 
@@ -501,6 +508,11 @@ function createAppState() {
     },
     get selectedSwarm() {
       return getSelectedSwarm();
+    },
+    get selectedWorkspaceContainerRunning(): boolean {
+      if (demoMode) return true;
+      const ws = workspaces.find((w) => w.id === selectedWorkspaceId);
+      return ws?.containerStatus.state === "running";
     },
     get agentConnections() {
       return agentConnections;
@@ -623,13 +635,21 @@ function createAppState() {
     async resumeThread(threadId: string): Promise<void> {
       const conn = agentStore.getThread(threadId);
       if (!conn || !conn.acpSessionId) return;
+      const ws = workspaces.find((w) => w.id === conn.workspaceId);
+      if (ws?.containerStatus.state !== "running") return;
       agentStore.resetThreadState(threadId);
       conn.status = "initializing";
-      await invoke("resume_thread", {
-        threadId,
-        agentId: conn.agentDefinitionId,
-        acpSessionId: conn.acpSessionId,
-      });
+      try {
+        await invoke("resume_thread", {
+          threadId,
+          agentId: conn.agentDefinitionId,
+          acpSessionId: conn.acpSessionId,
+        });
+      } catch (e) {
+        console.error("Failed to resume thread:", e);
+        conn.status = "dead";
+        throw e;
+      }
     },
     refreshConnections,
     get tasks() {

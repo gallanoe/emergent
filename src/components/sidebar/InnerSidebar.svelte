@@ -155,42 +155,41 @@
     </div>
 
     <div class="px-2 flex-1 overflow-y-auto min-h-0">
-      {#if swarm.containerStatus.state !== "running"}
-        <div class="px-2.5 py-2 text-[11px] text-fg-disabled">
-          Workspace isn't available
+      {#each swarm.agentDefinitions as agentDef (agentDef.id)}
+        {@const aggStatus = aggregateStatus(agentDef.threads)}
+        <button
+          class="flex items-center gap-2 w-full px-2.5 py-[7px] rounded-md text-[12px] mt-0.5 truncate
+                 {activeView.startsWith('agent') &&
+          selectedAgentId === agentDef.id
+            ? 'bg-bg-hover text-fg-heading'
+            : 'text-fg-muted hover:bg-bg-hover'}"
+          onclick={() => onSelectAgent(agentDef.id)}
+        >
+          <span
+            class="w-[7px] h-[7px] rounded-full flex-shrink-0 {statusColor(
+              aggStatus,
+            )}"
+          ></span>
+          <span class="truncate">
+            {agentDef.name}{#if agentDef.role}<span class="text-fg-disabled">
+                — {agentDef.role}</span
+              >{/if}
+          </span>
+        </button>
+      {/each}
+      {#if !demoMode && swarm}
+        <button
+          class="interactive flex items-center gap-1.5 w-full px-2.5 py-[7px] rounded-md text-[11px] text-fg-muted mt-1"
+          onclick={onCreateAgent}
+        >
+          <Plus size={12} />
+          Add agent
+        </button>
+      {/if}
+      {#if !containerRunning}
+        <div class="px-2.5 pt-2 text-[10px] text-fg-disabled italic">
+          Container stopped — start it to spawn threads.
         </div>
-      {:else}
-        {#each swarm.agentDefinitions as agentDef (agentDef.id)}
-          {@const aggStatus = aggregateStatus(agentDef.threads)}
-          <button
-            class="flex items-center gap-2 w-full px-2.5 py-[7px] rounded-md text-[12px] mt-0.5 truncate
-                   {activeView.startsWith('agent') &&
-            selectedAgentId === agentDef.id
-              ? 'bg-bg-hover text-fg-heading'
-              : 'text-fg-muted hover:bg-bg-hover'}"
-            onclick={() => onSelectAgent(agentDef.id)}
-          >
-            <span
-              class="w-[7px] h-[7px] rounded-full flex-shrink-0 {statusColor(
-                aggStatus,
-              )}"
-            ></span>
-            <span class="truncate">
-              {agentDef.name}{#if agentDef.role}<span class="text-fg-disabled">
-                  — {agentDef.role}</span
-                >{/if}
-            </span>
-          </button>
-        {/each}
-        {#if !demoMode && swarm}
-          <button
-            class="interactive flex items-center gap-1.5 w-full px-2.5 py-[7px] rounded-md text-[11px] text-fg-muted mt-1"
-            onclick={onCreateAgent}
-          >
-            <Plus size={12} />
-            Add agent
-          </button>
-        {/if}
       {/if}
     </div>
   {:else}

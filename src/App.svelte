@@ -368,8 +368,12 @@
                   .length} tasks
               </div>
               <button
-                class="flex items-center gap-1.5 text-[11px] font-medium text-bg-base bg-accent hover:bg-accent-hover rounded-md px-3 py-1.5"
+                class="flex items-center gap-1.5 text-[11px] font-medium text-bg-base bg-accent hover:bg-accent-hover rounded-md px-3 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-accent"
                 onclick={() => appState.openCreateTask()}
+                disabled={!appState.selectedWorkspaceContainerRunning}
+                title={appState.selectedWorkspaceContainerRunning
+                  ? "Create a new task"
+                  : "Start the workspace container to create tasks"}
               >
                 <Plus size={11} />
                 New task
@@ -454,6 +458,7 @@
           agentDefinition={appState.selectedAgentDef}
           tasks={appState.agentTasks}
           activeTab={appState.agentViewTab}
+          containerRunning={appState.selectedWorkspaceContainerRunning}
           onSelectTask={(id) => appState.selectTask(id)}
           onSelectTab={(tab) => appState.setAgentViewTab(tab)}
           onSelectThread={(id) => appState.selectThread(id)}
@@ -520,6 +525,7 @@
       <ChatInput
         agent={appState.selectedAgent}
         demoMode={appState.demoMode}
+        containerRunning={appState.selectedWorkspaceContainerRunning}
         {externalContent}
         onSend={(text) => {
           const threadId = appState.selectedThreadId;
@@ -562,6 +568,7 @@
       <ChatInput
         agent={appState.selectedAgent}
         demoMode={appState.demoMode}
+        containerRunning={appState.selectedWorkspaceContainerRunning}
         {externalContent}
         onSend={(text) => {
           const agent = appState.selectedAgent;

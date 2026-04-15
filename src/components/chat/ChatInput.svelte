@@ -13,6 +13,7 @@
   interface Props {
     agent: DisplayThread | undefined;
     demoMode: boolean;
+    containerRunning?: boolean;
     onSend: (text: string) => void;
     onInterrupt?: () => void;
     onSetConfig?: (configId: string, value: string) => void;
@@ -22,6 +23,7 @@
   let {
     agent,
     demoMode,
+    containerRunning = true,
     onSend,
     onInterrupt,
     onSetConfig,
@@ -48,15 +50,19 @@
   let isDisabled = $derived(
     demoMode ||
       !agent ||
+      !containerRunning ||
       agent.status === "initializing" ||
-      agent.status === "error",
+      agent.status === "error" ||
+      agent.status === "dead",
   );
 
   let placeholderText = $derived.by(() => {
     if (demoMode) return "Demo mode — input disabled";
     if (!agent) return "Select an agent...";
+    if (!containerRunning) return "Container stopped — start it to chat";
     if (agent.status === "initializing") return "Connecting to agent…";
     if (agent.status === "error") return "Agent unavailable";
+    if (agent.status === "dead") return "Thread stopped";
     return `Message ${agent.name}…`;
   });
 

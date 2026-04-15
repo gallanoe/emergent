@@ -13,6 +13,7 @@
     agentDefinition: DisplayAgentDefinition;
     tasks: DisplayTask[];
     activeTab: "threads" | "tasks";
+    containerRunning: boolean;
     onSelectThread: (threadId: string) => void;
     onNewThread: () => void;
     onOpenSettings: () => void;
@@ -27,6 +28,7 @@
     agentDefinition,
     tasks,
     activeTab,
+    containerRunning,
     onSelectThread,
     onNewThread,
     onOpenSettings,
@@ -185,8 +187,12 @@
             : ""}
         </span>
         <button
-          class="text-[11px] text-fg-muted border border-border-default rounded-md px-3 py-1 hover:bg-bg-hover transition-colors"
+          class="text-[11px] text-fg-muted border border-border-default rounded-md px-3 py-1 hover:bg-bg-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
           onclick={onNewThread}
+          disabled={!containerRunning}
+          title={containerRunning
+            ? "Create a new thread"
+            : "Start the workspace container to create threads"}
         >
           <span class="flex items-center gap-1.5">
             <Plus size={12} />
@@ -328,8 +334,12 @@
         </button>
       {:else}
         <button
-          class="flex items-center w-full px-2.5 py-[6px] rounded-md text-[11px] text-fg-muted hover:bg-bg-hover hover:text-fg-heading"
+          class="flex items-center w-full px-2.5 py-[6px] rounded-md text-[11px] text-fg-muted hover:bg-bg-hover hover:text-fg-heading disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-fg-muted"
           onclick={() => handleAction("resume", thread)}
+          disabled={!containerRunning}
+          title={containerRunning
+            ? "Resume this thread"
+            : "Start the workspace container to resume threads"}
         >
           Start
         </button>
