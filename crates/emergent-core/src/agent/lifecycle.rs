@@ -23,6 +23,17 @@ pub(crate) enum SessionInit {
     Load { acp_session_id: String },
 }
 
+fn initial_config_from_load_response(
+    load_resp: acp::LoadSessionResponse,
+    config_state: &[ConfigOption],
+) -> Vec<ConfigOption> {
+    load_resp
+        .config_options
+        .as_deref()
+        .map(crate::config::convert_config_options)
+        .unwrap_or_else(|| config_state.to_vec())
+}
+
 /// Perform the full agent initialization: spawn process, ACP handshake,
 /// store handle, and emit notifications.
 #[allow(clippy::too_many_arguments)]
@@ -159,7 +170,7 @@ pub(crate) async fn initialize_agent(
                             );
                             let session_id = acp::SessionId::new(acp_session_id);
 
-                            let _load_resp = conn
+                            let load_resp = conn
                                 .load_session(
                                     acp::LoadSessionRequest::new(
                                         session_id.clone(),
@@ -170,8 +181,10 @@ pub(crate) async fn initialize_agent(
                                 .await
                                 .map_err(|e| format!("ACP load_session failed: {}", e))?;
 
-                            // Config comes from load_session response if available
-                            let initial_config = config_state.lock().unwrap().clone();
+                            let config_snapshot = config_state.lock().unwrap().clone();
+                            let initial_config =
+                                initial_config_from_load_response(load_resp, &config_snapshot);
+                            *config_state.lock().unwrap() = initial_config.clone();
 
                             Ok::<_, String>((session_id, initial_config))
                         }
@@ -260,4 +273,78 @@ pub(crate) async fn initialize_agent(
     handle_arc.lock().await.prompt_loop_handle = Some(loop_handle);
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_option(current_value: &str) -> acp::SessionConfigOption {
+        acp::SessionConfigOption::select(
+            "model",
+            "Model",
+            current_value.to_string(),
+            vec![
+                acp::SessionConfigSelectOption::new("opus-4", "Opus 4"),
+                acp::SessionConfigSelectOption::new("sonnet-4", "Sonnet 4"),
+            ],
+        )
+        .category(acp::SessionConfigOptionCategory::Model)
+    }
+
+    #[test]
+    fn load_response_config_takes_priority_on_resume() {
+        let load_resp =
+            acp::LoadSessionResponse::new().config_options(vec![sample_option("opus-4")]);
+        let fallback = vec![ConfigOption {
+            id: "model".into(),
+            name: "Model".into(),
+            description: None,
+            category: Some("model".into()),
+            current_value: "sonnet-4".into(),
+            options: emergent_protocol::ConfigSelectOptions::Ungrouped(vec![
+                emergent_protocol::ConfigSelectOption {
+                    value: "opus-4".into(),
+                    name: "Opus 4".into(),
+                },
+                emergent_protocol::ConfigSelectOption {
+                    value: "sonnet-4".into(),
+                    name: "Sonnet 4".into(),
+                },
+            ]),
+        }];
+
+        let initial = initial_config_from_load_response(load_resp, &fallback);
+
+        assert_eq!(initial.len(), 1);
+        assert_eq!(initial[0].id, "model");
+        assert_eq!(initial[0].current_value, "opus-4");
+    }
+
+    #[test]
+    fn load_response_falls_back_to_notification_cache_when_missing_config() {
+        let fallback = vec![ConfigOption {
+            id: "model".into(),
+            name: "Model".into(),
+            description: None,
+            category: Some("model".into()),
+            current_value: "sonnet-4".into(),
+            options: emergent_protocol::ConfigSelectOptions::Ungrouped(vec![
+                emergent_protocol::ConfigSelectOption {
+                    value: "opus-4".into(),
+                    name: "Opus 4".into(),
+                },
+                emergent_protocol::ConfigSelectOption {
+                    value: "sonnet-4".into(),
+                    name: "Sonnet 4".into(),
+                },
+            ]),
+        }];
+
+        let initial = initial_config_from_load_response(acp::LoadSessionResponse::new(), &fallback);
+
+        assert_eq!(initial.len(), fallback.len());
+        assert_eq!(initial[0].id, fallback[0].id);
+        assert_eq!(initial[0].current_value, fallback[0].current_value);
+    }
 }
