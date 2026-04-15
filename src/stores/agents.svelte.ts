@@ -53,14 +53,16 @@ interface ToolCallContentPayload {
   exit_code?: number | null;
 }
 
-interface ToolCallUpdatePayload {
+interface ToolCallEventPayload {
   thread_id: string;
   tool_call_id: string;
-  title: string;
+  title?: string;
   kind?: string;
-  status: string;
+  status?: string;
   locations?: string[];
   content?: ToolCallContentPayload[];
+  raw_input?: unknown;
+  raw_output?: unknown;
 }
 
 interface PromptCompletePayload {
@@ -264,7 +266,7 @@ function createAgentStore() {
     });
   }
 
-  function handleToolCallUpdate(payload: ToolCallUpdatePayload) {
+  function handleToolCallUpdate(payload: ToolCallEventPayload) {
     const thread = threads[payload.thread_id];
     if (!thread) return;
 
@@ -276,6 +278,8 @@ function createAgentStore() {
       status: (payload.status ?? existing?.status ?? "pending") as DisplayToolCall["status"],
       locations: payload.locations ?? existing?.locations ?? [],
       content: payload.content ? mapToolCallContent(payload.content) : (existing?.content ?? []),
+      rawInput: payload.raw_input ?? existing?.rawInput,
+      rawOutput: payload.raw_output ?? existing?.rawOutput,
     };
 
     thread.activeToolCalls[payload.tool_call_id] = tc;
@@ -455,7 +459,7 @@ function createAgentStore() {
       await listen<MessageChunkPayload>("thread:message-chunk", (e) => handleMessageChunk(e.payload)),
     );
     listenerCleanup.push(
-      await listen<ToolCallUpdatePayload>("thread:tool-call-update", (e) =>
+      await listen<ToolCallEventPayload>("thread:tool-call-update", (e) =>
         handleToolCallUpdate(e.payload),
       ),
     );
@@ -683,7 +687,7 @@ function createAgentStore() {
 
   type DaemonNotification =
     | ({ type: "thread:message-chunk" } & MessageChunkPayload)
-    | ({ type: "thread:tool-call-update" } & ToolCallUpdatePayload)
+    | ({ type: "thread:tool-call-update" } & ToolCallEventPayload)
     | ({ type: "thread:prompt-complete" } & PromptCompletePayload)
     | ({ type: "thread:status-change" } & StatusChangePayload)
     | ({ type: "thread:config-update" } & ConfigUpdatePayload)
@@ -743,6 +747,8 @@ function createAgentStore() {
             status: (n.status ?? existing?.status ?? "pending") as DisplayToolCall["status"],
             locations: n.locations ?? existing?.locations ?? [],
             content: n.content ? mapToolCallContent(n.content) : (existing?.content ?? []),
+            rawInput: n.raw_input ?? existing?.rawInput,
+            rawOutput: n.raw_output ?? existing?.rawOutput,
           };
 
           if (n.status === "completed" || n.status === "failed") {

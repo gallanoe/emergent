@@ -54,6 +54,17 @@ struct AvailableAgent {
     name: String,
 }
 
+#[derive(Debug, Serialize)]
+struct CreateTaskResult {
+    task_id: String,
+}
+
+#[derive(Debug, Serialize)]
+struct CompleteTaskResult {
+    task_id: String,
+    status: &'static str,
+}
+
 impl McpHandler {
     pub fn new(
         manager: Arc<AgentManager>,
@@ -124,8 +135,10 @@ impl McpHandler {
             .await
             .map_err(|e| rmcp::model::ErrorData::internal_error(e, None))?;
 
+        let json = serde_json::to_string_pretty(&CreateTaskResult { task_id })
+            .map_err(|e| rmcp::model::ErrorData::internal_error(e.to_string(), None))?;
         Ok(rmcp::model::CallToolResult::success(vec![
-            rmcp::model::Content::text(format!("Task created: {}", task_id)),
+            rmcp::model::Content::text(json),
         ]))
     }
 
@@ -223,8 +236,13 @@ impl McpHandler {
             .await
             .map_err(|e| rmcp::model::ErrorData::internal_error(e, None))?;
 
+        let json = serde_json::to_string_pretty(&CompleteTaskResult {
+            task_id,
+            status: "completed",
+        })
+        .map_err(|e| rmcp::model::ErrorData::internal_error(e.to_string(), None))?;
         Ok(rmcp::model::CallToolResult::success(vec![
-            rmcp::model::Content::text(format!("Task {} completed", task_id)),
+            rmcp::model::Content::text(json),
         ]))
     }
 }

@@ -34,7 +34,7 @@ pub enum ToolCallContentPayload {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ToolCallUpdatePayload {
+pub struct ToolCallEventPayload {
     pub thread_id: String,
     pub tool_call_id: String,
     pub title: Option<String>,
@@ -42,6 +42,10 @@ pub struct ToolCallUpdatePayload {
     pub status: Option<String>,
     pub locations: Option<Vec<String>>,
     pub content: Option<Vec<ToolCallContentPayload>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub raw_input: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub raw_output: Option<serde_json::Value>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -348,7 +352,7 @@ pub enum Notification {
     #[serde(rename = "thread:message-chunk")]
     MessageChunk(MessageChunkPayload),
     #[serde(rename = "thread:tool-call-update")]
-    ToolCallUpdate(ToolCallUpdatePayload),
+    ToolCallUpdate(ToolCallEventPayload),
     #[serde(rename = "thread:prompt-complete")]
     PromptComplete(PromptCompletePayload),
     #[serde(rename = "thread:status-change")]

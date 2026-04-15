@@ -2,7 +2,7 @@ use acp::Agent as _;
 use agent_client_protocol as acp;
 use emergent_protocol::{
     ConfigOption, ConfigUpdatePayload, MessageChunkPayload, Notification, PromptCompletePayload,
-    ThreadErrorPayload, ToolCallContentPayload, ToolCallUpdatePayload, UserMessagePayload,
+    ThreadErrorPayload, ToolCallContentPayload, ToolCallEventPayload, UserMessagePayload,
 };
 use tokio::sync::{broadcast, mpsc};
 
@@ -151,7 +151,7 @@ impl acp::Client for EmergentClient {
                     tc.tool_call_id,
                     tc.status
                 );
-                self.emit(Notification::ToolCallUpdate(ToolCallUpdatePayload {
+                self.emit(Notification::ToolCallUpdate(ToolCallEventPayload {
                     thread_id: self.agent_id.clone(),
                     tool_call_id: tc.tool_call_id.to_string(),
                     title: Some(tc.title.clone()),
@@ -159,10 +159,12 @@ impl acp::Client for EmergentClient {
                     status: Some(Self::tool_call_status_str(&tc.status)),
                     locations: Self::extract_locations(&tc.locations),
                     content: Self::extract_tool_call_content(&tc.content),
+                    raw_input: tc.raw_input.clone(),
+                    raw_output: tc.raw_output.clone(),
                 }));
             }
             acp::SessionUpdate::ToolCallUpdate(tcu) => {
-                self.emit(Notification::ToolCallUpdate(ToolCallUpdatePayload {
+                self.emit(Notification::ToolCallUpdate(ToolCallEventPayload {
                     thread_id: self.agent_id.clone(),
                     tool_call_id: tcu.tool_call_id.to_string(),
                     title: tcu.fields.title.clone(),
@@ -178,6 +180,8 @@ impl acp::Client for EmergentClient {
                         .content
                         .as_ref()
                         .and_then(|c| Self::extract_tool_call_content(c)),
+                    raw_input: tcu.fields.raw_input.clone(),
+                    raw_output: tcu.fields.raw_output.clone(),
                 }));
             }
             acp::SessionUpdate::UserMessageChunk(chunk) => {
@@ -251,7 +255,11 @@ pub(crate) async fn agent_command_loop(
                 log::debug!(
                     "Agent {} prompt: {}",
                     &agent_id,
-                    if text.len() > 100 { &text[..100] } else { &text }
+                    if text.len() > 100 {
+                        &text[..100]
+                    } else {
+                        &text
+                    }
                 );
 
                 let prompt_req = acp::PromptRequest::new(session_id.clone(), vec![text.into()]);
@@ -338,7 +346,6 @@ pub(crate) async fn agent_command_loop(
                         let _ = reply.send(Err(msg));
                     }
                 }
-
             }
             AgentCommand::Cancel { reply } => {
                 log::debug!("Agent {} cancel requested", &agent_id);
@@ -357,17 +364,9 @@ pub(crate) async fn agent_command_loop(
                 value,
                 reply,
             } => {
-                log::debug!(
-                    "Agent {} set_config: {} = {}",
-                    &agent_id,
-                    config_id,
-                    value
-                );
-                let req = acp::SetSessionConfigOptionRequest::new(
-                    session_id.clone(),
-                    config_id,
-                    value,
-                );
+                log::debug!("Agent {} set_config: {} = {}", &agent_id, config_id, value);
+                let req =
+                    acp::SetSessionConfigOptionRequest::new(session_id.clone(), config_id, value);
                 match conn.set_session_config_option(req).await {
                     Ok(resp) => {
                         let new_config =

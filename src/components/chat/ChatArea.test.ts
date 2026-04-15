@@ -108,6 +108,133 @@ describe("ChatArea", () => {
     expect(screen.getByText("src/bar.ts")).toBeTruthy();
   });
 
+  it("renders custom MCP card for list_agents", () => {
+    const agent = makeAgent([
+      msg("tool-group", "", "1:00 PM", {
+        toolCalls: [
+          {
+            id: "tc-agents",
+            name: "list_agents",
+            kind: "other",
+            status: "completed",
+            locations: [],
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify([
+                  { id: "a1b2c3d4", name: "Planner" },
+                  { id: "e5f6g7h8", name: "Reviewer" },
+                ]),
+              },
+            ],
+          },
+        ],
+      }),
+    ]);
+    render(ChatArea, { props: { agent } });
+    expect(screen.getByText("Agents")).toBeTruthy();
+    expect(screen.getByText("2 agents")).toBeTruthy();
+    expect(screen.getByText("Planner")).toBeTruthy();
+    expect(screen.getByText("Reviewer")).toBeTruthy();
+  });
+
+  it("renders custom MCP card for list_tasks", () => {
+    const agent = makeAgent([
+      msg("tool-group", "", "1:00 PM", {
+        toolCalls: [
+          {
+            id: "tc-tasks",
+            name: "list_tasks",
+            kind: "other",
+            status: "completed",
+            locations: [],
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify([
+                  {
+                    id: "task-1",
+                    title: "Write migration",
+                    description: "Draft it",
+                    status: "working",
+                    blocker_ids: [],
+                    agent_id: "planner-1",
+                    session_id: "thread-1",
+                    workspace_id: "ws-1",
+                    created_at: "2026-04-14T18:00:00Z",
+                    parent_id: null,
+                  },
+                ]),
+              },
+            ],
+          },
+        ],
+      }),
+    ]);
+    render(ChatArea, { props: { agent } });
+    expect(screen.getByText("Tasks")).toBeTruthy();
+    expect(screen.getByText("1 task")).toBeTruthy();
+    expect(screen.getByText("Write migration")).toBeTruthy();
+    expect(screen.getByText("Working")).toBeTruthy();
+  });
+
+  it("renders custom MCP card for create_task", () => {
+    const agent = makeAgent([
+      msg("tool-group", "", "1:00 PM", {
+        toolCalls: [
+          {
+            id: "tc-create",
+            name: "create_task",
+            kind: "other",
+            status: "completed",
+            locations: [],
+            rawInput: {
+              title: "Write migration",
+              description: "Draft the database migration plan.",
+              agent_id: "planner-1",
+              blocker_ids: ["task-1", "task-2"],
+            },
+            rawOutput: { task_id: "task-42" },
+            content: [{ type: "text", text: JSON.stringify({ task_id: "task-42" }) }],
+          },
+        ],
+      }),
+    ]);
+    render(ChatArea, { props: { agent } });
+    expect(screen.getAllByText("Create Task")).toHaveLength(2);
+    expect(screen.getAllByText("Write migration")).toHaveLength(2);
+    expect(screen.getByText("Draft the database migration plan.")).toBeTruthy();
+    expect(screen.getByText("planner-1")).toBeTruthy();
+    expect(screen.getByText("2 blockers")).toBeTruthy();
+    expect(screen.getByText("Created task-42")).toBeTruthy();
+  });
+
+  it("renders custom MCP card for complete_task", () => {
+    const agent = makeAgent([
+      msg("tool-group", "", "1:00 PM", {
+        toolCalls: [
+          {
+            id: "tc-complete",
+            name: "complete_task",
+            kind: "other",
+            status: "completed",
+            locations: [],
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({ task_id: "task-42", status: "completed" }),
+              },
+            ],
+          },
+        ],
+      }),
+    ]);
+    render(ChatArea, { props: { agent } });
+    expect(screen.getByText("Complete Task")).toBeTruthy();
+    expect(screen.getByText("Task Completed")).toBeTruthy();
+    expect(screen.getAllByText("task-42")).toHaveLength(2);
+  });
+
   it("renders thinking block collapsed by default", () => {
     const agent = makeAgent([msg("thinking", "Let me analyze this...", "1:00 PM")]);
     render(ChatArea, { props: { agent } });

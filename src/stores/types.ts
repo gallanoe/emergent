@@ -28,6 +28,8 @@ export interface DisplayToolCall {
   status: "pending" | "in_progress" | "completed" | "failed";
   locations: string[];
   content: ToolCallContentItem[];
+  rawInput?: unknown;
+  rawOutput?: unknown;
 }
 
 export interface ConfigSelectOption {

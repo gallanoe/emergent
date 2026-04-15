@@ -2,17 +2,34 @@
 <script lang="ts">
   import { ChevronRight, ChevronDown } from "@lucide/svelte";
   import { slide } from "svelte/transition";
+  import {
+    getEmergentToolName,
+    parseAgentsToolContent,
+    parseCompleteTaskToolContent,
+    parseCreateTaskToolInput,
+    parseCreateTaskToolContent,
+    parseTasksToolContent,
+  } from "../../lib/emergent-tool-calls";
   import type { DisplayToolCall, ToolKind } from "../../stores/types";
-  import PeersToolRender from "./PeersToolRender.svelte";
-  import SendToolRender from "./SendToolRender.svelte";
+  import CompleteTaskToolRender from "./CompleteTaskToolRender.svelte";
+  import CreateTaskToolRender from "./CreateTaskToolRender.svelte";
+  import ListAgentsToolRender from "./ListAgentsToolRender.svelte";
+  import ListTasksToolRender from "./ListTasksToolRender.svelte";
 
   interface Props {
     toolCall: DisplayToolCall;
   }
 
   let { toolCall }: Props = $props();
+  let emergentToolName = $derived(getEmergentToolName(toolCall.name));
+  let isListAgentsTool = $derived(emergentToolName === "list_agents");
+  let isListTasksTool = $derived(emergentToolName === "list_tasks");
+  let isCreateTaskTool = $derived(emergentToolName === "create_task");
+  let isCompleteTaskTool = $derived(emergentToolName === "complete_task");
   let userToggled = $state<boolean | null>(null);
-  let expanded = $derived(userToggled ?? toolCall.kind === "edit");
+  let expanded = $derived(
+    userToggled ?? (toolCall.kind === "edit" || emergentToolName !== null),
+  );
 
   function toggle() {
     if (!hasPreview) return;
@@ -49,70 +66,33 @@
     return text.replace(/^```\w*\n?/, "").replace(/\n?```\s*$/, "");
   }
 
-  // ── Tool type detection ────────────────────────────────────────
-  let isSendTool = $derived(toolCall.name.endsWith("send_message"));
-  let isPeersTool = $derived(toolCall.name.endsWith("list_peers"));
-  let isSpawnTool = $derived(toolCall.name.endsWith("spawn_thread"));
-  let isKillTool = $derived(toolCall.name.endsWith("kill_agent"));
-  let isConnectTool = $derived(toolCall.name.endsWith("connect_agents"));
-  let isDisconnectTool = $derived(toolCall.name.endsWith("disconnect_agents"));
-  let isSwarmTool = $derived(
-    isSendTool ||
-      isPeersTool ||
-      isSpawnTool ||
-      isKillTool ||
-      isConnectTool ||
-      isDisconnectTool,
-  );
-
-  function parseTextContent(): unknown {
-    try {
-      const text = toolCall.content.find((c) => c.type === "text");
-      if (text?.type === "text") return JSON.parse(text.text);
-    } catch {
-      /* */
-    }
-    return null;
-  }
-
   // ── Derived display values ─────────────────────────────────────
   let verb = $derived(
-    isSendTool
-      ? "Send"
-      : isPeersTool
-        ? "Peers"
-        : isSpawnTool
-          ? "Spawn"
-          : isKillTool
-            ? "Kill"
-            : isConnectTool
-              ? "Connect"
-              : isDisconnectTool
-                ? "Disconnect"
-                : (kindVerb[toolCall.kind] ?? "Tool"),
+    isListAgentsTool
+      ? "Agents"
+      : isListTasksTool
+        ? "Tasks"
+        : isCreateTaskTool
+          ? "Create Task"
+          : isCompleteTaskTool
+            ? "Complete Task"
+            : (kindVerb[toolCall.kind] ?? "Tool"),
   );
 
   let target = $derived.by(() => {
-    if (isSendTool) {
-      const parsed = parseTextContent() as Record<string, string> | null;
-      return parsed?.target ?? toolCall.locations[0] ?? "";
+    if (isListAgentsTool) {
+      const agents = parseAgentsToolContent(toolCall);
+      return `${agents.length} agent${agents.length === 1 ? "" : "s"}`;
     }
-    if (isPeersTool) {
-      const parsed = parseTextContent();
-      const peers = Array.isArray(parsed) ? parsed : [];
-      return `${peers.length} agent${peers.length === 1 ? "" : "s"}`;
+    if (isListTasksTool) {
+      const tasks = parseTasksToolContent(toolCall);
+      return `${tasks.length} task${tasks.length === 1 ? "" : "s"}`;
     }
-    if (isSpawnTool) {
-      const parsed = parseTextContent() as Record<string, string> | null;
-      return parsed?.agent_id ?? "";
+    if (isCreateTaskTool) {
+      return parseCreateTaskToolInput(toolCall)?.title ?? parseCreateTaskToolContent(toolCall)?.task_id ?? "";
     }
-    if (isKillTool) {
-      const parsed = parseTextContent() as Record<string, string> | null;
-      return parsed?.status === "killed" ? "terminated" : "";
-    }
-    if (isConnectTool || isDisconnectTool) {
-      const parsed = parseTextContent() as Record<string, string> | null;
-      return parsed?.status ?? "";
+    if (isCompleteTaskTool) {
+      return parseCompleteTaskToolContent(toolCall)?.task_id ?? "";
     }
     return (
       toolCall.locations[0] ??
@@ -131,7 +111,6 @@
     }
     if (toolCall.status === "in_progress") return "running";
     if (toolCall.status === "pending") return "pending";
-    if (isSendTool && toolCall.status === "completed") return "delivered";
     return null;
   });
 
@@ -144,35 +123,15 @@
   );
 
   let hasPreview = $derived(
-    isSendTool ||
-      isPeersTool ||
+    isListAgentsTool ||
+      isListTasksTool ||
+      isCreateTaskTool ||
+      isCompleteTaskTool ||
       (toolCall.content.length > 0 &&
         toolCall.kind !== "read" &&
         toolCall.status !== "pending" &&
         toolCall.status !== "in_progress"),
   );
-
-  // ── Parsed content for expanded views ──────────────────────────
-  let sendBody = $derived.by(() => {
-    if (!isSendTool) return "";
-    const text = toolCall.content.find((c) => c.type === "text");
-    if (text?.type === "text") {
-      try {
-        const parsed = JSON.parse(text.text);
-        if (parsed.body) return parsed.body as string;
-      } catch {
-        /* */
-      }
-      return text.text;
-    }
-    return "";
-  });
-
-  let peersList = $derived.by(() => {
-    if (!isPeersTool) return [];
-    const parsed = parseTextContent();
-    return Array.isArray(parsed) ? parsed : [];
-  });
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
@@ -215,10 +174,17 @@
 
   {#if expanded}
     <div transition:slide={{ duration: 150 }}>
-      {#if isSendTool}
-        <SendToolRender body={sendBody} />
-      {:else if isPeersTool}
-        <PeersToolRender peers={peersList} />
+      {#if isListAgentsTool}
+        <ListAgentsToolRender agents={parseAgentsToolContent(toolCall)} />
+      {:else if isListTasksTool}
+        <ListTasksToolRender tasks={parseTasksToolContent(toolCall)} />
+      {:else if isCreateTaskTool}
+        <CreateTaskToolRender
+          input={parseCreateTaskToolInput(toolCall)}
+          result={parseCreateTaskToolContent(toolCall)}
+        />
+      {:else if isCompleteTaskTool}
+        <CompleteTaskToolRender result={parseCompleteTaskToolContent(toolCall)} />
       {:else}
         <div class="flex flex-col gap-1.5 pb-1.5">
           {#each toolCall.content as item}
