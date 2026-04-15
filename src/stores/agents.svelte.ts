@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   AgentDefinition,
   ConfigOption,
@@ -111,9 +111,35 @@ function stripSystemBlock(content: string): string {
   return content.replace(EMERGENT_SYSTEM_RE, "").trim();
 }
 
+function toDisplayThread(conn: ThreadState): DisplayThread {
+  const lastMsg = conn.messages.at(-1);
+  return {
+    id: conn.id,
+    agentId: conn.agentDefinitionId,
+    workspaceId: conn.workspaceId,
+    cli: conn.cli,
+    name: conn.agentName,
+    status: conn.status,
+    processStatus: conn.status,
+    preview: conn.role ?? (lastMsg?.content ? lastMsg.content.slice(0, 30) + "..." : ""),
+    messages: conn.messages,
+    activeToolCalls: Object.values(conn.activeToolCalls),
+    queuedMessage: conn.queuedContent || null,
+    configOptions: conn.configOptions,
+    hasManagementPermissions: conn.hasManagementPermissions,
+    ...(conn.errorMessage !== undefined && { errorMessage: conn.errorMessage }),
+    ...(conn.role !== undefined && { role: conn.role }),
+    updatedAt: conn.messages.at(-1)?.timestamp ?? "just now",
+    stopReason: conn.stopReason,
+    taskId: conn.taskId ?? null,
+  };
+}
+
 function createAgentStore() {
   // Plain object instead of Map — Svelte 5 reliably deep-proxies plain objects
   let threads: Record<string, ThreadState> = $state({});
+  let listenerCleanup: UnlistenFn[] = [];
+  let listenersReady = false;
 
   // Callback for dumping queued content to the input on error
   let onQueueDump: ((threadId: string, content: string) => void) | null = null;
@@ -423,24 +449,47 @@ function createAgentStore() {
   // ── Event listener setup ──────────────────────────────────────
 
   async function setupListeners() {
-    await listen<MessageChunkPayload>("thread:message-chunk", (e) => handleMessageChunk(e.payload));
-    await listen<ToolCallUpdatePayload>("thread:tool-call-update", (e) =>
-      handleToolCallUpdate(e.payload),
+    if (listenersReady) return;
+
+    listenerCleanup.push(
+      await listen<MessageChunkPayload>("thread:message-chunk", (e) => handleMessageChunk(e.payload)),
     );
-    await listen<PromptCompletePayload>("thread:prompt-complete", (e) =>
-      handlePromptComplete(e.payload),
+    listenerCleanup.push(
+      await listen<ToolCallUpdatePayload>("thread:tool-call-update", (e) =>
+        handleToolCallUpdate(e.payload),
+      ),
     );
-    await listen<ThreadErrorPayload>("thread:error", (e) => handleError(e.payload));
-    await listen<StatusChangePayload>("thread:status-change", (e) => handleStatusChange(e.payload));
-    await listen<SessionReadyPayload>("thread:session-ready", (e) => handleSessionReady(e.payload));
-    await listen<UserMessagePayload>("thread:user-message", (e) => handleUserMessage(e.payload));
-    await listen<ConfigUpdatePayload>("thread:config-update", (e) => handleConfigUpdate(e.payload));
-    await listen<NudgeDeliveredPayload>("thread:nudge-delivered", (e) =>
-      handleNudgeDelivered(e.payload),
+    listenerCleanup.push(
+      await listen<PromptCompletePayload>("thread:prompt-complete", (e) =>
+        handlePromptComplete(e.payload),
+      ),
     );
-    await listen<SystemMessagePayload>("thread:system-message", (e) =>
-      handleSystemMessage(e.payload),
+    listenerCleanup.push(
+      await listen<ThreadErrorPayload>("thread:error", (e) => handleError(e.payload)),
     );
+    listenerCleanup.push(
+      await listen<StatusChangePayload>("thread:status-change", (e) => handleStatusChange(e.payload)),
+    );
+    listenerCleanup.push(
+      await listen<SessionReadyPayload>("thread:session-ready", (e) => handleSessionReady(e.payload)),
+    );
+    listenerCleanup.push(
+      await listen<UserMessagePayload>("thread:user-message", (e) => handleUserMessage(e.payload)),
+    );
+    listenerCleanup.push(
+      await listen<ConfigUpdatePayload>("thread:config-update", (e) => handleConfigUpdate(e.payload)),
+    );
+    listenerCleanup.push(
+      await listen<NudgeDeliveredPayload>("thread:nudge-delivered", (e) =>
+        handleNudgeDelivered(e.payload),
+      ),
+    );
+    listenerCleanup.push(
+      await listen<SystemMessagePayload>("thread:system-message", (e) =>
+        handleSystemMessage(e.payload),
+      ),
+    );
+    listenersReady = true;
   }
 
   // ── Public API ────────────────────────────────────────────────
@@ -630,30 +679,6 @@ function createAgentStore() {
 
   function getThreadsForAgent(agentDefinitionId: string): ThreadState[] {
     return Object.values(threads).filter((t) => t.agentDefinitionId === agentDefinitionId);
-  }
-
-  function toDisplayThread(conn: ThreadState): DisplayThread {
-    const lastMsg = conn.messages.at(-1);
-    return {
-      id: conn.id,
-      agentId: conn.agentDefinitionId,
-      workspaceId: conn.workspaceId,
-      cli: conn.cli,
-      name: conn.agentName,
-      status: conn.status,
-      processStatus: conn.status,
-      preview: conn.role ?? (lastMsg?.content ? lastMsg.content.slice(0, 30) + "..." : ""),
-      messages: conn.messages,
-      activeToolCalls: Object.values(conn.activeToolCalls),
-      queuedMessage: conn.queuedContent || null,
-      configOptions: conn.configOptions,
-      hasManagementPermissions: conn.hasManagementPermissions,
-      ...(conn.errorMessage !== undefined && { errorMessage: conn.errorMessage }),
-      ...(conn.role !== undefined && { role: conn.role }),
-      updatedAt: conn.messages.at(-1)?.timestamp ?? "just now",
-      stopReason: conn.stopReason,
-      taskId: conn.taskId ?? null,
-    };
   }
 
   type DaemonNotification =

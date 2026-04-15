@@ -123,7 +123,10 @@
 
     <!-- Blockers -->
     <div>
-      <label class="block text-[11px] font-medium text-fg-muted mb-1.5">
+      <label
+        for="task-blockers"
+        class="block text-[11px] font-medium text-fg-muted mb-1.5"
+      >
         Blocked by
         <span class="text-fg-disabled font-normal">(optional)</span>
       </label>
@@ -149,6 +152,7 @@
         </div>
       {/if}
       <select
+        id="task-blockers"
         class="w-full bg-bg-base border border-border-strong rounded-md px-2.5 py-[7px] text-[12px] text-fg-disabled focus:outline-none focus:border-border-focus"
         onchange={(e) => {
           const val = (e.target as HTMLSelectElement).value;

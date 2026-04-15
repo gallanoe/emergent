@@ -18,29 +18,40 @@ use tokio::sync::broadcast;
 const DEFAULT_DOCKERFILE: &str = "\
 FROM ubuntu:24.04
 
-# System dependencies
-RUN apt-get update && apt-get install -y curl git unzip && rm -rf /var/lib/apt/lists/*
+ARG TARGETARCH
+ARG NODE_VERSION=22.14.0
+ARG BUN_VERSION=1.2.13
+ARG CLAUDE_CODE_VERSION=1.0.33
+ARG CODEX_VERSION=0.52.0
 
-# Node.js (latest LTS via NodeSource)
-RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - \
-    && apt-get install -y nodejs \
+# System dependencies
+RUN apt-get update && apt-get install -y ca-certificates curl git gh unzip xz-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# Bun
-RUN curl -fsSL https://bun.sh/install | bash
-ENV PATH=\"/root/.bun/bin:$PATH\"
+# Node.js (pinned version, direct official tarball)
+RUN case \"$TARGETARCH\" in \
+        amd64) node_arch=\"x64\" ;; \
+        arm64) node_arch=\"arm64\" ;; \
+        *) echo \"Unsupported TARGETARCH: $TARGETARCH\" && exit 1 ;; \
+    esac \
+    && curl -fsSL \"https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${node_arch}.tar.xz\" -o /tmp/node.tar.xz \
+    && tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1 \
+    && rm -f /tmp/node.tar.xz
 
-# Claude Code CLI
-RUN curl -fsSL https://claude.ai/install.sh | bash
-ENV PATH=\"/root/.local/bin:$PATH\"
+# Bun (pinned version, direct release artifact)
+RUN case \"$TARGETARCH\" in \
+        amd64) bun_arch=\"x64\" ;; \
+        arm64) bun_arch=\"aarch64\" ;; \
+        *) echo \"Unsupported TARGETARCH: $TARGETARCH\" && exit 1 ;; \
+    esac \
+    && curl -fsSL \"https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/bun-linux-${bun_arch}.zip\" -o /tmp/bun.zip \
+    && unzip /tmp/bun.zip -d /tmp \
+    && install -m 0755 \"/tmp/bun-linux-${bun_arch}/bun\" /usr/local/bin/bun \
+    && ln -sf /usr/local/bin/bun /usr/local/bin/bunx \
+    && rm -rf /tmp/bun.zip \"/tmp/bun-linux-${bun_arch}\"
 
-# GitHub CLI
-RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | tee /usr/share/keyrings/githubcli-archive-keyring.gpg > /dev/null \
-    && echo \"deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main\" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
-    && apt-get update && apt-get install -y gh && rm -rf /var/lib/apt/lists/*
-
-# Codex CLI
-RUN npm install -g @openai/codex
+# Pinned agent CLIs installed from npm packages instead of remote shell scripts
+RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} @openai/codex@${CODEX_VERSION}
 
 CMD [\"sleep\", \"infinity\"]
 ";

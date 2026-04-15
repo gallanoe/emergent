@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { agentStore } from "./agents.svelte";
 import { dispose as disposeTerminal } from "../components/terminal/terminal-instances";
 import type {
@@ -60,6 +60,9 @@ function createAppState() {
   let tasks = $state<Record<string, DisplayTask>>({});
   let selectedTaskId = $state<string | null>(null);
   let taskSidebarMode = $state<"detail" | "create" | null>(null);
+  let initializePromise: Promise<void> | null = null;
+  let listenerCleanup: UnlistenFn[] = [];
+  let listenersReady = false;
 
   // ── Initialization ────────────────────────────────────────────
 
@@ -146,63 +149,74 @@ function createAppState() {
     }
 
     await agentStore.setupListeners();
-
-    // Listen for workspace status changes
-    await listen<WorkspaceStatusChangePayload>("workspace:status-change", (e) => {
-      const ws = workspaces.find((w) => w.id === e.payload.workspace_id);
-      if (ws) ws.containerStatus = e.payload.status;
-
-      // Refresh known agents when container starts running
-      if (e.payload.status.state === "running") {
-        refreshKnownAgents(e.payload.workspace_id);
-      }
-
-      // Clear terminal session when container stops
-      if (e.payload.status.state !== "running") {
-        delete terminalSessionIds[e.payload.workspace_id];
-      }
-    });
-
-    // Listen for topology changes (connections created/removed externally)
-    await listen<TopologyChangedPayload>("swarm:topology-changed", (e) => {
-      refreshConnections(e.payload.thread_id_a);
-      refreshConnections(e.payload.thread_id_b);
-    });
-
-    // Listen for task events
-    await listen<TaskCreatedPayload>("task:created", (e) => {
-      tasks[e.payload.task.id] = e.payload.task;
-    });
-
-    await listen<TaskUpdatedPayload>("task:updated", (e) => {
-      const task = e.payload.task;
-      tasks[task.id] = task;
-
-      // When a task session is spawned server-side, register the thread
-      // in the agent store so the frontend can navigate to it
-      if (task.session_id && !agentStore.getThread(task.session_id)) {
-        const def = agentDefinitions[task.agent_id];
-        if (def) {
-          agentStore.registerPersistedThread(
-            task.session_id,
-            task.agent_id,
-            def,
-            null,
-            task.id,
-          );
-        }
-      }
-    });
+    await setupListeners();
   }
 
   async function initialize() {
     if (demoMode) return;
 
-    try {
-      await setupAfterConnect();
-    } catch (e) {
-      console.error("Failed to initialize:", e);
+    if (!initializePromise) {
+      initializePromise = setupAfterConnect().catch((e) => {
+        initializePromise = null;
+        console.error("Failed to initialize:", e);
+      });
     }
+
+    await initializePromise;
+  }
+
+  async function setupListeners() {
+    if (listenersReady) return;
+
+    listenerCleanup.push(
+      await listen<WorkspaceStatusChangePayload>("workspace:status-change", (e) => {
+        const ws = workspaces.find((w) => w.id === e.payload.workspace_id);
+        if (ws) ws.containerStatus = e.payload.status;
+
+        if (e.payload.status.state === "running") {
+          refreshKnownAgents(e.payload.workspace_id);
+        }
+
+        if (e.payload.status.state !== "running") {
+          delete terminalSessionIds[e.payload.workspace_id];
+        }
+      }),
+    );
+
+    listenerCleanup.push(
+      await listen<TopologyChangedPayload>("swarm:topology-changed", (e) => {
+        refreshConnections(e.payload.thread_id_a);
+        refreshConnections(e.payload.thread_id_b);
+      }),
+    );
+
+    listenerCleanup.push(
+      await listen<TaskCreatedPayload>("task:created", (e) => {
+        tasks[e.payload.task.id] = e.payload.task;
+      }),
+    );
+
+    listenerCleanup.push(
+      await listen<TaskUpdatedPayload>("task:updated", (e) => {
+        const task = e.payload.task;
+        tasks[task.id] = task;
+
+        if (task.session_id && !agentStore.getThread(task.session_id)) {
+          const def = agentDefinitions[task.agent_id];
+          if (def) {
+            agentStore.registerPersistedThread(
+              task.session_id,
+              task.agent_id,
+              def,
+              null,
+              task.id,
+            );
+          }
+        }
+      }),
+    );
+
+    listenersReady = true;
   }
 
   async function refreshKnownAgents(workspaceId: string) {
@@ -293,9 +307,21 @@ function createAppState() {
           const def = agentDefinitions[defId];
           if (!def) return null;
           const threads = agentStore.getThreadsForAgent(defId);
+          const displayThreads = threads.map((t) => agentStore.toDisplayThread(t));
+          if (def.role === undefined) {
+            return {
+              id: def.id,
+              name: def.name,
+              cli: def.cli,
+              threads: displayThreads,
+            };
+          }
           return {
-            ...def,
-            threads: threads.map((t) => agentStore.toDisplayThread(t)),
+            id: def.id,
+            name: def.name,
+            role: def.role,
+            cli: def.cli,
+            threads: displayThreads,
           };
         })
         .filter(Boolean) as DisplayAgentDefinition[],

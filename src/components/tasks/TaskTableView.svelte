@@ -37,7 +37,7 @@
   };
 
   const sortedTasks = $derived(
-    [...tasks].sort((a, b) => {
+    tasks.toSorted((a, b) => {
       const statusDiff =
         (statusOrder[a.status] ?? 99) - (statusOrder[b.status] ?? 99);
       if (statusDiff !== 0) return statusDiff;

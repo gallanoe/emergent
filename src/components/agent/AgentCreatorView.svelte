@@ -16,11 +16,19 @@
 
   let { knownAgents, onCreate, onCancel }: Props = $props();
 
-  const initialCli = knownAgents.find((a) => a.available)?.command ?? "";
-  let selectedCli = $state(initialCli);
+  let selectedCli = $state("");
   let name = $state("");
   let role = $state("");
   let dropdownOpen = $state(false);
+
+  $effect(() => {
+    const selectedAgentStillValid = knownAgents.some(
+      (agent) => agent.command === selectedCli && agent.available,
+    );
+    if (!selectedAgentStillValid) {
+      selectedCli = knownAgents.find((agent) => agent.available)?.command ?? "";
+    }
+  });
 
   const selectedAgent = $derived(
     knownAgents.find((a) => a.command === selectedCli),
