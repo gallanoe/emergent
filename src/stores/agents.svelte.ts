@@ -123,7 +123,9 @@ function toDisplayThread(conn: ThreadState): DisplayThread {
     name: conn.agentName,
     status: conn.status,
     processStatus: conn.status,
-    preview: conn.role ?? (lastMsg?.content ? lastMsg.content.slice(0, 30) + "..." : ""),
+    preview:
+      conn.role ??
+      (lastMsg?.content ? lastMsg.content.slice(0, 30) + "..." : ""),
     messages: conn.messages,
     activeToolCalls: Object.values(conn.activeToolCalls),
     queuedMessage: conn.queuedContent || null,
@@ -146,7 +148,9 @@ function createAgentStore() {
   // Callback for dumping queued content to the input on error
   let onQueueDump: ((threadId: string, content: string) => void) | null = null;
 
-  function registerQueueDumpHandler(handler: (threadId: string, content: string) => void) {
+  function registerQueueDumpHandler(
+    handler: (threadId: string, content: string) => void,
+  ) {
     onQueueDump = handler;
   }
 
@@ -234,7 +238,10 @@ function createAgentStore() {
     if (buffer) {
       buffer.content += payload.content;
     } else {
-      chunkBuffers[payload.thread_id] = { content: payload.content, kind: payload.kind };
+      chunkBuffers[payload.thread_id] = {
+        content: payload.content,
+        kind: payload.kind,
+      };
     }
 
     if (!flushScheduled) {
@@ -243,7 +250,9 @@ function createAgentStore() {
     }
   }
 
-  function mapToolCallContent(items: ToolCallContentPayload[]): ToolCallContentItem[] {
+  function mapToolCallContent(
+    items: ToolCallContentPayload[],
+  ): ToolCallContentItem[] {
     return items.map((item): ToolCallContentItem => {
       if (item.type === "diff") {
         return {
@@ -275,9 +284,13 @@ function createAgentStore() {
       id: payload.tool_call_id,
       name: payload.title ?? existing?.name ?? "Tool call",
       kind: (payload.kind ?? existing?.kind ?? "other") as ToolKind,
-      status: (payload.status ?? existing?.status ?? "pending") as DisplayToolCall["status"],
+      status: (payload.status ??
+        existing?.status ??
+        "pending") as DisplayToolCall["status"],
       locations: payload.locations ?? existing?.locations ?? [],
-      content: payload.content ? mapToolCallContent(payload.content) : (existing?.content ?? []),
+      content: payload.content
+        ? mapToolCallContent(payload.content)
+        : (existing?.content ?? []),
       rawInput: payload.raw_input ?? existing?.rawInput,
       rawOutput: payload.raw_output ?? existing?.rawOutput,
     };
@@ -456,7 +469,9 @@ function createAgentStore() {
     if (listenersReady) return;
 
     listenerCleanup.push(
-      await listen<MessageChunkPayload>("thread:message-chunk", (e) => handleMessageChunk(e.payload)),
+      await listen<MessageChunkPayload>("thread:message-chunk", (e) =>
+        handleMessageChunk(e.payload),
+      ),
     );
     listenerCleanup.push(
       await listen<ToolCallEventPayload>("thread:tool-call-update", (e) =>
@@ -469,19 +484,29 @@ function createAgentStore() {
       ),
     );
     listenerCleanup.push(
-      await listen<ThreadErrorPayload>("thread:error", (e) => handleError(e.payload)),
+      await listen<ThreadErrorPayload>("thread:error", (e) =>
+        handleError(e.payload),
+      ),
     );
     listenerCleanup.push(
-      await listen<StatusChangePayload>("thread:status-change", (e) => handleStatusChange(e.payload)),
+      await listen<StatusChangePayload>("thread:status-change", (e) =>
+        handleStatusChange(e.payload),
+      ),
     );
     listenerCleanup.push(
-      await listen<SessionReadyPayload>("thread:session-ready", (e) => handleSessionReady(e.payload)),
+      await listen<SessionReadyPayload>("thread:session-ready", (e) =>
+        handleSessionReady(e.payload),
+      ),
     );
     listenerCleanup.push(
-      await listen<UserMessagePayload>("thread:user-message", (e) => handleUserMessage(e.payload)),
+      await listen<UserMessagePayload>("thread:user-message", (e) =>
+        handleUserMessage(e.payload),
+      ),
     );
     listenerCleanup.push(
-      await listen<ConfigUpdatePayload>("thread:config-update", (e) => handleConfigUpdate(e.payload)),
+      await listen<ConfigUpdatePayload>("thread:config-update", (e) =>
+        handleConfigUpdate(e.payload),
+      ),
     );
     listenerCleanup.push(
       await listen<NudgeDeliveredPayload>("thread:nudge-delivered", (e) =>
@@ -566,7 +591,9 @@ function createAgentStore() {
 
     // Queue path: thread is busy, accumulate content
     if (thread.status === "working") {
-      thread.queuedContent = thread.queuedContent ? thread.queuedContent + "\n\n" + text : text;
+      thread.queuedContent = thread.queuedContent
+        ? thread.queuedContent + "\n\n" + text
+        : text;
       return;
     }
 
@@ -602,7 +629,11 @@ function createAgentStore() {
     return content;
   }
 
-  async function setConfig(threadId: string, configId: string, value: string): Promise<void> {
+  async function setConfig(
+    threadId: string,
+    configId: string,
+    value: string,
+  ): Promise<void> {
     const thread = threads[threadId];
     if (!thread) throw new Error(`Thread ${threadId} not found`);
 
@@ -682,7 +713,9 @@ function createAgentStore() {
   }
 
   function getThreadsForAgent(agentDefinitionId: string): ThreadState[] {
-    return Object.values(threads).filter((t) => t.agentDefinitionId === agentDefinitionId);
+    return Object.values(threads).filter(
+      (t) => t.agentDefinitionId === agentDefinitionId,
+    );
   }
 
   type DaemonNotification =
@@ -744,9 +777,13 @@ function createAgentStore() {
             id: n.tool_call_id,
             name: n.title ?? existing?.name ?? "Tool call",
             kind: (n.kind ?? existing?.kind ?? "other") as ToolKind,
-            status: (n.status ?? existing?.status ?? "pending") as DisplayToolCall["status"],
+            status: (n.status ??
+              existing?.status ??
+              "pending") as DisplayToolCall["status"],
             locations: n.locations ?? existing?.locations ?? [],
-            content: n.content ? mapToolCallContent(n.content) : (existing?.content ?? []),
+            content: n.content
+              ? mapToolCallContent(n.content)
+              : (existing?.content ?? []),
             rawInput: n.raw_input ?? existing?.rawInput,
             rawOutput: n.raw_output ?? existing?.rawOutput,
           };
@@ -835,7 +872,8 @@ function createAgentStore() {
     for (const threadId of Object.keys(replayToolCalls)) {
       const threadTCs = replayToolCalls[threadId];
       const thread = threads[threadId];
-      if (!thread || !threadTCs || Object.keys(threadTCs).length === 0) continue;
+      if (!thread || !threadTCs || Object.keys(threadTCs).length === 0)
+        continue;
       thread.messages.push({
         id: crypto.randomUUID(),
         role: "tool-group",
@@ -847,6 +885,26 @@ function createAgentStore() {
         }),
       });
     }
+  }
+
+  function syncThreadSnapshot(
+    threadId: string,
+    snapshot: {
+      status: ThreadState["status"];
+      acpSessionId?: string | null;
+      history: unknown[];
+      configOptions: ConfigOption[];
+    },
+  ): void {
+    const thread = threads[threadId];
+    if (!thread) return;
+
+    resetThreadState(threadId);
+    replayNotifications(snapshot.history as DaemonNotification[]);
+    thread.configOptions = snapshot.configOptions;
+    thread.status = snapshot.status;
+    thread.acpSessionId = snapshot.acpSessionId ?? thread.acpSessionId ?? null;
+    delete thread.errorMessage;
   }
 
   return {
@@ -869,6 +927,7 @@ function createAgentStore() {
     editQueue,
     registerQueueDumpHandler,
     replayNotifications,
+    syncThreadSnapshot,
     setManagementPermissions,
     setRole,
   };
