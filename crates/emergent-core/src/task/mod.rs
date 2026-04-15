@@ -16,6 +16,13 @@ pub struct TaskManager {
     prompted_sessions: Arc<RwLock<HashSet<String>>>,
 }
 
+fn build_task_prompt(task_id: &str, title: &str, description: &str) -> String {
+    format!(
+        "Task {}: {}\n\n{}\n\nWhen the task is complete, call Emergent's `complete_task` tool to mark it done.",
+        task_id, title, description
+    )
+}
+
 /// Lightweight clone of TaskManager fields needed inside the spawned event
 /// loop for reconciliation on broadcast lag.
 struct TaskManagerRef {
@@ -149,8 +156,11 @@ impl TaskManager {
             for task in reg.all_tasks() {
                 if let TaskState::Working { session_id } = &task.state {
                     if session_id == thread_id {
-                        found =
-                            Some((task.id.clone(), task.title.clone(), task.description.clone()));
+                        found = Some((
+                            task.id.clone(),
+                            task.title.clone(),
+                            task.description.clone(),
+                        ));
                         break;
                     }
                 }
@@ -167,7 +177,7 @@ impl TaskManager {
                 prompted.insert(thread_id.to_string());
             }
 
-            let prompt = format!("Task {}: {}\n\n{}", task_id, title, description);
+            let prompt = build_task_prompt(&task_id, &title, &description);
             match agent_manager.queue_prompt(thread_id, prompt, None).await {
                 Ok(_reply_rx) => {
                     // Drop the receiver — task completion is driven by the agent calling complete_task.
@@ -429,10 +439,9 @@ impl TaskManager {
             None => return,
         };
 
-        let mappings =
-            crate::agent::thread_manager::ThreadManager::load_from_dir(&workspace_path)
-                .await
-                .unwrap_or_default();
+        let mappings = crate::agent::thread_manager::ThreadManager::load_from_dir(&workspace_path)
+            .await
+            .unwrap_or_default();
         let mapping_by_thread: std::collections::HashMap<String, _> = mappings
             .into_iter()
             .map(|m| (m.thread_id.clone(), m))
@@ -591,5 +600,20 @@ impl TaskManager {
                 log::error!("Failed to persist tasks: {}", e);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::build_task_prompt;
+
+    #[test]
+    fn task_prompt_includes_completion_instruction() {
+        let prompt = build_task_prompt("task-42", "Ship it", "Wrap up the feature.");
+
+        assert!(prompt.contains("Task task-42: Ship it"));
+        assert!(prompt.contains("Wrap up the feature."));
+        assert!(prompt.contains("`complete_task`"));
+        assert!(prompt.contains("mark it done"));
     }
 }

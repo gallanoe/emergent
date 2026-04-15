@@ -54,12 +54,33 @@ pub fn run() {
             ));
 
             // Create task manager
-            let task_manager = Arc::new(TaskManager::new(
-                manager.clone(),
-                event_tx.clone(),
-            ));
+            let task_manager = Arc::new(TaskManager::new(manager.clone(), event_tx.clone()));
             let event_rx = event_tx.subscribe();
             task_manager.start_event_loop(event_rx);
+
+            // Start MCP HTTP server before any persisted task sessions are
+            // resumed so reloaded agents receive a valid MCP endpoint instead
+            // of the default port 0.
+            let mcp_server = tauri::async_runtime::block_on(async {
+                emergent_core::mcp::http_server::start(
+                    manager.clone(),
+                    token_registry.clone(),
+                    task_manager.clone(),
+                )
+                .await
+            });
+            match mcp_server {
+                Ok(server) => {
+                    tauri::async_runtime::block_on(async {
+                        manager.set_mcp_port(server.port).await;
+                    });
+                    log::info!("MCP HTTP server started on 127.0.0.1:{}", server.port);
+                    app.manage(server);
+                }
+                Err(e) => {
+                    log::error!("Failed to start MCP HTTP server: {}", e);
+                }
+            }
 
             // Load persisted agent definitions, thread mappings, and tasks for all workspaces
             tauri::async_runtime::block_on(async {
@@ -198,30 +219,6 @@ pub fn run() {
                             log::warn!("Notification bridge lagged, missed {} events", n);
                         }
                         Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
-                    }
-                }
-            });
-
-            // Start MCP HTTP server
-            let http_manager = manager.clone();
-            let http_registry = token_registry.clone();
-            let http_task_manager = task_manager.clone();
-            tauri::async_runtime::spawn(async move {
-                match emergent_core::mcp::http_server::start(
-                    http_manager.clone(),
-                    http_registry,
-                    http_task_manager,
-                )
-                .await
-                {
-                    Ok(server) => {
-                        http_manager.set_mcp_port(server.port).await;
-                        log::info!("MCP HTTP server started on 127.0.0.1:{}", server.port);
-                        // Keep cancellation token alive until app exits
-                        std::future::pending::<()>().await;
-                    }
-                    Err(e) => {
-                        log::error!("Failed to start MCP HTTP server: {}", e);
                     }
                 }
             });

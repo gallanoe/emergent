@@ -3,7 +3,10 @@ import { render, screen, fireEvent } from "@testing-library/svelte";
 import ChatArea from "./ChatArea.svelte";
 import type { DisplayThread, DisplayMessage } from "../../stores/types";
 
-function makeAgent(messages: DisplayMessage[], overrides?: Partial<DisplayThread>): DisplayThread {
+function makeAgent(
+  messages: DisplayMessage[],
+  overrides?: Partial<DisplayThread>,
+): DisplayThread {
   return {
     id: "agent-1",
     agentId: "def-1",
@@ -43,7 +46,9 @@ function msg(
 describe("ChatArea", () => {
   it("shows placeholder when no agent is selected", () => {
     render(ChatArea, { props: { agent: undefined } });
-    expect(screen.getByText("Select an agent to view its conversation")).toBeTruthy();
+    expect(
+      screen.getByText("Select an agent to view its conversation"),
+    ).toBeTruthy();
   });
 
   it("renders assistant messages", () => {
@@ -195,7 +200,9 @@ describe("ChatArea", () => {
               blocker_ids: ["task-1", "task-2"],
             },
             rawOutput: { task_id: "task-42" },
-            content: [{ type: "text", text: JSON.stringify({ task_id: "task-42" }) }],
+            content: [
+              { type: "text", text: JSON.stringify({ task_id: "task-42" }) },
+            ],
           },
         ],
       }),
@@ -222,7 +229,10 @@ describe("ChatArea", () => {
             content: [
               {
                 type: "text",
-                text: JSON.stringify({ task_id: "task-42", status: "completed" }),
+                text: JSON.stringify({
+                  task_id: "task-42",
+                  status: "completed",
+                }),
               },
             ],
           },
@@ -230,20 +240,23 @@ describe("ChatArea", () => {
       }),
     ]);
     render(ChatArea, { props: { agent } });
-    expect(screen.getByText("Complete Task")).toBeTruthy();
     expect(screen.getByText("Task Completed")).toBeTruthy();
-    expect(screen.getAllByText("task-42")).toHaveLength(2);
+    expect(screen.queryByText("Complete Task")).toBeNull();
   });
 
   it("renders thinking block collapsed by default", () => {
-    const agent = makeAgent([msg("thinking", "Let me analyze this...", "1:00 PM")]);
+    const agent = makeAgent([
+      msg("thinking", "Let me analyze this...", "1:00 PM"),
+    ]);
     render(ChatArea, { props: { agent } });
     expect(screen.getByText("Thinking")).toBeTruthy();
     expect(screen.queryByText("Let me analyze this...")).toBeNull();
   });
 
   it("expands thinking block on click", async () => {
-    const agent = makeAgent([msg("thinking", "Let me analyze this...", "1:00 PM")]);
+    const agent = makeAgent([
+      msg("thinking", "Let me analyze this...", "1:00 PM"),
+    ]);
     render(ChatArea, { props: { agent } });
     await fireEvent.click(screen.getByText("Thinking"));
     expect(screen.getByText("Let me analyze this...")).toBeTruthy();
@@ -335,7 +348,9 @@ describe("ChatArea", () => {
     render(ChatArea, { props: { agent } });
     expect(screen.getByText("Failed to connect")).toBeTruthy();
     expect(screen.getByText("Could not start the agent")).toBeTruthy();
-    expect(screen.getByText("Connection refused: binary not found")).toBeTruthy();
+    expect(
+      screen.getByText("Connection refused: binary not found"),
+    ).toBeTruthy();
   });
 
   it("hides working indicator when agent is idle", () => {
@@ -352,6 +367,8 @@ describe("ChatArea", () => {
       { status: "idle" },
     );
     render(ChatArea, { props: { agent } });
-    expect(screen.getByText("Management permissions have been granted.")).toBeTruthy();
+    expect(
+      screen.getByText("Management permissions have been granted."),
+    ).toBeTruthy();
   });
 });

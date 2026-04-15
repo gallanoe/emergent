@@ -18,7 +18,6 @@ use tokio::sync::broadcast;
 const DEFAULT_DOCKERFILE: &str = "\
 FROM ubuntu:24.04
 
-ARG TARGETARCH
 ARG NODE_VERSION=22.14.0
 ARG BUN_VERSION=1.2.13
 ARG CLAUDE_CODE_VERSION=1.0.33
@@ -29,20 +28,20 @@ RUN apt-get update && apt-get install -y ca-certificates curl git gh unzip xz-ut
     && rm -rf /var/lib/apt/lists/*
 
 # Node.js (pinned version, direct official tarball)
-RUN case \"$TARGETARCH\" in \
+RUN case \"$(dpkg --print-architecture)\" in \
         amd64) node_arch=\"x64\" ;; \
         arm64) node_arch=\"arm64\" ;; \
-        *) echo \"Unsupported TARGETARCH: $TARGETARCH\" && exit 1 ;; \
+        *) echo \"Unsupported architecture: $(dpkg --print-architecture)\" && exit 1 ;; \
     esac \
     && curl -fsSL \"https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${node_arch}.tar.xz\" -o /tmp/node.tar.xz \
     && tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1 \
     && rm -f /tmp/node.tar.xz
 
 # Bun (pinned version, direct release artifact)
-RUN case \"$TARGETARCH\" in \
+RUN case \"$(dpkg --print-architecture)\" in \
         amd64) bun_arch=\"x64\" ;; \
         arm64) bun_arch=\"aarch64\" ;; \
-        *) echo \"Unsupported TARGETARCH: $TARGETARCH\" && exit 1 ;; \
+        *) echo \"Unsupported architecture: $(dpkg --print-architecture)\" && exit 1 ;; \
     esac \
     && curl -fsSL \"https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/bun-linux-${bun_arch}.zip\" -o /tmp/bun.zip \
     && unzip /tmp/bun.zip -d /tmp \
@@ -263,33 +262,50 @@ impl WorkspaceManager {
         }
         self.emit_status(&workspace_id, ContainerStatus::Building);
 
-        // Build container
-        log::info!("Building container for workspace '{}'", workspace_id);
-        if let Err(e) = self.build_container(&workspace_id).await {
-            let error_status = ContainerStatus::Error { message: e.clone() };
-            {
-                let mut state = self.state.write().await;
-                if let Some(ws) = state.workspaces.get_mut(&workspace_id) {
-                    ws.container_status = error_status.clone();
-                }
-            }
-            self.emit_status(&workspace_id, error_status);
-            return Err(e);
-        }
+        let state = self.state.clone();
+        let event_tx = self.event_tx.clone();
+        let docker = self.docker.clone();
+        let workspace_id_for_task = workspace_id.clone();
+        let workspace_path_for_task = workspace_path.clone();
+        tokio::spawn(async move {
+            log::info!(
+                "Building container for workspace '{}'",
+                workspace_id_for_task
+            );
 
-        // Start container
-        log::info!("Starting container for workspace '{}'", workspace_id);
-        if let Err(e) = self.start_container(&workspace_id).await {
-            let error_status = ContainerStatus::Error { message: e.clone() };
+            let build_result = match docker {
+                Some(docker) => {
+                    container::build_image(
+                        &docker,
+                        &workspace_id_for_task,
+                        &workspace_path_for_task,
+                    )
+                    .await
+                }
+                None => Err("Docker is not available".to_string()),
+            };
+
+            let next_status = match build_result {
+                Ok(_) => ContainerStatus::Stopped,
+                Err(message) => ContainerStatus::Error { message },
+            };
+
             {
-                let mut state = self.state.write().await;
-                if let Some(ws) = state.workspaces.get_mut(&workspace_id) {
-                    ws.container_status = error_status.clone();
+                let mut state = state.write().await;
+                if let Some(ws) = state.workspaces.get_mut(&workspace_id_for_task) {
+                    ws.container_status = next_status.clone();
+                } else {
+                    return;
                 }
             }
-            self.emit_status(&workspace_id, error_status);
-            return Err(e);
-        }
+
+            let _ = event_tx.send(Notification::WorkspaceStatusChange(
+                WorkspaceStatusChangePayload {
+                    workspace_id: workspace_id_for_task,
+                    status: next_status,
+                },
+            ));
+        });
 
         Ok(workspace_id)
     }

@@ -5,13 +5,11 @@
   import {
     getEmergentToolName,
     parseAgentsToolContent,
-    parseCompleteTaskToolContent,
     parseCreateTaskToolInput,
     parseCreateTaskToolContent,
     parseTasksToolContent,
   } from "../../lib/emergent-tool-calls";
   import type { DisplayToolCall, ToolKind } from "../../stores/types";
-  import CompleteTaskToolRender from "./CompleteTaskToolRender.svelte";
   import CreateTaskToolRender from "./CreateTaskToolRender.svelte";
   import ListAgentsToolRender from "./ListAgentsToolRender.svelte";
   import ListTasksToolRender from "./ListTasksToolRender.svelte";
@@ -28,7 +26,9 @@
   let isCompleteTaskTool = $derived(emergentToolName === "complete_task");
   let userToggled = $state<boolean | null>(null);
   let expanded = $derived(
-    userToggled ?? (toolCall.kind === "edit" || emergentToolName !== null),
+    userToggled ??
+      (toolCall.kind === "edit" ||
+        (emergentToolName !== null && !isCompleteTaskTool)),
   );
 
   function toggle() {
@@ -75,7 +75,7 @@
         : isCreateTaskTool
           ? "Create Task"
           : isCompleteTaskTool
-            ? "Complete Task"
+            ? "Task Completed"
             : (kindVerb[toolCall.kind] ?? "Tool"),
   );
 
@@ -89,10 +89,14 @@
       return `${tasks.length} task${tasks.length === 1 ? "" : "s"}`;
     }
     if (isCreateTaskTool) {
-      return parseCreateTaskToolInput(toolCall)?.title ?? parseCreateTaskToolContent(toolCall)?.task_id ?? "";
+      return (
+        parseCreateTaskToolInput(toolCall)?.title ??
+        parseCreateTaskToolContent(toolCall)?.task_id ??
+        ""
+      );
     }
     if (isCompleteTaskTool) {
-      return parseCompleteTaskToolContent(toolCall)?.task_id ?? "";
+      return "";
     }
     return (
       toolCall.locations[0] ??
@@ -126,7 +130,6 @@
     isListAgentsTool ||
       isListTasksTool ||
       isCreateTaskTool ||
-      isCompleteTaskTool ||
       (toolCall.content.length > 0 &&
         toolCall.kind !== "read" &&
         toolCall.status !== "pending" &&
@@ -183,8 +186,6 @@
           input={parseCreateTaskToolInput(toolCall)}
           result={parseCreateTaskToolContent(toolCall)}
         />
-      {:else if isCompleteTaskTool}
-        <CompleteTaskToolRender result={parseCompleteTaskToolContent(toolCall)} />
       {:else}
         <div class="flex flex-col gap-1.5 pb-1.5">
           {#each toolCall.content as item}
