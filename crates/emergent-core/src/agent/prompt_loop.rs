@@ -1,8 +1,6 @@
 use std::sync::Arc;
 
-use emergent_protocol::{
-    AgentStatus, Notification, StatusChangePayload, SystemMessagePayload,
-};
+use emergent_protocol::{AgentStatus, Notification, StatusChangePayload, SystemMessagePayload};
 use tokio::sync::{broadcast, oneshot, Mutex};
 
 use super::{AgentCommand, ThreadHandle};
@@ -57,11 +55,8 @@ pub(crate) async fn prompt_loop(
             (first, role_ref, perm_change)
         };
 
-        let system_block = build_system_block(
-            is_first_turn,
-            role.as_deref(),
-            permission_change.as_deref(),
-        );
+        let system_block =
+            build_system_block(is_first_turn, role.as_deref(), permission_change.as_deref());
 
         // Emit permission change system message to frontend
         if let Some(ref perm_msg) = permission_change {

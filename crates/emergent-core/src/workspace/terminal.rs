@@ -4,9 +4,7 @@ use std::sync::Arc;
 
 use bollard::exec::{CreateExecOptions, ResizeExecOptions, StartExecOptions, StartExecResults};
 use bollard::Docker;
-use emergent_protocol::{
-    Notification, TerminalExitedPayload, TerminalOutputPayload, WorkspaceId,
-};
+use emergent_protocol::{Notification, TerminalExitedPayload, TerminalOutputPayload, WorkspaceId};
 use futures_util::StreamExt;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::{broadcast, Mutex};
@@ -184,10 +182,7 @@ pub async fn create_session(
 }
 
 /// Close all terminal sessions for a workspace.
-pub async fn close_sessions_for_workspace(
-    sessions: &TerminalSessions,
-    workspace_id: &WorkspaceId,
-) {
+pub async fn close_sessions_for_workspace(sessions: &TerminalSessions, workspace_id: &WorkspaceId) {
     let mut map = sessions.lock().await;
     let ids_to_remove: Vec<String> = map
         .iter()

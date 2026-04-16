@@ -39,10 +39,7 @@ impl TokenRegistry {
 
     /// Remove all tokens for an agent (called when an agent is killed).
     pub fn revoke_agent(&self, agent_id: &str) {
-        self.tokens
-            .write()
-            .unwrap()
-            .retain(|_, id| id != agent_id);
+        self.tokens.write().unwrap().retain(|_, id| id != agent_id);
     }
 }
 

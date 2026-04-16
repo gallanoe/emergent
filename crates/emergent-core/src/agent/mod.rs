@@ -258,7 +258,11 @@ impl AgentManager {
     /// Spawn a new thread under an agent definition.
     /// Reads CLI and workspace from the definition, validates the container,
     /// then delegates to ThreadManager.
-    pub async fn spawn_thread(&self, agent_id: &str, task_id: Option<String>) -> Result<String, String> {
+    pub async fn spawn_thread(
+        &self,
+        agent_id: &str,
+        task_id: Option<String>,
+    ) -> Result<String, String> {
         // Read agent definition
         let definition = {
             let reg = self.registry.read().await;

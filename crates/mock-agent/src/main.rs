@@ -69,7 +69,10 @@ impl MockAgent {
     ) -> Result<oneshot::Receiver<()>, acp::Error> {
         let (tx, rx) = oneshot::channel();
         self.notify_tx
-            .send((acp::SessionNotification::new(session_id.clone(), update), tx))
+            .send((
+                acp::SessionNotification::new(session_id.clone(), update),
+                tx,
+            ))
             .map_err(|_| acp::Error::internal_error())?;
         Ok(rx)
     }
@@ -103,10 +106,8 @@ impl acp::Agent for MockAgent {
         &self,
         _args: acp::InitializeRequest,
     ) -> Result<acp::InitializeResponse, acp::Error> {
-        Ok(
-            acp::InitializeResponse::new(acp::ProtocolVersion::V1)
-                .agent_info(acp::Implementation::new("mock-agent", "0.1.0").title("Mock Agent")),
-        )
+        Ok(acp::InitializeResponse::new(acp::ProtocolVersion::V1)
+            .agent_info(acp::Implementation::new("mock-agent", "0.1.0").title("Mock Agent")))
     }
 
     async fn authenticate(
@@ -122,8 +123,10 @@ impl acp::Agent for MockAgent {
     ) -> Result<acp::NewSessionResponse, acp::Error> {
         let id = self.next_session_id.get();
         self.next_session_id.set(id + 1);
-        Ok(acp::NewSessionResponse::new(id.to_string())
-            .config_options(self.build_config_options()))
+        Ok(
+            acp::NewSessionResponse::new(id.to_string())
+                .config_options(self.build_config_options()),
+        )
     }
 
     async fn set_session_config_option(
@@ -144,10 +147,7 @@ impl acp::Agent for MockAgent {
         ))
     }
 
-    async fn prompt(
-        &self,
-        args: acp::PromptRequest,
-    ) -> Result<acp::PromptResponse, acp::Error> {
+    async fn prompt(&self, args: acp::PromptRequest) -> Result<acp::PromptResponse, acp::Error> {
         // Extract prompt text
         let text = args
             .prompt
@@ -193,13 +193,10 @@ impl acp::Agent for MockAgent {
             .await
             .map_err(|_| acp::Error::internal_error())?;
 
-            let fields = acp::ToolCallUpdateFields::new()
-                .status(acp::ToolCallStatus::Completed);
+            let fields = acp::ToolCallUpdateFields::new().status(acp::ToolCallStatus::Completed);
             self.send_notification(
                 &args.session_id,
-                acp::SessionUpdate::ToolCallUpdate(
-                    acp::ToolCallUpdate::new(tool_call_id, fields),
-                ),
+                acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(tool_call_id, fields)),
             )
             .map_err(|_| acp::Error::internal_error())?
             .await

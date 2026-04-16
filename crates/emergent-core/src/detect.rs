@@ -9,8 +9,18 @@ use futures_util::StreamExt;
 /// `requires` lists binaries that must be findable via `which` inside the container.
 /// If empty, the command binary itself is checked.
 const KNOWN_AGENTS: &[(&str, &str, &[&str], &[&str])] = &[
-    ("Claude Code", "bunx", &["@zed-industries/claude-agent-acp"], &["claude", "bunx"]),
-    ("Codex", "bunx", &["@zed-industries/codex-acp"], &["codex", "bunx"]),
+    (
+        "Claude Code",
+        "bunx",
+        &["@zed-industries/claude-agent-acp"],
+        &["claude", "bunx"],
+    ),
+    (
+        "Codex",
+        "bunx",
+        &["@zed-industries/codex-acp"],
+        &["codex", "bunx"],
+    ),
     ("Gemini", "gemini", &["--experimental-acp"], &[]),
     ("Kiro", "kiro-cli", &["acp"], &[]),
     ("OpenCode", "opencode", &["acp"], &[]),
@@ -45,9 +55,7 @@ async fn is_available_in_container(docker: &Docker, container_id: &str, binary: 
 
     // Start exec and drain the output stream to wait for completion
     match docker.start_exec(&exec_id, None).await {
-        Ok(StartExecResults::Attached { mut output, .. }) => {
-            while output.next().await.is_some() {}
-        }
+        Ok(StartExecResults::Attached { mut output, .. }) => while output.next().await.is_some() {},
         Ok(StartExecResults::Detached) => {}
         Err(_) => return false,
     }
@@ -60,10 +68,7 @@ async fn is_available_in_container(docker: &Docker, container_id: &str, binary: 
 }
 
 /// Return all known agent types, checking availability inside a container.
-pub async fn known_agents_in_container(
-    docker: &Docker,
-    container_id: &str,
-) -> Vec<KnownAgent> {
+pub async fn known_agents_in_container(docker: &Docker, container_id: &str) -> Vec<KnownAgent> {
     let mut agents = Vec::new();
 
     for &(name, binary, args, requires) in KNOWN_AGENTS {

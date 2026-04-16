@@ -149,7 +149,12 @@ mod tests {
     #[test]
     fn test_update_agent() {
         let mut reg = AgentRegistry::new();
-        let id = reg.create_agent(ws_id(), "Old".into(), Some("old role".into()), "claude".into());
+        let id = reg.create_agent(
+            ws_id(),
+            "Old".into(),
+            Some("old role".into()),
+            "claude".into(),
+        );
         reg.update_agent(&id, Some("New".into()), None).unwrap();
         assert_eq!(reg.get_agent(&id).unwrap().name, "New");
         assert_eq!(reg.get_agent(&id).unwrap().role, Some("old role".into()));
@@ -173,7 +178,12 @@ mod tests {
     fn test_list_definitions_filters_by_workspace() {
         let mut reg = AgentRegistry::new();
         reg.create_agent(ws_id(), "A".into(), None, "c".into());
-        reg.create_agent(WorkspaceId::from("other"), "B".into(), Some("r".into()), "c".into());
+        reg.create_agent(
+            WorkspaceId::from("other"),
+            "B".into(),
+            Some("r".into()),
+            "c".into(),
+        );
         let list = reg.list_definitions(&ws_id());
         assert_eq!(list.len(), 1);
         assert_eq!(list[0].name, "A");

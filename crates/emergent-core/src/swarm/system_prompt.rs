@@ -93,5 +93,4 @@ mod tests {
     fn nothing_to_inject() {
         assert!(build_system_block(false, None, None).is_none());
     }
-
 }

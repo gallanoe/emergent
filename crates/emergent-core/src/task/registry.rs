@@ -133,8 +133,8 @@ impl TaskRegistry {
         let raw = tokio::fs::read_to_string(&path)
             .await
             .map_err(|e| format!("Failed to read tasks.json: {}", e))?;
-        let tasks: Vec<Task> = serde_json::from_str(&raw)
-            .map_err(|e| format!("Failed to parse tasks.json: {}", e))?;
+        let tasks: Vec<Task> =
+            serde_json::from_str(&raw).map_err(|e| format!("Failed to parse tasks.json: {}", e))?;
         for task in tasks {
             self.tasks.insert(task.id.clone(), task);
         }
@@ -188,8 +188,22 @@ mod tests {
     #[test]
     fn test_list_tasks_for_agent() {
         let mut reg = TaskRegistry::new();
-        reg.create_task(ws_id(), "A".into(), "d".into(), "agent-1".into(), vec![], None);
-        reg.create_task(ws_id(), "B".into(), "d".into(), "agent-2".into(), vec![], None);
+        reg.create_task(
+            ws_id(),
+            "A".into(),
+            "d".into(),
+            "agent-1".into(),
+            vec![],
+            None,
+        );
+        reg.create_task(
+            ws_id(),
+            "B".into(),
+            "d".into(),
+            "agent-2".into(),
+            vec![],
+            None,
+        );
         let list = reg.list_tasks_for_agent("agent-1");
         assert_eq!(list.len(), 1);
         assert_eq!(list[0].title, "A");
@@ -206,8 +220,14 @@ mod tests {
     #[test]
     fn test_find_unblocked_tasks_with_pending_blocker() {
         let mut reg = TaskRegistry::new();
-        let blocker_id =
-            reg.create_task(ws_id(), "Blocker".into(), "d".into(), "a".into(), vec![], None);
+        let blocker_id = reg.create_task(
+            ws_id(),
+            "Blocker".into(),
+            "d".into(),
+            "a".into(),
+            vec![],
+            None,
+        );
         reg.create_task(
             ws_id(),
             "Blocked".into(),
@@ -224,8 +244,14 @@ mod tests {
     #[test]
     fn test_find_unblocked_tasks_after_blocker_completes() {
         let mut reg = TaskRegistry::new();
-        let blocker_id =
-            reg.create_task(ws_id(), "Blocker".into(), "d".into(), "a".into(), vec![], None);
+        let blocker_id = reg.create_task(
+            ws_id(),
+            "Blocker".into(),
+            "d".into(),
+            "a".into(),
+            vec![],
+            None,
+        );
         let blocked_id = reg.create_task(
             ws_id(),
             "Blocked".into(),
@@ -244,7 +270,14 @@ mod tests {
     #[test]
     fn test_agent_has_active_tasks() {
         let mut reg = TaskRegistry::new();
-        let id = reg.create_task(ws_id(), "A".into(), "d".into(), "agent-1".into(), vec![], None);
+        let id = reg.create_task(
+            ws_id(),
+            "A".into(),
+            "d".into(),
+            "agent-1".into(),
+            vec![],
+            None,
+        );
         assert!(reg.agent_has_active_tasks("agent-1"));
         assert!(!reg.agent_has_active_tasks("agent-2"));
         reg.get_task_mut(&id).unwrap().state = TaskState::Completed {

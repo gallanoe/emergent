@@ -22,34 +22,30 @@ fn convert_one(opt: &acp::SessionConfigOption) -> Option<ConfigOption> {
     });
 
     let options = match &select.options {
-        acp::SessionConfigSelectOptions::Ungrouped(opts) => {
-            ConfigSelectOptions::Ungrouped(
-                opts.iter()
-                    .map(|o| ConfigSelectOption {
-                        value: o.value.to_string(),
-                        name: o.name.clone(),
-                    })
-                    .collect(),
-            )
-        }
-        acp::SessionConfigSelectOptions::Grouped(groups) => {
-            ConfigSelectOptions::Grouped(
-                groups
-                    .iter()
-                    .map(|g| ConfigSelectGroup {
-                        label: g.name.clone(),
-                        options: g
-                            .options
-                            .iter()
-                            .map(|o| ConfigSelectOption {
-                                value: o.value.to_string(),
-                                name: o.name.clone(),
-                            })
-                            .collect(),
-                    })
-                    .collect(),
-            )
-        }
+        acp::SessionConfigSelectOptions::Ungrouped(opts) => ConfigSelectOptions::Ungrouped(
+            opts.iter()
+                .map(|o| ConfigSelectOption {
+                    value: o.value.to_string(),
+                    name: o.name.clone(),
+                })
+                .collect(),
+        ),
+        acp::SessionConfigSelectOptions::Grouped(groups) => ConfigSelectOptions::Grouped(
+            groups
+                .iter()
+                .map(|g| ConfigSelectGroup {
+                    label: g.name.clone(),
+                    options: g
+                        .options
+                        .iter()
+                        .map(|o| ConfigSelectOption {
+                            value: o.value.to_string(),
+                            name: o.name.clone(),
+                        })
+                        .collect(),
+                })
+                .collect(),
+        ),
         _ => return None, // Unknown options variant
     };
 
@@ -86,9 +82,10 @@ pub fn diff_config(old: &[ConfigOption], new: &[ConfigOption]) -> Vec<ConfigChan
 
 fn find_value_name(options: &ConfigSelectOptions, value: &str) -> Option<String> {
     match options {
-        ConfigSelectOptions::Ungrouped(opts) => {
-            opts.iter().find(|o| o.value == value).map(|o| o.name.clone())
-        }
+        ConfigSelectOptions::Ungrouped(opts) => opts
+            .iter()
+            .find(|o| o.value == value)
+            .map(|o| o.name.clone()),
         ConfigSelectOptions::Grouped(groups) => groups
             .iter()
             .flat_map(|g| &g.options)
