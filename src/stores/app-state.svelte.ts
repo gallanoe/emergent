@@ -6,12 +6,14 @@ import type {
   ActiveView,
   AgentDefinition,
   ContainerStatus,
+  ContainerRuntimeKind,
+  ContainerRuntimePreference,
+  ContainerRuntimeStatus,
   ConfigOption,
   DisplayAgentDefinition,
   DisplayTask,
   DisplayThread,
   DisplayWorkspace,
-  DockerStatus,
   TaskCreatedPayload,
   TaskUpdatedPayload,
   ThreadMapping,
@@ -62,7 +64,10 @@ function createAppState() {
   // Which segmented-control tab is active inside ThreadListView. Persisted in
   // appState so it survives the agent-chat round-trip (the component remounts).
   let agentViewTab = $state<"threads" | "tasks">("threads");
-  let dockerStatus = $state<DockerStatus | null>(null);
+  let runtimePreference = $state<ContainerRuntimePreference>({
+    selected_runtime: "docker",
+  });
+  let runtimeStatus = $state<ContainerRuntimeStatus | null>(null);
   let terminalSessionIds = $state<Record<string, string>>({});
   let tasks = $state<Record<string, DisplayTask>>({});
   let selectedTaskId = $state<string | null>(null);
@@ -74,11 +79,23 @@ function createAppState() {
   // ── Initialization ────────────────────────────────────────────
 
   async function setupAfterConnect() {
-    // Detect Docker availability
+    // Load runtime preference and availability first so the app can show the
+    // correct unavailable state before workspace-specific views mount.
     try {
-      dockerStatus = await invoke<DockerStatus>("detect_docker");
+      const [preference, status] = await Promise.all([
+        invoke<ContainerRuntimePreference>("get_container_runtime_preference"),
+        invoke<ContainerRuntimeStatus>("get_container_runtime_status"),
+      ]);
+      runtimePreference = preference;
+      runtimeStatus = status;
     } catch {
-      dockerStatus = { docker_available: false, docker_version: null };
+      runtimePreference = { selected_runtime: "docker" };
+      runtimeStatus = {
+        selected_runtime: "docker",
+        available: false,
+        version: null,
+        message: "Failed to detect the selected container runtime.",
+      };
     }
 
     // Load existing workspaces
@@ -348,6 +365,24 @@ function createAppState() {
     if (idx !== -1) workspaces.splice(idx, 1);
     if (selectedWorkspaceId === workspaceId) {
       selectedWorkspaceId = workspaces[0]?.id ?? null;
+    }
+  }
+
+  async function setContainerRuntimePreference(selectedRuntime: ContainerRuntimeKind) {
+    runtimePreference = { selected_runtime: selectedRuntime };
+    runtimeStatus = await invoke<ContainerRuntimeStatus>(
+      "set_container_runtime_preference",
+      { selectedRuntime },
+    );
+
+    if (
+      selectedWorkspaceId &&
+      workspaces.find((w) => w.id === selectedWorkspaceId)?.containerStatus.state ===
+        "running"
+    ) {
+      await refreshKnownAgents(selectedWorkspaceId);
+    } else {
+      knownAgents = [];
     }
   }
 
@@ -629,8 +664,11 @@ function createAppState() {
     get agentConnections() {
       return agentConnections;
     },
-    get dockerStatus() {
-      return dockerStatus;
+    get runtimePreference() {
+      return runtimePreference;
+    },
+    get runtimeStatus() {
+      return runtimeStatus;
     },
     initialize,
     createWorkspace,
@@ -638,6 +676,7 @@ function createAppState() {
     killThread,
     updateWorkspace,
     deleteWorkspace,
+    setContainerRuntimePreference,
     startContainer,
     stopContainer,
     rebuildContainer,

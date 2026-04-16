@@ -29,6 +29,7 @@ pub struct ThreadManager {
     pub(crate) token_registry: Arc<crate::mcp::TokenRegistry>,
     pub(crate) mcp_port: std::sync::atomic::AtomicU16,
     pub(crate) workspace_state: crate::workspace::SharedWorkspaceState,
+    pub(crate) runtime: crate::runtime::SharedRuntime,
 }
 
 impl ThreadManager {
@@ -36,6 +37,7 @@ impl ThreadManager {
         event_tx: broadcast::Sender<Notification>,
         token_registry: Arc<crate::mcp::TokenRegistry>,
         workspace_state: crate::workspace::SharedWorkspaceState,
+        runtime: crate::runtime::SharedRuntime,
     ) -> Self {
         let history: Arc<RwLock<HashMap<String, Vec<Notification>>>> =
             Arc::new(RwLock::new(HashMap::new()));
@@ -69,6 +71,7 @@ impl ThreadManager {
             token_registry,
             mcp_port: std::sync::atomic::AtomicU16::new(0),
             workspace_state,
+            runtime,
         }
     }
 
@@ -127,6 +130,10 @@ impl ThreadManager {
         let ws_id_for_persist = workspace_id.clone();
         let threads_for_persist = self.threads.clone();
         let token_registry_for_cleanup = self.token_registry.clone();
+        let runtime = self.runtime.read().await;
+        let cli_program = runtime.cli_program().to_string();
+        let mcp_host_alias = runtime.mcp_host_alias().to_string();
+        drop(runtime);
 
         tokio::spawn(async move {
             match lifecycle::initialize_agent(
@@ -143,6 +150,8 @@ impl ThreadManager {
                 history,
                 mcp_port,
                 bearer_token,
+                cli_program,
+                mcp_host_alias,
             )
             .await
             {
@@ -222,6 +231,10 @@ impl ThreadManager {
         let bearer_token = self.token_registry.register(&id);
         let mcp_port = self.mcp_port.load(std::sync::atomic::Ordering::Relaxed);
         let token_registry_for_cleanup = self.token_registry.clone();
+        let runtime = self.runtime.read().await;
+        let cli_program = runtime.cli_program().to_string();
+        let mcp_host_alias = runtime.mcp_host_alias().to_string();
+        drop(runtime);
 
         tokio::spawn(async move {
             match lifecycle::initialize_agent(
@@ -238,6 +251,8 @@ impl ThreadManager {
                 history,
                 mcp_port,
                 bearer_token,
+                cli_program,
+                mcp_host_alias,
             )
             .await
             {

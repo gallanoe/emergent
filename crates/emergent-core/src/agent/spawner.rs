@@ -28,17 +28,17 @@ pub trait ProcessSpawner: Send + Sync {
 }
 
 // ---------------------------------------------------------------------------
-// DockerCliSpawner — uses `docker exec -i` via tokio::process::Command
+// RuntimeCliSpawner — uses `<runtime> exec -i` via tokio::process::Command
 // ---------------------------------------------------------------------------
 
-pub struct DockerCliProcess {
+pub struct RuntimeCliProcess {
     child: tokio::process::Child,
     stdin: Option<tokio::process::ChildStdin>,
     stdout: Option<tokio::process::ChildStdout>,
 }
 
 #[async_trait]
-impl AgentProcess for DockerCliProcess {
+impl AgentProcess for RuntimeCliProcess {
     type Stdin = tokio::process::ChildStdin;
     type Stdout = tokio::process::ChildStdout;
 
@@ -62,22 +62,32 @@ impl AgentProcess for DockerCliProcess {
         self.child
             .kill()
             .await
-            .map_err(|e| format!("Failed to kill docker exec process: {}", e))
+            .map_err(|e| format!("Failed to kill runtime exec process: {}", e))
     }
 
     async fn wait(&mut self) -> Result<std::process::ExitStatus, String> {
         self.child
             .wait()
             .await
-            .map_err(|e| format!("Failed to wait on docker exec process: {}", e))
+            .map_err(|e| format!("Failed to wait on runtime exec process: {}", e))
     }
 }
 
-pub struct DockerCliSpawner;
+pub struct RuntimeCliSpawner {
+    cli_program: String,
+}
+
+impl RuntimeCliSpawner {
+    pub fn new(cli_program: impl Into<String>) -> Self {
+        Self {
+            cli_program: cli_program.into(),
+        }
+    }
+}
 
 #[async_trait]
-impl ProcessSpawner for DockerCliSpawner {
-    type Process = DockerCliProcess;
+impl ProcessSpawner for RuntimeCliSpawner {
+    type Process = RuntimeCliProcess;
 
     async fn spawn(
         &self,
@@ -85,7 +95,7 @@ impl ProcessSpawner for DockerCliSpawner {
         command: &[&str],
         workdir: Option<&str>,
     ) -> Result<Self::Process, String> {
-        let mut cmd = tokio::process::Command::new("docker");
+        let mut cmd = tokio::process::Command::new(&self.cli_program);
         cmd.arg("exec").arg("-i");
         if let Some(dir) = workdir {
             cmd.arg("-w").arg(dir);
@@ -101,12 +111,12 @@ impl ProcessSpawner for DockerCliSpawner {
 
         let mut child = cmd
             .spawn()
-            .map_err(|e| format!("Failed to spawn docker exec: {}", e))?;
+            .map_err(|e| format!("Failed to spawn {} exec: {}", self.cli_program, e))?;
 
         let stdin = child.stdin.take();
         let stdout = child.stdout.take();
 
-        Ok(DockerCliProcess {
+        Ok(RuntimeCliProcess {
             child,
             stdin,
             stdout,
@@ -119,8 +129,8 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn docker_cli_spawner_implements_trait() {
-        let spawner = DockerCliSpawner;
+    async fn runtime_cli_spawner_implements_trait() {
+        let spawner = RuntimeCliSpawner::new("docker");
         fn assert_spawner<S: ProcessSpawner>(_s: &S) {}
         assert_spawner(&spawner);
     }

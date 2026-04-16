@@ -1,11 +1,20 @@
 <script lang="ts">
-  import type { ContainerStatus } from "../../stores/types";
+  import type {
+    ContainerStatus,
+    ContainerRuntimeKind,
+    ContainerRuntimePreference,
+    ContainerRuntimeStatus,
+  } from "../../stores/types";
   import ConfirmDialog from "../ConfirmDialog.svelte";
+  import RuntimeSelector from "./RuntimeSelector.svelte";
   import { Play, Square, RefreshCw } from "@lucide/svelte";
 
   interface Props {
     containerStatus: ContainerStatus;
+    runtimePreference: ContainerRuntimePreference;
+    runtimeStatus: ContainerRuntimeStatus | null;
     dockerfile: string;
+    onRuntimeChange: (runtime: ContainerRuntimeKind) => void;
     onStart: () => void;
     onStop: () => void;
     onRebuild: () => void;
@@ -14,7 +23,10 @@
 
   let {
     containerStatus,
+    runtimePreference,
+    runtimeStatus,
     dockerfile,
+    onRuntimeChange,
     onStart,
     onStop,
     onRebuild,
@@ -54,6 +66,12 @@
 </script>
 
 <div class="space-y-6">
+  <RuntimeSelector
+    preference={runtimePreference}
+    status={runtimeStatus}
+    onChange={onRuntimeChange}
+  />
+
   <div>
     <span
       class="block text-[10px] font-medium uppercase tracking-wider text-fg-muted mb-1.5"

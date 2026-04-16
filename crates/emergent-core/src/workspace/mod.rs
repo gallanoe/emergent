@@ -9,9 +9,9 @@ pub use state::{
 
 use std::path::PathBuf;
 
-use bollard::Docker;
 use emergent_protocol::{
-    DockerStatus, Notification, WorkspaceEntry, WorkspaceInfo, WorkspaceStatusChangePayload,
+    ContainerRuntimePreference, ContainerRuntimeStatus, Notification, WorkspaceEntry,
+    WorkspaceInfo, WorkspaceStatusChangePayload,
 };
 use tokio::sync::broadcast;
 
@@ -58,8 +58,7 @@ CMD [\"sleep\", \"infinity\"]
 pub struct WorkspaceManager {
     state: SharedWorkspaceState,
     event_tx: broadcast::Sender<Notification>,
-    docker: Option<Docker>,
-    docker_status: DockerStatus,
+    runtime: crate::runtime::SharedRuntime,
     workspaces_dir: PathBuf,
     terminal_sessions: terminal::TerminalSessions,
 }
@@ -68,24 +67,14 @@ impl WorkspaceManager {
     pub async fn new(
         state: SharedWorkspaceState,
         event_tx: broadcast::Sender<Notification>,
-        docker: Option<Docker>,
+        runtime: crate::runtime::SharedRuntime,
     ) -> Self {
-        let docker_status = if let Some(ref d) = docker {
-            container::detect_docker(d).await
-        } else {
-            DockerStatus {
-                docker_available: false,
-                docker_version: None,
-            }
-        };
-
         let workspaces_dir = dirs_home().join(".emergent").join("workspaces");
 
         Self {
             state,
             event_tx,
-            docker,
-            docker_status,
+            runtime,
             workspaces_dir,
             terminal_sessions: terminal::new_terminal_sessions(),
         }
@@ -95,15 +84,22 @@ impl WorkspaceManager {
     // Helpers
     // -----------------------------------------------------------------------
 
-    /// Get a reference to the Docker client, if available.
-    pub fn docker(&self) -> Option<&Docker> {
-        self.docker.as_ref()
+    pub async fn runtime_client(&self) -> Option<bollard::Docker> {
+        self.runtime.read().await.client()
     }
 
-    fn require_docker(&self) -> Result<&Docker, String> {
-        self.docker
-            .as_ref()
-            .ok_or_else(|| "Docker is not available".to_string())
+    async fn require_runtime_client(&self) -> Result<bollard::Docker, String> {
+        let runtime = self.runtime.read().await;
+        runtime.client().ok_or_else(|| {
+            let status = runtime.status();
+            status
+                .message
+                .unwrap_or_else(|| format!("{} is not available", status.selected_runtime))
+        })
+    }
+
+    async fn container_extra_hosts(&self) -> Option<Vec<String>> {
+        self.runtime.read().await.container_extra_hosts()
     }
 
     fn emit_status(&self, workspace_id: &WorkspaceId, status: ContainerStatus) {
@@ -113,6 +109,22 @@ impl WorkspaceManager {
                 status,
             },
         ));
+    }
+
+    async fn set_workspace_status(&self, workspace_id: &WorkspaceId, status: ContainerStatus) {
+        {
+            let mut state = self.state.write().await;
+            if let Some(workspace) = state.workspaces.get_mut(workspace_id) {
+                if !matches!(status, ContainerStatus::Running) {
+                    workspace.container_id = None;
+                }
+                workspace.container_status = status.clone();
+            } else {
+                return;
+            }
+        }
+
+        self.emit_status(workspace_id, status);
     }
 
     fn generate_id() -> String {
@@ -128,6 +140,53 @@ impl WorkspaceManager {
 
     fn workspace_path(&self, id: &WorkspaceId) -> PathBuf {
         self.workspaces_dir.join(&id.0)
+    }
+
+    async fn refresh_workspace_runtime_status(&self) {
+        let client = self.runtime_client().await;
+        let workspace_ids: Vec<WorkspaceId> = {
+            let state = self.state.read().await;
+            state.workspaces.keys().cloned().collect()
+        };
+
+        for workspace_id in workspace_ids {
+            let status = if let Some(ref client) = client {
+                container::inspect_container_status(client, &workspace_id).await
+            } else {
+                ContainerStatus::Stopped
+            };
+
+            {
+                let mut state = self.state.write().await;
+                if let Some(workspace) = state.workspaces.get_mut(&workspace_id) {
+                    workspace.container_id = if status == ContainerStatus::Running {
+                        Some(container::container_name(&workspace_id))
+                    } else {
+                        None
+                    };
+                    workspace.container_status = status.clone();
+                }
+            }
+
+            self.emit_status(&workspace_id, status);
+        }
+    }
+
+    pub async fn get_container_runtime_status(&self) -> ContainerRuntimeStatus {
+        self.runtime.read().await.status()
+    }
+
+    pub async fn get_container_runtime_preference(&self) -> ContainerRuntimePreference {
+        self.runtime.read().await.preference()
+    }
+
+    pub async fn set_container_runtime_preference(
+        &self,
+        preference: ContainerRuntimePreference,
+    ) -> Result<ContainerRuntimeStatus, String> {
+        let status = crate::runtime::update_shared_runtime(&self.runtime, preference).await?;
+        self.refresh_workspace_runtime_status().await;
+        Ok(status)
     }
 
     // -----------------------------------------------------------------------
@@ -168,8 +227,9 @@ impl WorkspaceManager {
 
             let workspace_id = WorkspaceId(metadata.id.clone());
 
-            let (container_status, container_id) = if let Some(docker) = &self.docker {
-                let status = container::inspect_container_status(docker, &workspace_id).await;
+            let client = self.runtime_client().await;
+            let (container_status, container_id) = if let Some(client) = client {
+                let status = container::inspect_container_status(&client, &workspace_id).await;
                 let cid = if status == ContainerStatus::Running {
                     Some(container::container_name(&workspace_id))
                 } else {
@@ -264,7 +324,7 @@ impl WorkspaceManager {
 
         let state = self.state.clone();
         let event_tx = self.event_tx.clone();
-        let docker = self.docker.clone();
+        let runtime = self.runtime.clone();
         let workspace_id_for_task = workspace_id.clone();
         let workspace_path_for_task = workspace_path.clone();
         tokio::spawn(async move {
@@ -273,16 +333,21 @@ impl WorkspaceManager {
                 workspace_id_for_task
             );
 
-            let build_result = match docker {
-                Some(docker) => {
+            let build_result = match runtime.read().await.client() {
+                Some(client) => {
                     container::build_image(
-                        &docker,
+                        &client,
                         &workspace_id_for_task,
                         &workspace_path_for_task,
                     )
                     .await
                 }
-                None => Err("Docker is not available".to_string()),
+                None => {
+                    let status = runtime.read().await.status();
+                    Err(status.message.unwrap_or_else(|| {
+                        format!("{} is not available", status.selected_runtime)
+                    }))
+                }
             };
 
             let next_status = match build_result {
@@ -323,8 +388,8 @@ impl WorkspaceManager {
         // Close any terminal sessions for this workspace
         terminal::close_sessions_for_workspace(&self.terminal_sessions, id).await;
 
-        // Stop and remove container if docker is available
-        if let Some(docker) = &self.docker {
+        // Stop and remove container if the selected runtime is available.
+        if let Some(client) = self.runtime_client().await {
             let container_id = {
                 let state = self.state.read().await;
                 state
@@ -334,15 +399,15 @@ impl WorkspaceManager {
             };
 
             if let Some(cid) = container_id {
-                let _ = container::stop_and_remove_container(docker, &cid).await;
+                let _ = container::stop_and_remove_container(&client, &cid).await;
             } else {
                 // Try by name convention
                 let name = container::container_name(id);
-                let _ = container::stop_and_remove_container(docker, &name).await;
+                let _ = container::stop_and_remove_container(&client, &name).await;
             }
 
             // Remove image
-            let _ = container::remove_image(docker, id).await;
+            let _ = container::remove_image(&client, id).await;
         }
 
         // Delete directory
@@ -422,62 +487,109 @@ impl WorkspaceManager {
     // -----------------------------------------------------------------------
 
     pub async fn build_container(&self, id: &WorkspaceId) -> Result<(), String> {
-        let docker = self.require_docker()?;
-        let workspace_path = {
-            let mut state = self.state.write().await;
-            let ws = state
-                .workspaces
-                .get_mut(id)
-                .ok_or_else(|| format!("Workspace '{}' not found", id))?;
-            ws.container_status = ContainerStatus::Building;
-            ws.path.clone()
-        };
+        let result: Result<(), String> = async {
+            let client = self.require_runtime_client().await?;
+            let workspace_path = {
+                let mut state = self.state.write().await;
+                let ws = state
+                    .workspaces
+                    .get_mut(id)
+                    .ok_or_else(|| format!("Workspace '{}' not found", id))?;
+                ws.container_status = ContainerStatus::Building;
+                ws.path.clone()
+            };
 
-        self.emit_status(id, ContainerStatus::Building);
+            self.emit_status(id, ContainerStatus::Building);
 
-        container::build_image(docker, id, &workspace_path).await?;
+            container::build_image(&client, id, &workspace_path).await?;
 
-        Ok(())
+            Ok(())
+        }
+        .await;
+
+        if let Err(ref message) = result {
+            self.set_workspace_status(
+                id,
+                ContainerStatus::Error {
+                    message: message.clone(),
+                },
+            )
+            .await;
+        }
+
+        result
     }
 
     pub async fn start_container(&self, id: &WorkspaceId) -> Result<(), String> {
-        let docker = self.require_docker()?;
-        let workspace_path = {
-            let state = self.state.read().await;
-            state
-                .workspaces
-                .get(id)
-                .map(|ws| ws.path.clone())
-                .ok_or_else(|| format!("Workspace '{}' not found", id))?
-        };
+        let result: Result<(), String> = async {
+            let client = self.require_runtime_client().await?;
+            let workspace_path = {
+                let state = self.state.read().await;
+                state
+                    .workspaces
+                    .get(id)
+                    .map(|ws| ws.path.clone())
+                    .ok_or_else(|| format!("Workspace '{}' not found", id))?
+            };
 
-        let container_id =
-            container::create_and_start_container(docker, id, &workspace_path).await?;
-
-        // Set up workspace symlinks in all existing agent directories
-        if let Err(e) = container::setup_agent_symlinks(&container_id).await {
-            log::warn!(
-                "Failed to set up agent symlinks for workspace '{}': {}",
-                id,
-                e
-            );
-        }
-
-        {
-            let mut state = self.state.write().await;
-            if let Some(ws) = state.workspaces.get_mut(id) {
-                ws.container_id = Some(container_id);
-                ws.container_status = ContainerStatus::Running;
+            if !container::image_exists(&client, id).await {
+                {
+                    let mut state = self.state.write().await;
+                    if let Some(ws) = state.workspaces.get_mut(id) {
+                        ws.container_status = ContainerStatus::Building;
+                    }
+                }
+                self.emit_status(id, ContainerStatus::Building);
+                container::build_image(&client, id, &workspace_path).await?;
             }
+
+            let extra_hosts = self.container_extra_hosts().await;
+            let container_id = container::create_and_start_container(
+                &client,
+                id,
+                &workspace_path,
+                extra_hosts,
+            )
+            .await?;
+
+            // Set up workspace symlinks in all existing agent directories
+            if let Err(e) = container::setup_agent_symlinks(&client, &container_id).await {
+                log::warn!(
+                    "Failed to set up agent symlinks for workspace '{}': {}",
+                    id,
+                    e
+                );
+            }
+
+            {
+                let mut state = self.state.write().await;
+                if let Some(ws) = state.workspaces.get_mut(id) {
+                    ws.container_id = Some(container_id);
+                    ws.container_status = ContainerStatus::Running;
+                }
+            }
+
+            self.emit_status(id, ContainerStatus::Running);
+
+            Ok(())
+        }
+        .await;
+
+        if let Err(ref message) = result {
+            self.set_workspace_status(
+                id,
+                ContainerStatus::Error {
+                    message: message.clone(),
+                },
+            )
+            .await;
         }
 
-        self.emit_status(id, ContainerStatus::Running);
-
-        Ok(())
+        result
     }
 
     pub async fn stop_container(&self, id: &WorkspaceId) -> Result<(), String> {
-        let docker = self.require_docker()?;
+        let client = self.require_runtime_client().await?;
 
         let container_id = {
             let state = self.state.read().await;
@@ -491,7 +603,7 @@ impl WorkspaceManager {
         // Close any terminal sessions for this workspace
         terminal::close_sessions_for_workspace(&self.terminal_sessions, id).await;
 
-        container::stop_and_remove_container(docker, &container_id).await?;
+        container::stop_and_remove_container(&client, &container_id).await?;
 
         {
             let mut state = self.state.write().await;
@@ -547,22 +659,14 @@ impl WorkspaceManager {
     }
 
     // -----------------------------------------------------------------------
-    // Docker detection
-    // -----------------------------------------------------------------------
-
-    pub fn detect_docker(&self) -> DockerStatus {
-        self.docker_status.clone()
-    }
-
-    // -----------------------------------------------------------------------
-    // Terminal sessions
+    // Runtime status
     // -----------------------------------------------------------------------
 
     pub async fn create_terminal_session(
         &self,
         workspace_id: &WorkspaceId,
     ) -> Result<String, String> {
-        let docker = self.require_docker()?;
+        let client = self.require_runtime_client().await?;
         let container_id = {
             let state = self.state.read().await;
             state
@@ -573,7 +677,7 @@ impl WorkspaceManager {
         };
 
         let session =
-            terminal::create_session(docker, &container_id, workspace_id.clone(), &self.event_tx)
+            terminal::create_session(&client, &container_id, workspace_id.clone(), &self.event_tx)
                 .await?;
 
         let session_id = session.session_id.clone();
@@ -598,7 +702,7 @@ impl WorkspaceManager {
         cols: u16,
         rows: u16,
     ) -> Result<(), String> {
-        let docker = self.require_docker()?;
+        let client = self.require_runtime_client().await?;
         let exec_id = {
             let sessions = self.terminal_sessions.lock().await;
             sessions
@@ -606,7 +710,7 @@ impl WorkspaceManager {
                 .map(|s| s.exec_id.clone())
                 .ok_or_else(|| format!("Terminal session '{}' not found", session_id))?
         };
-        terminal::TerminalSession::resize(docker, &exec_id, cols, rows).await
+        terminal::TerminalSession::resize(&client, &exec_id, cols, rows).await
     }
 
     pub async fn close_terminal_session(&self, session_id: &str) -> Result<(), String> {

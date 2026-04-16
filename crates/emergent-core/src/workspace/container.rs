@@ -1,13 +1,16 @@
 use bollard::container::{
     Config, CreateContainerOptions, RemoveContainerOptions, StopContainerOptions,
 };
+use bollard::auth::DockerCredentials;
+use bollard::exec::{CreateExecOptions, StartExecOptions, StartExecResults};
 use bollard::image::BuildImageOptions;
 use bollard::models::HostConfig;
 use bollard::Docker;
 use futures_util::StreamExt;
+use std::collections::HashMap;
 use std::path::Path;
 
-use emergent_protocol::{ContainerStatus, DockerStatus, WorkspaceId};
+use emergent_protocol::{ContainerStatus, WorkspaceId};
 
 /// Build a Docker image from a workspace directory containing a Dockerfile.
 pub async fn build_image(
@@ -26,7 +29,8 @@ pub async fn build_image(
         ..Default::default()
     };
 
-    let mut stream = docker.build_image(options, None, Some(tar.into()));
+    let credentials: HashMap<String, DockerCredentials> = HashMap::new();
+    let mut stream = docker.build_image(options, Some(credentials), Some(tar.into()));
 
     while let Some(result) = stream.next().await {
         match result {
@@ -50,6 +54,7 @@ pub async fn create_and_start_container(
     docker: &Docker,
     workspace_id: &WorkspaceId,
     host_path: &Path,
+    extra_hosts: Option<Vec<String>>,
 ) -> Result<String, String> {
     let name = container_name(workspace_id);
     let tag = image_tag(workspace_id);
@@ -60,12 +65,6 @@ pub async fn create_and_start_container(
     let mount_path_str = mount_path
         .to_str()
         .ok_or_else(|| "Workspace path is not valid UTF-8".to_string())?;
-
-    let extra_hosts = if cfg!(target_os = "linux") {
-        Some(vec!["host.docker.internal:host-gateway".to_string()])
-    } else {
-        None
-    };
 
     let config = Config {
         image: Some(tag.as_str()),
@@ -138,6 +137,12 @@ pub async fn remove_image(docker: &Docker, workspace_id: &WorkspaceId) -> Result
     Ok(())
 }
 
+/// Check whether the workspace image already exists in the selected runtime.
+pub async fn image_exists(docker: &Docker, workspace_id: &WorkspaceId) -> bool {
+    let tag = image_tag(workspace_id);
+    docker.inspect_image(&tag).await.is_ok()
+}
+
 /// Query Docker for a container's running status.
 pub async fn inspect_container_status(
     docker: &Docker,
@@ -157,20 +162,6 @@ pub async fn inspect_container_status(
     }
 }
 
-/// Check Docker availability.
-pub async fn detect_docker(docker: &Docker) -> DockerStatus {
-    match docker.version().await {
-        Ok(version) => DockerStatus {
-            docker_available: true,
-            docker_version: version.version,
-        },
-        Err(_) => DockerStatus {
-            docker_available: false,
-            docker_version: None,
-        },
-    }
-}
-
 /// Create a tar archive from a directory for Docker build context.
 fn create_build_context(path: &Path) -> Result<Vec<u8>, std::io::Error> {
     let mut archive = tar::Builder::new(Vec::new());
@@ -184,8 +175,13 @@ fn create_build_context(path: &Path) -> Result<Vec<u8>, std::io::Error> {
             let entry = entry?;
             let entry_path = entry.path();
             let name = entry_path.strip_prefix(prefix).unwrap();
+            let metadata = std::fs::symlink_metadata(&entry_path)?;
 
-            if entry_path.is_dir() {
+            if metadata.file_type().is_symlink() {
+                let target = std::fs::read_link(&entry_path)?;
+                let mut header = tar::Header::new_gnu();
+                archive.append_link(&mut header, name, target)?;
+            } else if metadata.is_dir() {
                 archive.append_dir(name, &entry_path)?;
                 add_dir_to_archive(archive, &entry_path, prefix)?;
             } else {
@@ -202,44 +198,83 @@ fn create_build_context(path: &Path) -> Result<Vec<u8>, std::io::Error> {
 
 /// Create `workspace -> /home/workspace` symlinks in all agent directories
 /// that don't already have one. Called after container start.
-pub async fn setup_agent_symlinks(container_id: &str) -> Result<(), String> {
-    let output = tokio::process::Command::new("docker")
-        .args([
-            "exec", container_id, "sh", "-c",
-            "[ -d /home/.agents ] && for d in /home/.agents/*/; do [ -d \"$d\" ] && [ ! -e \"$d/workspace\" ] && ln -s /home/workspace \"$d/workspace\"; done; true",
-        ])
-        .output()
-        .await
-        .map_err(|e| format!("Failed to run symlink setup: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        log::warn!("Symlink setup had errors: {}", stderr);
-    }
-
-    Ok(())
+pub async fn setup_agent_symlinks(docker: &Docker, container_id: &str) -> Result<(), String> {
+    run_shell_exec(
+        docker,
+        container_id,
+        "[ -d /home/.agents ] && for d in /home/.agents/*/; do [ -d \"$d\" ] && [ ! -e \"$d/workspace\" ] && ln -s /home/workspace \"$d/workspace\"; done; true",
+    )
+    .await
+    .map(|_| ())
 }
 
 /// Create a `workspace -> /home/workspace` symlink for a single agent directory.
 /// Also ensures the directory exists inside the container (avoids VirtioFS sync delay).
-pub async fn setup_agent_symlink(container_id: &str, agent_id: &str) -> Result<(), String> {
+pub async fn setup_agent_symlink(
+    docker: &Docker,
+    container_id: &str,
+    agent_id: &str,
+) -> Result<(), String> {
     let cmd = format!(
         "mkdir -p /home/.agents/{} && ln -sf /home/workspace /home/.agents/{}/workspace",
         agent_id, agent_id
     );
 
-    let output = tokio::process::Command::new("docker")
-        .args(["exec", container_id, "sh", "-c", &cmd])
-        .output()
-        .await
-        .map_err(|e| format!("Failed to create agent symlink: {}", e))?;
+    run_shell_exec(docker, container_id, &cmd).await.map(|_| ())
+}
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Failed to create agent symlink: {}", stderr));
+async fn run_shell_exec(
+    docker: &Docker,
+    container_id: &str,
+    script: &str,
+) -> Result<String, String> {
+    let exec = docker
+        .create_exec(
+            container_id,
+            CreateExecOptions::<&str> {
+                cmd: Some(vec!["sh", "-c", script]),
+                attach_stdout: Some(true),
+                attach_stderr: Some(true),
+                ..Default::default()
+            },
+        )
+        .await
+        .map_err(|e| format!("Failed to create exec: {}", e))?;
+
+    let result = docker
+        .start_exec(
+            &exec.id,
+            Some(StartExecOptions {
+                detach: false,
+                ..Default::default()
+            }),
+        )
+        .await
+        .map_err(|e| format!("Failed to start exec: {}", e))?;
+
+    let mut output = String::new();
+    match result {
+        StartExecResults::Attached { output: mut stream, .. } => {
+            while let Some(chunk) = stream.next().await {
+                let chunk = chunk.map_err(|e| format!("Exec stream failed: {}", e))?;
+                output.push_str(&String::from_utf8_lossy(&chunk.into_bytes()));
+            }
+        }
+        StartExecResults::Detached => {
+            return Err("Exec detached unexpectedly".to_string());
+        }
     }
 
-    Ok(())
+    let inspect = docker
+        .inspect_exec(&exec.id)
+        .await
+        .map_err(|e| format!("Failed to inspect exec: {}", e))?;
+
+    if inspect.exit_code == Some(0) {
+        Ok(output)
+    } else {
+        Err(output.trim().to_string())
+    }
 }
 
 // ---------------------------------------------------------------------------

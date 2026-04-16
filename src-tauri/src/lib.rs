@@ -24,19 +24,15 @@ pub fn run() {
             // Create shared workspace state
             let workspace_state = emergent_core::workspace::new_shared_state();
 
-            // Connect to Docker (optional — log warning if unavailable)
-            let docker = match bollard::Docker::connect_with_local_defaults() {
-                Ok(d) => Some(d),
-                Err(e) => {
-                    log::warn!("Docker not available: {}", e);
-                    None
-                }
-            };
+            let runtime = tauri::async_runtime::block_on(async {
+                emergent_core::runtime::load_shared_runtime().await
+            });
 
             // Create workspace manager (async — use block_on)
             let workspace_manager = tauri::async_runtime::block_on(async {
                 let wm =
-                    WorkspaceManager::new(workspace_state.clone(), event_tx.clone(), docker).await;
+                    WorkspaceManager::new(workspace_state.clone(), event_tx.clone(), runtime.clone())
+                        .await;
                 if let Err(e) = wm.load_workspaces().await {
                     log::error!("Failed to load workspaces: {}", e);
                 }
@@ -51,6 +47,7 @@ pub fn run() {
                 workspace_state.clone(),
                 event_tx.clone(),
                 token_registry.clone(),
+                runtime.clone(),
             ));
 
             // Create task manager
@@ -264,7 +261,9 @@ pub fn run() {
             commands::start_container,
             commands::stop_container,
             commands::rebuild_container,
-            commands::detect_docker,
+            commands::get_container_runtime_status,
+            commands::get_container_runtime_preference,
+            commands::set_container_runtime_preference,
             commands::create_terminal_session,
             commands::write_terminal,
             commands::resize_terminal,
