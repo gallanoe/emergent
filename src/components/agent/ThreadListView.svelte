@@ -288,8 +288,7 @@
                 /><path d="M13 12h8" /><path d="M13 18h8" /></svg
               >
               <span class="flex-1 truncate text-left">{thread.name}</span>
-              <span
-                class="text-[10px] font-mono text-fg-disabled flex-shrink-0"
+              <span class="text-[10px] font-mono text-fg-disabled flex-shrink-0"
                 >{thread.taskId}</span
               >
             </button>
@@ -311,7 +310,7 @@
         {tasks}
         selectedTaskId={null}
         agentScoped={true}
-        onSelectTask={onSelectTask}
+        {onSelectTask}
         onNavigateToSession={onSelectThread}
       />
     </div>
