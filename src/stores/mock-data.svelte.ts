@@ -8,7 +8,20 @@ const swarms: DisplayWorkspace[] = [
     name: "website-redesign",
     collapsed: false,
     containerStatus: { state: "running" },
-    agentDefinitions: [],
+    agentDefinitions: [
+      {
+        id: "agent-1",
+        name: "Refactoring the navigation component",
+        cli: "claude-agent-acp",
+        threads: [],
+      },
+      {
+        id: "agent-2",
+        name: "Set up Tailwind config",
+        cli: "claude-agent-acp",
+        threads: [],
+      },
+    ],
   },
   {
     id: "swarm-2",

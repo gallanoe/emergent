@@ -494,6 +494,13 @@ function createAppState() {
   }
 
   function selectAgent(agentId: string) {
+    if (demoMode) {
+      selectedAgentId = agentId;
+      selectedThreadId = null;
+      activeView = "agent-chat";
+      return;
+    }
+
     if (agentId !== selectedAgentId) {
       // Reset the segmented tab when switching to a different agent so the
       // user lands on Threads by default.
