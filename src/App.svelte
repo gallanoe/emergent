@@ -5,6 +5,7 @@
   import TopBar from "./components/topbar/TopBar.svelte";
   import ChatArea from "./components/chat/ChatArea.svelte";
   import ChatInput from "./components/chat/ChatInput.svelte";
+  import TaskSessionHeader from "./components/chat/TaskSessionHeader.svelte";
   import SwarmView from "./components/swarm/SwarmView.svelte";
   import SettingsView from "./components/settings/SettingsView.svelte";
   import RuntimeSelector from "./components/settings/RuntimeSelector.svelte";
@@ -519,42 +520,82 @@
       />
     {:else if appState.activeView === "agent-chat" && appState.selectedThread}
       <div
-        class="flex items-center h-[38px] px-4 border-b border-border-default flex-shrink-0 relative z-[60] gap-2"
+        class="flex-1 min-h-0"
+        style="display:grid; grid-template-columns: {appState.taskSidebarMode
+          ? '1fr 320px'
+          : '1fr'};"
       >
-        <button
-          class="interactive flex items-center justify-center w-[24px] h-[24px] rounded-[5px] text-fg-muted"
-          title="Back to threads"
-          onclick={() => appState.backToThreads()}
-        >
-          ‹
-        </button>
-        <span class="text-[13px] font-semibold text-fg-heading"
-          >{appState.selectedAgentDef?.name ?? ""}</span
-        >
-        <span class="text-[12px] text-fg-disabled">/</span>
-        <span class="text-[12px] text-fg-muted"
-          >{appState.selectedThread.name}</span
-        >
+        <div class="flex flex-col min-h-0 min-w-0">
+          <div
+            class="flex items-center h-[38px] px-4 border-b border-border-default flex-shrink-0 relative z-[60] gap-2"
+          >
+            <button
+              class="interactive flex items-center justify-center w-[24px] h-[24px] rounded-[5px] text-fg-muted"
+              title="Back to threads"
+              onclick={() => appState.backToThreads()}
+            >
+              ‹
+            </button>
+            <span class="text-[13px] font-semibold text-fg-heading"
+              >{appState.selectedAgentDef?.name ?? ""}</span
+            >
+            <span class="text-[12px] text-fg-disabled">/</span>
+            <span class="text-[12px] text-fg-muted"
+              >{appState.selectedThread.name}</span
+            >
+          </div>
+          {#if appState.selectedThread.taskId}
+            {@const task = appState.tasks[appState.selectedThread.taskId]}
+            {#if task}
+              <TaskSessionHeader
+                {task}
+                onOpen={() => appState.selectTask(task.id)}
+              />
+            {/if}
+          {/if}
+          <ChatArea
+            agent={appState.selectedAgent}
+            onEditQueue={handleEditQueue}
+          />
+          <ChatInput
+            agent={appState.selectedAgent}
+            demoMode={appState.demoMode}
+            containerRunning={appState.selectedWorkspaceContainerRunning}
+            {externalContent}
+            onSend={(text) => {
+              const threadId = appState.selectedThreadId;
+              if (threadId) appState.sendPrompt(threadId, text);
+            }}
+            onInterrupt={() => {
+              const threadId = appState.selectedThreadId;
+              if (threadId) appState.cancelPrompt(threadId);
+            }}
+            onSetConfig={(configId, value) => {
+              const threadId = appState.selectedThreadId;
+              if (threadId) appState.setConfig(threadId, configId, value);
+            }}
+          />
+        </div>
+        {#if appState.taskSidebarMode === "detail" && appState.selectedTaskId}
+          {@const task = appState.tasks[appState.selectedTaskId]}
+          {#if task}
+            <TaskDetailSidebar
+              {task}
+              allTasks={appState.tasks}
+              agentNames={Object.fromEntries(
+                Object.values(appState.agentDefinitionsMap ?? {}).map((d) => [
+                  d.id,
+                  d.name,
+                ]),
+              )}
+              onClose={() => appState.closeTaskSidebar()}
+              onSelectTask={(id) => appState.selectTask(id)}
+              onNavigateToSession={(threadId) =>
+                appState.selectThread(threadId)}
+            />
+          {/if}
+        {/if}
       </div>
-      <ChatArea agent={appState.selectedAgent} onEditQueue={handleEditQueue} />
-      <ChatInput
-        agent={appState.selectedAgent}
-        demoMode={appState.demoMode}
-        containerRunning={appState.selectedWorkspaceContainerRunning}
-        {externalContent}
-        onSend={(text) => {
-          const threadId = appState.selectedThreadId;
-          if (threadId) appState.sendPrompt(threadId, text);
-        }}
-        onInterrupt={() => {
-          const threadId = appState.selectedThreadId;
-          if (threadId) appState.cancelPrompt(threadId);
-        }}
-        onSetConfig={(configId, value) => {
-          const threadId = appState.selectedThreadId;
-          if (threadId) appState.setConfig(threadId, configId, value);
-        }}
-      />
     {:else}
       <TopBar
         agent={appState.selectedAgent}
