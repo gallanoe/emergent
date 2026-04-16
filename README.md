@@ -21,34 +21,20 @@ The Tauri app embeds the orchestration layer directly. There is no separate daem
 
 ```mermaid
 graph TD
-    subgraph Tauri App
-        UI[Svelte 5 Frontend]
-        TR[Tauri Rust Backend]
-        AM[Agent Manager]
-        WM[Workspace Manager]
-        HS[Embedded MCP HTTP Server]
-        TOK[Token Registry]
+    subgraph APP["Tauri App"]
+        UI[Svelte 5 Frontend] <-->|IPC / events| BE[Tauri Rust Backend]
+        BE --> WM[Workspace Manager] & AM[Agent Manager]
+        BE --> MCP[MCP HTTP Server]
+        MCP -.->|tool calls| AM
     end
 
-    UI -- "Tauri IPC<br/>(invoke commands)" --> TR
-    TR --> AM
-    TR --> WM
-    TR --> HS
-    HS --> TOK
+    subgraph WC["Workspace Container"]
+        AG[Agent Thread]
+    end
 
-    WM -- "Docker API<br/>(bollard)" --> D[Docker Engine]
-    D --> C1[Container: Workspace 1]
-    D --> C2[Container: Workspace 2]
-
-    AM -- "ACP<br/>(docker exec)" --> A1[Agent in Container 1]
-    AM -- "ACP<br/>(docker exec)" --> A2[Agent in Container 2]
-
-    AM -. "notifications<br/>(broadcast)" .-> TR
-    TR -. "Tauri events" .-> UI
-
-    A1 -- "MCP over HTTP<br/>host.docker.internal:{port}/mcp" --> HS
-    A2 -- "MCP over HTTP" --> HS
-    HS --> AM
+    WM -->|Docker API| WC
+    AM -->|ACP via docker exec| AG
+    AG -->|Streamable HTTP| MCP
 ```
 
 **How it works:**
@@ -119,8 +105,8 @@ bun run build             # Tauri desktop app (includes agent manager)
 
 Availability is detected inside each running workspace container.
 
-| Agent       | Command                               |
-| ----------- | ------------------------------------- |
+| Agent       | Command                                 |
+| ----------- | --------------------------------------- |
 | Claude Code | `bunx @zed-industries/claude-agent-acp` |
 | Codex       | `bunx @zed-industries/codex-acp`        |
 | Gemini      | `gemini --experimental-acp`             |
