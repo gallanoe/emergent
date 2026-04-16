@@ -63,7 +63,6 @@
         }
       : { id: "tasks", label: "Tasks", icon: ListChecks, enabled: true },
   ]);
-
 </script>
 
 <aside

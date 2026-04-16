@@ -10,16 +10,18 @@ async fn spawn_test_server() -> (String, Arc<TokenRegistry>, Arc<AgentManager>) 
     let registry = Arc::new(TokenRegistry::new());
     let workspace_state = workspace::new_shared_state();
     let (event_tx, _) = tokio::sync::broadcast::channel(1024);
+    let runtime = emergent_core::runtime::load_shared_runtime().await;
     let manager = Arc::new(AgentManager::new(
         workspace_state,
         event_tx.clone(),
         registry.clone(),
+        runtime,
     ));
     let task_manager = Arc::new(TaskManager::new(manager.clone(), event_tx));
     let server = http_server::start(manager.clone(), registry.clone(), task_manager)
         .await
         .expect("failed to start HTTP server");
-    manager.set_mcp_port(server.port);
+    manager.set_mcp_port(server.port).await;
 
     let base_url = format!("http://127.0.0.1:{}/mcp", server.port);
     (base_url, registry, manager)

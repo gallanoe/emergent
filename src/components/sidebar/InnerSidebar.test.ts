@@ -100,8 +100,6 @@ describe("InnerSidebar", () => {
 
   it("does not render stopped container helper text", () => {
     renderSidebar({ containerRunning: false });
-    expect(
-      screen.queryByText("Container stopped — start it to spawn threads."),
-    ).toBeNull();
+    expect(screen.queryByText("Container stopped — start it to spawn threads.")).toBeNull();
   });
 });

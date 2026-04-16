@@ -186,9 +186,17 @@ export interface WorkspaceInfo {
   container_status: ContainerStatus;
 }
 
-export interface DockerStatus {
-  docker_available: boolean;
-  docker_version: string | null;
+export type ContainerRuntimeKind = "docker" | "podman";
+
+export interface ContainerRuntimePreference {
+  selected_runtime: ContainerRuntimeKind;
+}
+
+export interface ContainerRuntimeStatus {
+  selected_runtime: ContainerRuntimeKind;
+  available: boolean;
+  version: string | null;
+  message?: string | null;
 }
 
 export interface WorkspaceStatusChangePayload {

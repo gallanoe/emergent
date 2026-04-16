@@ -6,8 +6,9 @@ use emergent_core::detect;
 use emergent_core::task::TaskManager;
 use emergent_core::workspace::WorkspaceManager;
 use emergent_protocol::{
-    AgentDefinition, ConfigOption, DockerStatus, KnownAgent, Notification, ThreadSummary,
-    WorkspaceInfo, WorkspaceSummary,
+    AgentDefinition, ConfigOption, ContainerRuntimeKind, ContainerRuntimePreference,
+    ContainerRuntimeStatus, KnownAgent, Notification, ThreadSummary, WorkspaceInfo,
+    WorkspaceSummary,
 };
 
 #[tauri::command]
@@ -18,10 +19,10 @@ pub async fn known_agents(
     let ws_id = emergent_protocol::WorkspaceId::from(workspace_id.as_str());
     let info = workspace_manager.get_workspace(&ws_id).await?;
 
-    match workspace_manager.docker() {
-        Some(docker) if info.container_status == emergent_protocol::ContainerStatus::Running => {
+    match workspace_manager.runtime_client().await {
+        Some(client) if info.container_status == emergent_protocol::ContainerStatus::Running => {
             let name = emergent_core::workspace::container::container_name(&ws_id);
-            Ok(detect::known_agents_in_container(docker, &name).await)
+            Ok(detect::known_agents_in_container(&client, &name).await)
         }
         _ => Ok(detect::known_agents_unavailable()),
     }
@@ -375,10 +376,27 @@ pub async fn rebuild_container(
 }
 
 #[tauri::command]
-pub async fn detect_docker(
+pub async fn get_container_runtime_status(
     workspace_manager: State<'_, Arc<WorkspaceManager>>,
-) -> Result<DockerStatus, String> {
-    Ok(workspace_manager.detect_docker())
+) -> Result<ContainerRuntimeStatus, String> {
+    Ok(workspace_manager.get_container_runtime_status().await)
+}
+
+#[tauri::command]
+pub async fn get_container_runtime_preference(
+    workspace_manager: State<'_, Arc<WorkspaceManager>>,
+) -> Result<ContainerRuntimePreference, String> {
+    Ok(workspace_manager.get_container_runtime_preference().await)
+}
+
+#[tauri::command]
+pub async fn set_container_runtime_preference(
+    workspace_manager: State<'_, Arc<WorkspaceManager>>,
+    selected_runtime: ContainerRuntimeKind,
+) -> Result<ContainerRuntimeStatus, String> {
+    workspace_manager
+        .set_container_runtime_preference(ContainerRuntimePreference { selected_runtime })
+        .await
 }
 
 #[tauri::command]

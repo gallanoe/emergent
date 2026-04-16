@@ -51,9 +51,11 @@ pub(crate) async fn initialize_agent(
     history: Arc<RwLock<HashMap<String, Vec<Notification>>>>,
     mcp_port: u16,
     bearer_token: String,
+    cli_program: String,
+    mcp_host_alias: String,
 ) -> Result<(), String> {
     // Spawn the agent process via ProcessSpawner
-    let spawner = super::spawner::DockerCliSpawner;
+    let spawner = super::spawner::RuntimeCliSpawner::new(cli_program);
     let parts: Vec<&str> = agent_binary.split_whitespace().collect();
     let agent_workdir = format!("/home/.agents/{}/", agent_definition_id);
     let mut process = super::spawner::ProcessSpawner::spawn(
@@ -134,7 +136,7 @@ pub(crate) async fn initialize_agent(
                     let mcp_config = acp::McpServer::Http(
                         acp::McpServerHttp::new(
                             "emergent-swarm",
-                            format!("http://host.docker.internal:{}/mcp", mcp_port),
+                            format!("http://{}:{}/mcp", mcp_host_alias, mcp_port),
                         )
                         .headers(vec![acp::HttpHeader::new(
                             "Authorization",

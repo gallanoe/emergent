@@ -6,7 +6,7 @@ pub mod spawner;
 pub mod thread_manager;
 
 pub use registry::AgentRegistry;
-pub use spawner::{AgentProcess, DockerCliSpawner, ProcessSpawner};
+pub use spawner::{AgentProcess, ProcessSpawner, RuntimeCliProcess, RuntimeCliSpawner};
 pub use thread_manager::{ThreadManager, ThreadMapping};
 
 use std::sync::Arc;
@@ -51,7 +51,7 @@ pub(crate) struct ThreadHandle {
     pub(crate) workspace_id: WorkspaceId,
     pub(crate) command_tx: mpsc::UnboundedSender<AgentCommand>,
     /// Handle to the agent process (for kill).
-    pub(crate) process: crate::agent::spawner::DockerCliProcess,
+    pub(crate) process: crate::agent::spawner::RuntimeCliProcess,
     /// Handle to the dedicated ACP thread (kept for ownership; not joined).
     pub(crate) thread_handle: Option<std::thread::JoinHandle<()>>,
     pub(crate) config_options: Vec<ConfigOption>,
@@ -81,6 +81,7 @@ pub struct AgentManager {
     pub(crate) threads: ThreadManager,
     topology: Arc<RwLock<crate::swarm::Topology>>,
     workspace_state: crate::workspace::SharedWorkspaceState,
+    runtime: crate::runtime::SharedRuntime,
     event_tx: broadcast::Sender<Notification>,
 }
 
@@ -89,16 +90,23 @@ impl AgentManager {
         workspace_state: crate::workspace::SharedWorkspaceState,
         event_tx: broadcast::Sender<Notification>,
         token_registry: Arc<crate::mcp::TokenRegistry>,
+        runtime: crate::runtime::SharedRuntime,
     ) -> Self {
         enrich_path();
 
-        let threads = ThreadManager::new(event_tx.clone(), token_registry, workspace_state.clone());
+        let threads = ThreadManager::new(
+            event_tx.clone(),
+            token_registry,
+            workspace_state.clone(),
+            runtime.clone(),
+        );
 
         Self {
             registry: Arc::new(RwLock::new(AgentRegistry::new())),
             threads,
             topology: Arc::new(RwLock::new(crate::swarm::Topology::new())),
             workspace_state,
+            runtime,
             event_tx: event_tx.clone(),
         }
     }
@@ -177,8 +185,12 @@ impl AgentManager {
                     .and_then(|ws| ws.container_id.clone())
             };
             if let Some(cid) = container_id {
-                if let Err(e) = crate::workspace::container::setup_agent_symlink(&cid, &id).await {
-                    log::warn!("Failed to create agent symlink in container: {}", e);
+                if let Some(client) = self.runtime.read().await.client() {
+                    if let Err(e) =
+                        crate::workspace::container::setup_agent_symlink(&client, &cid, &id).await
+                    {
+                        log::warn!("Failed to create agent symlink in container: {}", e);
+                    }
                 }
             }
         }

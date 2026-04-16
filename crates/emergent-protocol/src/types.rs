@@ -190,10 +190,43 @@ pub struct WorkspaceInfo {
     pub container_status: ContainerStatus,
 }
 
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ContainerRuntimeKind {
+    #[default]
+    Docker,
+    Podman,
+}
+
+impl std::fmt::Display for ContainerRuntimeKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ContainerRuntimeKind::Docker => write!(f, "docker"),
+            ContainerRuntimeKind::Podman => write!(f, "podman"),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct DockerStatus {
-    pub docker_available: bool,
-    pub docker_version: Option<String>,
+pub struct ContainerRuntimePreference {
+    pub selected_runtime: ContainerRuntimeKind,
+}
+
+impl Default for ContainerRuntimePreference {
+    fn default() -> Self {
+        Self {
+            selected_runtime: ContainerRuntimeKind::Docker,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ContainerRuntimeStatus {
+    pub selected_runtime: ContainerRuntimeKind,
+    pub available: bool,
+    pub version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

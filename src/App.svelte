@@ -7,6 +7,7 @@
   import ChatInput from "./components/chat/ChatInput.svelte";
   import SwarmView from "./components/swarm/SwarmView.svelte";
   import SettingsView from "./components/settings/SettingsView.svelte";
+  import RuntimeSelector from "./components/settings/RuntimeSelector.svelte";
   import TerminalView from "./components/terminal/TerminalView.svelte";
   import ThreadListView from "./components/agent/ThreadListView.svelte";
   import AgentSettingsView from "./components/agent/AgentSettingsView.svelte";
@@ -37,9 +38,9 @@
   let seq = 0;
   let shutdownTarget = $state<{ id: string; name: string } | null>(null);
   let showCreateWorkspace = $state(false);
-  let taskStatusFilter = $state<"all" | "working" | "pending" | "completed" | "failed">(
-    "all",
-  );
+  let taskStatusFilter = $state<
+    "all" | "working" | "pending" | "completed" | "failed"
+  >("all");
   const filteredWorkspaceTasks = $derived(
     taskStatusFilter === "all"
       ? appState.workspaceTasks
@@ -123,8 +124,8 @@
     workspaceMenu = { x, y, workspaceId };
   }
 
-  const isEmptyOrDockerMissing = $derived(
-    (appState.dockerStatus && !appState.dockerStatus.docker_available) ||
+  const isEmptyOrRuntimeMissing = $derived(
+    (appState.runtimeStatus && !appState.runtimeStatus.available) ||
       (!appState.demoMode && appState.swarms.length === 0),
   );
 
@@ -229,7 +230,7 @@
     </div>
   </div>
   <main class="flex flex-col min-h-0 min-w-0">
-    {#if appState.selectedSwarm && !isEmptyOrDockerMissing}
+    {#if appState.selectedSwarm && !isEmptyOrRuntimeMissing}
       <div
         class="flex items-center h-[38px] px-5 border-b border-border-default flex-shrink-0 relative z-[60]"
       >
@@ -238,9 +239,9 @@
         >
       </div>
     {/if}
-    {#if appState.dockerStatus && !appState.dockerStatus.docker_available}
+    {#if appState.runtimeStatus && !appState.runtimeStatus.available}
       <div
-        class="flex flex-col items-center justify-center flex-1 gap-3 text-center"
+        class="flex flex-col items-center justify-center flex-1 gap-4 text-center px-6"
       >
         <div
           class="w-10 h-10 rounded-full bg-bg-hover flex items-center justify-center text-warning"
@@ -261,16 +262,24 @@
           >
         </div>
         <div class="text-[13px] font-semibold text-fg-heading">
-          Docker not found
+          Selected runtime unavailable
         </div>
         <div class="text-[12px] text-fg-muted max-w-xs leading-relaxed">
-          Emergent requires Docker to run workspaces. Install Docker Desktop and
-          restart the app.
+          Emergent could not reach the selected container runtime. Switch
+          runtimes here or fix the selected runtime, then try again.
+        </div>
+        <div class="w-full max-w-sm">
+          <RuntimeSelector
+            preference={appState.runtimePreference}
+            status={appState.runtimeStatus}
+            onChange={appState.setContainerRuntimePreference}
+            align="center"
+          />
         </div>
       </div>
     {:else if !appState.demoMode && appState.swarms.length === 0}
       <div
-        class="flex flex-col items-center justify-center flex-1 gap-3 text-center"
+        class="flex flex-col items-center justify-center flex-1 gap-4 text-center px-6"
       >
         <div
           class="w-10 h-10 rounded-full bg-bg-hover flex items-center justify-center text-fg-muted"
@@ -282,6 +291,14 @@
         </div>
         <div class="text-[12px] text-fg-muted">
           Create a workspace to get started
+        </div>
+        <div class="w-full max-w-sm">
+          <RuntimeSelector
+            preference={appState.runtimePreference}
+            status={appState.runtimeStatus}
+            onChange={appState.setContainerRuntimePreference}
+            align="center"
+          />
         </div>
         <button
           class="mt-1 h-7 px-4 rounded-[5px] text-[12px] font-medium text-bg-base bg-accent hover:bg-accent-hover transition-colors"
@@ -296,8 +313,11 @@
         containerStatus={appState.selectedSwarm?.containerStatus ?? {
           state: "stopped",
         }}
+        runtimePreference={appState.runtimePreference}
+        runtimeStatus={appState.runtimeStatus}
         onUpdateName={(name) =>
           appState.updateWorkspace(appState.selectedSwarmId!, name)}
+        onRuntimeChange={appState.setContainerRuntimePreference}
         onStart={() => appState.startContainer(appState.selectedSwarmId!)}
         onStop={() => appState.stopContainer(appState.selectedSwarmId!)}
         onRebuild={() => appState.rebuildContainer(appState.selectedSwarmId!)}
