@@ -420,12 +420,41 @@ impl ThreadManager {
         Ok(Some(workspace_id))
     }
 
-    /// Kill a thread: shut down its subprocess, remove it from the in-memory
-    /// map, and purge its entry from `threads.json`.
+    /// Kill a thread: shut down its subprocess if live, remove it from the
+    /// in-memory maps (live and dormant), and purge its entry from
+    /// `threads.json`.
     pub async fn kill_thread(&self, thread_id: &str) -> Result<(), String> {
+        // Try the live path first. shutdown_thread demotes to dormant;
+        // since this is a kill, we then also purge from dormant.
         if let Some(workspace_id) = self.shutdown_thread(thread_id).await? {
+            {
+                let mut dormant = self.dormant_threads.write().await;
+                if let Some(ws_map) = dormant.get_mut(&workspace_id) {
+                    ws_map.remove(thread_id);
+                }
+            }
+            self.persist_threads_for_workspace(&workspace_id).await;
+            return Ok(());
+        }
+
+        // Not live — look up in dormant and purge from there.
+        let workspace_id = {
+            let mut dormant = self.dormant_threads.write().await;
+            let mut found_ws: Option<WorkspaceId> = None;
+            for (ws, ws_map) in dormant.iter_mut() {
+                if ws_map.remove(thread_id).is_some() {
+                    found_ws = Some(ws.clone());
+                    break;
+                }
+            }
+            found_ws
+        };
+
+        if let Some(workspace_id) = workspace_id {
+            self.token_registry.revoke_agent(thread_id);
             self.persist_threads_for_workspace(&workspace_id).await;
         }
+
         Ok(())
     }
 
