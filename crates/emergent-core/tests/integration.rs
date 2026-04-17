@@ -261,3 +261,78 @@ async fn test_no_auth_header_tool_call_returns_error() {
         body
     );
 }
+
+#[tokio::test]
+async fn task_session_survives_restart_and_respawn() {
+    use emergent_core::agent::thread_manager::{ThreadManager, ThreadMapping};
+    use emergent_protocol::{ContainerStatus, WorkspaceId};
+    use tempfile::TempDir;
+
+    let tmp = TempDir::new().unwrap();
+    let ws_id = WorkspaceId::from("it-ws-restart");
+
+    // First manager: persist a dormant entry to disk (stand-in for a
+    // completed task's session mapping).
+    {
+        let (_, _tr, manager) = spawn_test_server().await;
+        manager
+            .thread_manager()
+            .register_workspace_for_test(
+                ws_id.clone(),
+                tmp.path().to_path_buf(),
+                ContainerStatus::Stopped,
+            )
+            .await;
+
+        manager
+            .thread_manager()
+            .hydrate_dormant_for_workspace(
+                &ws_id,
+                vec![ThreadMapping {
+                    thread_id: "completed-task-session".into(),
+                    agent_definition_id: "agent-x".into(),
+                    acp_session_id: Some("acp-completed".into()),
+                    task_id: Some("task-done".into()),
+                }],
+            )
+            .await;
+        manager
+            .thread_manager()
+            .persist_threads_for_workspace(&ws_id)
+            .await;
+
+        let on_disk = ThreadManager::load_from_dir(tmp.path()).await.unwrap();
+        assert_eq!(on_disk.len(), 1);
+    }
+
+    // "Restart": fresh manager, hydrate from disk, then trigger a persist
+    // (as a new spawn would). The dormant entry must survive.
+    let (_, _tr, manager2) = spawn_test_server().await;
+    manager2
+        .thread_manager()
+        .register_workspace_for_test(
+            ws_id.clone(),
+            tmp.path().to_path_buf(),
+            ContainerStatus::Stopped,
+        )
+        .await;
+
+    let mappings = ThreadManager::load_from_dir(tmp.path()).await.unwrap();
+    manager2
+        .thread_manager()
+        .hydrate_dormant_for_workspace(&ws_id, mappings)
+        .await;
+
+    manager2
+        .thread_manager()
+        .persist_threads_for_workspace(&ws_id)
+        .await;
+
+    let after_restart = ThreadManager::load_from_dir(tmp.path()).await.unwrap();
+    assert_eq!(after_restart.len(), 1);
+    assert_eq!(after_restart[0].thread_id, "completed-task-session");
+
+    let summaries = manager2.thread_manager().list_threads("agent-x").await;
+    assert_eq!(summaries.len(), 1);
+    assert_eq!(summaries[0].status, "dead");
+}
