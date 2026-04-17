@@ -62,6 +62,9 @@ pub(crate) struct ThreadHandle {
     pub(crate) role: Option<String>,
     /// Optional task ID linking this thread to a task.
     pub(crate) task_id: Option<String>,
+    /// Set once the agent has signalled task completion. Blocks new prompts so
+    /// the final turn can drain and the session can be torn down cleanly.
+    pub(crate) completing: bool,
     /// Permission state at time of last prompt — used to detect changes.
     pub(crate) last_prompted_permissions: bool,
     /// Wakes the prompt loop when work is available.
@@ -504,6 +507,11 @@ impl AgentManager {
         self.threads
             .set_management_permissions(thread_id, enabled)
             .await
+    }
+
+    /// Mark a thread as completing. See `ThreadManager::mark_thread_completing`.
+    pub async fn mark_thread_completing(&self, thread_id: &str) -> Result<(), String> {
+        self.threads.mark_thread_completing(thread_id).await
     }
 
     pub async fn is_agent_idle(&self, thread_id: &str) -> bool {

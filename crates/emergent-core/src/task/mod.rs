@@ -14,11 +14,14 @@ pub struct TaskManager {
     agent_manager: Arc<AgentManager>,
     event_tx: broadcast::Sender<Notification>,
     prompted_sessions: Arc<RwLock<HashSet<String>>>,
+    /// Thread IDs pending teardown after their current turn drains.
+    /// Populated by `complete_task`, consumed on the next `StatusChange(Idle)`.
+    pending_teardown: Arc<RwLock<HashSet<String>>>,
 }
 
 fn build_task_prompt(task_id: &str, title: &str, description: &str) -> String {
     format!(
-        "Task {}: {}\n\n{}\n\nWhen the task is complete, call Emergent's `complete_task` tool to mark it done.",
+        "Task {}: {}\n\n{}\n\nWhen the task is complete, call Emergent's `complete_task` tool to mark it done. Your session will end after the turn in which you call this tool, so use that turn to wrap up any final message.",
         task_id, title, description
     )
 }
@@ -29,6 +32,7 @@ struct TaskManagerRef {
     registry: Arc<RwLock<TaskRegistry>>,
     agent_manager: Arc<AgentManager>,
     event_tx: broadcast::Sender<Notification>,
+    pending_teardown: Arc<RwLock<HashSet<String>>>,
 }
 
 impl TaskManagerRef {
@@ -60,6 +64,33 @@ impl TaskManagerRef {
                 }
             }
         }
+
+        // If we missed a `StatusChange(Idle)`, a thread pending teardown may
+        // be stranded alive with no more prompts. Force it down; drop entries
+        // whose threads were already reaped.
+        let pending: Vec<String> = self
+            .pending_teardown
+            .read()
+            .await
+            .iter()
+            .cloned()
+            .collect();
+        for thread_id in pending {
+            self.pending_teardown.write().await.remove(&thread_id);
+            if live.contains(&thread_id) {
+                log::info!(
+                    "Forcing teardown for thread {} pending after lag reconcile",
+                    thread_id
+                );
+                if let Err(e) = self.agent_manager.kill_thread(&thread_id).await {
+                    log::error!(
+                        "Failed to tear down stranded thread {} after lag: {}",
+                        thread_id,
+                        e
+                    );
+                }
+            }
+        }
     }
 }
 
@@ -73,6 +104,7 @@ impl TaskManager {
             agent_manager,
             event_tx,
             prompted_sessions: Arc::new(RwLock::new(HashSet::new())),
+            pending_teardown: Arc::new(RwLock::new(HashSet::new())),
         }
     }
 
@@ -81,10 +113,12 @@ impl TaskManager {
         let prompted = self.prompted_sessions.clone();
         let agent_manager = self.agent_manager.clone();
         let event_tx = self.event_tx.clone();
+        let pending_teardown = self.pending_teardown.clone();
         let self_ref = Arc::new(TaskManagerRef {
             registry: registry.clone(),
             agent_manager: agent_manager.clone(),
             event_tx: event_tx.clone(),
+            pending_teardown: pending_teardown.clone(),
         });
 
         tokio::spawn(async move {
@@ -110,7 +144,16 @@ impl TaskManager {
                             )
                             .await;
                             prompted.write().await.remove(&payload.thread_id);
+                            pending_teardown.write().await.remove(&payload.thread_id);
                         }
+                    }
+                    Ok(Notification::PromptComplete(ref payload)) => {
+                        Self::handle_turn_complete_for_teardown(
+                            &pending_teardown,
+                            &agent_manager,
+                            &payload.thread_id,
+                        )
+                        .await;
                     }
                     Ok(Notification::Error(ref payload)) => {
                         // Thread initialization (spawn or resume) failed; fail
@@ -123,6 +166,7 @@ impl TaskManager {
                         )
                         .await;
                         prompted.write().await.remove(&payload.thread_id);
+                        pending_teardown.write().await.remove(&payload.thread_id);
                     }
                     Err(broadcast::error::RecvError::Lagged(n)) => {
                         log::warn!(
@@ -190,6 +234,33 @@ impl TaskManager {
                     );
                 }
             }
+        }
+    }
+
+    /// When an agent finishes the turn during which it called `complete_task`
+    /// we tear the session down. Triggered by `PromptComplete`, which fires
+    /// once per completed turn. Idempotent: `kill_thread` on an already-
+    /// removed thread is a no-op.
+    async fn handle_turn_complete_for_teardown(
+        pending_teardown: &Arc<RwLock<HashSet<String>>>,
+        agent_manager: &Arc<AgentManager>,
+        thread_id: &str,
+    ) {
+        let should_teardown = pending_teardown.write().await.remove(thread_id);
+        if !should_teardown {
+            return;
+        }
+
+        log::info!(
+            "Tearing down thread {} after task completion turn drained",
+            thread_id
+        );
+        if let Err(e) = agent_manager.kill_thread(thread_id).await {
+            log::error!(
+                "Failed to tear down completed task thread {}: {}",
+                thread_id,
+                e
+            );
         }
     }
 
@@ -315,6 +386,20 @@ impl TaskManager {
         };
 
         self.prompted_sessions.write().await.remove(&session_id);
+
+        // Block further prompts and queue the thread for teardown once its
+        // current turn drains (observed via `StatusChange(Idle)`).
+        if let Err(e) = self.agent_manager.mark_thread_completing(&session_id).await {
+            log::warn!(
+                "mark_thread_completing failed for thread {}: {}",
+                session_id,
+                e
+            );
+        }
+        self.pending_teardown
+            .write()
+            .await
+            .insert(session_id.clone());
 
         self.persist_tasks(&workspace_id).await;
         self.start_unblocked_tasks(&workspace_id).await;
@@ -615,5 +700,6 @@ mod tests {
         assert!(prompt.contains("Wrap up the feature."));
         assert!(prompt.contains("`complete_task`"));
         assert!(prompt.contains("mark it done"));
+        assert!(prompt.contains("session will end"));
     }
 }

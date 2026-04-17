@@ -238,6 +238,7 @@ pub(crate) async fn initialize_agent(
         has_prompted: is_resume,
         role,
         task_id,
+        completing: false,
         last_prompted_permissions: false,
         prompt_notify,
         pending_prompt: None,

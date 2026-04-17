@@ -290,6 +290,12 @@ impl ThreadManager {
 
         let mut handle = handle_arc.lock().await;
 
+        if handle.completing {
+            return Err(format!(
+                "Thread '{}' has completed its task and is shutting down",
+                thread_id
+            ));
+        }
         if handle.pending_prompt.is_some() {
             return Err(format!(
                 "Thread '{}' already has a pending prompt",
@@ -547,6 +553,18 @@ impl ThreadManager {
             Some(handle_arc) => handle_arc.lock().await.has_management_permissions,
             None => false,
         }
+    }
+
+    /// Mark a thread as completing its task. Blocks further prompts; the
+    /// thread itself is torn down separately once the current turn drains.
+    /// Returns `Ok(())` even if already marked (idempotent).
+    pub async fn mark_thread_completing(&self, thread_id: &str) -> Result<(), String> {
+        let threads = self.threads.read().await;
+        let handle_arc = threads
+            .get(thread_id)
+            .ok_or_else(|| format!("Thread '{}' not found", thread_id))?;
+        handle_arc.lock().await.completing = true;
+        Ok(())
     }
 
     /// Set management permissions for a thread.
