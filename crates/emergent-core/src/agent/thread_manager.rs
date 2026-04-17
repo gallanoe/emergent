@@ -230,9 +230,11 @@ impl ThreadManager {
         );
 
         let threads = self.threads.clone();
+        let dormant = self.dormant_threads.clone();
         let event_tx = self.event_tx.clone();
         let history = self.history.clone();
         let id = thread_id.clone();
+        let ws_id_for_promotion = workspace_id.clone();
 
         let bearer_token = self.token_registry.register(&id, task_id.clone());
         let mcp_port = self.mcp_port.load(std::sync::atomic::Ordering::Relaxed);
@@ -264,9 +266,16 @@ impl ThreadManager {
             {
                 Ok(()) => {
                     log::info!("Thread {} resumed successfully", &id);
+                    // Promote: the live entry is now registered in `threads`
+                    // by initialize_agent, so remove the dormant stub.
+                    let mut dormant_guard = dormant.write().await;
+                    if let Some(ws_map) = dormant_guard.get_mut(&ws_id_for_promotion) {
+                        ws_map.remove(&id);
+                    }
                 }
                 Err(e) => {
                     log::error!("Thread {} failed to resume: {}", &id, e);
+                    // Leave the dormant entry intact so the user can retry.
                     token_registry_for_cleanup.revoke_agent(&id);
                     let _ = event_tx.send(Notification::Error(ThreadErrorPayload {
                         thread_id: id,
