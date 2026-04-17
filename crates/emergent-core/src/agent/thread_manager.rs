@@ -536,22 +536,47 @@ impl ThreadManager {
         counts
     }
 
-    /// List threads for a specific agent definition.
+    /// List threads for a specific agent definition. Returns both live and
+    /// dormant entries, deduping by thread_id (live wins). Dormant entries
+    /// carry `status = "dead"`.
     pub async fn list_threads(&self, agent_definition_id: &str) -> Vec<ThreadSummary> {
-        let threads = self.threads.read().await;
-        let mut result = Vec::new();
-        for (id, handle_arc) in threads.iter() {
-            let handle = handle_arc.lock().await;
-            if handle.agent_id == agent_definition_id {
-                result.push(ThreadSummary {
-                    id: id.clone(),
-                    agent_id: handle.agent_id.clone(),
-                    status: handle.status.to_string(),
-                    workspace_id: handle.workspace_id.clone(),
-                    acp_session_id: handle.acp_session_id.clone(),
-                });
+        let mut result: Vec<ThreadSummary> = Vec::new();
+        let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+        {
+            let threads = self.threads.read().await;
+            for (id, handle_arc) in threads.iter() {
+                let handle = handle_arc.lock().await;
+                if handle.agent_id == agent_definition_id {
+                    result.push(ThreadSummary {
+                        id: id.clone(),
+                        agent_id: handle.agent_id.clone(),
+                        status: handle.status.to_string(),
+                        workspace_id: handle.workspace_id.clone(),
+                        acp_session_id: handle.acp_session_id.clone(),
+                    });
+                    seen.insert(id.clone());
+                }
             }
         }
+
+        {
+            let dormant = self.dormant_threads.read().await;
+            for (ws_id, ws_map) in dormant.iter() {
+                for (id, m) in ws_map {
+                    if m.agent_definition_id == agent_definition_id && seen.insert(id.clone()) {
+                        result.push(ThreadSummary {
+                            id: id.clone(),
+                            agent_id: m.agent_definition_id.clone(),
+                            status: AgentStatus::Dead.to_string(),
+                            workspace_id: ws_id.clone(),
+                            acp_session_id: m.acp_session_id.clone(),
+                        });
+                    }
+                }
+            }
+        }
+
         result
     }
 
