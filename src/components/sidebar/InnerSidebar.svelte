@@ -117,8 +117,14 @@
     <div class="px-2 flex-1 overflow-y-auto min-h-0">
       {#each swarm.agentDefinitions as agentDef (agentDef.id)}
         {@const agentLogo = getAgentLogo(agentDef.name, agentDef.cli)}
+        {@const activeSessionCount = agentDef.threads.filter(
+          (t) =>
+            t.processStatus === "idle" ||
+            t.processStatus === "working" ||
+            t.processStatus === "initializing",
+        ).length}
         <button
-          class="flex items-center gap-2 w-full px-2.5 py-[7px] rounded-md text-[12px] mt-0.5 truncate
+          class="flex items-center gap-2 w-full px-2.5 py-[7px] rounded-md text-[12px] mt-0.5
                  {activeView.startsWith('agent') &&
           selectedAgentId === agentDef.id
             ? 'bg-bg-hover text-fg-heading'
@@ -138,11 +144,22 @@
               {agentDef.name.charAt(0).toUpperCase()}
             </span>
           {/if}
-          <span class="truncate">
+          <span class="flex-1 min-w-0 truncate text-left">
             {agentDef.name}{#if agentDef.role}<span class="text-fg-disabled">
                 — {agentDef.role}</span
               >{/if}
           </span>
+          {#if activeSessionCount > 0}
+            <span
+              title="{activeSessionCount} active session{activeSessionCount !==
+              1
+                ? 's'
+                : ''}"
+              class="text-[10px] font-medium text-fg-muted bg-bg-elevated border border-border-default rounded-full px-1.5 min-w-[18px] text-center flex-shrink-0"
+            >
+              {activeSessionCount}
+            </span>
+          {/if}
         </button>
       {/each}
       {#if !demoMode && swarm}
