@@ -401,6 +401,15 @@ impl ThreadManager {
         let mut handle = handle_arc.lock().await;
         let workspace_id = handle.workspace_id.clone();
 
+        // Capture the mapping now; ThreadMapping fields are immutable over
+        // a thread's lifetime, so this snapshot is safe to demote later.
+        let mapping = ThreadMapping {
+            thread_id: thread_id.to_string(),
+            agent_definition_id: handle.agent_id.clone(),
+            acp_session_id: handle.acp_session_id.clone(),
+            task_id: handle.task_id.clone(),
+        };
+
         if let Some(loop_handle) = handle.prompt_loop_handle.take() {
             loop_handle.abort();
         }
@@ -414,6 +423,16 @@ impl ThreadManager {
 
         drop(handle.thread_handle.take());
         drop(handle);
+
+        // Demote to dormant. We've already dropped the live entry + lock
+        // above, so no risk of holding both locks simultaneously.
+        {
+            let mut dormant = self.dormant_threads.write().await;
+            dormant
+                .entry(workspace_id.clone())
+                .or_default()
+                .insert(thread_id.to_string(), mapping);
+        }
 
         self.token_registry.revoke_agent(thread_id);
 
