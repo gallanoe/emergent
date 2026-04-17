@@ -101,6 +101,28 @@ impl McpHandler {
             .await
             .ok_or_else(|| "This session is not a task session".to_string())
     }
+
+    /// Return true when the caller's token was minted for a task session.
+    ///
+    /// Used to gate task-only tools in `list_tools`. Consults the token
+    /// registry rather than the live thread map because `list_tools` fires
+    /// during the ACP handshake, before the `ThreadHandle` is inserted into
+    /// `ThreadManager.threads`. The task_id was recorded at token-mint time
+    /// (synchronous, pre-spawn), so it's already visible here.
+    fn is_task_session(&self, context: &rmcp::service::RequestContext<rmcp::RoleServer>) -> bool {
+        let Some(parts) = context.extensions.get::<http::request::Parts>() else {
+            return false;
+        };
+        let Some(token) = parts
+            .headers
+            .get("authorization")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.strip_prefix("Bearer "))
+        else {
+            return false;
+        };
+        self.token_registry.resolve_task_id(token).is_some()
+    }
 }
 
 #[tool_router]
@@ -253,14 +275,21 @@ impl ServerHandler for McpHandler {
             .with_instructions("Emergent MCP server")
     }
 
+    #[allow(clippy::manual_async_fn)]
     fn list_tools(
         &self,
         _request: Option<rmcp::model::PaginatedRequestParams>,
-        _context: rmcp::service::RequestContext<rmcp::RoleServer>,
+        context: rmcp::service::RequestContext<rmcp::RoleServer>,
     ) -> impl Future<Output = Result<rmcp::model::ListToolsResult, rmcp::model::ErrorData>> + Send + '_
     {
-        let tools = self.tool_router.list_all();
         async move {
+            let is_task_session = self.is_task_session(&context);
+            let tools = self
+                .tool_router
+                .list_all()
+                .into_iter()
+                .filter(|t| is_task_session || t.name != "complete_task")
+                .collect();
             Ok(rmcp::model::ListToolsResult {
                 tools,
                 next_cursor: None,

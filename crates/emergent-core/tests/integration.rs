@@ -89,7 +89,7 @@ async fn test_initialize_succeeds() {
 #[tokio::test]
 async fn test_valid_token_can_list_tools() {
     let (url, registry, _manager) = spawn_test_server().await;
-    let token = registry.register("test-agent-1");
+    let token = registry.register("test-agent-1", None);
     let client = reqwest::Client::new();
 
     // Initialize (stateless — no session needed)
@@ -119,6 +119,67 @@ async fn test_valid_token_can_list_tools() {
 }
 
 #[tokio::test]
+async fn test_list_tools_hides_complete_task_for_conversation_session() {
+    // Tokens minted without a task_id belong to conversation sessions.
+    // `complete_task` must not appear in the advertised tool list — the LLM
+    // should never see a tool it can't usefully call.
+    let (url, registry, _manager) = spawn_test_server().await;
+    let token = registry.register("conversation-agent", None);
+    let client = reqwest::Client::new();
+
+    let (status, _) = post_mcp(&client, &url, mcp_init_body(), Some(&token)).await;
+    assert_eq!(status, 200);
+
+    let list_body = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/list",
+        "params": {}
+    })
+    .to_string();
+    let (status, body) = post_mcp(&client, &url, list_body, Some(&token)).await;
+    assert_eq!(status, 200);
+    assert!(
+        body.contains("\"create_task\""),
+        "Expected create_task in tool list, got: {}",
+        body
+    );
+    assert!(
+        !body.contains("\"complete_task\""),
+        "complete_task must be hidden for conversation sessions, got: {}",
+        body
+    );
+}
+
+#[tokio::test]
+async fn test_list_tools_shows_complete_task_for_task_session() {
+    // Tokens minted with a task_id belong to task sessions. `complete_task`
+    // must be visible immediately — including during the ACP handshake, before
+    // any ThreadHandle is inserted into the threads map.
+    let (url, registry, _manager) = spawn_test_server().await;
+    let token = registry.register("task-agent", Some("task-42".to_string()));
+    let client = reqwest::Client::new();
+
+    let (status, _) = post_mcp(&client, &url, mcp_init_body(), Some(&token)).await;
+    assert_eq!(status, 200);
+
+    let list_body = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/list",
+        "params": {}
+    })
+    .to_string();
+    let (status, body) = post_mcp(&client, &url, list_body, Some(&token)).await;
+    assert_eq!(status, 200);
+    assert!(
+        body.contains("\"complete_task\""),
+        "complete_task must be visible for task sessions, got: {}",
+        body
+    );
+}
+
+#[tokio::test]
 async fn test_invalid_token_tool_call_returns_error() {
     let (url, _registry, _manager) = spawn_test_server().await;
     let client = reqwest::Client::new();
@@ -142,7 +203,7 @@ async fn test_invalid_token_tool_call_returns_error() {
 #[tokio::test]
 async fn test_revoked_token_fails() {
     let (url, registry, _manager) = spawn_test_server().await;
-    let token = registry.register("agent-to-kill");
+    let token = registry.register("agent-to-kill", None);
     let client = reqwest::Client::new();
 
     // Verify token works: list tools should succeed

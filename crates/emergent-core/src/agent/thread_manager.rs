@@ -124,7 +124,7 @@ impl ThreadManager {
         let id = thread_id.clone();
         let ws_state = self.workspace_state.clone();
 
-        let bearer_token = self.token_registry.register(&id);
+        let bearer_token = self.token_registry.register(&id, task_id.clone());
         let mcp_port = self.mcp_port.load(std::sync::atomic::Ordering::Relaxed);
 
         let ws_id_for_persist = workspace_id.clone();
@@ -228,7 +228,7 @@ impl ThreadManager {
         let history = self.history.clone();
         let id = thread_id.clone();
 
-        let bearer_token = self.token_registry.register(&id);
+        let bearer_token = self.token_registry.register(&id, task_id.clone());
         let mcp_port = self.mcp_port.load(std::sync::atomic::Ordering::Relaxed);
         let token_registry_for_cleanup = self.token_registry.clone();
         let runtime = self.runtime.read().await;
