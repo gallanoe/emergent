@@ -58,6 +58,33 @@ async fn hydrate_dormant_for_workspace_inserts_mappings() {
 }
 
 #[tokio::test]
+async fn kill_threads_for_agent_covers_dormant() {
+    let tmp = TempDir::new().unwrap();
+    let ws_id = WorkspaceId::from("ws-agent");
+
+    let manager = test_manager().await;
+    register_workspace(&manager, &ws_id, tmp.path().to_path_buf()).await;
+
+    manager
+        .hydrate_dormant_for_workspace(
+            &ws_id,
+            vec![
+                mapping("t-a-1", "agent-a", None),
+                mapping("t-a-2", "agent-a", Some("task-2")),
+                mapping("t-b-1", "agent-b", None),
+            ],
+        )
+        .await;
+    manager.persist_threads_for_workspace(&ws_id).await;
+
+    manager.kill_threads_for_agent("agent-a").await.unwrap();
+
+    let remaining = manager.dormant_snapshot_for_workspace(&ws_id).await;
+    assert_eq!(remaining.len(), 1);
+    assert!(remaining.contains_key("t-b-1"));
+}
+
+#[tokio::test]
 async fn kill_thread_purges_dormant_only_entry() {
     let tmp = TempDir::new().unwrap();
     let ws_id = WorkspaceId::from("ws-kill");

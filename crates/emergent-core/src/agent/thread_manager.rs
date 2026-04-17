@@ -459,7 +459,11 @@ impl ThreadManager {
     }
 
     /// Kill all threads belonging to a given agent definition.
+    /// Walks both live and dormant maps.
     pub async fn kill_threads_for_agent(&self, agent_definition_id: &str) -> Result<(), String> {
+        let mut to_kill: Vec<String> = Vec::new();
+
+        // Live candidates.
         let candidates: Vec<(String, Arc<Mutex<ThreadHandle>>)> = {
             let threads = self.threads.read().await;
             threads
@@ -467,14 +471,22 @@ impl ThreadManager {
                 .map(|(id, handle_arc)| (id.clone(), handle_arc.clone()))
                 .collect()
         };
-
-        let mut to_kill = Vec::new();
         for (id, handle_arc) in candidates {
-            // Use .lock().await so we do not silently skip threads whose
-            // mutex is temporarily held by the prompt loop.
             let handle = handle_arc.lock().await;
             if handle.agent_id == agent_definition_id {
                 to_kill.push(id);
+            }
+        }
+
+        // Dormant candidates.
+        {
+            let dormant = self.dormant_threads.read().await;
+            for ws_map in dormant.values() {
+                for (id, m) in ws_map.iter() {
+                    if m.agent_definition_id == agent_definition_id && !to_kill.contains(id) {
+                        to_kill.push(id.clone());
+                    }
+                }
             }
         }
 
