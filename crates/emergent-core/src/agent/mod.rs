@@ -460,6 +460,13 @@ impl AgentManager {
         self.threads.kill_threads_in_workspace(workspace_id).await
     }
 
+    /// Borrow the underlying `ThreadManager`. Used by startup code that
+    /// needs to hydrate dormant mappings from disk, and by integration
+    /// tests that manipulate the dormant map directly.
+    pub fn thread_manager(&self) -> &ThreadManager {
+        &self.threads
+    }
+
     pub async fn thread_count_by_workspace(&self) -> std::collections::HashMap<WorkspaceId, usize> {
         self.threads.thread_count_by_workspace().await
     }

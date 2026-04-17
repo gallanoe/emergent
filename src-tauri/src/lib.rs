@@ -112,9 +112,17 @@ pub fn run() {
                         )
                         .await
                     {
-                        for m in mappings {
-                            recoverable_thread_ids.insert(m.thread_id);
+                        // Record thread_ids for stale-task recovery.
+                        for m in &mappings {
+                            recoverable_thread_ids.insert(m.thread_id.clone());
                         }
+                        // Hydrate the dormant map so subsequent persists keep
+                        // these mappings in threads.json and list_threads
+                        // surfaces them. Must run before recover_stale_tasks.
+                        manager
+                            .thread_manager()
+                            .hydrate_dormant_for_workspace(ws_id, mappings)
+                            .await;
                     }
 
                     if matches!(
