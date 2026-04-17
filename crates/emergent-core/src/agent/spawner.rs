@@ -16,6 +16,12 @@ pub trait AgentProcess: Send {
 }
 
 /// Strategy for spawning agent processes inside containers.
+///
+/// When `pid_file` is `Some`, the spawner wraps the command with a shell
+/// that records the in-container PID before exec'ing the binary, so the
+/// process can be killed directly via `<runtime> exec <container> kill <pid>`.
+/// `<runtime> exec -i` does not forward signals from the host-side client
+/// to the in-container process, so killing the host client alone leaks.
 #[async_trait]
 pub trait ProcessSpawner: Send + Sync {
     type Process: AgentProcess;
@@ -24,7 +30,12 @@ pub trait ProcessSpawner: Send + Sync {
         container_id: &str,
         command: &[&str],
         workdir: Option<&str>,
+        pid_file: Option<&str>,
     ) -> Result<Self::Process, String>;
+}
+
+fn sh_single_quote(s: &str) -> String {
+    format!("'{}'", s.replace('\'', "'\\''"))
 }
 
 // ---------------------------------------------------------------------------
@@ -35,6 +46,53 @@ pub struct RuntimeCliProcess {
     child: tokio::process::Child,
     stdin: Option<tokio::process::ChildStdin>,
     stdout: Option<tokio::process::ChildStdout>,
+    cli_program: String,
+    container_id: String,
+    pid_file: Option<String>,
+}
+
+impl RuntimeCliProcess {
+    /// Graceful shutdown: kill the in-container process via its recorded PID,
+    /// then wait for the host-side exec client to exit (force-killing it on
+    /// timeout). Necessary because `<runtime> exec -i` does not forward
+    /// signals — killing only the host client leaks the container process.
+    pub async fn shutdown(&mut self, timeout: std::time::Duration) -> Result<(), String> {
+        if let Some(pf) = &self.pid_file {
+            let script = format!(
+                "PID=$(cat {pf} 2>/dev/null); \
+                 if [ -n \"$PID\" ]; then \
+                   kill -TERM \"$PID\" 2>/dev/null; \
+                   sleep 0.3; \
+                   kill -KILL \"$PID\" 2>/dev/null; \
+                 fi; \
+                 rm -f {pf}",
+                pf = pf,
+            );
+            // Fire-and-forget. `kill_on_drop` would SIGKILL this exec client
+            // the moment `_child` goes out of scope below — before the kill
+            // script runs — so leave it off. If our app exits before the
+            // script finishes, the client is reparented to init and runs to
+            // completion.
+            match tokio::process::Command::new(&self.cli_program)
+                .arg("exec")
+                .arg(&self.container_id)
+                .arg("sh")
+                .arg("-c")
+                .arg(&script)
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn()
+            {
+                Ok(_child) => {}
+                Err(e) => log::warn!("in-container kill failed to spawn: {}", e),
+            }
+        }
+
+        if tokio::time::timeout(timeout, self.child.wait()).await.is_err() {
+            let _ = self.child.kill().await;
+        }
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -94,6 +152,7 @@ impl ProcessSpawner for RuntimeCliSpawner {
         container_id: &str,
         command: &[&str],
         workdir: Option<&str>,
+        pid_file: Option<&str>,
     ) -> Result<Self::Process, String> {
         let mut cmd = tokio::process::Command::new(&self.cli_program);
         cmd.arg("exec").arg("-i");
@@ -101,9 +160,24 @@ impl ProcessSpawner for RuntimeCliSpawner {
             cmd.arg("-w").arg(dir);
         }
         cmd.arg(container_id);
-        for arg in command {
-            cmd.arg(arg);
+
+        match pid_file {
+            Some(pf) => {
+                let inner = command
+                    .iter()
+                    .map(|a| sh_single_quote(a))
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                let wrapped = format!("echo $$ > {} && exec {}", sh_single_quote(pf), inner);
+                cmd.arg("sh").arg("-c").arg(&wrapped);
+            }
+            None => {
+                for arg in command {
+                    cmd.arg(arg);
+                }
+            }
         }
+
         cmd.stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::null())
@@ -120,6 +194,9 @@ impl ProcessSpawner for RuntimeCliSpawner {
             child,
             stdin,
             stdout,
+            cli_program: self.cli_program.clone(),
+            container_id: container_id.to_string(),
+            pid_file: pid_file.map(|s| s.to_string()),
         })
     }
 }

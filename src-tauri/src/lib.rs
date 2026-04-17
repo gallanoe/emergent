@@ -6,6 +6,7 @@ use emergent_core::mcp::TokenRegistry;
 use emergent_core::task::TaskManager;
 use emergent_core::workspace::WorkspaceManager;
 use emergent_protocol::Notification;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::Manager;
 use tokio::sync::broadcast;
@@ -276,16 +277,88 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
 
-    app.run(|_app_handle, event| {
-        match &event {
-            tauri::RunEvent::ExitRequested { api, .. } => {
-                api.prevent_exit();
+    // Two-flag shutdown gate. `cleanup_started` prevents spawning the cleanup
+    // task twice; `exit_approved` lets our own `handle.exit(0)` pass through
+    // the second `ExitRequested` (and the `Exit` handler skip when the
+    // async path already ran cleanup).
+    let cleanup_started = Arc::new(AtomicBool::new(false));
+    let exit_approved = Arc::new(AtomicBool::new(false));
+
+    app.run(move |app_handle, event| match &event {
+        tauri::RunEvent::ExitRequested { api, .. } => {
+            if exit_approved.load(Ordering::SeqCst) {
+                return;
             }
-            tauri::RunEvent::Exit => {
-                // HTTP server is cancelled when its task is dropped.
-                // No socket cleanup needed.
+            api.prevent_exit();
+            if cleanup_started.swap(true, Ordering::SeqCst) {
+                return;
             }
-            _ => {}
+
+            if let Some(window) = app_handle.get_webview_window("main") {
+                let _ = window.hide();
+            }
+
+            // Watchdog on an OS thread (survives tokio runtime teardown) in
+            // case Tauri's exit itself hangs after cleanup completes.
+            std::thread::spawn(|| {
+                std::thread::sleep(std::time::Duration::from_secs(10));
+                eprintln!("emergent: shutdown watchdog triggered — forcing exit");
+                std::process::exit(1);
+            });
+
+            let manager = app_handle.state::<Arc<AgentManager>>().inner().clone();
+            let handle = app_handle.clone();
+            let exit_approved = exit_approved.clone();
+            tauri::async_runtime::spawn(async move {
+                shutdown_all_threads(manager, std::time::Duration::from_secs(5)).await;
+                exit_approved.store(true, Ordering::SeqCst);
+                handle.exit(0);
+            });
         }
+        // macOS cmd-Q / menu-bar Quit skips ExitRequested and jumps straight
+        // to Exit (Tauri bug tauri-apps/tauri#9198). Run cleanup synchronously
+        // here, within the ~5s macOS grants during applicationWillTerminate.
+        tauri::RunEvent::Exit => {
+            if exit_approved.load(Ordering::SeqCst) {
+                return;
+            }
+            let manager = app_handle.state::<Arc<AgentManager>>().inner().clone();
+            tauri::async_runtime::block_on(shutdown_all_threads(
+                manager,
+                std::time::Duration::from_secs(3),
+            ));
+        }
+        _ => {}
     });
+}
+
+async fn shutdown_all_threads(manager: Arc<AgentManager>, cap: std::time::Duration) {
+    let started = std::time::Instant::now();
+    let ids = manager.live_thread_ids().await;
+    log::info!("shutdown: {} live thread(s)", ids.len());
+
+    let mut set = tokio::task::JoinSet::new();
+    for id in ids {
+        let m = manager.clone();
+        set.spawn(async move {
+            let t = std::time::Instant::now();
+            match m.shutdown_thread(&id).await {
+                Ok(()) => log::info!("shutdown: thread {} done in {:?}", id, t.elapsed()),
+                Err(e) => log::warn!("shutdown: thread {} error after {:?}: {}", id, t.elapsed(), e),
+            }
+        });
+    }
+
+    let wait = async {
+        while set.join_next().await.is_some() {}
+    };
+    if tokio::time::timeout(cap, wait).await.is_err() {
+        log::warn!(
+            "shutdown: cleanup exceeded {:?}, aborting {} remaining task(s)",
+            cap,
+            set.len()
+        );
+        set.abort_all();
+    }
+    log::info!("shutdown: finished in {:?}", started.elapsed());
 }

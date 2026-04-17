@@ -54,15 +54,16 @@ pub(crate) async fn initialize_agent(
     cli_program: String,
     mcp_host_alias: String,
 ) -> Result<(), String> {
-    // Spawn the agent process via ProcessSpawner
     let spawner = super::spawner::RuntimeCliSpawner::new(cli_program);
     let parts: Vec<&str> = agent_binary.split_whitespace().collect();
     let agent_workdir = format!("/home/.agents/{}/", agent_definition_id);
+    let pid_file = format!("/tmp/emergent.{}.pid", agent_id);
     let mut process = super::spawner::ProcessSpawner::spawn(
         &spawner,
         &container_id,
         &parts,
         Some(&agent_workdir),
+        Some(&pid_file),
     )
     .await
     .map_err(|e| format!("Failed to spawn agent '{}': {}", agent_binary, e))?;

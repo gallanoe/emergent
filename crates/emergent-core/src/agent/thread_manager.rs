@@ -9,7 +9,6 @@ use emergent_protocol::{
 use tokio::sync::{broadcast, oneshot, Mutex, RwLock};
 
 use super::lifecycle::SessionInit;
-use super::spawner::AgentProcess;
 use super::{lifecycle, AgentCommand, ThreadHandle};
 
 /// Persisted thread-to-session mapping (stored in threads.json).
@@ -401,11 +400,10 @@ impl ThreadManager {
 
         let _ = handle.command_tx.send(AgentCommand::Shutdown);
 
-        let exited =
-            tokio::time::timeout(std::time::Duration::from_secs(2), handle.process.wait()).await;
-        if exited.is_err() {
-            let _ = handle.process.kill().await;
-        }
+        let _ = handle
+            .process
+            .shutdown(std::time::Duration::from_secs(2))
+            .await;
 
         drop(handle.thread_handle.take());
         drop(handle);
