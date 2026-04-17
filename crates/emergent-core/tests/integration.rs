@@ -336,3 +336,56 @@ async fn task_session_survives_restart_and_respawn() {
     assert_eq!(summaries.len(), 1);
     assert_eq!(summaries[0].status, "dead");
 }
+
+#[tokio::test]
+async fn delete_workspace_clears_dormant_in_memory() {
+    use emergent_core::agent::thread_manager::ThreadMapping;
+    use emergent_protocol::{ContainerStatus, WorkspaceId};
+    use tempfile::TempDir;
+
+    let tmp = TempDir::new().unwrap();
+    let ws_id = WorkspaceId::from("it-ws-delete");
+
+    let (_, _tr, manager) = spawn_test_server().await;
+    manager
+        .thread_manager()
+        .register_workspace_for_test(
+            ws_id.clone(),
+            tmp.path().to_path_buf(),
+            ContainerStatus::Stopped,
+        )
+        .await;
+
+    manager
+        .thread_manager()
+        .hydrate_dormant_for_workspace(
+            &ws_id,
+            vec![ThreadMapping {
+                thread_id: "dorm-del".into(),
+                agent_definition_id: "agent-x".into(),
+                acp_session_id: Some("acp-del".into()),
+                task_id: None,
+            }],
+        )
+        .await;
+
+    assert_eq!(
+        manager
+            .thread_manager()
+            .dormant_snapshot_for_workspace(&ws_id)
+            .await
+            .len(),
+        1
+    );
+
+    // This is what commands::delete_workspace invokes first.
+    manager.kill_threads_in_workspace(&ws_id).await.unwrap();
+
+    assert!(
+        manager
+            .thread_manager()
+            .dormant_snapshot_for_workspace(&ws_id)
+            .await
+            .is_empty()
+    );
+}
