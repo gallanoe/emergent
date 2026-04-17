@@ -23,6 +23,8 @@ pub struct ThreadMapping {
 
 pub struct ThreadManager {
     pub(crate) threads: Arc<RwLock<HashMap<String, Arc<Mutex<ThreadHandle>>>>>,
+    pub(crate) dormant_threads:
+        Arc<RwLock<HashMap<WorkspaceId, HashMap<String, ThreadMapping>>>>,
     pub(crate) event_tx: broadcast::Sender<Notification>,
     pub(crate) history: Arc<RwLock<HashMap<String, Vec<Notification>>>>,
     pub(crate) token_registry: Arc<crate::mcp::TokenRegistry>,
@@ -65,6 +67,7 @@ impl ThreadManager {
 
         Self {
             threads: Arc::new(RwLock::new(HashMap::new())),
+            dormant_threads: Arc::new(RwLock::new(HashMap::new())),
             event_tx,
             history,
             token_registry,
@@ -593,6 +596,71 @@ impl ThreadManager {
             .ok_or_else(|| format!("Thread not found: {}", thread_id))?;
         handle_arc.lock().await.has_management_permissions = enabled;
         Ok(())
+    }
+
+    // -----------------------------------------------------------------------
+    // Dormant map
+    // -----------------------------------------------------------------------
+
+    /// Insert persisted-but-not-live thread mappings for a workspace.
+    /// Called at startup once per workspace after `load_from_dir`.
+    pub async fn hydrate_dormant_for_workspace(
+        &self,
+        workspace_id: &WorkspaceId,
+        mappings: Vec<ThreadMapping>,
+    ) {
+        let mut dormant = self.dormant_threads.write().await;
+        let entry = dormant.entry(workspace_id.clone()).or_default();
+        for m in mappings {
+            entry.insert(m.thread_id.clone(), m);
+        }
+    }
+
+    /// Return a snapshot of dormant entries for a workspace.
+    pub async fn dormant_snapshot_for_workspace(
+        &self,
+        workspace_id: &WorkspaceId,
+    ) -> HashMap<String, ThreadMapping> {
+        self.dormant_threads
+            .read()
+            .await
+            .get(workspace_id)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    /// Flat snapshot of all dormant entries across workspaces, keyed by
+    /// `thread_id`. Used for lookups when only a thread_id is known.
+    pub async fn dormant_snapshot(&self) -> HashMap<String, ThreadMapping> {
+        let dormant = self.dormant_threads.read().await;
+        let mut flat = HashMap::new();
+        for ws_map in dormant.values() {
+            for (id, m) in ws_map {
+                flat.insert(id.clone(), m.clone());
+            }
+        }
+        flat
+    }
+
+    /// Register a workspace in the manager's shared state. Intended for
+    /// integration tests — production code flows through `WorkspaceManager`.
+    pub async fn register_workspace_for_test(
+        &self,
+        workspace_id: WorkspaceId,
+        path: std::path::PathBuf,
+        container_status: emergent_protocol::ContainerStatus,
+    ) {
+        use crate::workspace::Workspace;
+        let mut state = self.workspace_state.write().await;
+        state.workspaces.insert(
+            workspace_id,
+            Workspace {
+                name: "test-ws".into(),
+                path,
+                container_id: None,
+                container_status,
+            },
+        );
     }
 
     // -----------------------------------------------------------------------
