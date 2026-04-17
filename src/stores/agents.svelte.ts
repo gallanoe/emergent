@@ -660,9 +660,9 @@ function createAgentStore() {
     const thread = threads[threadId];
     if (!thread || thread.status === "dead") return;
     try {
-      await invoke("kill_thread", { threadId });
+      await invoke("shutdown_thread", { threadId });
     } catch (err) {
-      console.error("kill_thread RPC failed (marking dead anyway):", err);
+      console.error("shutdown_thread RPC failed (marking dead anyway):", err);
     }
     // Keep the stub with dead status (handleStatusChange may have already done this)
     if (threads[threadId]) {
