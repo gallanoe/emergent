@@ -442,6 +442,15 @@ impl AgentManager {
         Ok(())
     }
 
+    /// Shut down a thread's subprocess but preserve its persisted mapping in
+    /// `threads.json`. Used by task-completion teardown so the completed
+    /// task's session remains resumable after restart.
+    pub async fn shutdown_thread(&self, thread_id: &str) -> Result<(), String> {
+        self.threads.shutdown_thread(thread_id).await?;
+        self.topology.write().await.remove_node(thread_id);
+        Ok(())
+    }
+
     /// Kill all running threads in a workspace without deleting agent definitions.
     pub async fn kill_threads_in_workspace(
         &self,

@@ -82,7 +82,7 @@ impl TaskManagerRef {
                     "Forcing teardown for thread {} pending after lag reconcile",
                     thread_id
                 );
-                if let Err(e) = self.agent_manager.kill_thread(&thread_id).await {
+                if let Err(e) = self.agent_manager.shutdown_thread(&thread_id).await {
                     log::error!(
                         "Failed to tear down stranded thread {} after lag: {}",
                         thread_id,
@@ -255,7 +255,7 @@ impl TaskManager {
             "Tearing down thread {} after task completion turn drained",
             thread_id
         );
-        if let Err(e) = agent_manager.kill_thread(thread_id).await {
+        if let Err(e) = agent_manager.shutdown_thread(thread_id).await {
             log::error!(
                 "Failed to tear down completed task thread {}: {}",
                 thread_id,
@@ -644,7 +644,7 @@ impl TaskManager {
             .spawn_thread(&agent_id, Some(task_id.to_string()))
             .await?;
 
-        {
+        let workspace_id = {
             let mut reg = self.registry.write().await;
             if let Some(task) = reg.get_task_mut(task_id) {
                 // Atomic transition: state and session_id move together so the
@@ -655,7 +655,16 @@ impl TaskManager {
                 let _ = self.event_tx.send(Notification::TaskUpdated(TaskPayload {
                     task: task.clone(),
                 }));
+                Some(task.workspace_id.clone())
+            } else {
+                None
             }
+        };
+
+        // Persist the Working transition so a restart before the next
+        // state change does not lose the task's session_id.
+        if let Some(ws_id) = workspace_id {
+            self.persist_tasks(&ws_id).await;
         }
 
         Ok(())

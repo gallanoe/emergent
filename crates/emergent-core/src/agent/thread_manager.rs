@@ -361,10 +361,21 @@ impl ThreadManager {
             .map_err(|_| "Thread terminated during cancel".to_string())?
     }
 
-    /// Kill a thread, removing it from the map and terminating the subprocess.
+    /// Shut down a thread's subprocess and remove it from the in-memory map,
+    /// but leave its persisted `threads.json` entry intact. Returns the
+    /// workspace the thread belonged to, or `None` if the thread was not
+    /// found.
+    ///
+    /// Use this for task-completion teardown, where the process should stop
+    /// but the session mapping must remain resumable. Callers that want the
+    /// mapping purged from disk should use `kill_thread` instead.
+    ///
     /// Does NOT handle topology cleanup — that's the coordinator's job.
-    pub async fn kill_thread(&self, thread_id: &str) -> Result<(), String> {
-        log::info!("Killing thread {}", thread_id);
+    pub async fn shutdown_thread(
+        &self,
+        thread_id: &str,
+    ) -> Result<Option<WorkspaceId>, String> {
+        log::info!("Shutting down thread {}", thread_id);
 
         let _ = self
             .event_tx
@@ -377,7 +388,7 @@ impl ThreadManager {
             let mut threads = self.threads.write().await;
             match threads.remove(thread_id) {
                 Some(h) => h,
-                None => return Ok(()),
+                None => return Ok(None),
             }
         };
 
@@ -399,12 +410,17 @@ impl ThreadManager {
         drop(handle.thread_handle.take());
         drop(handle);
 
-        // Revoke bearer token
         self.token_registry.revoke_agent(thread_id);
 
-        // Persist updated mappings (thread removed)
-        self.persist_threads_for_workspace(&workspace_id).await;
+        Ok(Some(workspace_id))
+    }
 
+    /// Kill a thread: shut down its subprocess, remove it from the in-memory
+    /// map, and purge its entry from `threads.json`.
+    pub async fn kill_thread(&self, thread_id: &str) -> Result<(), String> {
+        if let Some(workspace_id) = self.shutdown_thread(thread_id).await? {
+            self.persist_threads_for_workspace(&workspace_id).await;
+        }
         Ok(())
     }
 
