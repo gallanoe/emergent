@@ -451,28 +451,13 @@ impl AgentManager {
         Ok(())
     }
 
-    /// Kill all running threads in a workspace without deleting agent definitions.
+    /// Kill all threads (live and dormant) in a workspace without deleting
+    /// the workspace's agent definitions.
     pub async fn kill_threads_in_workspace(
         &self,
         workspace_id: &WorkspaceId,
     ) -> Result<(), String> {
-        let thread_ids: Vec<String> = {
-            let threads = self.threads.threads.read().await;
-            let mut ids = Vec::new();
-            for (id, handle_arc) in threads.iter() {
-                let handle = handle_arc.lock().await;
-                if &handle.workspace_id == workspace_id {
-                    ids.push(id.clone());
-                }
-            }
-            ids
-        };
-
-        for id in thread_ids {
-            self.threads.kill_thread(&id).await?;
-        }
-
-        Ok(())
+        self.threads.kill_threads_in_workspace(workspace_id).await
     }
 
     pub async fn thread_count_by_workspace(&self) -> std::collections::HashMap<WorkspaceId, usize> {

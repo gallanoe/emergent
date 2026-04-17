@@ -486,6 +486,40 @@ impl ThreadManager {
         Ok(())
     }
 
+    /// Kill all threads (live and dormant) belonging to a given workspace.
+    pub async fn kill_threads_in_workspace(
+        &self,
+        workspace_id: &WorkspaceId,
+    ) -> Result<(), String> {
+        let mut to_kill: Vec<String> = Vec::new();
+
+        {
+            let threads = self.threads.read().await;
+            for (id, handle_arc) in threads.iter() {
+                let handle = handle_arc.lock().await;
+                if &handle.workspace_id == workspace_id {
+                    to_kill.push(id.clone());
+                }
+            }
+        }
+        {
+            let dormant = self.dormant_threads.read().await;
+            if let Some(ws_map) = dormant.get(workspace_id) {
+                for id in ws_map.keys() {
+                    if !to_kill.contains(id) {
+                        to_kill.push(id.clone());
+                    }
+                }
+            }
+        }
+
+        for id in to_kill {
+            self.kill_thread(&id).await?;
+        }
+
+        Ok(())
+    }
+
     /// Kill all threads belonging to a given agent definition.
     /// Walks both live and dormant maps.
     pub async fn kill_threads_for_agent(&self, agent_definition_id: &str) -> Result<(), String> {
