@@ -163,6 +163,14 @@ pub async fn kill_thread(
 }
 
 #[tauri::command]
+pub async fn shutdown_thread(
+    manager: State<'_, Arc<AgentManager>>,
+    thread_id: String,
+) -> Result<(), String> {
+    manager.shutdown_thread(&thread_id).await
+}
+
+#[tauri::command]
 pub async fn get_daemon_status() -> Result<String, String> {
     Ok("connected".into())
 }

@@ -252,6 +252,7 @@ pub fn run() {
             commands::send_prompt,
             commands::cancel_prompt,
             commands::kill_thread,
+            commands::shutdown_thread,
             commands::get_daemon_status,
             commands::get_history,
             commands::get_thread_config,
