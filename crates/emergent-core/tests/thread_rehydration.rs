@@ -56,3 +56,25 @@ async fn hydrate_dormant_for_workspace_inserts_mappings() {
     assert_eq!(dormant.get("t1").unwrap().agent_definition_id, "agent-a");
     assert_eq!(dormant.get("t2").unwrap().task_id, None);
 }
+
+#[tokio::test]
+async fn persist_includes_dormant_entries() {
+    let tmp = TempDir::new().unwrap();
+    let ws_id = WorkspaceId::from("ws-persist");
+
+    let manager = test_manager().await;
+    register_workspace(&manager, &ws_id, tmp.path().to_path_buf()).await;
+
+    manager
+        .hydrate_dormant_for_workspace(
+            &ws_id,
+            vec![mapping("dormant-1", "agent-a", Some("task-1"))],
+        )
+        .await;
+
+    manager.persist_threads_for_workspace(&ws_id).await;
+
+    let on_disk = ThreadManager::load_from_dir(tmp.path()).await.unwrap();
+    assert_eq!(on_disk.len(), 1);
+    assert_eq!(on_disk[0].thread_id, "dormant-1");
+}

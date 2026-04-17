@@ -131,6 +131,7 @@ impl ThreadManager {
 
         let ws_id_for_persist = workspace_id.clone();
         let threads_for_persist = self.threads.clone();
+        let dormant_for_persist = self.dormant_threads.clone();
         let token_registry_for_cleanup = self.token_registry.clone();
         let runtime = self.runtime.read().await;
         let cli_program = runtime.cli_program().to_string();
@@ -168,9 +169,12 @@ impl ThreadManager {
                             .map(|ws| ws.path.clone())
                     };
                     if let Some(dir) = workspace_dir {
-                        let mappings =
-                            Self::collect_mappings_static(&threads_for_persist, &ws_id_for_persist)
-                                .await;
+                        let mappings = Self::collect_mappings_static(
+                            &threads_for_persist,
+                            &dormant_for_persist,
+                            &ws_id_for_persist,
+                        )
+                        .await;
                         if let Err(e) = Self::save_to_dir(&mappings, &dir).await {
                             log::error!("Failed to persist thread mappings: {}", e);
                         }
@@ -677,31 +681,52 @@ impl ThreadManager {
             }
         };
 
-        let mappings = Self::collect_mappings_static(&self.threads, workspace_id).await;
+        let mappings = Self::collect_mappings_static(
+            &self.threads,
+            &self.dormant_threads,
+            workspace_id,
+        )
+        .await;
         if let Err(e) = Self::save_to_dir(&mappings, &workspace_dir).await {
             log::error!("Failed to persist thread mappings: {}", e);
         }
     }
 
-    /// Collect thread mappings for a workspace (static version for use in spawned tasks).
+    /// Collect thread mappings for a workspace. Unions live and dormant maps,
+    /// deduping by `thread_id` (live wins).
     async fn collect_mappings_static(
         threads: &RwLock<HashMap<String, Arc<Mutex<ThreadHandle>>>>,
+        dormant: &RwLock<HashMap<WorkspaceId, HashMap<String, ThreadMapping>>>,
         workspace_id: &WorkspaceId,
     ) -> Vec<ThreadMapping> {
-        let threads = threads.read().await;
-        let mut mappings = Vec::new();
-        for (id, handle_arc) in threads.iter() {
-            let handle = handle_arc.lock().await;
-            if &handle.workspace_id == workspace_id {
-                mappings.push(ThreadMapping {
-                    thread_id: id.clone(),
-                    agent_definition_id: handle.agent_id.clone(),
-                    acp_session_id: handle.acp_session_id.clone(),
-                    task_id: handle.task_id.clone(),
-                });
+        let mut out: Vec<ThreadMapping> = Vec::new();
+        let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+        {
+            let live = threads.read().await;
+            for (id, handle_arc) in live.iter() {
+                let handle = handle_arc.lock().await;
+                if &handle.workspace_id == workspace_id {
+                    out.push(ThreadMapping {
+                        thread_id: id.clone(),
+                        agent_definition_id: handle.agent_id.clone(),
+                        acp_session_id: handle.acp_session_id.clone(),
+                        task_id: handle.task_id.clone(),
+                    });
+                    seen.insert(id.clone());
+                }
             }
         }
-        mappings
+
+        let dormant_guard = dormant.read().await;
+        if let Some(ws_map) = dormant_guard.get(workspace_id) {
+            for (id, m) in ws_map {
+                if seen.insert(id.clone()) {
+                    out.push(m.clone());
+                }
+            }
+        }
+        out
     }
 
     async fn save_to_dir(mappings: &[ThreadMapping], workspace_dir: &Path) -> Result<(), String> {
