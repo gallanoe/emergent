@@ -230,7 +230,7 @@
       />
     </div>
   </div>
-  <main class="flex flex-col min-h-0 min-w-0">
+  <main class="relative flex flex-col min-h-0 min-w-0">
     {#if appState.selectedSwarm && !isEmptyOrRuntimeMissing}
       <div
         class="flex items-center h-[38px] px-5 border-b border-border-default flex-shrink-0 relative z-[60]"
@@ -525,7 +525,7 @@
           ? '1fr 320px'
           : '1fr'};"
       >
-        <div class="flex flex-col min-h-0 min-w-0">
+        <div class="relative flex flex-col min-h-0 min-w-0">
           <div
             class="flex items-center h-[38px] px-4 border-b border-border-default flex-shrink-0 relative z-[60] gap-2"
           >

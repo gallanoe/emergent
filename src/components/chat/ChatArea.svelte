@@ -78,7 +78,7 @@
 <div
   bind:this={scrollContainer}
   onscroll={onScroll}
-  class="flex-1 overflow-y-auto min-w-0 px-20 py-4"
+  class="flex-1 overflow-y-auto min-w-0 px-20 pt-4 pb-24"
 >
   {#if agent}
     {#if agent.status === "initializing"}

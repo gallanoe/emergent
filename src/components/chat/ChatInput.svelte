@@ -117,9 +117,11 @@
   }
 </script>
 
-<div class="px-10 py-3 border-t border-border-default">
+<div
+  class="absolute bottom-0 left-0 right-0 px-10 pb-3 pointer-events-none z-10"
+>
   <div
-    class="border border-border-strong rounded-lg transition-colors duration-150 focus-within:border-border-focus"
+    class="pointer-events-auto border border-border-strong rounded-lg transition-colors duration-150 focus-within:border-border-focus bg-bg-base/55 backdrop-blur-xl backdrop-saturate-[1.3]"
   >
     <textarea
       bind:this={textareaEl}
