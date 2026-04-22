@@ -6,6 +6,7 @@
   import ChatTaskBanner from "./components/chat/ChatTaskBanner.svelte";
   import SwarmView from "./components/swarm/SwarmView.svelte";
   import WorkspaceSettingsView from "./components/settings/WorkspaceSettingsView.svelte";
+  import AppSettingsView from "./components/settings/AppSettingsView.svelte";
   import RuntimeSelector from "./components/settings/RuntimeSelector.svelte";
   import TerminalView from "./components/terminal/TerminalView.svelte";
   import ThreadListView from "./components/agent/ThreadListView.svelte";
@@ -297,9 +298,7 @@
         Overview — built in Phase 6
       </div>
     {:else if appState.activeView === "app-settings"}
-      <div class="p-6 text-[12px] text-fg-muted">
-        Application settings — built in Phase 5
-      </div>
+      <AppSettingsView />
     {:else if appState.activeView === "settings" && appState.selectedSwarmId}
       <WorkspaceSettingsView
         workspaceId={appState.selectedSwarmId}
