@@ -3,7 +3,7 @@
   import InnerSidebar from "./components/sidebar/InnerSidebar.svelte";
   import ChatArea from "./components/chat/ChatArea.svelte";
   import ChatInput from "./components/chat/ChatInput.svelte";
-  import TaskSessionHeader from "./components/chat/TaskSessionHeader.svelte";
+  import ChatTaskBanner from "./components/chat/ChatTaskBanner.svelte";
   import SwarmView from "./components/swarm/SwarmView.svelte";
   import SettingsView from "./components/settings/SettingsView.svelte";
   import RuntimeSelector from "./components/settings/RuntimeSelector.svelte";
@@ -532,46 +532,27 @@
           appState.deleteAgentDefinition(appState.selectedAgentId!)}
       />
     {:else if appState.activeView === "agent-chat" && appState.selectedThread}
+      {@const thread = appState.selectedThread}
+      {@const task = thread.taskId
+        ? (appState.tasks[thread.taskId] ?? null)
+        : null}
       <div
-        class="flex-1 min-h-0"
+        class="flex min-h-0 flex-1 min-w-0"
         style="display:grid; grid-template-columns: {appState.taskSidebarMode
           ? '1fr 320px'
           : '1fr'};"
       >
-        <div class="relative flex flex-col min-h-0 min-w-0">
-          <div
-            class="flex items-center h-[38px] px-4 border-b border-border-default flex-shrink-0 relative z-[60] gap-2"
-          >
-            <button
-              class="interactive flex items-center justify-center w-[24px] h-[24px] rounded-[5px] text-fg-muted"
-              title="Back to threads"
-              onclick={() => appState.backToThreads()}
-            >
-              ‹
-            </button>
-            <span class="text-[13px] font-semibold text-fg-heading"
-              >{appState.selectedAgentDef?.name ?? ""}</span
-            >
-            <span class="text-[12px] text-fg-disabled">/</span>
-            <span class="text-[12px] text-fg-muted"
-              >{appState.selectedThread.name}</span
-            >
-          </div>
-          {#if appState.selectedThread.taskId}
-            {@const task = appState.tasks[appState.selectedThread.taskId]}
-            {#if task}
-              <TaskSessionHeader
-                {task}
-                onOpen={() => appState.selectTask(task.id)}
-              />
-            {/if}
+        <div class="relative flex min-h-0 min-w-0 flex-col">
+          {#if task}
+            <ChatTaskBanner {task} onOpen={(id) => appState.selectTask(id)} />
           {/if}
           <ChatArea
-            agent={appState.selectedAgent}
+            agent={thread}
+            hasTaskBanner={task != null}
             onEditQueue={handleEditQueue}
           />
           <ChatInput
-            agent={appState.selectedAgent}
+            agent={thread}
             demoMode={appState.demoMode}
             containerRunning={appState.selectedWorkspaceContainerRunning}
             {externalContent}
@@ -610,25 +591,31 @@
         {/if}
       </div>
     {:else}
-      <ChatArea agent={appState.selectedAgent} onEditQueue={handleEditQueue} />
-      <ChatInput
-        agent={appState.selectedAgent}
-        demoMode={appState.demoMode}
-        containerRunning={appState.selectedWorkspaceContainerRunning}
-        {externalContent}
-        onSend={(text) => {
-          const agent = appState.selectedAgent;
-          if (agent) appState.sendPrompt(agent.id, text);
-        }}
-        onInterrupt={() => {
-          const agent = appState.selectedAgent;
-          if (agent) appState.cancelPrompt(agent.id);
-        }}
-        onSetConfig={(configId, value) => {
-          const agent = appState.selectedAgent;
-          if (agent) appState.setConfig(agent.id, configId, value);
-        }}
-      />
+      <div class="relative flex min-h-0 min-w-0 flex-1 flex-col">
+        <ChatArea
+          agent={appState.selectedAgent}
+          hasTaskBanner={false}
+          onEditQueue={handleEditQueue}
+        />
+        <ChatInput
+          agent={appState.selectedAgent}
+          demoMode={appState.demoMode}
+          containerRunning={appState.selectedWorkspaceContainerRunning}
+          {externalContent}
+          onSend={(text) => {
+            const agent = appState.selectedAgent;
+            if (agent) appState.sendPrompt(agent.id, text);
+          }}
+          onInterrupt={() => {
+            const agent = appState.selectedAgent;
+            if (agent) appState.cancelPrompt(agent.id);
+          }}
+          onSetConfig={(configId, value) => {
+            const agent = appState.selectedAgent;
+            if (agent) appState.setConfig(agent.id, configId, value);
+          }}
+        />
+      </div>
     {/if}
   </main>
 </div>
