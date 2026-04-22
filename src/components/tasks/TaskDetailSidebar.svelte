@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { DisplayTask } from "../../stores/types";
   import { Lock, X } from "@lucide/svelte";
+  import { Button, Mono, SLabel, TaskStatusPill } from "../../lib/primitives";
 
   interface Props {
     task: DisplayTask;
@@ -56,37 +57,30 @@
   }
 </script>
 
-<div class="flex flex-col h-full bg-bg-sidebar">
-  <!-- Header -->
-  <div
-    class="flex items-center justify-between px-4 py-3.5 border-b border-border-default"
-  >
-    <div class="flex items-center gap-2">
-      <span class="text-[13px] font-semibold text-fg-heading">Task</span>
-      <span class="text-[11px] font-mono text-fg-muted">{task.id}</span>
+<div
+  class="flex h-full min-h-0 flex-col border-l border-border-default bg-bg-sidebar px-4 py-4"
+>
+  <div class="mb-3 flex items-start justify-between gap-2">
+    <div class="flex min-w-0 flex-col gap-1">
+      <div class="flex flex-wrap items-baseline gap-2">
+        <span class="text-[13px] font-semibold text-fg-heading">Task</span>
+        <Mono size={11} color="var(--color-fg-muted)">
+          {#snippet children()}{task.id}{/snippet}
+        </Mono>
+      </div>
     </div>
-    <button
-      class="interactive flex items-center justify-center w-6 h-6 rounded-[5px] text-fg-muted"
-      onclick={onClose}
-    >
-      <X size={14} />
-    </button>
+    <Button variant="ghost" size="xs" onclick={onClose} title="Close">
+      {#snippet icon()}<X size={14} />{/snippet}
+      {#snippet children()}{/snippet}
+    </Button>
   </div>
 
-  <!-- Body -->
-  <div class="flex-1 overflow-y-auto p-4">
-    <!-- Status badges -->
-    <div class="flex items-center gap-2 mb-2.5">
-      <span
-        class="inline-flex items-center gap-1.5 text-[10px] font-medium border rounded-full px-2 py-0.5 {statusClasses(
-          task.status,
-        )}"
-      >
-        {task.status.charAt(0).toUpperCase() + task.status.slice(1)}
-      </span>
+  <div class="flex min-h-0 flex-1 flex-col overflow-y-auto">
+    <div class="mb-2.5 flex flex-wrap items-center gap-2">
+      <TaskStatusPill status={task.status} />
       {#if blockerTasks.some((b) => b.status !== "completed")}
         <span
-          class="inline-flex items-center gap-1 text-[10px] text-warning bg-warning/10 border border-warning/20 rounded-full px-2 py-0.5"
+          class="inline-flex items-center gap-1 rounded-full border border-warning/25 bg-warning/10 px-2 py-0.5 text-[10px] text-warning"
         >
           <Lock size={10} />
           Blocked
@@ -94,79 +88,80 @@
       {/if}
     </div>
 
-    <!-- Title + description -->
-    <h3 class="text-[14px] font-semibold text-fg-heading mb-1.5">
+    <h3 class="mb-1.5 text-[14px] font-semibold text-fg-heading">
       {task.title}
     </h3>
-    <p class="text-[12px] text-fg-muted leading-relaxed mb-5">
+    <p class="mb-5 text-[12px] leading-relaxed text-fg-muted">
       {task.description}
     </p>
 
-    <!-- Metadata -->
     <div
-      class="grid gap-y-2.5 text-[12px] py-3.5 border-t border-border-default"
-      style="grid-template-columns: 68px 1fr;"
+      class="grid gap-y-2.5 border-t border-border-default py-3.5 text-[12px] grid-cols-[120px_1fr] gap-x-3"
     >
-      <span class="text-fg-disabled">Agent</span>
-      <span class="text-fg-muted">
-        {agentNames[task.agent_id] ?? task.agent_id}
-      </span>
+      <Mono size={11} color="var(--color-fg-muted)">
+        {#snippet children()}Agent{/snippet}
+      </Mono>
+      <span>{agentNames[task.agent_id] ?? task.agent_id}</span>
 
-      <span class="text-fg-disabled">Session</span>
+      <Mono size={11} color="var(--color-fg-muted)">
+        {#snippet children()}Session{/snippet}
+      </Mono>
       {#if task.session_id}
         <button
-          class="text-fg-muted hover:text-fg-heading text-left"
+          type="button"
+          class="text-left text-fg-muted hover:text-fg-heading"
           onclick={() =>
             task.session_id && onNavigateToSession(task.session_id)}
         >
           {task.session_id}
         </button>
       {:else}
-        <span class="text-fg-disabled italic">Not started</span>
+        <span class="italic text-fg-disabled">Not started</span>
       {/if}
 
       {#if task.parent_id}
         {@const parentTask = allTasks[task.parent_id]}
-        <span class="text-fg-disabled">Parent</span>
+        <Mono size={11} color="var(--color-fg-muted)">
+          {#snippet children()}Parent{/snippet}
+        </Mono>
         <button
-          class="text-fg-muted hover:text-fg-heading text-left flex items-center gap-1.5 min-w-0"
+          type="button"
+          class="flex min-w-0 items-center gap-1.5 text-left text-fg-muted hover:text-fg-heading"
           onclick={() => task.parent_id && onSelectTask(task.parent_id)}
         >
           <span class="truncate">{parentTask?.title ?? task.parent_id}</span>
-          <span class="font-mono text-[10px] text-fg-disabled flex-shrink-0">
-            {task.parent_id}
-          </span>
+          <Mono size={10} color="var(--color-fg-disabled)" class="shrink-0">
+            {#snippet children()}{task.parent_id}{/snippet}
+          </Mono>
         </button>
       {/if}
 
-      <span class="text-fg-disabled">Created</span>
-      <span class="text-fg-muted">{relativeTime(task.created_at)}</span>
+      <Mono size={11} color="var(--color-fg-muted)">
+        {#snippet children()}Created{/snippet}
+      </Mono>
+      <span>{relativeTime(task.created_at)}</span>
     </div>
 
-    <!-- Blockers -->
     {#if task.blocker_ids.length > 0}
-      <div class="py-3.5 border-t border-border-default">
-        <div
-          class="text-[10px] font-medium uppercase tracking-wider text-fg-disabled mb-2"
-        >
-          Blocked by
-        </div>
+      <div class="border-t border-border-default py-3.5">
+        <SLabel class="mb-2 block">Blocked by</SLabel>
         <div class="flex flex-col gap-1.5">
           {#each blockerTasks as blocker (blocker.id)}
             <button
-              class="flex items-center gap-2 px-2.5 py-2 bg-bg-elevated border border-border-default rounded-md hover:bg-bg-hover text-left"
+              type="button"
+              class="flex items-center gap-2 rounded-md border border-border-default bg-bg-elevated px-2.5 py-2 text-left hover:bg-bg-hover"
               onclick={() => onSelectTask(blocker.id)}
             >
-              <div class="flex-1 min-w-0">
-                <div class="text-[11px] text-fg-heading truncate">
+              <div class="min-w-0 flex-1">
+                <div class="truncate text-[11px] text-fg-heading">
                   {blocker.title}
                 </div>
-                <div class="text-[10px] font-mono text-fg-disabled mt-0.5">
+                <div class="mt-0.5 font-mono text-[10px] text-fg-disabled">
                   {blocker.id}
                 </div>
               </div>
               <span
-                class="text-[9px] font-medium border rounded-full px-1.5 py-0.5 {statusClasses(
+                class="inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9px] font-medium {statusClasses(
                   blocker.status,
                 )}"
               >
@@ -178,30 +173,26 @@
       </div>
     {/if}
 
-    <!-- Child tasks -->
     {#if childTasks.length > 0}
-      <div class="py-3.5 border-t border-border-default">
-        <div
-          class="text-[10px] font-medium uppercase tracking-wider text-fg-disabled mb-2"
-        >
-          Child tasks
-        </div>
+      <div class="border-t border-border-default py-3.5">
+        <SLabel class="mb-2 block">Child tasks</SLabel>
         <div class="flex flex-col gap-1.5">
           {#each childTasks as child (child.id)}
             <button
-              class="flex items-center gap-2 px-2.5 py-2 bg-bg-elevated border border-border-default rounded-md hover:bg-bg-hover text-left"
+              type="button"
+              class="flex items-center gap-2 rounded-md border border-border-default bg-bg-elevated px-2.5 py-2 text-left hover:bg-bg-hover"
               onclick={() => onSelectTask(child.id)}
             >
-              <div class="flex-1 min-w-0">
-                <div class="text-[11px] text-fg-heading truncate">
+              <div class="min-w-0 flex-1">
+                <div class="truncate text-[11px] text-fg-heading">
                   {child.title}
                 </div>
-                <div class="text-[10px] font-mono text-fg-disabled mt-0.5">
+                <div class="mt-0.5 font-mono text-[10px] text-fg-disabled">
                   {child.id}
                 </div>
               </div>
               <span
-                class="text-[9px] font-medium border rounded-full px-1.5 py-0.5 {statusClasses(
+                class="inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9px] font-medium {statusClasses(
                   child.status,
                 )}"
               >
