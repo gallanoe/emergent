@@ -9,6 +9,7 @@ function makeAgentDef(overrides?: Partial<DisplayAgentDefinition>): DisplayAgent
     name: "Claude",
     role: "Researcher",
     cli: "claude",
+    systemPrompt: "",
     threads: [],
     ...overrides,
   };

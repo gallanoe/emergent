@@ -72,6 +72,8 @@ function createAppState() {
   let tasks = $state<Record<string, DisplayTask>>({});
   let selectedTaskId = $state<string | null>(null);
   let taskSidebarMode = $state<"detail" | "create" | null>(null);
+  /** Per-agent system prompt; frontend-only (see DisplayAgentDefinition.systemPrompt). */
+  let agentSystemPrompts = $state<Record<string, string>>({});
   let initializePromise: Promise<void> | null = null;
   let listenerCleanup: UnlistenFn[] = [];
   let listenersReady = false;
@@ -372,7 +374,38 @@ function createAppState() {
   // ── Computed display data ─────────────────────────────────────
 
   function getDisplayWorkspaces(): DisplayWorkspace[] {
-    if (demoMode) return mockState.swarms as unknown as DisplayWorkspace[];
+    if (demoMode) {
+      const list = mockState.swarms as unknown as DisplayWorkspace[];
+      return list.map((w) => {
+        const agentDefinitions = w.agentDefinitions.map((ad) => {
+          const systemPrompt = agentSystemPrompts[ad.id] ?? ad.systemPrompt ?? "";
+          if (ad.role === undefined) {
+            return {
+              id: ad.id,
+              name: ad.name,
+              cli: ad.cli,
+              systemPrompt,
+              threads: ad.threads,
+            };
+          }
+          return {
+            id: ad.id,
+            name: ad.name,
+            role: ad.role,
+            cli: ad.cli,
+            systemPrompt,
+            threads: ad.threads,
+          };
+        });
+        return {
+          id: w.id,
+          name: w.name,
+          collapsed: w.collapsed,
+          containerStatus: w.containerStatus,
+          agentDefinitions,
+        };
+      });
+    }
     return workspaces.map((w) => ({
       id: w.id,
       name: w.name,
@@ -389,6 +422,7 @@ function createAppState() {
               id: def.id,
               name: def.name,
               cli: def.cli,
+              systemPrompt: agentSystemPrompts[defId] ?? "",
               threads: displayThreads,
             };
           }
@@ -397,6 +431,7 @@ function createAppState() {
             name: def.name,
             role: def.role,
             cli: def.cli,
+            systemPrompt: agentSystemPrompts[defId] ?? "",
             threads: displayThreads,
           };
         })
@@ -679,6 +714,7 @@ function createAppState() {
       const threads = agentStore.getThreadsForAgent(selectedAgentId);
       return {
         ...def,
+        systemPrompt: agentSystemPrompts[selectedAgentId] ?? "",
         threads: threads.map((t) => agentStore.toDisplayThread(t)),
       };
     },
@@ -715,6 +751,10 @@ function createAppState() {
         if (name !== undefined) def.name = name;
         if (role !== undefined) def.role = role;
       }
+    },
+    updateAgentSystemPrompt(agentId: string, next: string) {
+      // TODO: persist once backend protocol supports it
+      agentSystemPrompts[agentId] = next;
     },
     async deleteAgentDefinition(agentId: string): Promise<void> {
       await invoke("delete_agent", { agentId });

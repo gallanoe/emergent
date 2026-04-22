@@ -121,6 +121,8 @@ export interface DisplayAgentDefinition {
   name: string;
   role?: string;
   cli: string;
+  /** Client-only until backend exposes a persisted field. */
+  systemPrompt: string;
   threads: DisplayThread[];
 }
 
