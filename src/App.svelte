@@ -5,7 +5,7 @@
   import ChatInput from "./components/chat/ChatInput.svelte";
   import ChatTaskBanner from "./components/chat/ChatTaskBanner.svelte";
   import SwarmView from "./components/swarm/SwarmView.svelte";
-  import SettingsView from "./components/settings/SettingsView.svelte";
+  import WorkspaceSettingsView from "./components/settings/WorkspaceSettingsView.svelte";
   import RuntimeSelector from "./components/settings/RuntimeSelector.svelte";
   import TerminalView from "./components/terminal/TerminalView.svelte";
   import ThreadListView from "./components/agent/ThreadListView.svelte";
@@ -301,7 +301,7 @@
         Application settings — built in Phase 5
       </div>
     {:else if appState.activeView === "settings" && appState.selectedSwarmId}
-      <SettingsView
+      <WorkspaceSettingsView
         workspaceId={appState.selectedSwarmId}
         containerStatus={appState.selectedSwarm?.containerStatus ?? {
           state: "stopped",
@@ -314,6 +314,11 @@
         onStart={() => appState.startContainer(appState.selectedSwarmId!)}
         onStop={() => appState.stopContainer(appState.selectedSwarmId!)}
         onRebuild={() => appState.rebuildContainer(appState.selectedSwarmId!)}
+        onDelete={() => {
+          const id = appState.selectedSwarmId!;
+          appState.activeView = "swarm";
+          void appState.deleteWorkspace(id);
+        }}
       />
     {:else if appState.activeView === "terminal" && appState.selectedSwarmId}
       <TerminalView
