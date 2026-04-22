@@ -738,7 +738,7 @@ function createAppState() {
       }
     },
     updateAgentSystemPrompt(agentId: string, next: string) {
-      // TODO: persist once backend protocol supports it
+      // Display-only until `AgentDefinition` / `update_agent` gain a persisted system-prompt field (post-redesign).
       agentSystemPrompts[agentId] = next;
     },
     async deleteAgentDefinition(agentId: string): Promise<void> {

@@ -201,7 +201,7 @@
             value={workspace?.name ? `${workspace.name}:latest` : "—"}
             readOnly
           />
-          <!-- TODO: show last image build time when backend exposes it -->
+          <!-- Deferred: surface last image build time once the workspace API exposes `last_built_at`. -->
           <ConfigRow label="Last build" value="—" readOnly last />
         </div>
       </section>
