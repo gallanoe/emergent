@@ -24,4 +24,12 @@ describe("AgentAvatar", () => {
     expect(img?.getAttribute("width")).toBe("32");
     expect(img?.getAttribute("height")).toBe("32");
   });
+
+  it("resolves logo from a full command string (e.g. claude with flags)", () => {
+    const { container } = render(AgentAvatar, {
+      props: { cli: "claude --acp" },
+    });
+    const img = container.querySelector("img");
+    expect(img?.getAttribute("src")).toBe(getCliLogo("claude"));
+  });
 });
