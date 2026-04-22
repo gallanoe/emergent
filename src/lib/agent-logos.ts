@@ -12,6 +12,19 @@ export const AGENT_LOGOS: Record<string, string> = {
   OpenCode: opencodeLogo,
 };
 
+const CLI_LOGOS: Record<string, string> = {
+  claude: claudeLogo,
+  codex: openaiLogo,
+  gemini: geminiLogo,
+  kiro: kiroLogo,
+  opencode: opencodeLogo,
+};
+
+/** Returns the logo URL for a given CLI id, or null for unknown CLIs. */
+export function getCliLogo(cli: string): string | null {
+  return CLI_LOGOS[cli.toLowerCase()] ?? null;
+}
+
 const AGENT_LOGOS_BY_CLI: Record<string, string> = {
   claude: claudeLogo,
   "claude-agent-acp": claudeLogo,
