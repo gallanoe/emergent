@@ -147,8 +147,32 @@
     await appState.killThread(id);
   }
 
+  function isEditableTarget(el: EventTarget | null): boolean {
+    if (!(el instanceof HTMLElement)) return false;
+    const tag = el.tagName;
+    return tag === "INPUT" || tag === "TEXTAREA" || el.isContentEditable;
+  }
+
+  function onGlobalKeydown(e: KeyboardEvent) {
+    const meta = e.metaKey || e.ctrlKey;
+    if (!meta || e.altKey || e.shiftKey) return;
+    if (isEditableTarget(document.activeElement)) return;
+
+    if (e.key === "n" || e.key === "N") {
+      e.preventDefault();
+      void handleNewThread();
+    } else if (e.key === ".") {
+      e.preventDefault();
+      if (appState.selectedSwarmId) {
+        appState.showOverview();
+      }
+    }
+  }
+
   onMount(() => {
     appState.initialize();
+
+    window.addEventListener("keydown", onGlobalKeydown);
 
     // Close workspace menu when its target workspace changes status
     const unlistenPromise = listen<WorkspaceStatusChangePayload>(
@@ -173,6 +197,7 @@
     });
 
     return () => {
+      window.removeEventListener("keydown", onGlobalKeydown);
       unlistenPromise.then((fn) => fn());
     };
   });
