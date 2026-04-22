@@ -50,7 +50,7 @@
     const lastContent = len > 0 ? messages![len - 1]!.content : "";
     const lastRole = len > 0 ? messages![len - 1]!.role : "";
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const _status = agent?.status;
+    const _status = agent?.processStatus;
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const _queued = agent?.queuedMessage;
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -81,7 +81,7 @@
   class="flex-1 overflow-y-auto min-w-0 px-20 pt-4 pb-24"
 >
   {#if agent}
-    {#if agent.status === "initializing"}
+    {#if agent.processStatus === "initializing"}
       <!-- Initializing banner -->
       <div class="flex items-center justify-center h-full">
         <div class="flex flex-col items-center gap-3 max-w-[280px] text-center">
@@ -98,7 +98,7 @@
           </div>
         </div>
       </div>
-    {:else if agent.status === "error" && agent.messages.length === 0}
+    {:else if agent.processStatus === "error" && agent.messages.length === 0}
       <!-- Error banner (init errors with no messages) -->
       <div class="flex items-center justify-center h-full">
         <div class="flex flex-col items-center gap-3 max-w-[280px] text-center">
@@ -122,7 +122,7 @@
           {/if}
         </div>
       </div>
-    {:else if agent.status === "idle" && agent.messages.length === 0}
+    {:else if agent.processStatus === "idle" && agent.messages.length === 0}
       <!-- Ready banner (idle, no messages) -->
       <div class="flex items-center justify-center h-full">
         <div class="flex flex-col items-center gap-3 max-w-[280px] text-center">
@@ -147,7 +147,7 @@
             </div>
           {:else if message.role === "assistant"}
             <div>
-              {#if agent.status === "working" && i === agent.messages.length - 1}
+              {#if agent.processStatus === "working" && i === agent.messages.length - 1}
                 <div class="text-[12px] text-fg-default leading-relaxed">
                   <StreamingText content={message.content} streaming={true} />
                 </div>
@@ -202,7 +202,7 @@
         {/if}
 
         <!-- Working indicator -->
-        {#if agent.status === "working"}
+        {#if agent.processStatus === "working"}
           <div class="flex items-center gap-1.5 text-[12px] text-fg-muted">
             <span class="w-1.5 h-1.5 rounded-full bg-success animate-pulse"
             ></span>

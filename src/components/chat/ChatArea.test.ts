@@ -10,7 +10,6 @@ function makeAgent(messages: DisplayMessage[], overrides?: Partial<DisplayThread
     workspaceId: "swarm-1",
     cli: "claude-agent-acp",
     name: "Test Agent",
-    status: "idle",
     processStatus: "idle",
     preview: "test...",
     updatedAt: "1m ago",
@@ -252,7 +251,7 @@ describe("ChatArea", () => {
 
   it("shows working indicator when agent is working", () => {
     const agent = makeAgent([msg("assistant", "Working...", "1:00 PM")], {
-      status: "working",
+      processStatus: "working",
     });
     render(ChatArea, { props: { agent } });
     expect(screen.getByText("· · ·")).toBeTruthy();
@@ -260,7 +259,7 @@ describe("ChatArea", () => {
 
   it("renders queued message bubble when queuedMessage exists", () => {
     const agent = makeAgent([msg("user", "Do task A", "1:00 PM")], {
-      status: "working",
+      processStatus: "working",
       queuedMessage: "Do task B",
     });
     render(ChatArea, { props: { agent } });
@@ -270,7 +269,7 @@ describe("ChatArea", () => {
 
   it("does not render queued bubble when queuedMessage is null", () => {
     const agent = makeAgent([msg("user", "Do task A", "1:00 PM")], {
-      status: "working",
+      processStatus: "working",
       activeToolCalls: [],
       queuedMessage: null,
     });
@@ -280,7 +279,7 @@ describe("ChatArea", () => {
 
   it("renders multiline queued message with whitespace preserved", () => {
     const agent = makeAgent([], {
-      status: "working",
+      processStatus: "working",
       queuedMessage: "Do task B\nDo task C",
     });
     render(ChatArea, { props: { agent } });
@@ -291,7 +290,7 @@ describe("ChatArea", () => {
   it("calls onEditQueue when edit button is clicked", async () => {
     let editCalled = false;
     const agent = makeAgent([], {
-      status: "working",
+      processStatus: "working",
       queuedMessage: "Do task B",
     });
     render(ChatArea, {
@@ -307,14 +306,14 @@ describe("ChatArea", () => {
   });
 
   it("shows connecting banner when agent is initializing", () => {
-    const agent = makeAgent([], { status: "initializing" });
+    const agent = makeAgent([], { processStatus: "initializing" });
     render(ChatArea, { props: { agent } });
     expect(screen.getByText(/Connecting to/)).toBeTruthy();
     expect(screen.getByText("Waiting for the agent to start up")).toBeTruthy();
   });
 
   it("shows ready banner when agent is idle with no messages", () => {
-    const agent = makeAgent([], { status: "idle" });
+    const agent = makeAgent([], { processStatus: "idle" });
     render(ChatArea, { props: { agent } });
     expect(screen.getByText("Ready")).toBeTruthy();
     expect(screen.getByText("Test Agent")).toBeTruthy();
@@ -322,7 +321,7 @@ describe("ChatArea", () => {
 
   it("does not show ready banner when agent has messages", () => {
     const agent = makeAgent([msg("assistant", "Hello", "1:00 PM")], {
-      status: "idle",
+      processStatus: "idle",
     });
     render(ChatArea, { props: { agent } });
     expect(screen.queryByText("Ready")).toBeNull();
@@ -330,7 +329,7 @@ describe("ChatArea", () => {
 
   it("shows error banner with error message when agent has init error", () => {
     const agent = makeAgent([], {
-      status: "error",
+      processStatus: "error",
       errorMessage: "Connection refused: binary not found",
     });
     render(ChatArea, { props: { agent } });
@@ -341,7 +340,7 @@ describe("ChatArea", () => {
 
   it("hides working indicator when agent is idle", () => {
     const agent = makeAgent([msg("assistant", "Done", "1:00 PM")], {
-      status: "idle",
+      processStatus: "idle",
     });
     render(ChatArea, { props: { agent } });
     expect(screen.queryByText("· · ·")).toBeNull();
@@ -350,7 +349,7 @@ describe("ChatArea", () => {
   it("renders system message as divider", () => {
     const agent = makeAgent(
       [msg("system", "Management permissions have been granted.", "1:00 PM")],
-      { status: "idle" },
+      { processStatus: "idle" },
     );
     render(ChatArea, { props: { agent } });
     expect(screen.getByText("Management permissions have been granted.")).toBeTruthy();

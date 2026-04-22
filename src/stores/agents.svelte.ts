@@ -120,7 +120,6 @@ function toDisplayThread(conn: ThreadState): DisplayThread {
     workspaceId: conn.workspaceId,
     cli: conn.cli,
     name: conn.agentName,
-    status: conn.status,
     processStatus: conn.status,
     preview: conn.role ?? (lastMsg?.content ? lastMsg.content.slice(0, 30) + "..." : ""),
     messages: conn.messages,

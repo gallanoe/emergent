@@ -43,7 +43,7 @@
     }
   });
 
-  let isWorking = $derived(agent?.status === "working");
+  let isWorking = $derived(agent?.processStatus === "working");
   let hasText = $derived(message.trim().length > 0);
   let openConfigId = $state<string | null>(null);
 
@@ -51,18 +51,18 @@
     demoMode ||
       !agent ||
       !containerRunning ||
-      agent.status === "initializing" ||
-      agent.status === "error" ||
-      agent.status === "dead",
+      agent.processStatus === "initializing" ||
+      agent.processStatus === "error" ||
+      agent.processStatus === "dead",
   );
 
   let placeholderText = $derived.by(() => {
     if (demoMode) return "Demo mode — input disabled";
     if (!agent) return "Select an agent...";
     if (!containerRunning) return "Container stopped — start it to chat";
-    if (agent.status === "initializing") return "Connecting to agent…";
-    if (agent.status === "error") return "Agent unavailable";
-    if (agent.status === "dead") return "Thread stopped";
+    if (agent.processStatus === "initializing") return "Connecting to agent…";
+    if (agent.processStatus === "error") return "Agent unavailable";
+    if (agent.processStatus === "dead") return "Thread stopped";
     return `Message ${agent.name}…`;
   });
 

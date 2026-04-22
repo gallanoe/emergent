@@ -103,7 +103,6 @@ export interface DisplayThread {
   workspaceId: string;
   cli: string;
   name: string;
-  status: ThreadProcessStatus | "dead";
   processStatus: ThreadProcessStatus | "dead";
   preview: string;
   messages: DisplayMessage[];
