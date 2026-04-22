@@ -3,7 +3,7 @@ import { render, screen, fireEvent } from "@testing-library/svelte";
 import ChatArea from "./ChatArea.svelte";
 import type { DisplayThread, DisplayMessage } from "../../stores/types";
 
-function makeAgent(messages: DisplayMessage[], overrides?: Partial<DisplayThread>): DisplayThread {
+function makeThread(messages: DisplayMessage[], overrides?: Partial<DisplayThread>): DisplayThread {
   return {
     id: "agent-1",
     agentId: "def-1",
@@ -39,25 +39,25 @@ function msg(
 }
 
 describe("ChatArea", () => {
-  it("shows placeholder when no agent is selected", () => {
-    render(ChatArea, { props: { agent: undefined } });
-    expect(screen.getByText("Select an agent to view its conversation")).toBeTruthy();
+  it("shows placeholder when no thread is selected", () => {
+    render(ChatArea, { props: { thread: undefined } });
+    expect(screen.getByText("Select a thread to view its conversation")).toBeTruthy();
   });
 
   it("renders assistant messages", () => {
-    const agent = makeAgent([msg("assistant", "Hello world", "1:00 PM")]);
-    render(ChatArea, { props: { agent } });
+    const thread = makeThread([msg("assistant", "Hello world", "1:00 PM")]);
+    render(ChatArea, { props: { thread } });
     expect(screen.getByText("Hello world")).toBeTruthy();
   });
 
   it("renders user messages", () => {
-    const agent = makeAgent([msg("user", "Fix the bug", "1:00 PM")]);
-    render(ChatArea, { props: { agent } });
+    const thread = makeThread([msg("user", "Fix the bug", "1:00 PM")]);
+    render(ChatArea, { props: { thread } });
     expect(screen.getByText("Fix the bug")).toBeTruthy();
   });
 
   it("renders generic tool calls as flat ToolRow lines", () => {
-    const agent = makeAgent([
+    const thread = makeThread([
       msg("assistant", "Let me check", "1:00 PM"),
       msg("tool-group", "", "1:00 PM", {
         toolCalls: [
@@ -72,13 +72,13 @@ describe("ChatArea", () => {
         ],
       }),
     ]);
-    render(ChatArea, { props: { agent } });
+    render(ChatArea, { props: { thread } });
     expect(screen.getByText("read_file")).toBeTruthy();
     expect(screen.getByText("(src/foo.ts)")).toBeTruthy();
   });
 
   it("renders multiple generic tool calls as separate ToolRows", () => {
-    const agent = makeAgent([
+    const thread = makeThread([
       msg("assistant", "Checking...", "1:00 PM"),
       msg("tool-group", "", "1:00 PM", {
         toolCalls: [
@@ -101,13 +101,13 @@ describe("ChatArea", () => {
         ],
       }),
     ]);
-    render(ChatArea, { props: { agent } });
+    render(ChatArea, { props: { thread } });
     expect(screen.getByText("(src/foo.ts)")).toBeTruthy();
     expect(screen.getByText("(src/bar.ts)")).toBeTruthy();
   });
 
   it("renders custom MCP card for list_agents", () => {
-    const agent = makeAgent([
+    const thread = makeThread([
       msg("tool-group", "", "1:00 PM", {
         toolCalls: [
           {
@@ -129,7 +129,7 @@ describe("ChatArea", () => {
         ],
       }),
     ]);
-    render(ChatArea, { props: { agent } });
+    render(ChatArea, { props: { thread } });
     expect(screen.getByText("Agents")).toBeTruthy();
     expect(screen.getByText("2 agents")).toBeTruthy();
     expect(screen.getByText("Planner")).toBeTruthy();
@@ -137,7 +137,7 @@ describe("ChatArea", () => {
   });
 
   it("renders custom MCP card for list_tasks", () => {
-    const agent = makeAgent([
+    const thread = makeThread([
       msg("tool-group", "", "1:00 PM", {
         toolCalls: [
           {
@@ -169,7 +169,7 @@ describe("ChatArea", () => {
         ],
       }),
     ]);
-    render(ChatArea, { props: { agent } });
+    render(ChatArea, { props: { thread } });
     expect(screen.getByText("Tasks")).toBeTruthy();
     expect(screen.getByText("1 task")).toBeTruthy();
     expect(screen.getByText("Write migration")).toBeTruthy();
@@ -177,7 +177,7 @@ describe("ChatArea", () => {
   });
 
   it("renders custom MCP card for create_task", () => {
-    const agent = makeAgent([
+    const thread = makeThread([
       msg("tool-group", "", "1:00 PM", {
         toolCalls: [
           {
@@ -198,7 +198,7 @@ describe("ChatArea", () => {
         ],
       }),
     ]);
-    render(ChatArea, { props: { agent } });
+    render(ChatArea, { props: { thread } });
     expect(screen.getAllByText("Create Task")).toHaveLength(2);
     expect(screen.getAllByText("Write migration")).toHaveLength(2);
     expect(screen.getByText("Draft the database migration plan.")).toBeTruthy();
@@ -208,7 +208,7 @@ describe("ChatArea", () => {
   });
 
   it("renders custom MCP card for complete_task", () => {
-    const agent = makeAgent([
+    const thread = makeThread([
       msg("tool-group", "", "1:00 PM", {
         toolCalls: [
           {
@@ -230,72 +230,72 @@ describe("ChatArea", () => {
         ],
       }),
     ]);
-    render(ChatArea, { props: { agent } });
+    render(ChatArea, { props: { thread } });
     expect(screen.getByText("Task Completed")).toBeTruthy();
     expect(screen.queryByText("Complete Task")).toBeNull();
   });
 
   it("renders thinking block collapsed by default", () => {
-    const agent = makeAgent([msg("thinking", "Let me analyze this...", "1:00 PM")]);
-    render(ChatArea, { props: { agent } });
+    const thread = makeThread([msg("thinking", "Let me analyze this...", "1:00 PM")]);
+    render(ChatArea, { props: { thread } });
     expect(screen.getByText("Thinking")).toBeTruthy();
     expect(screen.queryByText("Let me analyze this...")).toBeNull();
   });
 
   it("expands thinking block on click", async () => {
-    const agent = makeAgent([msg("thinking", "Let me analyze this...", "1:00 PM")]);
-    render(ChatArea, { props: { agent } });
+    const thread = makeThread([msg("thinking", "Let me analyze this...", "1:00 PM")]);
+    render(ChatArea, { props: { thread } });
     await fireEvent.click(screen.getByText("Thinking"));
     expect(screen.getByText("Let me analyze this...")).toBeTruthy();
   });
 
   it("shows working indicator when agent is working", () => {
-    const agent = makeAgent([msg("assistant", "Working...", "1:00 PM")], {
+    const thread = makeThread([msg("assistant", "Working...", "1:00 PM")], {
       processStatus: "working",
     });
-    render(ChatArea, { props: { agent } });
+    render(ChatArea, { props: { thread } });
     expect(screen.getByText("· · ·")).toBeTruthy();
   });
 
   it("renders queued message bubble when queuedMessage exists", () => {
-    const agent = makeAgent([msg("user", "Do task A", "1:00 PM")], {
+    const thread = makeThread([msg("user", "Do task A", "1:00 PM")], {
       processStatus: "working",
       queuedMessage: "Do task B",
     });
-    render(ChatArea, { props: { agent } });
+    render(ChatArea, { props: { thread } });
     expect(screen.getByText("Do task B")).toBeTruthy();
     expect(screen.getByText("Queued")).toBeTruthy();
   });
 
   it("does not render queued bubble when queuedMessage is null", () => {
-    const agent = makeAgent([msg("user", "Do task A", "1:00 PM")], {
+    const thread = makeThread([msg("user", "Do task A", "1:00 PM")], {
       processStatus: "working",
       activeToolCalls: [],
       queuedMessage: null,
     });
-    render(ChatArea, { props: { agent } });
+    render(ChatArea, { props: { thread } });
     expect(screen.queryByText("Queued")).toBeNull();
   });
 
   it("renders multiline queued message with whitespace preserved", () => {
-    const agent = makeAgent([], {
+    const thread = makeThread([], {
       processStatus: "working",
       queuedMessage: "Do task B\nDo task C",
     });
-    render(ChatArea, { props: { agent } });
+    render(ChatArea, { props: { thread } });
     expect(screen.getByText(/Do task B/)).toBeTruthy();
     expect(screen.getByText(/Do task C/)).toBeTruthy();
   });
 
   it("calls onEditQueue when edit button is clicked", async () => {
     let editCalled = false;
-    const agent = makeAgent([], {
+    const thread = makeThread([], {
       processStatus: "working",
       queuedMessage: "Do task B",
     });
     render(ChatArea, {
       props: {
-        agent,
+        thread,
         onEditQueue: () => {
           editCalled = true;
         },
@@ -306,52 +306,52 @@ describe("ChatArea", () => {
   });
 
   it("shows connecting banner when agent is initializing", () => {
-    const agent = makeAgent([], { processStatus: "initializing" });
-    render(ChatArea, { props: { agent } });
+    const thread = makeThread([], { processStatus: "initializing" });
+    render(ChatArea, { props: { thread } });
     expect(screen.getByText(/Connecting to/)).toBeTruthy();
     expect(screen.getByText("Waiting for the agent to start up")).toBeTruthy();
   });
 
   it("shows ready banner when agent is idle with no messages", () => {
-    const agent = makeAgent([], { processStatus: "idle" });
-    render(ChatArea, { props: { agent } });
+    const thread = makeThread([], { processStatus: "idle" });
+    render(ChatArea, { props: { thread } });
     expect(screen.getByText("Ready")).toBeTruthy();
     expect(screen.getByText("Test Agent")).toBeTruthy();
   });
 
   it("does not show ready banner when agent has messages", () => {
-    const agent = makeAgent([msg("assistant", "Hello", "1:00 PM")], {
+    const thread = makeThread([msg("assistant", "Hello", "1:00 PM")], {
       processStatus: "idle",
     });
-    render(ChatArea, { props: { agent } });
+    render(ChatArea, { props: { thread } });
     expect(screen.queryByText("Ready")).toBeNull();
   });
 
   it("shows error banner with error message when agent has init error", () => {
-    const agent = makeAgent([], {
+    const thread = makeThread([], {
       processStatus: "error",
       errorMessage: "Connection refused: binary not found",
     });
-    render(ChatArea, { props: { agent } });
+    render(ChatArea, { props: { thread } });
     expect(screen.getByText("Failed to connect")).toBeTruthy();
     expect(screen.getByText("Could not start the agent")).toBeTruthy();
     expect(screen.getByText("Connection refused: binary not found")).toBeTruthy();
   });
 
   it("hides working indicator when agent is idle", () => {
-    const agent = makeAgent([msg("assistant", "Done", "1:00 PM")], {
+    const thread = makeThread([msg("assistant", "Done", "1:00 PM")], {
       processStatus: "idle",
     });
-    render(ChatArea, { props: { agent } });
+    render(ChatArea, { props: { thread } });
     expect(screen.queryByText("· · ·")).toBeNull();
   });
 
   it("renders system message as divider", () => {
-    const agent = makeAgent(
+    const thread = makeThread(
       [msg("system", "Management permissions have been granted.", "1:00 PM")],
       { processStatus: "idle" },
     );
-    render(ChatArea, { props: { agent } });
+    render(ChatArea, { props: { thread } });
     expect(screen.getByText("Management permissions have been granted.")).toBeTruthy();
   });
 
@@ -361,8 +361,8 @@ describe("ChatArea", () => {
     Object.assign(navigator, {
       clipboard: { writeText },
     });
-    const agent = makeAgent([msg("assistant", "```rust\nfn x() {}\n```", "1:00 PM")]);
-    const { container } = render(ChatArea, { props: { agent } });
+    const thread = makeThread([msg("assistant", "```rust\nfn x() {}\n```", "1:00 PM")]);
+    const { container } = render(ChatArea, { props: { thread } });
     const copyBtn = container.querySelector("button.md-copy");
     expect(copyBtn).toBeTruthy();
     await fireEvent.click(copyBtn!);

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { AGENT_LOGOS } from "../../lib/agent-logos";
+  import { AgentAvatar } from "../../lib/primitives";
   import { ChevronDown } from "@lucide/svelte";
 
   interface KnownAgent {
@@ -82,18 +82,11 @@
             onclick={() => (dropdownOpen = !dropdownOpen)}
           >
             {#if selectedAgent}
-              {#if AGENT_LOGOS[selectedAgent.name]}
-                <img
-                  src={AGENT_LOGOS[selectedAgent.name]}
-                  alt=""
-                  class="w-[18px] h-[18px] rounded flex-shrink-0"
-                />
-              {:else}
-                <span
-                  class="w-[18px] h-[18px] rounded bg-bg-hover flex items-center justify-center text-[10px] font-semibold text-fg-muted flex-shrink-0"
-                  >{selectedAgent.name.charAt(0)}</span
-                >
-              {/if}
+              <AgentAvatar
+                cli={selectedAgent.command}
+                size={18}
+                class="flex-shrink-0"
+              />
               <span class="flex-1 text-left flex items-center gap-1.5">
                 <span class="text-fg-heading">{selectedAgent.name}</span>
                 <span
@@ -136,18 +129,11 @@
                   disabled={!agent.available}
                   onclick={() => selectCli(agent)}
                 >
-                  {#if AGENT_LOGOS[agent.name]}
-                    <img
-                      src={AGENT_LOGOS[agent.name]}
-                      alt=""
-                      class="w-[18px] h-[18px] rounded flex-shrink-0"
-                    />
-                  {:else}
-                    <span
-                      class="w-[18px] h-[18px] rounded bg-bg-hover flex items-center justify-center text-[10px] font-semibold text-fg-muted flex-shrink-0"
-                      >{agent.name.charAt(0)}</span
-                    >
-                  {/if}
+                  <AgentAvatar
+                    cli={agent.command}
+                    size={18}
+                    class="flex-shrink-0"
+                  />
                   <div class="flex-1 text-left">
                     <div class="text-fg-heading font-medium">{agent.name}</div>
                     <div

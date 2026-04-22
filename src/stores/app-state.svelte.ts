@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { agentStore } from "./agents.svelte";
 import { dispose as disposeTerminal } from "../components/terminal/terminal-instances";
+import { normalizeThreadSummaryStatus } from "./types";
 import type {
   ActiveView,
   AgentDefinition,
@@ -209,7 +210,7 @@ function createAppState() {
       ]);
 
       agentStore.syncThreadSnapshot(thread.id, {
-        status: thread.status as "initializing" | "idle" | "working" | "error" | "dead",
+        status: normalizeThreadSummaryStatus(String(thread.status)),
         acpSessionId: thread.acp_session_id,
         history,
         configOptions,
@@ -304,14 +305,6 @@ function createAppState() {
     activeView = "settings";
 
     return id;
-  }
-
-  async function killThread(threadId: string): Promise<void> {
-    await agentStore.killThread(threadId);
-
-    if (selectedAgentId === threadId) {
-      selectedAgentId = null;
-    }
   }
 
   async function startContainer(workspaceId: string) {
@@ -666,7 +659,6 @@ function createAppState() {
     initialize,
     createWorkspace,
     toggleSwarmCollapsed,
-    killThread,
     updateWorkspace,
     deleteWorkspace,
     setContainerRuntimePreference,

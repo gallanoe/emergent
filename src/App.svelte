@@ -474,12 +474,12 @@
             <ChatTaskBanner {task} onOpen={(id) => appState.selectTask(id)} />
           {/if}
           <ChatArea
-            agent={thread}
+            {thread}
             hasTaskBanner={task != null}
             onEditQueue={handleEditQueue}
           />
           <ChatInput
-            agent={thread}
+            {thread}
             demoMode={appState.demoMode}
             containerRunning={appState.selectedWorkspaceContainerRunning}
             {externalContent}
@@ -520,12 +520,12 @@
     {:else}
       <div class="relative flex min-h-0 min-w-0 flex-1 flex-col">
         <ChatArea
-          agent={appState.selectedAgent}
+          thread={appState.selectedAgent}
           hasTaskBanner={false}
           onEditQueue={handleEditQueue}
         />
         <ChatInput
-          agent={appState.selectedAgent}
+          thread={appState.selectedAgent}
           demoMode={appState.demoMode}
           containerRunning={appState.selectedWorkspaceContainerRunning}
           {externalContent}

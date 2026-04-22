@@ -72,6 +72,22 @@ export interface TopologyChangedPayload {
 
 export type ThreadProcessStatus = "initializing" | "idle" | "working" | "error";
 
+export type ThreadSummaryStatus = ThreadProcessStatus | "dead";
+
+/** Coerce backend thread status strings to a known union; unknown → `"dead"`. */
+export function normalizeThreadSummaryStatus(raw: string): ThreadSummaryStatus {
+  switch (raw) {
+    case "initializing":
+    case "idle":
+    case "working":
+    case "error":
+    case "dead":
+      return raw;
+    default:
+      return "dead";
+  }
+}
+
 // ── Agent/Thread remodel types ─────────────────────────────
 
 export interface AgentDefinition {
@@ -85,7 +101,7 @@ export interface AgentDefinition {
 export interface ThreadSummary {
   id: string;
   agent_id: string;
-  status: string;
+  status: ThreadSummaryStatus;
   workspace_id: string;
   acp_session_id: string | null;
 }
@@ -211,9 +227,6 @@ export interface DisplayWorkspace {
   containerStatus: ContainerStatus;
   agentDefinitions: DisplayAgentDefinition[];
 }
-
-/** @deprecated Use DisplayWorkspace instead */
-export type DisplaySwarm = DisplayWorkspace;
 
 export interface SystemMessagePayload {
   thread_id: string;

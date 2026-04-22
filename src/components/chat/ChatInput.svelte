@@ -5,7 +5,7 @@
   import type { DisplayThread } from "../../stores/types";
 
   interface Props {
-    agent: DisplayThread | undefined;
+    thread: DisplayThread | undefined;
     demoMode: boolean;
     containerRunning?: boolean;
     externalContent?: { text: string; seq: number } | null;
@@ -15,7 +15,7 @@
   }
 
   let {
-    agent,
+    thread,
     demoMode,
     containerRunning = true,
     externalContent = null,
@@ -37,30 +37,30 @@
     }
   });
 
-  const isWorking = $derived(agent?.processStatus === "working");
+  const isWorking = $derived(thread?.processStatus === "working");
   const hasText = $derived(message.trim().length > 0);
   const isDisabled = $derived(
     demoMode ||
-      !agent ||
+      !thread ||
       !containerRunning ||
-      agent.processStatus === "initializing" ||
-      agent.processStatus === "error" ||
-      agent.processStatus === "dead",
+      thread.processStatus === "initializing" ||
+      thread.processStatus === "error" ||
+      thread.processStatus === "dead",
   );
 
   const placeholderText = $derived.by(() => {
     if (demoMode) return "Demo mode — input disabled";
-    if (!agent) return "Select a thread";
+    if (!thread) return "Select a thread";
     if (!containerRunning) return "Start the container to send messages";
-    if (agent.processStatus === "initializing") return "Connecting to agent…";
-    if (agent.processStatus === "error") return "Agent unavailable";
-    if (agent.processStatus === "dead") return "Thread stopped";
-    return `Message ${agent.name}…`;
+    if (thread.processStatus === "initializing") return "Connecting to agent…";
+    if (thread.processStatus === "error") return "Agent unavailable";
+    if (thread.processStatus === "dead") return "Thread stopped";
+    return `Message ${thread.name}…`;
   });
 
   const configSummary = $derived.by(() => {
-    const opts = agent?.configOptions ?? [];
-    if (opts.length === 0) return agent?.cli ?? "";
+    const opts = thread?.configOptions ?? [];
+    if (opts.length === 0) return thread?.cli ?? "";
     return opts
       .filter((o) => o.current_value)
       .map((o) => o.current_value)
@@ -115,24 +115,24 @@
         <Plus size={13} />
       </button>
 
-      {#if agent}
+      {#if thread}
         <div class="relative">
           <button
             type="button"
             class="inline-flex h-[28px] items-center gap-[6px] rounded-full bg-bg-hover px-[10px] text-[11.5px] font-medium text-fg-default"
             onclick={() => (configOpen = !configOpen)}
           >
-            <AgentAvatar cli={agent.cli} size={13} />
-            <span>{agent.name}</span>
+            <AgentAvatar cli={thread.cli} size={13} />
+            <span>{thread.name}</span>
             {#if configSummary}
               <span class="text-fg-disabled">·</span>
               <span class="text-fg-muted">{configSummary}</span>
             {/if}
             <ChevronDown size={10} />
           </button>
-          {#if configOpen && agent}
+          {#if configOpen && thread}
             <ConfigPopover
-              configs={agent.configOptions}
+              configs={thread.configOptions}
               onSetConfig={(id, v) => onSetConfig?.(id, v)}
               onClose={() => (configOpen = false)}
             />

@@ -1,15 +1,16 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type {
-  AgentDefinition,
-  ConfigOption,
-  DisplayMessage,
-  DisplayThread,
-  DisplayToolCall,
-  NudgeDeliveredPayload,
-  SystemMessagePayload,
-  ToolCallContentItem,
-  ToolKind,
+import {
+  normalizeThreadSummaryStatus,
+  type AgentDefinition,
+  type ConfigOption,
+  type DisplayMessage,
+  type DisplayThread,
+  type DisplayToolCall,
+  type NudgeDeliveredPayload,
+  type SystemMessagePayload,
+  type ToolCallContentItem,
+  type ToolKind,
 } from "./types";
 
 // ── Internal state per thread ────────────────────────────────────
@@ -387,7 +388,7 @@ function createAgentStore() {
     if (!thread) {
       return;
     }
-    thread.status = payload.status as ThreadState["status"];
+    thread.status = normalizeThreadSummaryStatus(payload.status);
   }
 
   function handleNudgeDelivered(payload: NudgeDeliveredPayload) {
@@ -628,15 +629,6 @@ function createAgentStore() {
       thread.configOptions = previousConfig;
       console.error("set_thread_config failed:", err);
     }
-  }
-
-  async function killThread(threadId: string): Promise<void> {
-    try {
-      await invoke("kill_thread", { threadId });
-    } catch (err) {
-      console.error("kill_thread RPC failed (cleaning up anyway):", err);
-    }
-    delete threads[threadId];
   }
 
   /** Reset a thread's chat state before resuming (avoids duplicate history on replay). */
@@ -880,7 +872,6 @@ function createAgentStore() {
     spawnThread,
     sendPrompt,
     cancelPrompt,
-    killThread,
     resetThreadState,
     stopThread,
     deleteThread,

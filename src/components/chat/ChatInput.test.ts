@@ -28,7 +28,7 @@ describe("ChatInput", () => {
   it("shows demo placeholder when demoMode", () => {
     render(ChatInput, {
       props: {
-        agent: makeThread({ processStatus: "working" }),
+        thread: makeThread({ processStatus: "working" }),
         demoMode: true,
         onSend: () => {},
       },
@@ -39,7 +39,7 @@ describe("ChatInput", () => {
   it("shows initializing placeholder", () => {
     render(ChatInput, {
       props: {
-        agent: makeThread({ processStatus: "initializing" }),
+        thread: makeThread({ processStatus: "initializing" }),
         demoMode: false,
         onSend: () => {},
       },
@@ -50,7 +50,7 @@ describe("ChatInput", () => {
   it("shows running placeholder when idle", () => {
     render(ChatInput, {
       props: {
-        agent: makeThread({ processStatus: "idle" }),
+        thread: makeThread({ processStatus: "idle" }),
         demoMode: false,
         onSend: () => {},
       },
@@ -62,7 +62,7 @@ describe("ChatInput", () => {
     const onSend = vi.fn();
     render(ChatInput, {
       props: {
-        agent: makeThread(),
+        thread: makeThread(),
         demoMode: false,
         onSend,
       },
@@ -77,7 +77,7 @@ describe("ChatInput", () => {
     const onSend = vi.fn();
     render(ChatInput, {
       props: {
-        agent: makeThread(),
+        thread: makeThread(),
         demoMode: false,
         onSend,
       },
@@ -91,7 +91,7 @@ describe("ChatInput", () => {
   it("shows interrupt and send when working with text", async () => {
     render(ChatInput, {
       props: {
-        agent: makeThread({ processStatus: "working" }),
+        thread: makeThread({ processStatus: "working" }),
         demoMode: false,
         onSend: () => {},
       },
@@ -106,7 +106,7 @@ describe("ChatInput", () => {
   it("toggles config popover when agent chip is clicked", async () => {
     render(ChatInput, {
       props: {
-        agent: makeThread({
+        thread: makeThread({
           configOptions: [
             {
               id: "opt1",
@@ -130,7 +130,7 @@ describe("ChatInput", () => {
   it("closes config popover on Escape", async () => {
     render(ChatInput, {
       props: {
-        agent: makeThread({
+        thread: makeThread({
           configOptions: [
             {
               id: "opt1",
@@ -153,7 +153,7 @@ describe("ChatInput", () => {
   it("applies externalContent text on mount", async () => {
     render(ChatInput, {
       props: {
-        agent: makeThread(),
+        thread: makeThread(),
         demoMode: false,
         externalContent: { text: "from queue", seq: 1 },
         onSend: () => {},

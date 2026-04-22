@@ -9,12 +9,12 @@
   import { ToolRow, Mono } from "../../lib/primitives";
 
   interface Props {
-    agent: DisplayThread | undefined;
+    thread: DisplayThread | undefined;
     hasTaskBanner?: boolean;
     onEditQueue?: () => void;
   }
 
-  let { agent, hasTaskBanner = false, onEditQueue }: Props = $props();
+  let { thread, hasTaskBanner = false, onEditQueue }: Props = $props();
 
   function isRichTool(tc: DisplayToolCall): boolean {
     return getEmergentToolName(tc.name) !== null;
@@ -64,26 +64,26 @@
     scrollContainer.scrollTo({ top: scrollContainer.scrollHeight });
   }
 
-  // Reset scroll state when switching agents
-  let agentId = $derived(agent?.id);
+  // Reset scroll state when switching threads
+  let scrollThreadId = $derived(thread?.id);
   $effect(() => {
-    const _id = agentId;
+    const _id = scrollThreadId;
     userScrolledAway = false;
     requestAnimationFrame(() => scrollToBottom());
   });
 
   // Auto-scroll on content changes (DOM manipulation — legitimate $effect use)
   $effect(() => {
-    const messages = agent?.messages;
+    const messages = thread?.messages;
     const len = messages?.length ?? 0;
     const lastContent = len > 0 ? messages![len - 1]!.content : "";
     const lastRole = len > 0 ? messages![len - 1]!.role : "";
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const _status = agent?.processStatus;
+    const _status = thread?.processStatus;
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const _queued = agent?.queuedMessage;
+    const _queued = thread?.queuedMessage;
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const _activeTools = agent?.activeToolCalls.length;
+    const _activeTools = thread?.activeToolCalls.length;
 
     if (lastRole === "user") userScrolledAway = false;
 
@@ -112,8 +112,8 @@
   onclick={onChatClick}
   class="flex min-w-0 flex-1 justify-center overflow-y-auto"
 >
-  {#if agent}
-    {#if agent.processStatus === "initializing"}
+  {#if thread}
+    {#if thread.processStatus === "initializing"}
       <div class="flex h-full w-full items-center justify-center">
         <div class="flex max-w-[280px] flex-col items-center gap-3 text-center">
           <div
@@ -122,14 +122,14 @@
             <Loader size={16} />
           </div>
           <div class="text-[13px] font-medium text-fg-heading">
-            Connecting to {agent.name}…
+            Connecting to {thread.name}…
           </div>
           <div class="text-[12px] leading-relaxed text-fg-muted">
             Waiting for the agent to start up
           </div>
         </div>
       </div>
-    {:else if agent.processStatus === "error" && agent.messages.length === 0}
+    {:else if thread.processStatus === "error" && thread.messages.length === 0}
       <div class="flex h-full w-full items-center justify-center">
         <div class="flex max-w-[280px] flex-col items-center gap-3 text-center">
           <div
@@ -143,16 +143,16 @@
           <div class="text-[12px] leading-relaxed text-fg-muted">
             Could not start the agent
           </div>
-          {#if agent.errorMessage}
+          {#if thread.errorMessage}
             <code
               class="break-all rounded bg-bg-hover px-2 py-1 font-[family-name:var(--font-mono)] text-[11px] text-fg-muted"
             >
-              {agent.errorMessage}
+              {thread.errorMessage}
             </code>
           {/if}
         </div>
       </div>
-    {:else if agent.processStatus === "idle" && agent.messages.length === 0}
+    {:else if thread.processStatus === "idle" && thread.messages.length === 0}
       <div class="flex h-full w-full items-center justify-center">
         <div class="flex max-w-[280px] flex-col items-center gap-3 text-center">
           <div
@@ -161,7 +161,7 @@
             <Check size={16} />
           </div>
           <div class="text-[13px] font-medium text-fg-heading">
-            {agent.name}
+            {thread.name}
           </div>
           <div class="text-[12px] leading-relaxed text-fg-muted">Ready</div>
         </div>
@@ -172,11 +172,11 @@
         class:pt-[60px]={hasTaskBanner}
         class:pt-9={!hasTaskBanner}
       >
-        {#each agent.messages as message, i (message.id)}
+        {#each thread.messages as message, i (message.id)}
           {#if message.role === "thinking"}
             <ThinkingBlock content={message.content} />
           {:else if message.role === "assistant"}
-            {#if agent.processStatus === "working" && i === agent.messages.length - 1}
+            {#if thread.processStatus === "working" && i === thread.messages.length - 1}
               <div class="markdown">
                 <StreamingText content={message.content} streaming={true} />
               </div>
@@ -235,9 +235,9 @@
           {/if}
         {/each}
 
-        {#if agent.activeToolCalls.length > 0}
+        {#if thread.activeToolCalls.length > 0}
           <div class="flex flex-col gap-0">
-            {#each agent.activeToolCalls as tc (tc.id)}
+            {#each thread.activeToolCalls as tc (tc.id)}
               {#if isRichTool(tc)}
                 <ToolCallRow toolCall={tc} />
               {:else}
@@ -252,7 +252,7 @@
           </div>
         {/if}
 
-        {#if agent.processStatus === "working"}
+        {#if thread.processStatus === "working"}
           <div class="flex items-center gap-1.5 text-[12px] text-fg-muted">
             <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-success"
             ></span>
@@ -260,7 +260,7 @@
           </div>
         {/if}
 
-        {#if agent.queuedMessage}
+        {#if thread.queuedMessage}
           <div class="flex justify-end">
             <button
               type="button"
@@ -273,7 +273,7 @@
               >
                 <Mail size={10} /> Queued
               </div>
-              {agent.queuedMessage}
+              {thread.queuedMessage}
             </button>
           </div>
         {/if}
@@ -283,7 +283,7 @@
     <div
       class="flex h-full items-center justify-center text-[13px] text-fg-muted"
     >
-      Select an agent to view its conversation
+      Select a thread to view its conversation
     </div>
   {/if}
 </div>
