@@ -488,11 +488,6 @@ function createAppState() {
     await refreshConnections(agentIdB);
   }
 
-  async function setAgentPermissions(agentId: string, enabled: boolean) {
-    agentStore.setManagementPermissions(agentId, enabled);
-    await invoke("set_thread_permissions", { threadId: agentId, enabled });
-  }
-
   function selectWorkspace(workspaceId: string) {
     selectedWorkspaceId = workspaceId;
     activeView = "overview";
@@ -660,7 +655,6 @@ function createAppState() {
     registerQueueDumpHandler: agentStore.registerQueueDumpHandler,
     connectAgents,
     disconnectAgents,
-    setAgentPermissions,
     selectWorkspace,
     selectAgent,
     selectThread,

@@ -26,7 +26,6 @@ interface ThreadState {
   stopReason: string | null;
   queuedContent: string;
   configOptions: ConfigOption[];
-  hasManagementPermissions: boolean;
   errorMessage?: string;
   role?: string;
   hasPrompted?: boolean;
@@ -128,7 +127,6 @@ function toDisplayThread(conn: ThreadState): DisplayThread {
     activeToolCalls: Object.values(conn.activeToolCalls),
     queuedMessage: conn.queuedContent || null,
     configOptions: conn.configOptions,
-    hasManagementPermissions: conn.hasManagementPermissions,
     ...(conn.errorMessage !== undefined && { errorMessage: conn.errorMessage }),
     ...(conn.role !== undefined && { role: conn.role }),
     updatedAt: conn.messages.at(-1)?.timestamp ?? "just now",
@@ -536,7 +534,6 @@ function createAgentStore() {
       stopReason: null,
       queuedContent: "",
       configOptions: [],
-      hasManagementPermissions: false,
       acpSessionId,
       taskId: taskId ?? null,
     };
@@ -565,7 +562,6 @@ function createAgentStore() {
       stopReason: null,
       queuedContent: "",
       configOptions: [],
-      hasManagementPermissions: false,
     };
 
     return threadId;
@@ -682,13 +678,6 @@ function createAgentStore() {
       thread.role = role;
     } else {
       delete thread.role;
-    }
-  }
-
-  function setManagementPermissions(threadId: string, enabled: boolean) {
-    const thread = threads[threadId];
-    if (thread) {
-      thread.hasManagementPermissions = enabled;
     }
   }
 
@@ -901,7 +890,6 @@ function createAgentStore() {
     registerQueueDumpHandler,
     replayNotifications,
     syncThreadSnapshot,
-    setManagementPermissions,
     setRole,
   };
 }

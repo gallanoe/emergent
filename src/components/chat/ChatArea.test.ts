@@ -18,7 +18,6 @@ function makeAgent(messages: DisplayMessage[], overrides?: Partial<DisplayThread
     activeToolCalls: [],
     queuedMessage: null,
     configOptions: [],
-    hasManagementPermissions: false,
     stopReason: null,
     taskId: null,
     ...overrides,

@@ -604,25 +604,9 @@
     {:else}
       <TopBar
         agent={appState.selectedAgent}
-        allAgents={[]}
-        connections={appState.selectedAgent
-          ? (appState.agentConnections[appState.selectedAgent.id] ?? [])
-          : []}
         onShutdown={() => {
           const agent = appState.selectedAgent;
           if (agent) requestShutdown(agent.id, agent.name);
-        }}
-        onConnect={(targetId) => {
-          const agent = appState.selectedAgent;
-          if (agent) appState.connectAgents(agent.id, targetId);
-        }}
-        onDisconnect={(targetId) => {
-          const agent = appState.selectedAgent;
-          if (agent) appState.disconnectAgents(agent.id, targetId);
-        }}
-        onSetPermissions={(enabled) => {
-          const agent = appState.selectedAgent;
-          if (agent) appState.setAgentPermissions(agent.id, enabled);
         }}
       />
       <ChatArea agent={appState.selectedAgent} onEditQueue={handleEditQueue} />

@@ -18,7 +18,6 @@ function makeAgent(overrides?: Partial<DisplayThread>): DisplayThread {
     activeToolCalls: [],
     queuedMessage: null,
     configOptions: [],
-    hasManagementPermissions: false,
     stopReason: null,
     taskId: null,
     ...overrides,
@@ -36,8 +35,6 @@ function renderTopBar(
   return render(TopBar, {
     props: {
       agent: "agent" in overrides ? overrides.agent : makeAgent(),
-      allAgents: [],
-      connections: [],
       onShutdown: overrides.onShutdown ?? noop,
     },
   });
@@ -57,11 +54,6 @@ describe("TopBar", () => {
   it("renders Shutdown button when agent exists", () => {
     renderTopBar();
     expect(screen.getByText("Shutdown")).toBeTruthy();
-  });
-
-  it("renders Settings button", () => {
-    renderTopBar();
-    expect(screen.getByText("Settings")).toBeTruthy();
   });
 
   it("calls onShutdown when Shutdown is clicked", async () => {

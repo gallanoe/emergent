@@ -110,7 +110,6 @@ export interface DisplayThread {
   activeToolCalls: DisplayToolCall[];
   queuedMessage: string | null;
   configOptions: ConfigOption[];
-  hasManagementPermissions: boolean;
   errorMessage?: string;
   role?: string;
   updatedAt: string;
