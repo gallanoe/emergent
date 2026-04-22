@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { DisplayAgentDefinition } from "../../stores/types";
   import { ChevronLeft, Trash2 } from "@lucide/svelte";
-  import ConfirmDialog from "../ConfirmDialog.svelte";
+  import { ConfirmDialog } from "../../lib/primitives";
 
   interface Props {
     agentDefinition: DisplayAgentDefinition;
@@ -142,6 +142,7 @@
     title="Delete {agentDefinition.name}?"
     description="All threads will be terminated and the agent definition will be permanently removed."
     confirmLabel="Delete"
+    confirmVariant="danger"
     onConfirm={() => {
       showDeleteConfirm = false;
       onDelete();

@@ -5,7 +5,7 @@
     ContainerRuntimePreference,
     ContainerRuntimeStatus,
   } from "../../stores/types";
-  import ConfirmDialog from "../ConfirmDialog.svelte";
+  import { ConfirmDialog } from "../../lib/primitives";
   import RuntimeSelector from "./RuntimeSelector.svelte";
   import { Play, Square, RefreshCw } from "@lucide/svelte";
 

@@ -16,7 +16,7 @@
   import TaskTableView from "./components/tasks/TaskTableView.svelte";
   import TaskDetailSidebar from "./components/tasks/TaskDetailSidebar.svelte";
   import CreateTaskSidebar from "./components/tasks/CreateTaskSidebar.svelte";
-  import ConfirmDialog from "./components/ConfirmDialog.svelte";
+  import { ConfirmDialog } from "./lib/primitives";
   import ContextMenu from "./components/sidebar/ContextMenu.svelte";
   import CreateWorkspaceDialog from "./components/CreateWorkspaceDialog.svelte";
   import {
@@ -648,6 +648,7 @@
     title="Shutdown {shutdownTarget.name}?"
     description="Any in-progress work will be stopped immediately. This cannot be undone."
     confirmLabel="Shutdown"
+    confirmVariant="danger"
     onConfirm={confirmShutdown}
     onCancel={() => {
       shutdownTarget = null;
@@ -684,6 +685,7 @@
     title="Delete {deleteTarget.name}?"
     description="All agents will be terminated. The container, image, and workspace files will be permanently deleted."
     confirmLabel="Delete"
+    confirmVariant="danger"
     onConfirm={confirmDeleteWorkspace}
     onCancel={() => {
       deleteTarget = null;

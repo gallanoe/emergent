@@ -7,6 +7,8 @@ function renderDialog(
     title: string;
     description: string;
     confirmLabel: string;
+    cancelLabel: string;
+    confirmVariant: "primary" | "danger";
     onConfirm: () => void;
     onCancel: () => void;
   }> = {},
@@ -16,6 +18,8 @@ function renderDialog(
       title: overrides.title ?? "Delete item?",
       description: overrides.description ?? "This cannot be undone.",
       confirmLabel: overrides.confirmLabel ?? "Delete",
+      cancelLabel: overrides.cancelLabel ?? "Cancel",
+      confirmVariant: overrides.confirmVariant ?? "primary",
       onConfirm: overrides.onConfirm ?? (() => {}),
       onCancel: overrides.onCancel ?? (() => {}),
     },
@@ -55,6 +59,13 @@ describe("ConfirmDialog", () => {
     expect(onCancel).toHaveBeenCalledOnce();
   });
 
+  it("calls onConfirm when Enter is pressed", async () => {
+    const onConfirm = vi.fn();
+    renderDialog({ onConfirm });
+    await fireEvent.keyDown(window, { key: "Enter" });
+    expect(onConfirm).toHaveBeenCalledOnce();
+  });
+
   it("calls onCancel when overlay is clicked", async () => {
     const onCancel = vi.fn();
     renderDialog({ onCancel });
@@ -62,5 +73,11 @@ describe("ConfirmDialog", () => {
     expect(overlay).toBeTruthy();
     await fireEvent.click(overlay!);
     expect(onCancel).toHaveBeenCalledOnce();
+  });
+
+  it("renders danger confirm button when confirmVariant is danger", () => {
+    renderDialog({ confirmVariant: "danger", confirmLabel: "Delete" });
+    const btn = screen.getByRole("button", { name: "Delete" });
+    expect(btn.className).toContain("text-error");
   });
 });

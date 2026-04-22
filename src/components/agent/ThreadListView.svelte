@@ -6,7 +6,7 @@
     ThreadProcessStatus,
   } from "../../stores/types";
   import { Settings, Plus, EllipsisVertical } from "@lucide/svelte";
-  import ConfirmDialog from "../ConfirmDialog.svelte";
+  import { ConfirmDialog } from "../../lib/primitives";
   import TaskTableView from "../tasks/TaskTableView.svelte";
 
   interface Props {
@@ -358,6 +358,7 @@
     title="Delete thread?"
     description="This thread and its session will be permanently removed."
     confirmLabel="Delete"
+    confirmVariant="danger"
     onConfirm={() => {
       if (deleteThreadId) onDeleteThread(deleteThreadId);
       deleteThreadId = null;
