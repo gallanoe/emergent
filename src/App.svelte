@@ -11,6 +11,7 @@
   import TerminalView from "./components/terminal/TerminalView.svelte";
   import ThreadListView from "./components/agent/ThreadListView.svelte";
   import AgentCreatorView from "./components/agent/AgentCreatorView.svelte";
+  import OverviewView from "./components/overview/OverviewView.svelte";
   import TaskTableView from "./components/tasks/TaskTableView.svelte";
   import TaskDetailSidebar from "./components/tasks/TaskDetailSidebar.svelte";
   import CreateTaskSidebar from "./components/tasks/CreateTaskSidebar.svelte";
@@ -295,9 +296,12 @@
         </button>
       </div>
     {:else if appState.activeView === "overview" && appState.selectedSwarm}
-      <div class="p-6 text-[12px] text-fg-muted">
-        Overview — built in Phase 6
-      </div>
+      <OverviewView
+        workspace={appState.selectedSwarm}
+        tasks={appState.workspaceTasks}
+        onSelectThread={(id) => appState.selectThread(id)}
+        onOpenTasks={() => appState.showTasks()}
+      />
     {:else if appState.activeView === "app-settings"}
       <AppSettingsView />
     {:else if appState.activeView === "settings" && appState.selectedSwarmId}
