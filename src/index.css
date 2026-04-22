@@ -10,31 +10,36 @@
 @import "tailwindcss";
 
 :root {
-  /* Dark theme (default) */
-  --color-background: #09090b;
-  --color-background-sidebar: #0a0a0c;
+  /* Dark theme (default) — warm zinc palette (design system) */
+  --color-background: #0b0b0c;
+  --color-background-sidebar: #101012;
   --color-background-card: #18181b;
-  --color-background-hover: #27272a;
-  --color-background-active: #3f3f46;
-  --color-background-selected: rgba(255, 255, 255, 0.06);
-  --color-foreground: #fafafa;
+  --color-background-hover: #1f1f23;
+  --color-background-active: #2a2a2f;
+  --color-background-selected: rgba(255, 255, 255, 0.05);
+  --color-background-bubble: rgba(255, 255, 255, 0.04);
+  --color-foreground: #ededee;
   --color-foreground-heading: #fafafa;
-  --color-foreground-muted: #a1a1aa;
-  --color-foreground-disabled: #52525b;
-  --color-border: #27272a;
-  --color-border-strong: #3f3f46;
-  --color-border-focus: #71717a;
-  --color-accent: #e4e4e7;
-  --color-accent-hover: #d4d4d8;
+  --color-foreground-muted: #9898a0;
+  --color-foreground-disabled: #5a5a62;
+  --color-border: #232327;
+  --color-border-strong: #2f2f35;
+  --color-border-focus: #6e6e76;
+  --color-accent: #fafafa;
+  --color-accent-hover: #e4e4e7;
+  --color-accent-fg: #0b0b0c;
   --color-accent-text: #d4d4d8;
-  --color-accent-soft: rgba(255, 255, 255, 0.06);
-  --color-success: #22c55e;
-  --color-warning: #c48a1a;
-  --color-error: #c83c3c;
+  --color-accent-soft: rgba(113, 113, 122, 0.1);
+  --color-success: #6ee7a7;
+  --color-warning: #e4b061;
+  --color-error: #f07272;
   --color-added-bg: rgba(34, 197, 94, 0.07);
   --color-added-fg: #4ade80;
   --color-removed-bg: rgba(200, 60, 60, 0.07);
   --color-removed-fg: #f87171;
+  --color-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --color-shadow-md: 0 6px 24px rgba(0, 0, 0, 0.45), 0 1px 2px rgba(0, 0, 0, 0.5);
+  --color-shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.45);
   --color-scrollbar-thumb: rgba(255, 255, 255, 0.12);
   --color-scrollbar-thumb-hover: rgba(255, 255, 255, 0.2);
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
@@ -43,31 +48,36 @@
 }
 
 [data-theme="light"] {
-  --color-background: #ffffff;
-  --color-background-sidebar: #fafafa;
+  --color-background: #fcfcfb;
+  --color-background-sidebar: #f5f4f2;
   --color-background-card: #ffffff;
-  --color-background-hover: #f4f4f5;
-  --color-background-active: #e4e4e7;
+  --color-background-hover: #efeeec;
+  --color-background-active: #e5e4e1;
   --color-background-selected: rgba(0, 0, 0, 0.04);
-  --color-foreground: #09090b;
-  --color-foreground-heading: #09090b;
-  --color-foreground-muted: #71717a;
-  --color-foreground-disabled: #a1a1aa;
-  --color-border: #e4e4e7;
-  --color-border-strong: #d4d4d8;
-  --color-border-focus: #71717a;
-  --color-accent: #27272a;
-  --color-accent-hover: #3f3f46;
+  --color-background-bubble: #ffffff;
+  --color-foreground: #1c1c1e;
+  --color-foreground-heading: #0c0c0e;
+  --color-foreground-muted: #6e6e76;
+  --color-foreground-disabled: #a8a8ae;
+  --color-border: #e6e5e2;
+  --color-border-strong: #d4d3cf;
+  --color-border-focus: #7a7a82;
+  --color-accent: #1c1c1e;
+  --color-accent-hover: #2a2a2d;
+  --color-accent-fg: #fcfcfb;
   --color-accent-text: #3f3f46;
-  --color-accent-soft: rgba(0, 0, 0, 0.04);
-  --color-success: #22c55e;
-  --color-warning: #c48a1a;
-  --color-error: #c83c3c;
+  --color-accent-soft: rgba(113, 113, 122, 0.1);
+  --color-success: #2f8a5a;
+  --color-warning: #8a5a1f;
+  --color-error: #a23232;
   --color-added-bg: rgba(45, 140, 80, 0.07);
-  --color-added-fg: #2d6e46;
+  --color-added-fg: #16a34a;
   --color-removed-bg: rgba(200, 60, 60, 0.07);
-  --color-removed-fg: #a83232;
-  --color-scrollbar-thumb: rgba(0, 0, 0, 0.12);
+  --color-removed-fg: #b91c1c;
+  --color-shadow-sm: 0 1px 2px rgba(9, 9, 11, 0.06);
+  --color-shadow-md: 0 6px 24px rgba(9, 9, 11, 0.08), 0 1px 2px rgba(9, 9, 11, 0.06);
+  --color-shadow-lg: 0 20px 60px rgba(9, 9, 11, 0.12), 0 2px 6px rgba(9, 9, 11, 0.06);
+  --color-scrollbar-thumb: rgba(0, 0, 0, 0.14);
   --color-scrollbar-thumb-hover: rgba(0, 0, 0, 0.2);
 }
 
@@ -78,6 +88,7 @@
   --color-bg-hover: var(--color-background-hover);
   --color-bg-active: var(--color-background-active);
   --color-bg-selected: var(--color-background-selected);
+  --color-bg-bubble: var(--color-background-bubble);
   --color-fg-default: var(--color-foreground);
   --color-fg-heading: var(--color-foreground-heading);
   --color-fg-muted: var(--color-foreground-muted);
@@ -87,6 +98,7 @@
   --color-border-focus: var(--color-border-focus);
   --color-accent: var(--color-accent);
   --color-accent-hover: var(--color-accent-hover);
+  --color-accent-fg: var(--color-accent-fg);
   --color-accent-text: var(--color-accent-text);
   --color-accent-soft: var(--color-accent-soft);
   --color-success: var(--color-success);
@@ -96,6 +108,9 @@
   --color-added-fg: var(--color-added-fg);
   --color-removed-bg: var(--color-removed-bg);
   --color-removed-fg: var(--color-removed-fg);
+  --shadow-sm: var(--color-shadow-sm);
+  --shadow-md: var(--color-shadow-md);
+  --shadow-lg: var(--color-shadow-lg);
   --font-mono: var(--font-mono);
   --font-ui: var(--font-ui);
   --font-content: var(--font-content);
@@ -179,4 +194,13 @@ input,
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-scrollbar-thumb-hover);
+}
+
+/* Lucide icons — design calls for 14px @ stroke-width 1.6 by default.
+   @lucide/svelte emits `<svg class="lucide-icon lucide …">`, so this
+   targets every icon unless the call site overrides size explicitly. */
+svg.lucide {
+  width: 14px;
+  height: 14px;
+  stroke-width: 1.6;
 }
