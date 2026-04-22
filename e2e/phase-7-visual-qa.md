@@ -6,17 +6,17 @@ Checked against `docs/design/v1/project/` mocks in `bun run dev` demo mode on ma
 
 ## Artboard parity
 
-| artboard | light | dark | notes |
-| --- | --- | --- | --- |
-| app-overview | ✅ | ✅ | |
-| app-chat-markdown | ✅ | ✅ | |
-| app-chat (task session) | ✅ | ✅ | |
-| app-chat-free | ✅ | ✅ | |
-| app-threads | ✅ | ✅ | |
-| app-threads-overflow | ✅ | ✅ | |
-| app-tasks | ✅ | ✅ | |
-| app-settings (workspace) | ✅ | ✅ | |
-| app-app-settings | ✅ | ✅ | |
+| artboard                 | light | dark | notes |
+| ------------------------ | ----- | ---- | ----- |
+| app-overview             | ✅    | ✅   |       |
+| app-chat-markdown        | ✅    | ✅   |       |
+| app-chat (task session)  | ✅    | ✅   |       |
+| app-chat-free            | ✅    | ✅   |       |
+| app-threads              | ✅    | ✅   |       |
+| app-threads-overflow     | ✅    | ✅   |       |
+| app-tasks                | ✅    | ✅   |       |
+| app-settings (workspace) | ✅    | ✅   |       |
+| app-app-settings         | ✅    | ✅   |       |
 
 ## Known deltas
 
