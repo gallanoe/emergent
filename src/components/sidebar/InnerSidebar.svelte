@@ -69,7 +69,8 @@
     <button
       type="button"
       title="Hide sidebar (coming soon)"
-      class="inline-flex h-[26px] w-[26px] items-center justify-center rounded-[6px] text-fg-muted"
+      class="inline-flex h-[26px] w-[26px] items-center justify-center rounded-[6px] text-fg-muted transition-colors hover:bg-bg-hover"
+      data-tauri-drag-region="false"
     >
       <svg
         class="h-[13px] w-[13px]"
@@ -90,7 +91,8 @@
     <button
       type="button"
       title="Search · ⌘K"
-      class="inline-flex h-[26px] w-[26px] items-center justify-center rounded-[6px] text-fg-muted"
+      class="inline-flex h-[26px] w-[26px] items-center justify-center rounded-[6px] text-fg-muted transition-colors hover:bg-bg-hover"
+      data-tauri-drag-region="false"
       onclick={() => {
         // TODO(search)
       }}
@@ -170,7 +172,8 @@
         <button
           type="button"
           title="Add agent definition"
-          class="inline-flex h-[18px] w-[18px] items-center justify-center rounded-[4px] text-fg-disabled"
+          class="inline-flex h-[18px] w-[18px] items-center justify-center rounded-[4px] text-fg-disabled transition-colors hover:bg-bg-hover hover:text-fg-muted"
+          data-tauri-drag-region="false"
           onclick={onCreateAgent}
         >
           <Plus size={10} />
@@ -207,10 +210,11 @@
     <button
       type="button"
       title="Application settings"
-      class="inline-flex h-7 w-7 items-center justify-center rounded-[6px] {activeView ===
+      class="inline-flex h-7 w-7 items-center justify-center rounded-[6px] transition-colors {activeView ===
       'app-settings'
         ? 'bg-bg-selected text-fg-heading'
-        : 'text-fg-muted'}"
+        : 'text-fg-muted hover:bg-bg-hover'}"
+      data-tauri-drag-region="false"
       onclick={onOpenAppSettings}
     >
       <Cog size={12} />
