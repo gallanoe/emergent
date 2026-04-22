@@ -354,76 +354,61 @@
         }}
       />
     {:else if appState.activeView === "tasks" && appState.selectedSwarmId}
-      <div class="flex flex-col h-full min-h-0">
-        <div
-          class="flex items-center h-[38px] px-5 border-b border-border-default flex-shrink-0 relative z-[60]"
-        >
-          <span class="text-[13px] font-semibold text-fg-heading"
-            >{appState.selectedSwarm?.name ?? ""}</span
-          >
-        </div>
-        <div
-          class="flex min-h-0 min-w-0 flex-1 flex-col"
-          style="display:grid; grid-template-columns: {appState.taskSidebarMode
-            ? '1fr 320px'
-            : '1fr'};"
-        >
-          <div class="flex min-h-0 min-w-0 flex-col overflow-hidden">
-            <TaskTableView
-              tasks={appState.workspaceTasks}
-              selectedTaskId={appState.selectedTaskId}
+      <div
+        class="grid min-h-0 flex-1 min-w-0"
+        style="grid-template-columns: {appState.taskSidebarMode
+          ? '1fr 320px'
+          : '1fr'};"
+      >
+        <TaskTableView
+          tasks={appState.workspaceTasks}
+          selectedTaskId={appState.selectedTaskId}
+          agentNames={Object.fromEntries(
+            Object.values(appState.agentDefinitionsMap ?? {}).map((d) => [
+              d.id,
+              d.name,
+            ]),
+          )}
+          containerRunning={appState.selectedWorkspaceContainerRunning}
+          onSelectTask={(id) => appState.selectTask(id)}
+          onNavigateToSession={(threadId) => appState.selectThread(threadId)}
+          onCreateTask={() => appState.openCreateTask()}
+        />
+        {#if appState.taskSidebarMode === "detail" && appState.selectedTaskId}
+          {@const task = appState.tasks[appState.selectedTaskId]}
+          {#if task}
+            <TaskDetailSidebar
+              {task}
+              allTasks={appState.tasks}
               agentNames={Object.fromEntries(
                 Object.values(appState.agentDefinitionsMap ?? {}).map((d) => [
                   d.id,
                   d.name,
                 ]),
               )}
-              containerRunning={appState.selectedWorkspaceContainerRunning}
+              onClose={() => appState.closeTaskSidebar()}
               onSelectTask={(id) => appState.selectTask(id)}
               onNavigateToSession={(threadId) =>
                 appState.selectThread(threadId)}
-              onCreateTask={() => appState.openCreateTask()}
-            />
-          </div>
-          <!-- Sidebar -->
-          {#if appState.taskSidebarMode === "detail" && appState.selectedTaskId}
-            {@const task = appState.tasks[appState.selectedTaskId]}
-            {#if task}
-              <TaskDetailSidebar
-                {task}
-                allTasks={appState.tasks}
-                agentNames={Object.fromEntries(
-                  Object.values(appState.agentDefinitionsMap ?? {}).map((d) => [
-                    d.id,
-                    d.name,
-                  ]),
-                )}
-                onClose={() => appState.closeTaskSidebar()}
-                onSelectTask={(id) => appState.selectTask(id)}
-                onNavigateToSession={(threadId) =>
-                  appState.selectThread(threadId)}
-              />
-            {/if}
-          {:else if appState.taskSidebarMode === "create"}
-            <CreateTaskSidebar
-              agentDefinitions={Object.values(
-                appState.agentDefinitionsMap ?? {},
-              )}
-              existingTasks={appState.workspaceTasks}
-              onClose={() => appState.closeTaskSidebar()}
-              onCreate={async (title, desc, agentId, blockerIds) => {
-                await appState.createTask(
-                  appState.selectedSwarmId!,
-                  title,
-                  desc,
-                  agentId,
-                  blockerIds,
-                );
-                appState.closeTaskSidebar();
-              }}
             />
           {/if}
-        </div>
+        {:else if appState.taskSidebarMode === "create"}
+          <CreateTaskSidebar
+            agentDefinitions={Object.values(appState.agentDefinitionsMap ?? {})}
+            existingTasks={appState.workspaceTasks}
+            onClose={() => appState.closeTaskSidebar()}
+            onCreate={async (title, desc, agentId, blockerIds) => {
+              await appState.createTask(
+                appState.selectedSwarmId!,
+                title,
+                desc,
+                agentId,
+                blockerIds,
+              );
+              appState.closeTaskSidebar();
+            }}
+          />
+        {/if}
       </div>
     {:else if appState.activeView === "agent-threads" && appState.selectedAgentDef}
       {@const def = appState.selectedAgentDef}
