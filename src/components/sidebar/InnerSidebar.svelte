@@ -2,6 +2,7 @@
   import {
     Cog,
     ListChecks,
+    Orbit,
     Plus,
     Search,
     SquareTerminal,
@@ -23,6 +24,7 @@
     onSelectAgent: (id: string) => void;
     onCreateAgent: () => void;
     onNewThread: () => void;
+    onOpenSwarm: () => void;
     onOpenTasks: () => void;
     onOpenTerminal: () => void;
     onOpenAppSettings: () => void;
@@ -42,6 +44,7 @@
     onSelectAgent,
     onCreateAgent,
     onNewThread,
+    onOpenSwarm,
     onOpenTasks,
     onOpenTerminal,
     onOpenAppSettings,
@@ -124,6 +127,22 @@
       >
       <span class="flex-1">New thread</span>
       <Kbd keys={["⌘", "N"]} />
+    </button>
+    <button
+      type="button"
+      title="Swarm dashboard"
+      class="flex h-7 w-full items-center gap-2.5 rounded-[6px] px-2.5 py-1.5 text-left text-[12.5px]
+        {activeView === 'overview'
+        ? 'bg-bg-selected text-fg-heading'
+        : 'text-fg-default'}"
+      onclick={onOpenSwarm}
+    >
+      <span
+        class="inline-flex w-[18px] justify-center {activeView === 'overview'
+          ? 'text-fg-heading'
+          : 'text-fg-muted'}"><Orbit size={14} /></span
+      >
+      <span class="flex-1">Swarm</span>
     </button>
     <button
       type="button"

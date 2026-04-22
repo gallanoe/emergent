@@ -209,6 +209,7 @@
     onSelectAgent={(id) => appState.selectAgent(id)}
     onCreateAgent={() => appState.startCreatingAgent()}
     onNewThread={handleNewThread}
+    onOpenSwarm={() => appState.showOverview()}
     onOpenTasks={() => appState.showTasks()}
     onOpenTerminal={() => {
       appState.activeView = "terminal";

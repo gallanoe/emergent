@@ -68,9 +68,11 @@
   >
     <button
       type="button"
-      class="flex flex-1 min-w-0 items-center gap-2 rounded-[7px] px-[6px] py-[6px] text-left"
-      title="Workspace overview"
-      onclick={() => onSelect(current.id)}
+      class="flex w-full min-w-0 items-center gap-2 rounded-[7px] px-[6px] py-[6px] text-left"
+      title="Workspaces"
+      aria-expanded={open}
+      aria-haspopup="listbox"
+      onclick={() => (open = !open)}
     >
       <span
         class="size-5 shrink-0 rounded-[5px] bg-fg-heading text-bg-base flex items-center justify-center text-[11px] font-bold tracking-tight"
@@ -89,15 +91,9 @@
           title={statusLabel(current.containerStatus)}
         ></span>
       </span>
-    </button>
-    <button
-      type="button"
-      class="inline-flex w-[22px] shrink-0 items-center justify-center rounded-[7px] text-fg-disabled"
-      title="Switch workspace"
-      aria-expanded={open}
-      onclick={() => (open = !open)}
-    >
-      <ChevronDown size={10} />
+      <span class="inline-flex shrink-0 text-fg-disabled" aria-hidden="true"
+        ><ChevronDown size={10} /></span
+      >
     </button>
     {#if open}
       <div

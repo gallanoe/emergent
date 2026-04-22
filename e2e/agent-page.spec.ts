@@ -20,7 +20,7 @@ test("agent page shows system prompt and saves edits", async ({ page }) => {
 
   await expect(page.getByText(unique)).toBeVisible();
 
-  await page.getByTitle("Workspace overview").click();
+  await page.getByTitle("Swarm dashboard").click();
   await page
     .locator("aside")
     .getByRole("button", { name: /claude-sonnet/i })

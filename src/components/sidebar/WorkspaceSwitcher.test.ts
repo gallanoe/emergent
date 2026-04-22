@@ -37,7 +37,7 @@ describe("WorkspaceSwitcher", () => {
     expect(screen.getByText("Alpha")).toBeTruthy();
   });
 
-  it("calls onSelect with selected id when the name zone is clicked", async () => {
+  it("opens the popover when the main control is clicked (does not call onSelect)", async () => {
     const onSelect = vi.fn();
     const ws = [
       makeWorkspace("a", "Alpha", { state: "running" }),
@@ -52,27 +52,9 @@ describe("WorkspaceSwitcher", () => {
         onCreateWorkspace: () => {},
       },
     });
-    await fireEvent.click(screen.getByTitle("Workspace overview"));
-    expect(onSelect).toHaveBeenCalledWith("a");
-  });
-
-  it("toggles the popover when the caret is clicked", async () => {
-    const ws = [
-      makeWorkspace("a", "Alpha", { state: "running" }),
-      makeWorkspace("b", "Bravo", { state: "building" }),
-    ];
-    render(WorkspaceSwitcher, {
-      props: {
-        workspaces: ws,
-        selectedId: "a",
-        onSelect: () => {},
-        onOpenWorkspaceSettings: () => {},
-        onCreateWorkspace: () => {},
-      },
-    });
-    const caret = screen.getByTitle("Switch workspace");
     expect(screen.queryByText("New workspace")).toBeNull();
-    await fireEvent.click(caret);
+    await fireEvent.click(screen.getByTitle("Workspaces"));
+    expect(onSelect).not.toHaveBeenCalled();
     expect(screen.getByText("Bravo")).toBeTruthy();
     expect(screen.getByText("Workspace settings")).toBeTruthy();
     expect(screen.getByText("New workspace")).toBeTruthy();
@@ -93,7 +75,7 @@ describe("WorkspaceSwitcher", () => {
         onCreateWorkspace: () => {},
       },
     });
-    await fireEvent.click(screen.getByTitle("Switch workspace"));
+    await fireEvent.click(screen.getByTitle("Workspaces"));
     expect(screen.getByText("Running")).toBeTruthy();
     expect(screen.getByText("Building")).toBeTruthy();
     await fireEvent.click(screen.getByText("Bravo"));
@@ -112,7 +94,7 @@ describe("WorkspaceSwitcher", () => {
         onCreateWorkspace,
       },
     });
-    await fireEvent.click(screen.getByTitle("Switch workspace"));
+    await fireEvent.click(screen.getByTitle("Workspaces"));
     await fireEvent.click(screen.getByText("New workspace"));
     expect(onCreateWorkspace).toHaveBeenCalled();
   });
@@ -129,7 +111,7 @@ describe("WorkspaceSwitcher", () => {
         onCreateWorkspace: () => {},
       },
     });
-    await fireEvent.click(screen.getByTitle("Switch workspace"));
+    await fireEvent.click(screen.getByTitle("Workspaces"));
     expect(screen.getByText("Workspace settings")).toBeTruthy();
     await fireEvent.click(screen.getByText("Workspace settings"));
     expect(onOpenWorkspaceSettings).toHaveBeenCalledOnce();

@@ -34,8 +34,12 @@ const baseProps = (overrides: Record<string, unknown> = {}) => ({
   workspaces: (overrides.workspaces as DisplayWorkspace[]) ?? [makeSwarm()],
   selectedWorkspaceId: (overrides.selectedWorkspaceId as string | null) ?? "swarm-1",
   activeView:
-    (overrides.activeView as "agent-threads" | "tasks" | "terminal" | "app-settings") ??
-    "agent-threads",
+    (overrides.activeView as
+      | "overview"
+      | "agent-threads"
+      | "tasks"
+      | "terminal"
+      | "app-settings") ?? "agent-threads",
   selectedAgentId: (overrides.selectedAgentId as string | null) ?? "agent-1",
   demoMode: (overrides.demoMode as boolean) ?? false,
   activeTaskCount: (overrides.activeTaskCount as number) ?? 0,
@@ -44,6 +48,7 @@ const baseProps = (overrides: Record<string, unknown> = {}) => ({
   onSelectAgent: (overrides.onSelectAgent as (id: string) => void) ?? (() => {}),
   onCreateAgent: (overrides.onCreateAgent as () => void) ?? (() => {}),
   onNewThread: (overrides.onNewThread as () => void) ?? (() => {}),
+  onOpenSwarm: (overrides.onOpenSwarm as () => void) ?? (() => {}),
   onOpenTasks: (overrides.onOpenTasks as () => void) ?? (() => {}),
   onOpenTerminal: (overrides.onOpenTerminal as () => void) ?? (() => {}),
   onOpenAppSettings: (overrides.onOpenAppSettings as () => void) ?? (() => {}),
@@ -59,19 +64,23 @@ describe("InnerSidebar", () => {
     renderSidebar();
     expect(screen.getByText("AGENTS")).toBeTruthy();
     expect(screen.getByText("New thread")).toBeTruthy();
+    expect(screen.getByText("Swarm")).toBeTruthy();
     expect(screen.getByText("Tasks")).toBeTruthy();
     expect(screen.getByText("Terminal")).toBeTruthy();
     expect(screen.getByTitle("Application settings")).toBeTruthy();
     expect(screen.getByText("Research Swarm")).toBeTruthy();
   });
 
-  it("fires primary action callbacks for New thread, Tasks, and Terminal", async () => {
+  it("fires primary action callbacks for New thread, Swarm, Tasks, and Terminal", async () => {
     const onNewThread = vi.fn();
+    const onOpenSwarm = vi.fn();
     const onOpenTasks = vi.fn();
     const onOpenTerminal = vi.fn();
-    renderSidebar({ onNewThread, onOpenTasks, onOpenTerminal });
+    renderSidebar({ onNewThread, onOpenSwarm, onOpenTasks, onOpenTerminal });
     await fireEvent.click(screen.getByText("New thread"));
     expect(onNewThread).toHaveBeenCalled();
+    await fireEvent.click(screen.getByText("Swarm"));
+    expect(onOpenSwarm).toHaveBeenCalled();
     await fireEvent.click(screen.getByText("Tasks"));
     expect(onOpenTasks).toHaveBeenCalled();
     await fireEvent.click(screen.getByText("Terminal"));
