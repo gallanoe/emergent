@@ -218,15 +218,18 @@
     onOpenWorkspaceSettings={() => appState.showWorkspaceSettings()}
   />
   <main class="relative flex min-h-0 min-w-0 flex-col">
-    {#if showWorkspaceNameHeader}
-      <div
-        class="relative z-[60] flex h-[38px] flex-shrink-0 items-center border-b border-border-default px-5"
-      >
+    <div
+      class="relative z-[60] flex h-[38px] flex-shrink-0 items-center px-5"
+      class:border-b={showWorkspaceNameHeader}
+      class:border-border-default={showWorkspaceNameHeader}
+      data-tauri-drag-region
+    >
+      {#if showWorkspaceNameHeader}
         <span class="text-[13px] font-semibold text-fg-heading"
           >{appState.selectedSwarm!.name}</span
         >
-      </div>
-    {/if}
+      {/if}
+    </div>
     {#if appState.runtimeStatus && !appState.runtimeStatus.available}
       <div
         class="flex flex-col items-center justify-center flex-1 gap-4 text-center px-6"
