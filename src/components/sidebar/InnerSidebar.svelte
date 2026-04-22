@@ -26,6 +26,7 @@
     onOpenTasks: () => void;
     onOpenTerminal: () => void;
     onOpenAppSettings: () => void;
+    onOpenWorkspaceSettings: () => void;
   }
 
   let {
@@ -44,6 +45,7 @@
     onOpenTasks,
     onOpenTerminal,
     onOpenAppSettings,
+    onOpenWorkspaceSettings,
   }: Props = $props();
 
   const isMacOS = $derived(
@@ -103,6 +105,7 @@
       {workspaces}
       selectedId={selectedWorkspaceId}
       onSelect={onSelectWorkspace}
+      {onOpenWorkspaceSettings}
       {onCreateWorkspace}
     />
   </div>

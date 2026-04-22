@@ -474,6 +474,10 @@ function createAppState() {
     activeView = "app-settings";
   }
 
+  function showWorkspaceSettings() {
+    activeView = "settings";
+  }
+
   async function createTask(
     workspaceId: string,
     title: string,
@@ -805,6 +809,7 @@ function createAppState() {
     showTasks,
     showOverview,
     showAppSettings,
+    showWorkspaceSettings,
     createTask,
     get terminalSessionIds() {
       return terminalSessionIds;

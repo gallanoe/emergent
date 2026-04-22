@@ -30,6 +30,7 @@ describe("WorkspaceSwitcher", () => {
         workspaces: ws,
         selectedId: "a",
         onSelect: () => {},
+        onOpenWorkspaceSettings: () => {},
         onCreateWorkspace: () => {},
       },
     });
@@ -47,6 +48,7 @@ describe("WorkspaceSwitcher", () => {
         workspaces: ws,
         selectedId: "a",
         onSelect,
+        onOpenWorkspaceSettings: () => {},
         onCreateWorkspace: () => {},
       },
     });
@@ -64,6 +66,7 @@ describe("WorkspaceSwitcher", () => {
         workspaces: ws,
         selectedId: "a",
         onSelect: () => {},
+        onOpenWorkspaceSettings: () => {},
         onCreateWorkspace: () => {},
       },
     });
@@ -71,6 +74,7 @@ describe("WorkspaceSwitcher", () => {
     expect(screen.queryByText("New workspace")).toBeNull();
     await fireEvent.click(caret);
     expect(screen.getByText("Bravo")).toBeTruthy();
+    expect(screen.getByText("Workspace settings")).toBeTruthy();
     expect(screen.getByText("New workspace")).toBeTruthy();
   });
 
@@ -85,6 +89,7 @@ describe("WorkspaceSwitcher", () => {
         workspaces: ws,
         selectedId: "a",
         onSelect,
+        onOpenWorkspaceSettings: () => {},
         onCreateWorkspace: () => {},
       },
     });
@@ -103,11 +108,30 @@ describe("WorkspaceSwitcher", () => {
         workspaces: ws,
         selectedId: "a",
         onSelect: () => {},
+        onOpenWorkspaceSettings: () => {},
         onCreateWorkspace,
       },
     });
     await fireEvent.click(screen.getByTitle("Switch workspace"));
     await fireEvent.click(screen.getByText("New workspace"));
     expect(onCreateWorkspace).toHaveBeenCalled();
+  });
+
+  it("calls onOpenWorkspaceSettings when the workspace settings row is clicked", async () => {
+    const onOpenWorkspaceSettings = vi.fn();
+    const ws = [makeWorkspace("a", "Alpha", { state: "running" })];
+    render(WorkspaceSwitcher, {
+      props: {
+        workspaces: ws,
+        selectedId: "a",
+        onSelect: () => {},
+        onOpenWorkspaceSettings,
+        onCreateWorkspace: () => {},
+      },
+    });
+    await fireEvent.click(screen.getByTitle("Switch workspace"));
+    expect(screen.getByText("Workspace settings")).toBeTruthy();
+    await fireEvent.click(screen.getByText("Workspace settings"));
+    expect(onOpenWorkspaceSettings).toHaveBeenCalledOnce();
   });
 });

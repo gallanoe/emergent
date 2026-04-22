@@ -214,6 +214,7 @@
       appState.activeView = "terminal";
     }}
     onOpenAppSettings={() => appState.showAppSettings()}
+    onOpenWorkspaceSettings={() => appState.showWorkspaceSettings()}
   />
   <main class="relative flex min-h-0 min-w-0 flex-col">
     {#if showWorkspaceNameHeader}

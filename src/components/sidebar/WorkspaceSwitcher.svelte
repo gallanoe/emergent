@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ChevronDown, Plus } from "@lucide/svelte";
+  import { ChevronDown, Cog, Plus } from "@lucide/svelte";
   import type { ContainerStatus, DisplayWorkspace } from "../../stores/types";
   import { Mono } from "../../lib/primitives";
 
@@ -7,10 +7,17 @@
     workspaces: DisplayWorkspace[];
     selectedId: string | null;
     onSelect: (id: string) => void;
+    onOpenWorkspaceSettings: () => void;
     onCreateWorkspace: () => void;
   }
 
-  let { workspaces, selectedId, onSelect, onCreateWorkspace }: Props = $props();
+  let {
+    workspaces,
+    selectedId,
+    onSelect,
+    onOpenWorkspaceSettings,
+    onCreateWorkspace,
+  }: Props = $props();
 
   let open = $state(false);
   let rootEl: HTMLDivElement | undefined = $state();
@@ -120,6 +127,17 @@
           </button>
         {/each}
         <div class="h-px bg-border-default my-[6px] mx-[2px]"></div>
+        <button
+          type="button"
+          class="flex w-full items-center gap-2.5 rounded-[6px] px-2 py-[7px] text-left text-[12.5px] text-fg-muted"
+          onclick={() => {
+            onOpenWorkspaceSettings();
+            open = false;
+          }}
+        >
+          <Cog size={11} />
+          <span>Workspace settings</span>
+        </button>
         <button
           type="button"
           class="flex w-full items-center gap-2.5 rounded-[6px] px-2 py-[7px] text-left text-[12.5px] text-fg-muted"
