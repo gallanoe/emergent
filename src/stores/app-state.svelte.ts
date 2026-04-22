@@ -218,7 +218,10 @@ function createAppState() {
   }
 
   async function initialize() {
-    if (demoMode) return;
+    if (demoMode) {
+      mockState.seedDemoMockMetrics();
+      return;
+    }
 
     if (!initializePromise) {
       initializePromise = setupAfterConnect().catch((e) => {
@@ -436,7 +439,9 @@ function createAppState() {
   // ── Task management ──────────────────────────────────────────
 
   const workspaceTasks = $derived(
-    Object.values(tasks).filter((t) => t.workspace_id === selectedWorkspaceId),
+    demoMode
+      ? mockState.getWorkspaceTasks(selectedWorkspaceId)
+      : Object.values(tasks).filter((t) => t.workspace_id === selectedWorkspaceId),
   );
 
   const activeWorkspaceTaskCount = $derived(
@@ -531,7 +536,7 @@ function createAppState() {
 
   function selectAgent(agentId: string) {
     if (demoMode) {
-      selectedAgentId = agentId;
+      mockState.selectedAgentId = agentId;
       selectedThreadId = null;
       activeView = "agent-chat";
       return;
@@ -546,6 +551,14 @@ function createAppState() {
   }
 
   function selectThread(threadId: string) {
+    if (demoMode) {
+      selectedThreadId = threadId;
+      const owner = mockState.agentIdForThread(threadId);
+      if (owner) mockState.selectedAgentId = owner;
+      activeView = "agent-chat";
+      return;
+    }
+
     selectedThreadId = threadId;
     activeView = "agent-chat";
 
@@ -587,7 +600,7 @@ function createAppState() {
 
   function getSelectedThread(): DisplayThread | undefined {
     if (demoMode) {
-      return mockState.selectedAgent;
+      return mockState.resolveSelectedThread(selectedThreadId);
     }
     // In chat view, look up by thread ID (threads store is keyed by thread ID)
     const lookupId = selectedThreadId ?? selectedAgentId;
@@ -678,6 +691,10 @@ function createAppState() {
       return selectedThreadId;
     },
     get selectedThread() {
+      if (demoMode) {
+        if (!selectedThreadId) return undefined;
+        return mockState.findThread(selectedThreadId);
+      }
       if (!selectedThreadId) return undefined;
       const conn = agentStore.getThread(selectedThreadId);
       if (!conn) return undefined;
