@@ -25,6 +25,7 @@
     Trash2,
     Loader,
   } from "@lucide/svelte";
+  import { isEditableTarget } from "./lib/editable-guard";
   import { onMount } from "svelte";
   import { listen } from "@tauri-apps/api/event";
   import type {
@@ -145,12 +146,6 @@
     const id = shutdownTarget.id;
     shutdownTarget = null;
     await appState.killThread(id);
-  }
-
-  function isEditableTarget(el: EventTarget | null): boolean {
-    if (!(el instanceof HTMLElement)) return false;
-    const tag = el.tagName;
-    return tag === "INPUT" || tag === "TEXTAREA" || el.isContentEditable;
   }
 
   function onGlobalKeydown(e: KeyboardEvent) {
