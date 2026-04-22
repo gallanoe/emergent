@@ -119,7 +119,7 @@
   <div class="flex flex-col gap-px px-[8px] pb-[6px]">
     <button
       type="button"
-      class="flex h-7 w-full items-center gap-2.5 rounded-[6px] px-2.5 py-1.5 text-left text-[12.5px] font-medium text-fg-heading"
+      class="flex h-7 w-full items-center gap-2.5 rounded-[6px] px-2.5 py-1.5 text-left text-[12.5px] font-medium text-fg-heading transition-colors hover:bg-bg-hover"
       onclick={onNewThread}
     >
       <span class="inline-flex w-[18px] justify-center text-fg-heading"
@@ -131,10 +131,10 @@
     <button
       type="button"
       title="Swarm dashboard"
-      class="flex h-7 w-full items-center gap-2.5 rounded-[6px] px-2.5 py-1.5 text-left text-[12.5px]
+      class="flex h-7 w-full items-center gap-2.5 rounded-[6px] px-2.5 py-1.5 text-left text-[12.5px] transition-colors
         {activeView === 'overview'
-        ? 'bg-bg-selected text-fg-heading'
-        : 'text-fg-default'}"
+        ? 'bg-bg-selected text-fg-heading hover:brightness-[0.99]'
+        : 'text-fg-default hover:bg-bg-hover'}"
       onclick={onOpenSwarm}
     >
       <span
@@ -146,10 +146,10 @@
     </button>
     <button
       type="button"
-      class="flex h-7 w-full items-center gap-2.5 rounded-[6px] px-2.5 py-1.5 text-left text-[12.5px]
+      class="flex h-7 w-full items-center gap-2.5 rounded-[6px] px-2.5 py-1.5 text-left text-[12.5px] transition-colors
         {activeView === 'tasks'
-        ? 'bg-bg-selected text-fg-heading'
-        : 'text-fg-default'}"
+        ? 'bg-bg-selected text-fg-heading hover:brightness-[0.99]'
+        : 'text-fg-default hover:bg-bg-hover'}"
       onclick={onOpenTasks}
     >
       <span
@@ -167,10 +167,10 @@
     </button>
     <button
       type="button"
-      class="flex h-7 w-full items-center gap-2.5 rounded-[6px] px-2.5 py-1.5 text-left text-[12.5px]
+      class="flex h-7 w-full items-center gap-2.5 rounded-[6px] px-2.5 py-1.5 text-left text-[12.5px] transition-colors
         {activeView === 'terminal'
-        ? 'bg-bg-selected text-fg-heading'
-        : 'text-fg-default'}"
+        ? 'bg-bg-selected text-fg-heading hover:brightness-[0.99]'
+        : 'text-fg-default hover:bg-bg-hover'}"
       onclick={onOpenTerminal}
     >
       <span
@@ -205,9 +205,9 @@
           activeView.startsWith("agent") && selectedAgentId === def.id}
         <button
           type="button"
-          class="flex items-center gap-2.5 rounded-[6px] px-2 py-1.5 text-left text-[12.5px] {active
-            ? 'bg-bg-selected text-fg-heading'
-            : 'text-fg-default'}"
+          class="flex items-center gap-2.5 rounded-[6px] px-2 py-1.5 text-left text-[12.5px] transition-colors {active
+            ? 'bg-bg-selected text-fg-heading hover:brightness-[0.99]'
+            : 'text-fg-default hover:bg-bg-hover'}"
           onclick={() => onSelectAgent(def.id)}
         >
           <AgentAvatar cli={def.cli} size={18} />
@@ -231,7 +231,7 @@
       title="Application settings"
       class="inline-flex h-7 w-7 items-center justify-center rounded-[6px] transition-colors {activeView ===
       'app-settings'
-        ? 'bg-bg-selected text-fg-heading'
+        ? 'bg-bg-selected text-fg-heading hover:brightness-[0.99]'
         : 'text-fg-muted hover:bg-bg-hover'}"
       data-tauri-drag-region="false"
       onclick={onOpenAppSettings}

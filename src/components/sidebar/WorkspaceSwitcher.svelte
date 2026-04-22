@@ -68,7 +68,8 @@
   >
     <button
       type="button"
-      class="flex w-full min-w-0 items-center gap-2 rounded-[7px] px-[6px] py-[6px] text-left"
+      class="flex w-full min-w-0 items-center gap-2 rounded-[7px] px-[6px] py-[6px] text-left transition-colors
+        {open ? '' : 'hover:bg-bg-hover'}"
       title="Workspaces"
       aria-expanded={open}
       aria-haspopup="listbox"
@@ -105,8 +106,10 @@
           {@const sel = w.id === selectedId}
           <button
             type="button"
-            class="flex w-full items-center gap-2.5 rounded-[6px] px-2 py-[7px] text-left text-[12.5px]
-              {sel ? 'bg-bg-selected text-fg-heading' : 'text-fg-default'}"
+            class="flex w-full items-center gap-2.5 rounded-[6px] px-2 py-[7px] text-left text-[12.5px] transition-colors
+              {sel
+              ? 'bg-bg-selected text-fg-heading hover:brightness-[0.99]'
+              : 'text-fg-default hover:bg-bg-hover'}"
             onclick={() => {
               onSelect(w.id);
               open = false;
@@ -125,7 +128,7 @@
         <div class="h-px bg-border-default my-[6px] mx-[2px]"></div>
         <button
           type="button"
-          class="flex w-full items-center gap-2.5 rounded-[6px] px-2 py-[7px] text-left text-[12.5px] text-fg-muted"
+          class="flex w-full items-center gap-2.5 rounded-[6px] px-2 py-[7px] text-left text-[12.5px] text-fg-muted transition-colors hover:bg-bg-hover"
           onclick={() => {
             onOpenWorkspaceSettings();
             open = false;
@@ -136,7 +139,7 @@
         </button>
         <button
           type="button"
-          class="flex w-full items-center gap-2.5 rounded-[6px] px-2 py-[7px] text-left text-[12.5px] text-fg-muted"
+          class="flex w-full items-center gap-2.5 rounded-[6px] px-2 py-[7px] text-left text-[12.5px] text-fg-muted transition-colors hover:bg-bg-hover"
           onclick={() => {
             onCreateWorkspace();
             open = false;
