@@ -156,12 +156,14 @@ export interface AgentDeletedPayload {
 }
 
 export type ActiveView =
+  | "overview"
   | "swarm"
   | "agent-threads"
   | "agent-chat"
   | "agent-settings"
   | "create-agent"
   | "settings"
+  | "app-settings"
   | "terminal"
   | "tasks";
 

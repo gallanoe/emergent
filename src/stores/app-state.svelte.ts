@@ -437,6 +437,14 @@ function createAppState() {
     taskSidebarMode = null;
   }
 
+  function showOverview() {
+    activeView = "overview";
+  }
+
+  function showAppSettings() {
+    activeView = "app-settings";
+  }
+
   async function createTask(
     workspaceId: string,
     title: string,
@@ -487,7 +495,7 @@ function createAppState() {
 
   function selectWorkspace(workspaceId: string) {
     selectedWorkspaceId = workspaceId;
-    activeView = "swarm";
+    activeView = "overview";
     // Clear any task sidebar state scoped to the previous workspace
     selectedTaskId = null;
     taskSidebarMode = null;
@@ -795,6 +803,8 @@ function createAppState() {
     openCreateTask,
     closeTaskSidebar,
     showTasks,
+    showOverview,
+    showAppSettings,
     createTask,
     get terminalSessionIds() {
       return terminalSessionIds;
