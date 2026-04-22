@@ -96,6 +96,8 @@ export interface AgentDefinition {
   name: string;
   role?: string;
   cli: string;
+  /** Set at creation from `KnownAgent.provider`; used for logos only. */
+  provider?: string | null;
 }
 
 export interface ThreadSummary {
@@ -118,6 +120,8 @@ export interface DisplayThread {
   agentId: string;
   workspaceId: string;
   cli: string;
+  /** Same as the parent agent definition's `provider` when known. */
+  provider: string | null;
   name: string;
   processStatus: ThreadProcessStatus | "dead";
   preview: string;
@@ -137,6 +141,8 @@ export interface DisplayAgentDefinition {
   name: string;
   role?: string;
   cli: string;
+  /** Explicit logo id from agent creation; not derived from `cli`. */
+  provider: string | null;
   /** Client-only until backend exposes a persisted field. */
   systemPrompt: string;
   threads: DisplayThread[];

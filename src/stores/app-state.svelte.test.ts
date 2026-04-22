@@ -23,6 +23,7 @@ describe("appState.updateAgentSystemPrompt", () => {
       workspace_id: "ws-vitest",
       name: "Vitest agent",
       cli: "claude-agent-acp",
+      provider: "claude",
     };
     appState.selectedAgentId = agentId;
     flushSync();

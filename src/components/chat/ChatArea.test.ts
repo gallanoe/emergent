@@ -9,6 +9,7 @@ function makeThread(messages: DisplayMessage[], overrides?: Partial<DisplayThrea
     agentId: "def-1",
     workspaceId: "swarm-1",
     cli: "claude-agent-acp",
+    provider: "claude",
     name: "Test Agent",
     processStatus: "idle",
     preview: "test...",

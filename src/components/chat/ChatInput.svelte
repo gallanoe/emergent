@@ -122,7 +122,11 @@
             class="inline-flex h-[28px] items-center gap-[6px] rounded-full bg-bg-hover px-[10px] text-[11.5px] font-medium text-fg-default"
             onclick={() => (configOpen = !configOpen)}
           >
-            <AgentAvatar cli={thread.cli} size={13} />
+            <AgentAvatar
+              provider={thread.provider}
+              name={thread.name}
+              size={13}
+            />
             <span>{thread.name}</span>
             {#if configSummary}
               <span class="text-fg-disabled">·</span>

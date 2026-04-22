@@ -345,12 +345,13 @@
     {:else if appState.activeView === "create-agent" && appState.selectedSwarmId}
       <AgentCreatorView
         knownAgents={appState.knownAgents}
-        onCreate={async (cli, name, role) => {
+        onCreate={async (cli, name, role, provider) => {
           const agentId = await appState.createAgentDefinition(
             appState.selectedSwarmId!,
             name,
             role,
             cli,
+            provider,
           );
           appState.selectAgent(agentId);
         }}

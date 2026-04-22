@@ -8,22 +8,38 @@ use futures_util::StreamExt;
 ///
 /// `requires` lists binaries that must be findable via `which` inside the container.
 /// If empty, the command binary itself is checked.
-const KNOWN_AGENTS: &[(&str, &str, &[&str], &[&str])] = &[
+/// (display name, binary, args, required which bins, `provider` id for UI / persistence).
+type KnownAgentRow = (
+    &'static str,
+    &'static str,
+    &'static [&'static str],
+    &'static [&'static str],
+    &'static str,
+);
+const KNOWN_AGENTS: &[KnownAgentRow] = &[
     (
         "Claude Code",
         "bunx",
         &["@zed-industries/claude-agent-acp"],
         &["claude", "bunx"],
+        "claude",
     ),
     (
         "Codex",
         "bunx",
         &["@zed-industries/codex-acp"],
         &["codex", "bunx"],
+        "codex",
     ),
-    ("Gemini", "gemini", &["--experimental-acp"], &[]),
-    ("Kiro", "kiro-cli", &["acp"], &[]),
-    ("OpenCode", "opencode", &["acp"], &[]),
+    (
+        "Gemini",
+        "gemini",
+        &["--experimental-acp"],
+        &[],
+        "gemini",
+    ),
+    ("Kiro", "kiro-cli", &["acp"], &[], "kiro"),
+    ("OpenCode", "opencode", &["acp"], &[], "opencode"),
 ];
 
 fn build_command(binary: &str, args: &[&str]) -> String {
@@ -71,7 +87,7 @@ async fn is_available_in_container(docker: &Docker, container_id: &str, binary: 
 pub async fn known_agents_in_container(docker: &Docker, container_id: &str) -> Vec<KnownAgent> {
     let mut agents = Vec::new();
 
-    for &(name, binary, args, requires) in KNOWN_AGENTS {
+    for &(name, binary, args, requires, provider) in KNOWN_AGENTS {
         let available = if requires.is_empty() {
             is_available_in_container(docker, container_id, binary).await
         } else {
@@ -89,6 +105,7 @@ pub async fn known_agents_in_container(docker: &Docker, container_id: &str) -> V
             name: name.to_string(),
             command: build_command(binary, args),
             available,
+            provider: provider.to_string(),
         });
     }
 
@@ -99,10 +116,11 @@ pub async fn known_agents_in_container(docker: &Docker, container_id: &str) -> V
 pub fn known_agents_unavailable() -> Vec<KnownAgent> {
     KNOWN_AGENTS
         .iter()
-        .map(|&(name, binary, args, _)| KnownAgent {
+        .map(|&(name, binary, args, _, provider)| KnownAgent {
             name: name.to_string(),
             command: build_command(binary, args),
             available: false,
+            provider: provider.to_string(),
         })
         .collect()
 }
@@ -126,6 +144,7 @@ mod tests {
             name: "Test".into(),
             command: "test-bin".into(),
             available: true,
+            provider: "claude".into(),
         };
         let json = serde_json::to_string(&agent).unwrap();
         assert!(json.contains("\"available\":true"));

@@ -104,7 +104,11 @@
   <div class="flex-1 overflow-y-auto">
     <div class="mx-auto flex max-w-[720px] flex-col gap-7 px-8 pb-10 pt-7">
       <div class="flex items-start gap-4">
-        <AgentAvatar cli={agentDef.cli} size={44} />
+        <AgentAvatar
+          provider={agentDef.provider}
+          name={agentDef.name}
+          size={44}
+        />
         <div class="min-w-0 flex-1">
           <div class="flex flex-wrap items-baseline gap-[10px]">
             {#if editingName}

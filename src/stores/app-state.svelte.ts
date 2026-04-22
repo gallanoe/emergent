@@ -31,6 +31,7 @@ interface KnownAgent {
   name: string;
   command: string;
   available: boolean;
+  provider: string;
 }
 
 interface HistoryNotification {
@@ -373,11 +374,13 @@ function createAppState() {
       return list.map((w) => {
         const agentDefinitions = w.agentDefinitions.map((ad) => {
           const systemPrompt = agentSystemPrompts[ad.id] ?? ad.systemPrompt ?? "";
+          const prov = ad.provider ?? null;
           if (ad.role === undefined) {
             return {
               id: ad.id,
               name: ad.name,
               cli: ad.cli,
+              provider: prov,
               systemPrompt,
               threads: ad.threads,
             };
@@ -387,6 +390,7 @@ function createAppState() {
             name: ad.name,
             role: ad.role,
             cli: ad.cli,
+            provider: prov,
             systemPrompt,
             threads: ad.threads,
           };
@@ -416,6 +420,7 @@ function createAppState() {
               id: def.id,
               name: def.name,
               cli: def.cli,
+              provider: def.provider ?? null,
               systemPrompt: agentSystemPrompts[defId] ?? "",
               threads: displayThreads,
             };
@@ -425,6 +430,7 @@ function createAppState() {
             name: def.name,
             role: def.role,
             cli: def.cli,
+            provider: def.provider ?? null,
             systemPrompt: agentSystemPrompts[defId] ?? "",
             threads: displayThreads,
           };
@@ -723,6 +729,7 @@ function createAppState() {
       const threads = agentStore.getThreadsForAgent(selectedAgentId);
       return {
         ...def,
+        provider: def.provider ?? null,
         systemPrompt: agentSystemPrompts[selectedAgentId] ?? "",
         threads: threads.map((t) => agentStore.toDisplayThread(t)),
       };
@@ -735,12 +742,14 @@ function createAppState() {
       name: string,
       role: string | undefined,
       cli: string,
+      provider: string,
     ): Promise<string> {
       const agentId = await invoke<string>("create_agent", {
         workspaceId,
         name,
         ...(role !== undefined && { role }),
         cli,
+        provider,
       });
       agentDefinitions[agentId] = {
         id: agentId,
@@ -748,17 +757,28 @@ function createAppState() {
         name,
         ...(role !== undefined && { role }),
         cli,
+        provider,
       };
       const ws = workspaces.find((w) => w.id === workspaceId);
       if (ws) ws.agentDefinitionIds.push(agentId);
       return agentId;
     },
-    async updateAgentDefinition(agentId: string, name?: string, role?: string): Promise<void> {
-      await invoke("update_agent", { agentId, name, role });
+    async updateAgentDefinition(
+      agentId: string,
+      name?: string,
+      role?: string,
+      provider?: string,
+    ): Promise<void> {
+      const payload: Record<string, unknown> = { agentId };
+      if (name !== undefined) payload.name = name;
+      if (role !== undefined) payload.role = role;
+      if (provider !== undefined) payload.provider = provider;
+      await invoke("update_agent", payload);
       const def = agentDefinitions[agentId];
       if (def) {
         if (name !== undefined) def.name = name;
         if (role !== undefined) def.role = role;
+        if (provider !== undefined) def.provider = provider || null;
       }
     },
     updateAgentSystemPrompt(agentId: string, next: string) {

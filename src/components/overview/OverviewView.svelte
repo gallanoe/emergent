@@ -240,7 +240,11 @@
                 class="grid grid-cols-[160px_1fr_72px_52px] items-center gap-2.5"
               >
                 <div class="flex min-w-0 items-center gap-2">
-                  <AgentAvatar cli={def.cli} size={14} />
+                  <AgentAvatar
+                    provider={def.provider}
+                    name={def.name}
+                    size={14}
+                  />
                   <span class="truncate text-[12px] text-fg" title={def.name}
                     >{def.name}</span
                   >
@@ -339,7 +343,11 @@
               >
                 <StatusDot status={t.processStatus} size={6} />
                 <div class="flex min-w-0 items-center gap-1.5">
-                  <AgentAvatar cli={def?.cli ?? "claude"} size={14} />
+                  <AgentAvatar
+                    provider={def?.provider ?? null}
+                    name={def?.name ?? "—"}
+                    size={14}
+                  />
                   <span
                     class="truncate text-[11.5px] text-fg-muted"
                     title={def?.name ?? "—"}>{def?.name ?? "—"}</span

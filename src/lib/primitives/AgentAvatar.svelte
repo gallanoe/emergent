@@ -1,17 +1,20 @@
 <script lang="ts">
-  import { getCliLogo } from "../agent-logos";
+  import { getLogoUrlForProvider } from "../agent-logos";
 
   interface Props {
-    cli: string;
+    /** Persisted id from the catalog / agent definition (e.g. claude, codex). */
+    provider: string | null;
+    /** Shown as monogram when no logo exists for `provider`. */
+    name: string;
     size?: number;
     class?: string;
   }
 
-  let { cli, size = 28, class: className = "" }: Props = $props();
+  let { provider, name, size = 28, class: className = "" }: Props = $props();
 
-  const logoUrl = $derived(getCliLogo(cli));
+  const logoUrl = $derived(getLogoUrlForProvider(provider));
   const monogram = $derived(
-    cli.trim() ? cli.trim().charAt(0).toUpperCase() : "?",
+    name.trim() ? name.trim().charAt(0).toUpperCase() : "?",
   );
 </script>
 

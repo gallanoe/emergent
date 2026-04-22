@@ -20,6 +20,7 @@ function makeThread(
     agentId: "d1",
     workspaceId: "ws1",
     cli: "claude",
+    provider: "claude",
     name,
     processStatus,
     preview: "",
@@ -44,6 +45,7 @@ function makeAgentDef(
     id,
     name,
     cli: "claude",
+    provider: "claude",
     systemPrompt: "",
     threads,
     ...overrides,
@@ -61,9 +63,15 @@ function makeWorkspace(overrides?: Partial<DisplayWorkspace>): DisplayWorkspace 
         makeThread("t-live", "Refine API", "working", { updatedAt: "now" }),
         makeThread("t-idle", "Old task", "idle"),
       ]),
-      makeAgentDef("d2", "gemini-explorer", [makeThread("t2", "Reading", "initializing")], {
-        cli: "gemini",
-      }),
+      makeAgentDef(
+        "d2",
+        "gemini-explorer",
+        [makeThread("t2", "Reading", "initializing", { cli: "gemini", provider: "gemini" })],
+        {
+          cli: "gemini",
+          provider: "gemini",
+        },
+      ),
     ],
     ...overrides,
   };

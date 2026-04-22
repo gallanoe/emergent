@@ -282,6 +282,8 @@ pub struct KnownAgent {
     /// The full command string used to spawn the agent (e.g. "gemini --experimental-acp").
     pub command: String,
     pub available: bool,
+    /// Stable id for UI assets (e.g. logos), not inferred from the command string.
+    pub provider: String,
 }
 
 // ---------------------------------------------------------------------------
@@ -295,6 +297,9 @@ pub struct AgentDefinition {
     pub name: String,
     pub role: Option<String>,
     pub cli: String,
+    /// Chosen at creation from `KnownAgent::provider`; used for branding only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
 }
 
 // ---------------------------------------------------------------------------

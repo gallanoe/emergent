@@ -1,35 +1,29 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/svelte";
-import { getCliLogo } from "../agent-logos";
+import { getLogoUrlForProvider } from "../agent-logos";
 import AgentAvatar from "./AgentAvatar.svelte";
 
 describe("AgentAvatar", () => {
-  it("renders img with correct src for known CLI", () => {
-    const { container } = render(AgentAvatar, { props: { cli: "claude" } });
+  it("renders img when provider has a logo", () => {
+    const { container } = render(AgentAvatar, {
+      props: { provider: "claude", name: "My agent" },
+    });
     const img = container.querySelector("img");
-    expect(img?.getAttribute("src")).toBe(getCliLogo("claude"));
+    expect(img?.getAttribute("src")).toBe(getLogoUrlForProvider("claude"));
   });
 
-  it("renders monogram span for unknown CLI", () => {
-    render(AgentAvatar, { props: { cli: "unknown" } });
+  it("renders monogram from name when provider has no logo", () => {
+    render(AgentAvatar, { props: { provider: null, name: "Local" } });
     expect(screen.queryByRole("img")).toBeNull();
-    expect(screen.getByText("U")).toBeTruthy();
+    expect(screen.getByText("L")).toBeTruthy();
   });
 
   it("forwards size to width and height on img", () => {
     const { container } = render(AgentAvatar, {
-      props: { cli: "gemini", size: 32 },
+      props: { provider: "gemini", name: "G", size: 32 },
     });
     const img = container.querySelector("img");
     expect(img?.getAttribute("width")).toBe("32");
     expect(img?.getAttribute("height")).toBe("32");
-  });
-
-  it("resolves logo from a full command string (e.g. claude with flags)", () => {
-    const { container } = render(AgentAvatar, {
-      props: { cli: "claude --acp" },
-    });
-    const img = container.querySelector("img");
-    expect(img?.getAttribute("src")).toBe(getCliLogo("claude"));
   });
 });

@@ -6,11 +6,17 @@
     name: string;
     command: string;
     available: boolean;
+    provider: string;
   }
 
   interface Props {
     knownAgents: KnownAgent[];
-    onCreate: (cli: string, name: string, role: string | undefined) => void;
+    onCreate: (
+      cli: string,
+      name: string,
+      role: string | undefined,
+      provider: string,
+    ) => void;
     onCancel: () => void;
   }
 
@@ -36,8 +42,13 @@
   const canCreate = $derived(name.trim().length > 0 && selectedCli.length > 0);
 
   function handleCreate() {
-    if (!canCreate) return;
-    onCreate(selectedCli, name.trim(), role.trim() || undefined);
+    if (!canCreate || !selectedAgent) return;
+    onCreate(
+      selectedCli,
+      name.trim(),
+      role.trim() || undefined,
+      selectedAgent.provider,
+    );
   }
 
   function selectCli(agent: KnownAgent) {
@@ -83,7 +94,8 @@
           >
             {#if selectedAgent}
               <AgentAvatar
-                cli={selectedAgent.command}
+                provider={selectedAgent.provider}
+                name={selectedAgent.name}
                 size={18}
                 class="flex-shrink-0"
               />
@@ -130,7 +142,8 @@
                   onclick={() => selectCli(agent)}
                 >
                   <AgentAvatar
-                    cli={agent.command}
+                    provider={agent.provider}
+                    name={agent.name}
                     size={18}
                     class="flex-shrink-0"
                   />

@@ -37,9 +37,12 @@ pub async fn create_agent(
     name: String,
     role: Option<String>,
     cli: String,
+    provider: Option<String>,
 ) -> Result<String, String> {
     let ws_id = emergent_protocol::WorkspaceId::from(workspace_id.as_str());
-    Ok(manager.create_agent(ws_id, name, role, cli).await)
+    Ok(manager
+        .create_agent(ws_id, name, role, cli, provider)
+        .await)
 }
 
 #[tauri::command]
@@ -48,8 +51,11 @@ pub async fn update_agent(
     agent_id: String,
     name: Option<String>,
     role: Option<String>,
+    provider: Option<String>,
 ) -> Result<(), String> {
-    manager.update_agent(&agent_id, name, role).await
+    manager
+        .update_agent(&agent_id, name, role, provider)
+        .await
 }
 
 #[tauri::command]

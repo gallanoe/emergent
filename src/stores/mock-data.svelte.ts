@@ -164,11 +164,19 @@ function mkThread(
   messages: DisplayMessage[],
   extra?: Partial<DisplayThread>,
 ): DisplayThread {
+  const providerByAgent: Record<string, string> = {
+    a1: "claude",
+    a2: "codex",
+    a3: "gemini",
+    a4: "opencode",
+    a5: "kiro",
+  };
   return {
     id,
     agentId: agentDefinitionId,
     workspaceId: "ws1",
     cli,
+    provider: providerByAgent[agentDefinitionId] ?? null,
     name,
     processStatus,
     preview: "",
@@ -264,6 +272,7 @@ const agentDefinitions: DisplayAgentDefinition[] = [
     name: "claude-sonnet",
     role: "architect",
     cli: "claude",
+    provider: "claude",
     systemPrompt: "",
     threads: [
       mkThread("t1", "a1", "refine quantization", "working", "claude", T1_MESSAGES, {
@@ -297,6 +306,7 @@ const agentDefinitions: DisplayAgentDefinition[] = [
     name: "codex-validator",
     role: "reviewer",
     cli: "codex",
+    provider: "codex",
     systemPrompt: "",
     threads: [
       mkThread("t4", "a2", "verify palette delta", "idle", "codex", T4_MESSAGES, {
@@ -317,6 +327,7 @@ const agentDefinitions: DisplayAgentDefinition[] = [
     id: "a3",
     name: "gemini-explorer",
     cli: "gemini",
+    provider: "gemini",
     systemPrompt: "",
     threads: [
       mkThread(
@@ -335,6 +346,7 @@ const agentDefinitions: DisplayAgentDefinition[] = [
     name: "opencode-sweeper",
     role: "cleanup",
     cli: "opencode",
+    provider: "opencode",
     systemPrompt: "",
     threads: [
       mkThread(
@@ -352,6 +364,7 @@ const agentDefinitions: DisplayAgentDefinition[] = [
     id: "a5",
     name: "kiro-scout",
     cli: "kiro",
+    provider: "kiro",
     systemPrompt: "",
     threads: [],
   },

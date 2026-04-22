@@ -165,10 +165,11 @@ impl AgentManager {
         name: String,
         role: Option<String>,
         cli: String,
+        provider: Option<String>,
     ) -> String {
         let id = {
             let mut reg = self.registry.write().await;
-            reg.create_agent(workspace_id.clone(), name, role, cli)
+            reg.create_agent(workspace_id.clone(), name, role, cli, provider)
         };
         self.persist_agents(&workspace_id).await;
 
@@ -211,10 +212,11 @@ impl AgentManager {
         agent_id: &str,
         name: Option<String>,
         role: Option<String>,
+        provider: Option<String>,
     ) -> Result<(), String> {
         let workspace_id = {
             let mut reg = self.registry.write().await;
-            reg.update_agent(agent_id, name, role)?;
+            reg.update_agent(agent_id, name, role, provider)?;
             reg.get_agent(agent_id).map(|d| d.workspace_id.clone())
         };
         if let Some(ws_id) = workspace_id {
