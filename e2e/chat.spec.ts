@@ -5,11 +5,7 @@ test("chat view shows seeded assistant content in demo mode", async ({ page }) =
   await setupMocks(page);
   await page.goto("/");
 
-  await page
-    .locator("aside")
-    .getByRole("button", { name: /claude-sonnet/i })
-    .first()
-    .click();
+  await page.locator("aside").getByTestId("sidebar-agent-a1").click();
   await page.getByRole("button", { name: "refine quantization" }).click();
 
   await expect(page.getByText("analyzing the current navigation structure").first()).toBeVisible();

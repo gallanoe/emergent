@@ -5,11 +5,7 @@ test("agent page shows system prompt and saves edits", async ({ page }) => {
   await setupMocks(page);
   await page.goto("/");
 
-  await page
-    .locator("aside")
-    .getByRole("button", { name: /claude-sonnet/i })
-    .first()
-    .click();
+  await page.locator("aside").getByTestId("sidebar-agent-a1").click();
 
   await expect(page.getByText("System prompt", { exact: true })).toBeVisible();
 
@@ -21,10 +17,6 @@ test("agent page shows system prompt and saves edits", async ({ page }) => {
   await expect(page.getByText(unique)).toBeVisible();
 
   await page.getByTitle("Swarm dashboard").click();
-  await page
-    .locator("aside")
-    .getByRole("button", { name: /claude-sonnet/i })
-    .first()
-    .click();
+  await page.locator("aside").getByTestId("sidebar-agent-a1").click();
   await expect(page.getByText(unique)).toBeVisible();
 });

@@ -292,6 +292,8 @@
           />
         </div>
         <button
+          type="button"
+          data-testid="e2e-create-workspace"
           class="mt-1 h-7 px-4 rounded-[5px] text-[12px] font-medium text-bg-base bg-accent hover:bg-accent-hover transition-colors"
           onclick={() => (showCreateWorkspace = true)}
         >

@@ -11,11 +11,7 @@ test("demo shell shows overview then agent chat", async ({ page }) => {
 
   await expect(page.locator("aside").getByText("AGENTS", { exact: true })).toBeVisible();
 
-  await page
-    .locator("aside")
-    .getByRole("button", { name: /claude-sonnet/i })
-    .first()
-    .click();
+  await page.locator("aside").getByTestId("sidebar-agent-a1").click();
 
   await page.getByRole("button", { name: "refine quantization" }).click();
 

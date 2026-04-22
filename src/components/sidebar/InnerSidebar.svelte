@@ -205,6 +205,7 @@
           activeView.startsWith("agent") && selectedAgentId === def.id}
         <button
           type="button"
+          data-testid={`sidebar-agent-${def.id}`}
           aria-label={def.name}
           class="flex items-center gap-2.5 rounded-[6px] px-2 py-1.5 text-left text-[12.5px] transition-colors {active
             ? 'bg-bg-selected text-fg-heading hover:brightness-[0.99]'

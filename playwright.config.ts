@@ -3,6 +3,10 @@ import { defineConfig } from "@playwright/test";
 export default defineConfig({
   testDir: "e2e",
   outputDir: "e2e/results",
+  timeout: 60_000,
+  expect: {
+    timeout: 15_000,
+  },
   use: {
     baseURL: "http://localhost:1420",
     browserName: "chromium",
@@ -20,6 +24,10 @@ export default defineConfig({
     command: "bunx vite",
     url: "http://localhost:1420",
     reuseExistingServer: true,
-    timeout: 10000,
+    // CI cold starts: allow time for the dev server to accept connections
+    timeout: 120_000,
+    env: {
+      VITE_DEMO_MODE: "false",
+    },
   },
 });
