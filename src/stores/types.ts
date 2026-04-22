@@ -160,7 +160,6 @@ export type ActiveView =
   | "swarm"
   | "agent-threads"
   | "agent-chat"
-  | "agent-settings"
   | "create-agent"
   | "settings"
   | "app-settings"

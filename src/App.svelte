@@ -9,7 +9,6 @@
   import RuntimeSelector from "./components/settings/RuntimeSelector.svelte";
   import TerminalView from "./components/terminal/TerminalView.svelte";
   import ThreadListView from "./components/agent/ThreadListView.svelte";
-  import AgentSettingsView from "./components/agent/AgentSettingsView.svelte";
   import AgentCreatorView from "./components/agent/AgentCreatorView.svelte";
   import TaskTableView from "./components/tasks/TaskTableView.svelte";
   import TaskDetailSidebar from "./components/tasks/TaskDetailSidebar.svelte";
@@ -36,7 +35,6 @@
 
   let externalContent = $state<{ text: string; seq: number } | null>(null);
   let seq = 0;
-  let shutdownTarget = $state<{ id: string; name: string } | null>(null);
   let showCreateWorkspace = $state(false);
   let taskStatusFilter = $state<
     "all" | "working" | "pending" | "completed" | "failed"
@@ -135,17 +133,6 @@
 
   function pushToInput(text: string) {
     externalContent = { text, seq: ++seq };
-  }
-
-  function requestShutdown(agentId: string, agentName: string) {
-    shutdownTarget = { id: agentId, name: agentName };
-  }
-
-  async function confirmShutdown() {
-    if (!shutdownTarget) return;
-    const id = shutdownTarget.id;
-    shutdownTarget = null;
-    await appState.killThread(id);
   }
 
   function onGlobalKeydown(e: KeyboardEvent) {
@@ -523,15 +510,6 @@
           {/if}
         {/if}
       </div>
-    {:else if appState.activeView === "agent-settings" && appState.selectedAgentDef}
-      <AgentSettingsView
-        agentDefinition={appState.selectedAgentDef}
-        onBack={() => appState.backToThreads()}
-        onUpdate={(name, role) =>
-          appState.updateAgentDefinition(appState.selectedAgentId!, name, role)}
-        onDelete={() =>
-          appState.deleteAgentDefinition(appState.selectedAgentId!)}
-      />
     {:else if appState.activeView === "agent-chat" && appState.selectedThread}
       {@const thread = appState.selectedThread}
       {@const task = thread.taskId
@@ -620,19 +598,6 @@
     {/if}
   </main>
 </div>
-
-{#if shutdownTarget}
-  <ConfirmDialog
-    title="Shutdown {shutdownTarget.name}?"
-    description="Any in-progress work will be stopped immediately. This cannot be undone."
-    confirmLabel="Shutdown"
-    confirmVariant="danger"
-    onConfirm={confirmShutdown}
-    onCancel={() => {
-      shutdownTarget = null;
-    }}
-  />
-{/if}
 
 {#if showCreateWorkspace}
   <CreateWorkspaceDialog

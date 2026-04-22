@@ -58,9 +58,6 @@ function createAppState() {
   let agentConnections = $state<Record<string, string[]>>({});
   let selectedWorkspaceId = $state<string | null>(null);
   let activeView = $state<ActiveView>("swarm");
-  // Previous view stashed when navigating to agent-chat from the tasks view,
-  // so the back button returns to where the user came from.
-  let chatReturnView = $state<ActiveView | null>(null);
   let runtimePreference = $state<ContainerRuntimePreference>({
     selected_runtime: "docker",
   });
@@ -545,10 +542,6 @@ function createAppState() {
   }
 
   function selectThread(threadId: string) {
-    // Remember the view we came from so back navigation returns there
-    if (activeView === "tasks" || activeView === "agent-threads") {
-      chatReturnView = activeView;
-    }
     selectedThreadId = threadId;
     activeView = "agent-chat";
 
@@ -577,17 +570,6 @@ function createAppState() {
         });
       }
     }
-  }
-
-  function backToThreads() {
-    selectedThreadId = null;
-    activeView = chatReturnView ?? "agent-threads";
-    chatReturnView = null;
-  }
-
-  function openAgentSettings() {
-    selectedThreadId = null;
-    activeView = "agent-settings";
   }
 
   function getSelectedSwarm(): DisplayWorkspace | undefined {
@@ -685,8 +667,6 @@ function createAppState() {
     selectWorkspace,
     selectAgent,
     selectThread,
-    backToThreads,
-    openAgentSettings,
     startCreatingAgent() {
       activeView = "create-agent";
     },
