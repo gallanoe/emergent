@@ -36,14 +36,6 @@
   let externalContent = $state<{ text: string; seq: number } | null>(null);
   let seq = 0;
   let showCreateWorkspace = $state(false);
-  let taskStatusFilter = $state<
-    "all" | "working" | "pending" | "completed" | "failed"
-  >("all");
-  const filteredWorkspaceTasks = $derived(
-    taskStatusFilter === "all"
-      ? appState.workspaceTasks
-      : appState.workspaceTasks.filter((t) => t.status === taskStatusFilter),
-  );
   let workspaceMenu = $state<{
     x: number;
     y: number;
@@ -371,46 +363,14 @@
           >
         </div>
         <div
-          class="flex-1 min-h-0"
+          class="flex min-h-0 min-w-0 flex-1 flex-col"
           style="display:grid; grid-template-columns: {appState.taskSidebarMode
             ? '1fr 320px'
             : '1fr'};"
         >
-          <!-- Table -->
-          <div class="overflow-y-auto p-3.5">
-            <div class="flex items-center justify-between mb-3 px-1">
-              <div class="text-[11px] text-fg-disabled">
-                {filteredWorkspaceTasks.length} of {appState.workspaceTasks
-                  .length} tasks
-              </div>
-              <button
-                class="flex items-center gap-1.5 text-[11px] font-medium text-bg-base bg-accent hover:bg-accent-hover rounded-md px-3 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-accent"
-                onclick={() => appState.openCreateTask()}
-                disabled={!appState.selectedWorkspaceContainerRunning}
-                title={appState.selectedWorkspaceContainerRunning
-                  ? "Create a new task"
-                  : "Start the workspace container to create tasks"}
-              >
-                <Plus size={11} />
-                New task
-              </button>
-            </div>
-            <div class="flex items-center gap-1 mb-3 px-1">
-              {#each ["all", "working", "pending", "completed", "failed"] as f (f)}
-                <button
-                  class="px-2.5 py-1 rounded-md text-[10px] font-medium capitalize border transition-colors
-                    {taskStatusFilter === f
-                    ? 'bg-bg-selected text-fg-heading border-border-strong'
-                    : 'text-fg-muted border-border-default hover:bg-bg-hover'}"
-                  onclick={() =>
-                    (taskStatusFilter = f as typeof taskStatusFilter)}
-                >
-                  {f}
-                </button>
-              {/each}
-            </div>
+          <div class="flex min-h-0 min-w-0 flex-col overflow-hidden">
             <TaskTableView
-              tasks={filteredWorkspaceTasks}
+              tasks={appState.workspaceTasks}
               selectedTaskId={appState.selectedTaskId}
               agentNames={Object.fromEntries(
                 Object.values(appState.agentDefinitionsMap ?? {}).map((d) => [
@@ -418,9 +378,11 @@
                   d.name,
                 ]),
               )}
+              containerRunning={appState.selectedWorkspaceContainerRunning}
               onSelectTask={(id) => appState.selectTask(id)}
               onNavigateToSession={(threadId) =>
                 appState.selectThread(threadId)}
+              onCreateTask={() => appState.openCreateTask()}
             />
           </div>
           <!-- Sidebar -->
