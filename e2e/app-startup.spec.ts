@@ -36,7 +36,9 @@ const emptyStateMock = `
         },
       };
       if (cmd in responses) return Promise.resolve(responses[cmd]);
-      return Promise.reject("Unknown command: " + cmd);
+      // Never reject: unknown invocations would fail init and can surface
+      // the runtime-unavailable view instead of the empty-workspace CTA.
+      return Promise.resolve(null);
     },
     transformCallback: function(cb) {
       const id = ++callbackId;

@@ -217,7 +217,7 @@
     onOpenAppSettings={() => appState.showAppSettings()}
     onOpenWorkspaceSettings={() => appState.showWorkspaceSettings()}
   />
-  <main class="relative flex min-h-0 min-w-0 flex-col">
+  <main class="relative flex h-full min-h-0 min-w-0 flex-col">
     <div
       class="relative z-[60] flex h-[38px] flex-shrink-0 items-center px-5"
       class:border-b={showWorkspaceNameHeader}
