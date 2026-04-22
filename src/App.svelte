@@ -183,6 +183,14 @@
       pushToInput(content);
     }
   }
+
+  async function handleNewThread() {
+    const agentId = appState.selectedAgentId;
+    if (agentId) {
+      const threadId = await appState.spawnThread(agentId);
+      appState.selectThread(threadId);
+    }
+  }
 </script>
 
 <!-- Drag region overlay for window dragging (z-[100]).
@@ -192,7 +200,7 @@
   data-tauri-drag-region
 ></div>
 
-<div class="grid grid-cols-[256px_1fr] h-screen">
+<div class="grid h-screen grid-cols-[296px_1fr]">
   <div class="flex flex-col min-h-0">
     <div
       class="h-[38px] flex-shrink-0 bg-bg-sidebar border-b border-r border-border-default"
@@ -208,25 +216,22 @@
       />
       <InnerSidebar
         swarm={appState.selectedSwarm}
+        workspaces={appState.swarms}
+        selectedWorkspaceId={appState.selectedSwarmId}
         activeView={appState.activeView}
         selectedAgentId={appState.selectedAgentId}
         demoMode={appState.demoMode}
-        containerRunning={appState.selectedSwarm?.containerStatus.state ===
-          "running"}
         activeTaskCount={appState.activeWorkspaceTaskCount}
-        onSelectView={(view) => {
-          if (view === "swarm" && appState.selectedSwarmId) {
-            appState.selectWorkspace(appState.selectedSwarmId);
-          } else if (view === "settings") {
-            appState.activeView = "settings";
-          } else if (view === "terminal") {
-            appState.activeView = "terminal";
-          } else if (view === "tasks") {
-            appState.showTasks();
-          }
-        }}
+        onSelectWorkspace={(id) => appState.selectWorkspace(id)}
+        onCreateWorkspace={() => (showCreateWorkspace = true)}
         onSelectAgent={(id) => appState.selectAgent(id)}
         onCreateAgent={() => appState.startCreatingAgent()}
+        onNewThread={handleNewThread}
+        onOpenTasks={() => appState.showTasks()}
+        onOpenTerminal={() => {
+          appState.activeView = "terminal";
+        }}
+        onOpenAppSettings={() => appState.showAppSettings()}
       />
     </div>
   </div>

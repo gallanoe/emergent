@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/svelte";
 import InnerSidebar from "./InnerSidebar.svelte";
-import type { DisplayWorkspace, DisplayAgentDefinition } from "../../stores/types";
+import type { DisplayAgentDefinition, DisplayWorkspace } from "../../stores/types";
 
 function makeAgentDef(overrides?: Partial<DisplayAgentDefinition>): DisplayAgentDefinition {
   return {
@@ -22,84 +22,93 @@ function makeSwarm(overrides?: Partial<DisplayWorkspace>): DisplayWorkspace {
     containerStatus: { state: "running" },
     agentDefinitions: [
       makeAgentDef(),
-      makeAgentDef({
-        id: "agent-2",
-        name: "Gemini",
-        role: "Analyst",
-      }),
+      makeAgentDef({ id: "agent-2", name: "Gemini", role: "Analyst" }),
     ],
     ...overrides,
   };
 }
 
+const baseProps = (overrides: Record<string, unknown> = {}) => ({
+  swarm: (overrides.swarm as DisplayWorkspace | undefined) ?? makeSwarm(),
+  workspaces: (overrides.workspaces as DisplayWorkspace[]) ?? [makeSwarm()],
+  selectedWorkspaceId: (overrides.selectedWorkspaceId as string | null) ?? "swarm-1",
+  activeView:
+    (overrides.activeView as "agent-threads" | "tasks" | "terminal" | "app-settings") ??
+    "agent-threads",
+  selectedAgentId: (overrides.selectedAgentId as string | null) ?? "agent-1",
+  demoMode: (overrides.demoMode as boolean) ?? false,
+  activeTaskCount: (overrides.activeTaskCount as number) ?? 0,
+  onSelectWorkspace: (overrides.onSelectWorkspace as (id: string) => void) ?? (() => {}),
+  onCreateWorkspace: (overrides.onCreateWorkspace as () => void) ?? (() => {}),
+  onSelectAgent: (overrides.onSelectAgent as (id: string) => void) ?? (() => {}),
+  onCreateAgent: (overrides.onCreateAgent as () => void) ?? (() => {}),
+  onNewThread: (overrides.onNewThread as () => void) ?? (() => {}),
+  onOpenTasks: (overrides.onOpenTasks as () => void) ?? (() => {}),
+  onOpenTerminal: (overrides.onOpenTerminal as () => void) ?? (() => {}),
+  onOpenAppSettings: (overrides.onOpenAppSettings as () => void) ?? (() => {}),
+});
+
 function renderSidebar(overrides: Record<string, unknown> = {}) {
-  return render(InnerSidebar, {
-    props: {
-      swarm: (overrides.swarm as DisplayWorkspace | undefined) ?? makeSwarm(),
-      activeView: (overrides.activeView as string) ?? "swarm",
-      selectedAgentId: (overrides.selectedAgentId as string | null) ?? null,
-      demoMode: (overrides.demoMode as boolean) ?? false,
-      containerRunning: (overrides.containerRunning as boolean) ?? false,
-      onSelectView:
-        (overrides.onSelectView as (view: "swarm" | "settings" | "terminal" | "tasks") => void) ??
-        (() => {}),
-      onSelectAgent: (overrides.onSelectAgent as (id: string) => void) ?? (() => {}),
-      onCreateAgent: (overrides.onCreateAgent as () => void) ?? (() => {}),
-    },
-  });
+  return render(InnerSidebar, { props: baseProps(overrides) });
 }
 
 describe("InnerSidebar", () => {
-  it("renders nav items with Skills and Tasks greyed out", () => {
+  it("renders the five shell regions when a workspace is present", () => {
     renderSidebar();
-    expect(screen.getByText("Swarm")).toBeTruthy();
-    expect(screen.getByText("Settings")).toBeTruthy();
-    expect(screen.getByText("Skills")).toBeTruthy();
+    expect(screen.getByText("AGENTS")).toBeTruthy();
+    expect(screen.getByText("New thread")).toBeTruthy();
     expect(screen.getByText("Tasks")).toBeTruthy();
+    expect(screen.getByText("Terminal")).toBeTruthy();
+    expect(screen.getByTitle("Application settings")).toBeTruthy();
+    expect(screen.getByText("Research Swarm")).toBeTruthy();
   });
 
-  it("renders agents with names", () => {
-    renderSidebar();
-    expect(screen.getByText("Claude")).toBeTruthy();
-    expect(screen.getByText("Gemini")).toBeTruthy();
+  it("fires primary action callbacks for New thread, Tasks, and Terminal", async () => {
+    const onNewThread = vi.fn();
+    const onOpenTasks = vi.fn();
+    const onOpenTerminal = vi.fn();
+    renderSidebar({ onNewThread, onOpenTasks, onOpenTerminal });
+    await fireEvent.click(screen.getByText("New thread"));
+    expect(onNewThread).toHaveBeenCalled();
+    await fireEvent.click(screen.getByText("Tasks"));
+    expect(onOpenTasks).toHaveBeenCalled();
+    await fireEvent.click(screen.getByText("Terminal"));
+    expect(onOpenTerminal).toHaveBeenCalled();
   });
 
-  it("renders the agent CLI icon for known CLIs", () => {
-    const { container } = renderSidebar();
-    const icons = container.querySelectorAll("img[src]");
-    expect(icons.length).toBe(2);
-  });
-
-  it("calls onSelectView when Swarm nav clicked", async () => {
-    const onSelectView = vi.fn();
-    renderSidebar({ onSelectView, activeView: "agent" });
-    await fireEvent.click(screen.getByText("Swarm"));
-    expect(onSelectView).toHaveBeenCalledWith("swarm");
-  });
-
-  it("calls onSelectAgent when agent clicked", async () => {
+  it("calls onSelectAgent when an agent row is clicked", async () => {
     const onSelectAgent = vi.fn();
-    renderSidebar({ onSelectAgent });
+    renderSidebar({ onSelectAgent, activeView: "agent-threads" });
     await fireEvent.click(screen.getByText("Gemini"));
     expect(onSelectAgent).toHaveBeenCalledWith("agent-2");
   });
 
-  it("calls onSelectView when Settings nav clicked", async () => {
-    const onSelectView = vi.fn();
-    renderSidebar({ onSelectView });
-    await fireEvent.click(screen.getByText("Settings"));
-    expect(onSelectView).toHaveBeenCalledWith("settings");
+  it("applies the selected style to the active agent row", () => {
+    const { container } = renderSidebar({
+      selectedAgentId: "agent-2",
+      activeView: "agent-threads",
+    });
+    const btn = screen.getByText("Gemini").closest("button");
+    expect(btn?.className).toMatch(/bg-bg-selected/);
+    expect(container.querySelectorAll("button.bg-bg-selected").length).toBeGreaterThan(0);
   });
 
-  it("does not fire onSelectView for disabled items", async () => {
-    const onSelectView = vi.fn();
-    renderSidebar({ onSelectView });
-    await fireEvent.click(screen.getByText("Skills"));
-    expect(onSelectView).not.toHaveBeenCalled();
+  it("calls onCreateAgent when the AGENTS + button is used", async () => {
+    const onCreateAgent = vi.fn();
+    renderSidebar({ onCreateAgent, demoMode: false });
+    await fireEvent.click(screen.getByTitle("Add agent definition"));
+    expect(onCreateAgent).toHaveBeenCalled();
   });
 
-  it("does not render stopped container helper text", () => {
-    renderSidebar({ containerRunning: false });
-    expect(screen.queryByText("Container stopped — start it to spawn threads.")).toBeNull();
+  it("calls onOpenAppSettings when the footer gear is used", async () => {
+    const onOpenAppSettings = vi.fn();
+    renderSidebar({ onOpenAppSettings });
+    await fireEvent.click(screen.getByTitle("Application settings"));
+    expect(onOpenAppSettings).toHaveBeenCalled();
+  });
+
+  it("shows a task count badge when activeTaskCount is greater than zero", () => {
+    renderSidebar({ activeTaskCount: 4 });
+    expect(screen.getByTestId("task-count-badge").textContent).toBe("4");
   });
 });

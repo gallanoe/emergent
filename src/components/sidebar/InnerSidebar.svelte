@@ -1,182 +1,216 @@
 <script lang="ts">
-  import type { DisplayWorkspace } from "../../stores/types";
-  import { getAgentLogo } from "../../lib/agent-logos";
   import {
-    LayoutGrid,
-    Settings,
-    Sparkles,
+    Cog,
     ListChecks,
     Plus,
+    Search,
     SquareTerminal,
   } from "@lucide/svelte";
-  import type { Component } from "svelte";
+  import type { ActiveView, DisplayWorkspace } from "../../stores/types";
+  import { AgentAvatar, Kbd, SLabel } from "../../lib/primitives";
+  import WorkspaceSwitcher from "./WorkspaceSwitcher.svelte";
 
   interface Props {
     swarm: DisplayWorkspace | undefined;
-    activeView: string;
+    workspaces: DisplayWorkspace[];
+    selectedWorkspaceId: string | null;
+    activeView: ActiveView;
     selectedAgentId: string | null;
     demoMode: boolean;
-    containerRunning: boolean;
-    activeTaskCount?: number;
-    onSelectView: (view: "swarm" | "settings" | "terminal" | "tasks") => void;
+    activeTaskCount: number;
+    onSelectWorkspace: (id: string) => void;
+    onCreateWorkspace: () => void;
     onSelectAgent: (id: string) => void;
     onCreateAgent: () => void;
+    onNewThread: () => void;
+    onOpenTasks: () => void;
+    onOpenTerminal: () => void;
+    onOpenAppSettings: () => void;
   }
 
   let {
     swarm,
+    workspaces,
+    selectedWorkspaceId,
     activeView,
     selectedAgentId,
     demoMode,
-    containerRunning,
-    activeTaskCount = 0,
-    onSelectView,
+    activeTaskCount,
+    onSelectWorkspace,
+    onCreateWorkspace,
     onSelectAgent,
     onCreateAgent,
+    onNewThread,
+    onOpenTasks,
+    onOpenTerminal,
+    onOpenAppSettings,
   }: Props = $props();
 
-  const navItems = $derived<
-    {
-      id: string;
-      label: string;
-      icon: Component;
-      enabled: boolean;
-      badge?: number;
-    }[]
-  >([
-    { id: "swarm", label: "Swarm", icon: LayoutGrid, enabled: true },
-    { id: "settings", label: "Settings", icon: Settings, enabled: true },
-    {
-      id: "terminal",
-      label: "Terminal",
-      icon: SquareTerminal,
-      enabled: containerRunning,
-    },
-    { id: "skills", label: "Skills", icon: Sparkles, enabled: false },
-    activeTaskCount > 0
-      ? {
-          id: "tasks",
-          label: "Tasks",
-          icon: ListChecks,
-          enabled: true,
-          badge: activeTaskCount,
-        }
-      : { id: "tasks", label: "Tasks", icon: ListChecks, enabled: true },
-  ]);
+  const isMacOS = $derived(
+    typeof navigator !== "undefined" &&
+      (navigator.platform.toLowerCase().includes("mac") ||
+        /Mac|iPhone|iPad|iPod/.test(navigator.userAgent)),
+  );
 </script>
 
 <aside
-  class="flex flex-col w-[200px] border-r border-border-default bg-bg-sidebar pt-3"
+  class="flex h-full w-[240px] min-h-0 shrink-0 flex-col border-r border-border-default bg-bg-sidebar"
 >
-  {#if swarm}
-    <div class="px-2 flex flex-col gap-0.5">
-      {#each navItems as item (item.id)}
-        <button
-          class="flex items-center gap-2 w-full px-2.5 py-1.5 rounded-md text-[12px]
-                 {item.enabled
-            ? (item.id === 'settings' && activeView === 'settings') ||
-              (item.id === 'swarm' &&
-                (activeView === 'swarm' || activeView.startsWith('agent'))) ||
-              (item.id === 'terminal' && activeView === 'terminal') ||
-              (item.id === 'tasks' && activeView === 'tasks')
-              ? 'bg-bg-hover text-fg-heading'
-              : 'text-fg-muted hover:bg-bg-hover'
-            : 'text-fg-disabled cursor-default'}"
-          disabled={!item.enabled}
-          onclick={() => {
-            if (item.enabled) {
-              if (item.id === "swarm") onSelectView("swarm");
-              else if (item.id === "settings") onSelectView("settings");
-              else if (item.id === "terminal") onSelectView("terminal");
-              else if (item.id === "tasks") onSelectView("tasks");
-            }
-          }}
-        >
-          <item.icon
-            size={14}
-            class={item.enabled ? "opacity-70" : "opacity-40"}
-          />
-          <span class="flex-1 text-left">{item.label}</span>
-          {#if item.badge !== undefined}
-            <span
-              class="text-[10px] font-medium text-fg-muted bg-bg-elevated border border-border-default rounded-full px-1.5 min-w-[18px] text-center"
-            >
-              {item.badge}
-            </span>
-          {/if}
-        </button>
-      {/each}
-    </div>
-
-    <div
-      class="px-4 pt-3 pb-1.5 text-[10px] font-medium uppercase tracking-wider text-fg-muted"
+  <!-- 1. Window chrome strip -->
+  <div
+    class="flex h-[34px] items-center gap-[6px] pr-[10px]"
+    class:pl-[72px]={isMacOS}
+    class:pl-[10px]={!isMacOS}
+    data-tauri-drag-region
+  >
+    <div class="flex-1"></div>
+    <button
+      type="button"
+      title="Hide sidebar (coming soon)"
+      class="inline-flex h-[26px] w-[26px] items-center justify-center rounded-[6px] text-fg-muted"
     >
-      Agents
-    </div>
+      <svg
+        class="h-[13px] w-[13px]"
+        viewBox="0 0 16 16"
+        fill="none"
+        aria-hidden="true"
+        ><rect
+          x="1.5"
+          y="2.5"
+          width="13"
+          height="11"
+          rx="1.5"
+          stroke="currentColor"
+          stroke-width="1.3"
+        /><path d="M5.5 2.5v11" stroke="currentColor" stroke-width="1.3" />
+      </svg>
+    </button>
+    <button
+      type="button"
+      title="Search · ⌘K"
+      class="inline-flex h-[26px] w-[26px] items-center justify-center rounded-[6px] text-fg-muted"
+      onclick={() => {
+        // TODO(search)
+      }}
+    >
+      <Search size={12} />
+    </button>
+  </div>
 
-    <div class="px-2 flex-1 overflow-y-auto min-h-0">
-      {#each swarm.agentDefinitions as agentDef (agentDef.id)}
-        {@const agentLogo = getAgentLogo(agentDef.name, agentDef.cli)}
-        {@const activeSessionCount = agentDef.threads.filter(
-          (t) =>
-            t.processStatus === "idle" ||
-            t.processStatus === "working" ||
-            t.processStatus === "initializing",
-        ).length}
-        <button
-          class="flex items-center gap-2 w-full px-2.5 py-[7px] rounded-md text-[12px] mt-0.5
-                 {activeView.startsWith('agent') &&
-          selectedAgentId === agentDef.id
-            ? 'bg-bg-hover text-fg-heading'
-            : 'text-fg-muted hover:bg-bg-hover'}"
-          onclick={() => onSelectAgent(agentDef.id)}
+  <!-- 2. Workspace switcher -->
+  <div class="px-[8px] pt-[2px] pb-[10px]">
+    <WorkspaceSwitcher
+      {workspaces}
+      selectedId={selectedWorkspaceId}
+      onSelect={onSelectWorkspace}
+      {onCreateWorkspace}
+    />
+  </div>
+
+  <!-- 3. Primary actions -->
+  <div class="flex flex-col gap-px px-[8px] pb-[6px]">
+    <button
+      type="button"
+      class="flex h-7 w-full items-center gap-2.5 rounded-[6px] px-2.5 py-1.5 text-left text-[12.5px] font-medium text-fg-heading"
+      onclick={onNewThread}
+    >
+      <span class="inline-flex w-[18px] justify-center text-fg-heading"
+        ><Plus size={14} /></span
+      >
+      <span class="flex-1">New thread</span>
+      <Kbd keys={["⌘", "N"]} />
+    </button>
+    <button
+      type="button"
+      class="flex h-7 w-full items-center gap-2.5 rounded-[6px] px-2.5 py-1.5 text-left text-[12.5px]
+        {activeView === 'tasks'
+        ? 'bg-bg-selected text-fg-heading'
+        : 'text-fg-default'}"
+      onclick={onOpenTasks}
+    >
+      <span
+        class="inline-flex w-[18px] justify-center {activeView === 'tasks'
+          ? 'text-fg-heading'
+          : 'text-fg-muted'}"><ListChecks size={13} /></span
+      >
+      <span class="flex-1">Tasks</span>
+      {#if activeTaskCount > 0}
+        <span
+          class="text-[10px] text-fg-disabled font-mono tabular-nums"
+          data-testid="task-count-badge">{activeTaskCount}</span
         >
-          {#if agentLogo}
-            <img
-              src={agentLogo}
-              alt=""
-              class="w-[14px] h-[14px] rounded-[3px] flex-shrink-0"
-            />
-          {:else}
-            <span
-              class="w-[14px] h-[14px] rounded-[3px] bg-bg-hover flex items-center justify-center text-[9px] font-semibold text-fg-muted flex-shrink-0"
-            >
-              {agentDef.name.charAt(0).toUpperCase()}
-            </span>
-          {/if}
-          <span class="flex-1 min-w-0 truncate text-left">
-            {agentDef.name}{#if agentDef.role}<span class="text-fg-disabled">
-                — {agentDef.role}</span
-              >{/if}
-          </span>
-          {#if activeSessionCount > 0}
-            <span
-              title="{activeSessionCount} active session{activeSessionCount !==
-              1
-                ? 's'
-                : ''}"
-              class="text-[10px] font-medium text-fg-muted bg-bg-elevated border border-border-default rounded-full px-1.5 min-w-[18px] text-center flex-shrink-0"
-            >
-              {activeSessionCount}
-            </span>
-          {/if}
-        </button>
-      {/each}
-      {#if !demoMode && swarm}
+      {/if}
+    </button>
+    <button
+      type="button"
+      class="flex h-7 w-full items-center gap-2.5 rounded-[6px] px-2.5 py-1.5 text-left text-[12.5px]
+        {activeView === 'terminal'
+        ? 'bg-bg-selected text-fg-heading'
+        : 'text-fg-default'}"
+      onclick={onOpenTerminal}
+    >
+      <span
+        class="inline-flex w-[18px] justify-center {activeView === 'terminal'
+          ? 'text-fg-heading'
+          : 'text-fg-muted'}"><SquareTerminal size={13} /></span
+      >
+      <span class="flex-1">Terminal</span>
+    </button>
+  </div>
+
+  <!-- 4. Agents list -->
+  <div class="flex min-h-0 flex-1 flex-col">
+    <div class="flex items-center gap-1.5 px-3 pt-3 pb-1.5 pl-[12px]">
+      <SLabel>AGENTS</SLabel>
+      <div class="flex-1"></div>
+      {#if !demoMode}
         <button
-          class="interactive flex items-center gap-1.5 w-full px-2.5 py-[7px] rounded-md text-[11px] text-fg-muted mt-1"
+          type="button"
+          title="Add agent definition"
+          class="inline-flex h-[18px] w-[18px] items-center justify-center rounded-[4px] text-fg-disabled"
           onclick={onCreateAgent}
         >
-          <Plus size={12} />
-          Add agent
+          <Plus size={10} />
         </button>
       {/if}
     </div>
-  {:else}
-    <div
-      class="flex items-center justify-center flex-1 text-fg-disabled text-[12px]"
-    >
-      No swarm selected
+    <div class="flex min-h-0 flex-1 flex-col gap-px overflow-y-auto px-2">
+      {#each swarm?.agentDefinitions ?? [] as def (def.id)}
+        {@const active =
+          activeView.startsWith("agent") && selectedAgentId === def.id}
+        <button
+          type="button"
+          class="flex items-center gap-2.5 rounded-[6px] px-2 py-1.5 text-left text-[12.5px] {active
+            ? 'bg-bg-selected text-fg-heading'
+            : 'text-fg-default'}"
+          onclick={() => onSelectAgent(def.id)}
+        >
+          <AgentAvatar cli={def.cli} size={18} />
+          <span class="min-w-0 flex-1 truncate">{def.name}</span>
+          {#if def.threads.length > 0}
+            <span class="text-[10px] text-fg-disabled font-mono"
+              >{def.threads.length}</span
+            >
+          {/if}
+        </button>
+      {/each}
     </div>
-  {/if}
+  </div>
+
+  <!-- 5. Footer -->
+  <div
+    class="flex gap-1 border-t border-border-default px-[10px] py-2 [gap:4px] [padding-top:8px] [padding-bottom:8px]"
+  >
+    <button
+      type="button"
+      title="Application settings"
+      class="inline-flex h-7 w-7 items-center justify-center rounded-[6px] {activeView ===
+      'app-settings'
+        ? 'bg-bg-selected text-fg-heading'
+        : 'text-fg-muted'}"
+      onclick={onOpenAppSettings}
+    >
+      <Cog size={12} />
+    </button>
+  </div>
 </aside>
