@@ -3,7 +3,7 @@
     DisplayAgentDefinition,
     DisplayThread,
     DisplayTask,
-    AgentStatus,
+    ThreadProcessStatus,
   } from "../../stores/types";
   import { Settings, Plus, EllipsisVertical } from "@lucide/svelte";
   import ConfirmDialog from "../ConfirmDialog.svelte";
@@ -50,7 +50,7 @@
   let menuPos = $state({ x: 0, y: 0 });
   let deleteThreadId = $state<string | null>(null);
 
-  function statusColor(status: AgentStatus | "dead"): string {
+  function statusColor(status: ThreadProcessStatus | "dead"): string {
     switch (status) {
       case "idle":
         return "bg-success";
@@ -67,7 +67,7 @@
     }
   }
 
-  function isAlive(status: AgentStatus | "dead"): boolean {
+  function isAlive(status: ThreadProcessStatus | "dead"): boolean {
     return (
       status === "idle" || status === "working" || status === "initializing"
     );

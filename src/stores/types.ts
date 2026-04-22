@@ -70,7 +70,7 @@ export interface TopologyChangedPayload {
   thread_id_b: string;
 }
 
-export type AgentStatus = "initializing" | "idle" | "working" | "error";
+export type ThreadProcessStatus = "initializing" | "idle" | "working" | "error";
 
 // ── Agent/Thread remodel types ─────────────────────────────
 
@@ -103,8 +103,8 @@ export interface DisplayThread {
   workspaceId: string;
   cli: string;
   name: string;
-  status: AgentStatus | "dead";
-  processStatus: AgentStatus | "dead";
+  status: ThreadProcessStatus | "dead";
+  processStatus: ThreadProcessStatus | "dead";
   preview: string;
   messages: DisplayMessage[];
   activeToolCalls: DisplayToolCall[];
