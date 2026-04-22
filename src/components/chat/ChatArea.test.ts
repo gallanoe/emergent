@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/svelte";
 import ChatArea from "./ChatArea.svelte";
 import type { DisplayThread, DisplayMessage } from "../../stores/types";
@@ -56,14 +56,14 @@ describe("ChatArea", () => {
     expect(screen.getByText("Fix the bug")).toBeTruthy();
   });
 
-  it("renders tool call groups with verb and target", () => {
+  it("renders generic tool calls as flat ToolRow lines", () => {
     const agent = makeAgent([
       msg("assistant", "Let me check", "1:00 PM"),
       msg("tool-group", "", "1:00 PM", {
         toolCalls: [
           {
             id: "tc1",
-            name: "Read file",
+            name: "read_file",
             kind: "read",
             status: "completed",
             locations: ["src/foo.ts"],
@@ -73,18 +73,18 @@ describe("ChatArea", () => {
       }),
     ]);
     render(ChatArea, { props: { agent } });
-    expect(screen.getByText("Read")).toBeTruthy();
-    expect(screen.getByText("src/foo.ts")).toBeTruthy();
+    expect(screen.getByText("read_file")).toBeTruthy();
+    expect(screen.getByText("(src/foo.ts)")).toBeTruthy();
   });
 
-  it("renders multiple tool calls open by default", () => {
+  it("renders multiple generic tool calls as separate ToolRows", () => {
     const agent = makeAgent([
       msg("assistant", "Checking...", "1:00 PM"),
       msg("tool-group", "", "1:00 PM", {
         toolCalls: [
           {
             id: "tc1",
-            name: "Read file",
+            name: "read_file",
             kind: "read",
             status: "completed",
             locations: ["src/foo.ts"],
@@ -92,7 +92,7 @@ describe("ChatArea", () => {
           },
           {
             id: "tc2",
-            name: "Write file",
+            name: "write_file",
             kind: "edit",
             status: "completed",
             locations: ["src/bar.ts"],
@@ -102,8 +102,8 @@ describe("ChatArea", () => {
       }),
     ]);
     render(ChatArea, { props: { agent } });
-    expect(screen.getByText("src/foo.ts")).toBeTruthy();
-    expect(screen.getByText("src/bar.ts")).toBeTruthy();
+    expect(screen.getByText("(src/foo.ts)")).toBeTruthy();
+    expect(screen.getByText("(src/bar.ts)")).toBeTruthy();
   });
 
   it("renders custom MCP card for list_agents", () => {
@@ -301,7 +301,7 @@ describe("ChatArea", () => {
         },
       },
     });
-    await fireEvent.click(screen.getByText("Edit"));
+    await fireEvent.click(screen.getByTitle("Edit queued message"));
     expect(editCalled).toBe(true);
   });
 
@@ -353,5 +353,20 @@ describe("ChatArea", () => {
     );
     render(ChatArea, { props: { agent } });
     expect(screen.getByText("Management permissions have been granted.")).toBeTruthy();
+  });
+
+  it("copies fenced code when md-copy is clicked", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    const prev = navigator.clipboard;
+    Object.assign(navigator, {
+      clipboard: { writeText },
+    });
+    const agent = makeAgent([msg("assistant", "```rust\nfn x() {}\n```", "1:00 PM")]);
+    const { container } = render(ChatArea, { props: { agent } });
+    const copyBtn = container.querySelector("button.md-copy");
+    expect(copyBtn).toBeTruthy();
+    await fireEvent.click(copyBtn!);
+    expect(writeText).toHaveBeenCalledWith("fn x() {}");
+    Object.assign(navigator, { clipboard: prev });
   });
 });
