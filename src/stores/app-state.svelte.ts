@@ -221,6 +221,10 @@ function createAppState() {
   async function initialize() {
     if (demoMode) {
       mockState.seedDemoMockMetrics();
+      const firstWs = (mockState.swarms as unknown as DisplayWorkspace[])[0];
+      if (firstWs && !selectedWorkspaceId) {
+        selectedWorkspaceId = firstWs.id;
+      }
       return;
     }
 
@@ -531,7 +535,7 @@ function createAppState() {
     if (demoMode) {
       mockState.selectedAgentId = agentId;
       selectedThreadId = null;
-      activeView = "agent-chat";
+      activeView = "agent-threads";
       return;
     }
 
@@ -643,7 +647,11 @@ function createAppState() {
       return getSelectedSwarm();
     },
     get selectedWorkspaceContainerRunning(): boolean {
-      if (demoMode) return true;
+      if (demoMode) {
+        const list = mockState.swarms as unknown as DisplayWorkspace[];
+        const ws = list.find((w) => w.id === selectedWorkspaceId) ?? list[0];
+        return ws?.containerStatus.state === "running";
+      }
       const ws = workspaces.find((w) => w.id === selectedWorkspaceId);
       return ws?.containerStatus.state === "running";
     },
@@ -693,6 +701,22 @@ function createAppState() {
       return agentStore.toDisplayThread(conn);
     },
     get selectedAgentDef(): DisplayAgentDefinition | undefined {
+      if (demoMode) {
+        const id = mockState.selectedAgentId;
+        if (!id) return undefined;
+        const swarmList = mockState.swarms as unknown as DisplayWorkspace[];
+        for (const ws of swarmList) {
+          const def = ws.agentDefinitions.find((d) => d.id === id);
+          if (def) {
+            return {
+              ...def,
+              systemPrompt: agentSystemPrompts[id] ?? def.systemPrompt ?? "",
+              threads: def.threads,
+            };
+          }
+        }
+        return undefined;
+      }
       if (!selectedAgentId) return undefined;
       const def = agentDefinitions[selectedAgentId];
       if (!def) return undefined;

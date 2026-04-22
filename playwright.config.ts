@@ -11,13 +11,8 @@ export default defineConfig({
   },
   projects: [
     {
-      name: "demo",
-      testMatch: "smoke.spec.ts",
-      use: {},
-    },
-    {
-      name: "startup",
-      testMatch: "app-startup.spec.ts",
+      name: "chromium",
+      testMatch: "**/*.spec.ts",
       use: {},
     },
   ],

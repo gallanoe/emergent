@@ -39,7 +39,12 @@
         {#snippet children()}{wordCount} words{/snippet}
       </Mono>
       <div class="flex-1"></div>
-      <Button variant="ghost" size="xs" onclick={startEdit}>
+      <Button
+        variant="ghost"
+        size="xs"
+        title="Edit system prompt"
+        onclick={startEdit}
+      >
         {#snippet children()}Edit{/snippet}
       </Button>
     </div>
@@ -65,7 +70,12 @@
         <Button variant="ghost" size="xs" onclick={cancelEdit}>
           {#snippet children()}Cancel{/snippet}
         </Button>
-        <Button variant="primary" size="xs" onclick={save}>
+        <Button
+          variant="primary"
+          size="xs"
+          title="Save system prompt"
+          onclick={save}
+        >
           {#snippet children()}Save{/snippet}
         </Button>
       </div>
