@@ -477,30 +477,31 @@
         </div>
       </div>
     {:else if appState.activeView === "agent-threads" && appState.selectedAgentDef}
+      {@const def = appState.selectedAgentDef}
       <div
-        class="flex-1 min-h-0"
-        style="display:grid; grid-template-columns: {appState.taskSidebarMode
+        class="grid min-h-0 flex-1"
+        style="grid-template-columns: {appState.taskSidebarMode
           ? '1fr 320px'
           : '1fr'};"
       >
         <ThreadListView
-          agentDefinition={appState.selectedAgentDef}
-          tasks={appState.agentTasks}
-          activeTab={appState.agentViewTab}
+          agentDefinition={def}
           containerRunning={appState.selectedWorkspaceContainerRunning}
-          onSelectTask={(id) => appState.selectTask(id)}
-          onSelectTab={(tab) => appState.setAgentViewTab(tab)}
           onSelectThread={(id) => appState.selectThread(id)}
           onNewThread={async () => {
-            const threadId = await appState.spawnThread(
-              appState.selectedAgentId!,
-            );
+            const threadId = await appState.spawnThread(def.id);
             appState.selectThread(threadId);
           }}
-          onOpenSettings={() => appState.openAgentSettings()}
+          onUpdateName={(name) =>
+            appState.updateAgentDefinition(def.id, name, undefined)}
+          onUpdateRole={(role) =>
+            appState.updateAgentDefinition(def.id, undefined, role)}
+          onUpdateSystemPrompt={(next) =>
+            appState.updateAgentSystemPrompt(def.id, next)}
           onResumeThread={(id) => appState.resumeThread(id)}
           onStopThread={(id) => appState.stopThread(id)}
           onDeleteThread={(id) => appState.deleteThread(id)}
+          onDeleteAgent={() => appState.deleteAgentDefinition(def.id)}
         />
         {#if appState.taskSidebarMode === "detail" && appState.selectedTaskId}
           {@const task = appState.tasks[appState.selectedTaskId]}
