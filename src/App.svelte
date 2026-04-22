@@ -1,8 +1,6 @@
 <script lang="ts">
   import { appState } from "./stores/app-state.svelte";
-  import SwarmRail from "./components/swarm/SwarmRail.svelte";
   import InnerSidebar from "./components/sidebar/InnerSidebar.svelte";
-  import TopBar from "./components/topbar/TopBar.svelte";
   import ChatArea from "./components/chat/ChatArea.svelte";
   import ChatInput from "./components/chat/ChatInput.svelte";
   import TaskSessionHeader from "./components/chat/TaskSessionHeader.svelte";
@@ -121,13 +119,17 @@
     await appState.deleteWorkspace(id);
   }
 
-  function openWorkspaceMenu(workspaceId: string, x: number, y: number) {
-    workspaceMenu = { x, y, workspaceId };
-  }
-
   const isEmptyOrRuntimeMissing = $derived(
     (appState.runtimeStatus && !appState.runtimeStatus.available) ||
       (!appState.demoMode && appState.swarms.length === 0),
+  );
+
+  const showWorkspaceNameHeader = $derived(
+    appState.selectedSwarm &&
+      !isEmptyOrRuntimeMissing &&
+      appState.activeView !== "overview" &&
+      appState.activeView !== "app-settings" &&
+      appState.activeView !== "agent-chat",
   );
 
   function pushToInput(text: string) {
@@ -193,55 +195,33 @@
   }
 </script>
 
-<!-- Drag region overlay for window dragging (z-[100]).
-     Interactive elements in the top bar must use z-[101]+ to sit above this. -->
-<div
-  class="fixed top-0 left-0 right-0 h-[38px] z-[100]"
-  data-tauri-drag-region
-></div>
-
-<div class="grid h-screen grid-cols-[296px_1fr]">
-  <div class="flex flex-col min-h-0">
-    <div
-      class="h-[38px] flex-shrink-0 bg-bg-sidebar border-b border-r border-border-default"
-    ></div>
-    <div class="flex flex-1 min-h-0">
-      <SwarmRail
-        workspaces={appState.swarms}
-        selectedWorkspaceId={appState.selectedSwarmId}
-        demoMode={appState.demoMode}
-        onSelectWorkspace={(id) => appState.selectWorkspace(id)}
-        onNewWorkspace={() => (showCreateWorkspace = true)}
-        onContextMenu={openWorkspaceMenu}
-      />
-      <InnerSidebar
-        swarm={appState.selectedSwarm}
-        workspaces={appState.swarms}
-        selectedWorkspaceId={appState.selectedSwarmId}
-        activeView={appState.activeView}
-        selectedAgentId={appState.selectedAgentId}
-        demoMode={appState.demoMode}
-        activeTaskCount={appState.activeWorkspaceTaskCount}
-        onSelectWorkspace={(id) => appState.selectWorkspace(id)}
-        onCreateWorkspace={() => (showCreateWorkspace = true)}
-        onSelectAgent={(id) => appState.selectAgent(id)}
-        onCreateAgent={() => appState.startCreatingAgent()}
-        onNewThread={handleNewThread}
-        onOpenTasks={() => appState.showTasks()}
-        onOpenTerminal={() => {
-          appState.activeView = "terminal";
-        }}
-        onOpenAppSettings={() => appState.showAppSettings()}
-      />
-    </div>
-  </div>
-  <main class="relative flex flex-col min-h-0 min-w-0">
-    {#if appState.selectedSwarm && !isEmptyOrRuntimeMissing}
+<div class="grid h-screen grid-cols-[240px_1fr]">
+  <InnerSidebar
+    swarm={appState.selectedSwarm}
+    workspaces={appState.swarms}
+    selectedWorkspaceId={appState.selectedSwarmId}
+    activeView={appState.activeView}
+    selectedAgentId={appState.selectedAgentId}
+    demoMode={appState.demoMode}
+    activeTaskCount={appState.activeWorkspaceTaskCount}
+    onSelectWorkspace={(id) => appState.selectWorkspace(id)}
+    onCreateWorkspace={() => (showCreateWorkspace = true)}
+    onSelectAgent={(id) => appState.selectAgent(id)}
+    onCreateAgent={() => appState.startCreatingAgent()}
+    onNewThread={handleNewThread}
+    onOpenTasks={() => appState.showTasks()}
+    onOpenTerminal={() => {
+      appState.activeView = "terminal";
+    }}
+    onOpenAppSettings={() => appState.showAppSettings()}
+  />
+  <main class="relative flex min-h-0 min-w-0 flex-col">
+    {#if showWorkspaceNameHeader}
       <div
-        class="flex items-center h-[38px] px-5 border-b border-border-default flex-shrink-0 relative z-[60]"
+        class="relative z-[60] flex h-[38px] flex-shrink-0 items-center border-b border-border-default px-5"
       >
         <span class="text-[13px] font-semibold text-fg-heading"
-          >{appState.selectedSwarm.name}</span
+          >{appState.selectedSwarm!.name}</span
         >
       </div>
     {/if}
@@ -312,6 +292,14 @@
         >
           Create Workspace
         </button>
+      </div>
+    {:else if appState.activeView === "overview" && appState.selectedSwarm}
+      <div class="p-6 text-[12px] text-fg-muted">
+        Overview — built in Phase 6
+      </div>
+    {:else if appState.activeView === "app-settings"}
+      <div class="p-6 text-[12px] text-fg-muted">
+        Application settings — built in Phase 5
       </div>
     {:else if appState.activeView === "settings" && appState.selectedSwarmId}
       <SettingsView
@@ -602,13 +590,6 @@
         {/if}
       </div>
     {:else}
-      <TopBar
-        agent={appState.selectedAgent}
-        onShutdown={() => {
-          const agent = appState.selectedAgent;
-          if (agent) requestShutdown(agent.id, agent.name);
-        }}
-      />
       <ChatArea agent={appState.selectedAgent} onEditQueue={handleEditQueue} />
       <ChatInput
         agent={appState.selectedAgent}
