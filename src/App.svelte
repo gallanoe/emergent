@@ -4,7 +4,6 @@
   import ChatArea from "./components/chat/ChatArea.svelte";
   import ChatInput from "./components/chat/ChatInput.svelte";
   import ChatTaskBanner from "./components/chat/ChatTaskBanner.svelte";
-  import SwarmView from "./components/swarm/SwarmView.svelte";
   import WorkspaceSettingsView from "./components/settings/WorkspaceSettingsView.svelte";
   import AppSettingsView from "./components/settings/AppSettingsView.svelte";
   import RuntimeSelector from "./components/settings/RuntimeSelector.svelte";
@@ -107,7 +106,7 @@
     const id = deleteTarget.id;
     deleteTarget = null;
     if (appState.selectedSwarmId === id) {
-      appState.activeView = "swarm";
+      appState.activeView = "overview";
     }
     await appState.deleteWorkspace(id);
   }
@@ -320,7 +319,7 @@
         onRebuild={() => appState.rebuildContainer(appState.selectedSwarmId!)}
         onDelete={() => {
           const id = appState.selectedSwarmId!;
-          appState.activeView = "swarm";
+          appState.activeView = "overview";
           void appState.deleteWorkspace(id);
         }}
       />
@@ -336,13 +335,6 @@
           appState.setTerminalSessionId(appState.selectedSwarmId!, sid)}
         onSessionEnded={() =>
           appState.setTerminalSessionId(appState.selectedSwarmId!, null)}
-      />
-    {:else if appState.activeView === "swarm" && appState.selectedSwarm}
-      <SwarmView
-        swarm={appState.selectedSwarm}
-        agentConnections={appState.agentConnections}
-        demoMode={appState.demoMode}
-        onSelectAgent={(id) => appState.selectAgent(id)}
       />
     {:else if appState.activeView === "create-agent" && appState.selectedSwarmId}
       <AgentCreatorView

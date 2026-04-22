@@ -57,7 +57,7 @@ function createAppState() {
   let knownAgents = $state<KnownAgent[]>([]);
   let agentConnections = $state<Record<string, string[]>>({});
   let selectedWorkspaceId = $state<string | null>(null);
-  let activeView = $state<ActiveView>("swarm");
+  let activeView = $state<ActiveView>("overview");
   let runtimePreference = $state<ContainerRuntimePreference>({
     selected_runtime: "docker",
   });
@@ -757,7 +757,7 @@ function createAppState() {
       }
       if (selectedAgentId === agentId) {
         selectedAgentId = null;
-        activeView = "swarm";
+        activeView = "overview";
       }
     },
     async spawnThread(agentId: string): Promise<string> {
