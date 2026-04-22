@@ -27,6 +27,13 @@ const emptyStateMock = `
           { name: "OpenCode", command: "opencode acp", available: false },
         ],
         list_workspaces: [],
+        get_container_runtime_preference: { selected_runtime: "docker" },
+        get_container_runtime_status: {
+          selected_runtime: "docker",
+          available: true,
+          version: "27.0.0",
+          message: null,
+        },
       };
       if (cmd in responses) return Promise.resolve(responses[cmd]);
       return Promise.reject("Unknown command: " + cmd);
@@ -56,9 +63,6 @@ test.describe("app startup", () => {
     // App renders directly with no loading state
     await expect(page.locator("text=Starting…")).not.toBeVisible();
 
-    // New workspace button is immediately available (icon button in SwarmRail)
-    const newWorkspaceBtn = page.locator('button[title="New workspace"]');
-    await expect(newWorkspaceBtn).toBeVisible();
-    await expect(newWorkspaceBtn).toBeEnabled();
+    await expect(page.getByRole("button", { name: "Create Workspace" })).toBeVisible();
   });
 });
