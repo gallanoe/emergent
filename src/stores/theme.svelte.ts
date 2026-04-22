@@ -1,18 +1,34 @@
+const KEY = "emergent-theme";
+
+function loadStored(): "dark" | "light" {
+  if (typeof localStorage === "undefined") return "dark";
+  return localStorage.getItem(KEY) === "light" ? "light" : "dark";
+}
+
 function createThemeStore() {
-  let theme = $state<"dark" | "light">(
-    (typeof localStorage !== "undefined" &&
-      (localStorage.getItem("emergent-theme") as "dark" | "light")) ||
-      "dark",
-  );
+  let current = $state<"dark" | "light">(loadStored());
+
+  $effect.root(() => {
+    $effect(() => {
+      if (typeof document === "undefined") return;
+      document.documentElement.setAttribute("data-theme", current);
+      try {
+        localStorage.setItem(KEY, current);
+      } catch {
+        /* ignore quota or access errors */
+      }
+    });
+  });
 
   return {
     get current() {
-      return theme;
+      return current;
     },
     toggle() {
-      theme = theme === "dark" ? "light" : "dark";
-      document.documentElement.dataset.theme = theme;
-      localStorage.setItem("emergent-theme", theme);
+      current = current === "dark" ? "light" : "dark";
+    },
+    set(next: "dark" | "light") {
+      current = next;
     },
   };
 }
