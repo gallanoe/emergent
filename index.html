@@ -5,7 +5,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Emergent</title>
     <script>
-      document.documentElement.dataset.theme = localStorage.getItem("emergent-theme") || "dark";
+      (function () {
+        var key = "emergent-theme";
+        var v = localStorage.getItem(key) || "dark";
+        var prefersDark = true;
+        try {
+          if (v === "system" && window.matchMedia) {
+            prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+          } else if (v === "light") {
+            prefersDark = false;
+          } else if (v === "dark") {
+            prefersDark = true;
+          }
+        } catch (e) {
+          /* ignore */
+        }
+        document.documentElement.dataset.theme = prefersDark ? "dark" : "light";
+      })();
     </script>
   </head>
   <body>
