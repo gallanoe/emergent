@@ -116,14 +116,6 @@
       (!appState.demoMode && appState.swarms.length === 0),
   );
 
-  const showWorkspaceNameHeader = $derived(
-    appState.selectedSwarm &&
-      !isEmptyOrRuntimeMissing &&
-      appState.activeView !== "overview" &&
-      appState.activeView !== "app-settings" &&
-      appState.activeView !== "agent-chat",
-  );
-
   function pushToInput(text: string) {
     externalContent = { text, seq: ++seq };
   }
@@ -219,17 +211,10 @@
   />
   <main class="relative flex h-full min-h-0 min-w-0 flex-col">
     <div
-      class="relative z-[60] flex h-[38px] flex-shrink-0 items-center px-5"
-      class:border-b={showWorkspaceNameHeader}
-      class:border-border-default={showWorkspaceNameHeader}
+      class="relative z-[60] h-[38px] flex-shrink-0"
       data-tauri-drag-region
-    >
-      {#if showWorkspaceNameHeader}
-        <span class="text-[13px] font-semibold text-fg-heading"
-          >{appState.selectedSwarm!.name}</span
-        >
-      {/if}
-    </div>
+      aria-hidden="true"
+    ></div>
     {#if appState.runtimeStatus && !appState.runtimeStatus.available}
       <div
         class="flex flex-col items-center justify-center flex-1 gap-4 text-center px-6"
