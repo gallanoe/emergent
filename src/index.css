@@ -53,6 +53,35 @@
   --duration-base: 150ms;
   --duration-view: 200ms;
   --duration-reveal: 280ms;
+
+  /* Spacing scale — see docs/design/v2/project/em-foundations.jsx:244–248.
+     Consumed via var() inline or arbitrary Tailwind values like
+     p-[var(--space-3)]. Not registered in @theme to avoid clashing with
+     Tailwind's built-in --spacing base. */
+  --space-1: 2px;
+  --space-1-5: 4px;
+  --space-2: 6px;
+  --space-2-5: 8px;
+  --space-3: 10px;
+  --space-3-5: 12px;
+  --space-4: 14px;
+  --space-5: 18px;
+  --space-6: 22px;
+  --space-8: 32px;
+
+  /* Radius scale — see docs/design/v2/project/em-foundations.jsx:249. */
+  --radius-3: 3px;
+  --radius-4: 4px;
+  --radius-5: 5px;
+  --radius-6: 6px;
+  --radius-8: 8px;
+  --radius-10: 10px;
+  --radius-14: 14px;
+  --radius-full: 999px;
+
+  /* Accent focus ring — see docs/design/v2/project/em-primitives.jsx:205.
+     Unified focus-visible outline. Consumed via box-shadow typically. */
+  --accent-ring: rgba(250, 250, 250, 0.28);
 }
 
 [data-theme="light"] {
@@ -87,6 +116,7 @@
   --color-shadow-lg: 0 20px 60px rgba(9, 9, 11, 0.12), 0 2px 6px rgba(9, 9, 11, 0.06);
   --color-scrollbar-thumb: rgba(0, 0, 0, 0.14);
   --color-scrollbar-thumb-hover: rgba(0, 0, 0, 0.2);
+  --accent-ring: rgba(28, 28, 30, 0.28);
 }
 
 @theme {
