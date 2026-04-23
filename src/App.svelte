@@ -17,6 +17,7 @@
   import { ConfirmDialog } from "./lib/primitives";
   import ContextMenu from "./components/sidebar/ContextMenu.svelte";
   import CreateWorkspaceDialog from "./components/CreateWorkspaceDialog.svelte";
+  import SearchCommand from "./components/SearchCommand.svelte";
   import {
     Plus,
     Square,
@@ -43,6 +44,34 @@
     workspaceId: string;
   } | null>(null);
   let deleteTarget = $state<{ id: string; name: string } | null>(null);
+  let searchOpen = $state(false);
+
+  // Local mirror of SearchCommand's ThreadHit shape. Re-exporting types
+  // from .svelte files is a known rough edge; duplicating the shape here
+  // is cleaner than forcing a shared module just for one type.
+  type ThreadHit = {
+    id: string;
+    name: string;
+    agentId: string;
+    agentName: string;
+    agentProvider: string;
+    status: "idle" | "working" | "initializing" | "error" | "dead";
+  };
+
+  const searchThreads = $derived.by<ThreadHit[]>(() => {
+    const swarm = appState.selectedSwarm;
+    if (!swarm) return [];
+    return swarm.agentDefinitions.flatMap((def) =>
+      def.threads.map((t) => ({
+        id: t.id,
+        name: t.name,
+        agentId: def.id,
+        agentName: def.name,
+        agentProvider: def.provider ?? def.cli,
+        status: t.processStatus,
+      })),
+    );
+  });
 
   function workspaceMenuItems(status: ContainerStatus): MenuItem[] {
     switch (status.state) {
@@ -123,6 +152,16 @@
   function onGlobalKeydown(e: KeyboardEvent) {
     const meta = e.metaKey || e.ctrlKey;
     if (!meta || e.altKey || e.shiftKey) return;
+
+    // ⌘K opens/dismisses the search palette. Handled before the
+    // isEditableTarget guard so the shortcut fires even while the user is
+    // mid-message in the chat composer.
+    if (e.key === "k" || e.key === "K") {
+      e.preventDefault();
+      searchOpen = !searchOpen;
+      return;
+    }
+
     if (isEditableTarget(document.activeElement)) return;
 
     if (e.key === "n" || e.key === "N") {
@@ -208,6 +247,7 @@
     }}
     onOpenAppSettings={() => appState.showAppSettings()}
     onOpenWorkspaceSettings={() => appState.showWorkspaceSettings()}
+    onOpenSearch={() => (searchOpen = true)}
   />
   <main class="relative flex h-full min-h-0 min-w-0 flex-col">
     <div
@@ -573,5 +613,19 @@
     onCancel={() => {
       deleteTarget = null;
     }}
+  />
+{/if}
+
+{#if searchOpen}
+  <SearchCommand
+    threads={searchThreads}
+    onSelect={(threadId) => {
+      // selectThread (src/stores/app-state.svelte.ts:556) handles setting
+      // selectedThreadId, auto-selecting the owning agent, switching to
+      // agent-chat, and dead-thread resume logic.
+      appState.selectThread(threadId);
+      searchOpen = false;
+    }}
+    onClose={() => (searchOpen = false)}
   />
 {/if}

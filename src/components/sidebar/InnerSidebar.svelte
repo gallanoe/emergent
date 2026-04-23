@@ -29,6 +29,7 @@
     onOpenTerminal: () => void;
     onOpenAppSettings: () => void;
     onOpenWorkspaceSettings: () => void;
+    onOpenSearch: () => void;
   }
 
   let {
@@ -49,6 +50,7 @@
     onOpenTerminal,
     onOpenAppSettings,
     onOpenWorkspaceSettings,
+    onOpenSearch,
   }: Props = $props();
 
   const isMacOS = $derived(
@@ -96,9 +98,7 @@
       title="Search · ⌘K"
       class="inline-flex h-[26px] w-[26px] items-center justify-center rounded-[6px] text-fg-muted transition-colors hover:bg-bg-hover"
       data-tauri-drag-region="false"
-      onclick={() => {
-        // TODO(search)
-      }}
+      onclick={onOpenSearch}
     >
       <Search size={12} />
     </button>

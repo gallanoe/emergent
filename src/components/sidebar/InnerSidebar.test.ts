@@ -54,6 +54,7 @@ const baseProps = (overrides: Record<string, unknown> = {}) => ({
   onOpenTerminal: (overrides.onOpenTerminal as () => void) ?? (() => {}),
   onOpenAppSettings: (overrides.onOpenAppSettings as () => void) ?? (() => {}),
   onOpenWorkspaceSettings: (overrides.onOpenWorkspaceSettings as () => void) ?? (() => {}),
+  onOpenSearch: (overrides.onOpenSearch as () => void) ?? (() => {}),
 });
 
 function renderSidebar(overrides: Record<string, unknown> = {}) {
