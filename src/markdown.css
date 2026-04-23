@@ -48,6 +48,13 @@
 .markdown p {
   margin: 0 0 12px;
 }
+
+/* Trailing block margins stack with bubble padding and look asymmetric next to
+   zero top margin on the first block; message spacing uses the chat column gap. */
+.markdown > :last-child {
+  margin-bottom: 0;
+}
+
 .markdown a {
   color: var(--color-fg-heading);
   text-decoration: underline;
