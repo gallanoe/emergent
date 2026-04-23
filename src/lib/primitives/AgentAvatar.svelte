@@ -12,7 +12,13 @@
     class?: string;
   }
 
-  let { provider, cli = null, name, size = 28, class: className = "" }: Props = $props();
+  let {
+    provider,
+    cli = null,
+    name,
+    size = 28,
+    class: className = "",
+  }: Props = $props();
 
   const logoUrl = $derived(getLogoUrlForAgent(provider, cli));
   const monogram = $derived(

@@ -1,9 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  getLogoUrlForProvider,
-  inferProviderIdFromCli,
-  getLogoUrlForAgent,
-} from "./agent-logos";
+import { getLogoUrlForProvider, inferProviderIdFromCli, getLogoUrlForAgent } from "./agent-logos";
 import claudeLogo from "../assets/claude.svg";
 
 describe("agent-logos", () => {
@@ -19,9 +15,7 @@ describe("agent-logos", () => {
   });
 
   it("infers provider id from known spawn commands", () => {
-    expect(
-      inferProviderIdFromCli("bunx @zed-industries/claude-agent-acp"),
-    ).toBe("claude");
+    expect(inferProviderIdFromCli("bunx @zed-industries/claude-agent-acp")).toBe("claude");
     expect(inferProviderIdFromCli("bunx @zed-industries/codex-acp")).toBe("codex");
     expect(inferProviderIdFromCli("gemini --experimental-acp")).toBe("gemini");
     expect(inferProviderIdFromCli("kiro-cli acp")).toBe("kiro");
@@ -30,9 +24,7 @@ describe("agent-logos", () => {
 
   it("getLogoUrlForAgent prefers provider then cli", () => {
     expect(getLogoUrlForAgent("claude", "nope")).toBe(claudeLogo);
-    expect(getLogoUrlForAgent(null, "bunx @zed-industries/claude-agent-acp")).toBe(
-      claudeLogo,
-    );
+    expect(getLogoUrlForAgent(null, "bunx @zed-industries/claude-agent-acp")).toBe(claudeLogo);
     expect(getLogoUrlForAgent(null, "unknown-bin")).toBeNull();
   });
 });

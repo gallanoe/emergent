@@ -62,7 +62,5 @@ export function getLogoUrlForAgent(
   provider: string | null | undefined,
   cli: string | null | undefined,
 ): string | null {
-  return (
-    getLogoUrlForProvider(provider) ?? getLogoUrlForProvider(inferProviderIdFromCli(cli))
-  );
+  return getLogoUrlForProvider(provider) ?? getLogoUrlForProvider(inferProviderIdFromCli(cli));
 }
