@@ -106,6 +106,7 @@
       <div class="flex items-start gap-4">
         <AgentAvatar
           provider={agentDef.provider}
+          cli={agentDef.cli}
           name={agentDef.name}
           size={44}
         />

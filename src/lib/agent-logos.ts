@@ -22,3 +22,47 @@ export function getLogoUrlForProvider(provider: string | null | undefined): stri
   const k = provider.trim().toLowerCase();
   return PROVIDER_LOGOS[k] ?? null;
 }
+
+/**
+ * When `provider` was never stored (legacy rows) or is unknown, map the spawn
+ * command to the same stable ids used in {@link getLogoUrlForProvider}.
+ * Kept in sync with `KNOWN_AGENTS` command shapes in `emergent-core` `detect.rs`.
+ */
+export function inferProviderIdFromCli(cli: string | null | undefined): string | null {
+  if (cli == null) return null;
+  const c = cli.trim().toLowerCase();
+  if (c === "") return null;
+
+  if (c.includes("claude-agent-acp") || c.includes("@zed-industries/claude-agent")) {
+    return "claude";
+  }
+  if (c.includes("codex-acp") || c.includes("@zed-industries/codex")) {
+    return "codex";
+  }
+  if (c.includes("kiro-cli")) {
+    return "kiro";
+  }
+  if (c.includes("opencode") && c.includes("acp")) {
+    return "opencode";
+  }
+  if (c.includes("gemini") && (c.includes("experimental-acp") || c.includes(" acp"))) {
+    return "gemini";
+  }
+
+  // Short legacy / shorthand commands used in tests and older data
+  if (c === "claude" || c === "codex" || c === "gemini" || c === "kiro" || c === "opencode") {
+    return c;
+  }
+
+  return null;
+}
+
+/** Logo URL using explicit `provider`, falling back to inference from `cli`. */
+export function getLogoUrlForAgent(
+  provider: string | null | undefined,
+  cli: string | null | undefined,
+): string | null {
+  return (
+    getLogoUrlForProvider(provider) ?? getLogoUrlForProvider(inferProviderIdFromCli(cli))
+  );
+}

@@ -212,7 +212,12 @@
             : 'text-fg-default hover:bg-bg-hover'}"
           onclick={() => onSelectAgent(def.id)}
         >
-          <AgentAvatar provider={def.provider} name={def.name} size={18} />
+          <AgentAvatar
+            provider={def.provider}
+            cli={def.cli}
+            name={def.name}
+            size={18}
+          />
           <span class="min-w-0 flex-1 truncate">{def.name}</span>
           {#if def.threads.length > 0}
             <span class="text-[10px] text-fg-disabled font-mono"

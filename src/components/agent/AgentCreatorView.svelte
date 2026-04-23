@@ -95,6 +95,7 @@
             {#if selectedAgent}
               <AgentAvatar
                 provider={selectedAgent.provider}
+                cli={selectedAgent.command}
                 name={selectedAgent.name}
                 size={18}
                 class="flex-shrink-0"
@@ -143,6 +144,7 @@
                 >
                   <AgentAvatar
                     provider={agent.provider}
+                    cli={agent.command}
                     name={agent.name}
                     size={18}
                     class="flex-shrink-0"

@@ -124,6 +124,7 @@
           >
             <AgentAvatar
               provider={thread.provider}
+              cli={thread.cli}
               name={thread.name}
               size={13}
             />
