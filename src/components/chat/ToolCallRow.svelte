@@ -13,6 +13,10 @@
   import CreateTaskToolRender from "./CreateTaskToolRender.svelte";
   import ListAgentsToolRender from "./ListAgentsToolRender.svelte";
   import ListTasksToolRender from "./ListTasksToolRender.svelte";
+  import ToolVerbIcon from "./ToolVerbIcon.svelte";
+  import ToolStatusGlyph from "./ToolStatusGlyph.svelte";
+  import DiffBody from "./DiffBody.svelte";
+  import ShellBody from "./ShellBody.svelte";
 
   interface Props {
     toolCall: DisplayToolCall;
@@ -42,13 +46,6 @@
       toggle();
     }
   }
-
-  const statusColor: Record<DisplayToolCall["status"], string> = {
-    completed: "bg-success",
-    failed: "bg-error",
-    in_progress: "bg-warning",
-    pending: "bg-fg-disabled",
-  };
 
   const kindVerb: Record<ToolKind, string> = {
     read: "Read",
@@ -122,7 +119,7 @@
     toolCall.status === "failed"
       ? "text-error"
       : toolCall.status === "in_progress"
-        ? "text-warning"
+        ? "text-fg-muted"
         : "text-fg-disabled",
   );
 
@@ -135,6 +132,18 @@
         toolCall.status !== "pending" &&
         toolCall.status !== "in_progress"),
   );
+
+  // Commands from execute-kind calls live under either `command` or `cmd`
+  // depending on the agent. rawInput is unknown per the ACP spec, so we
+  // fall back across both shapes without typing it further.
+  function extractCommand(rawInput: unknown): string {
+    if (rawInput && typeof rawInput === "object") {
+      const obj = rawInput as Record<string, unknown>;
+      if (typeof obj.command === "string") return obj.command;
+      if (typeof obj.cmd === "string") return obj.cmd;
+    }
+    return "";
+  }
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
@@ -146,11 +155,17 @@
   onkeydown={hasPreview ? onKeydown : undefined}
 >
   <div class="flex items-center gap-2 px-2.5 py-[5px]">
+    <ToolVerbIcon
+      kind={toolCall.kind}
+      size={12}
+      class="text-fg-muted shrink-0"
+    />
     <span
-      class="w-1.5 h-1.5 rounded-full {statusColor[toolCall.status]} shrink-0"
-    ></span>
-    <span
-      class="text-[12px] font-[family-name:var(--font-mono)] font-medium text-fg-default min-w-[44px]"
+      data-testid="tool-verb"
+      class="text-[12px] font-[family-name:var(--font-mono)] font-medium text-fg-default min-w-[44px] {toolCall.status ===
+      'in_progress'
+        ? 'em-shimmer-text'
+        : ''}"
     >
       {verb}
     </span>
@@ -159,24 +174,30 @@
     >
       {target}
     </span>
-    {#if statusLabel}
-      <span class="text-[10px] {statusLabelColor} ml-auto whitespace-nowrap"
-        >{statusLabel}</span
-      >
-    {/if}
-    {#if hasPreview}
-      <span class="text-fg-disabled" class:ml-auto={!statusLabel}>
-        {#if expanded}
-          <ChevronDown size={10} />
-        {:else}
-          <ChevronRight size={10} />
-        {/if}
-      </span>
-    {/if}
+    <span class="ml-auto flex items-center gap-1.5 shrink-0">
+      {#if statusLabel}
+        <span class="text-[10px] {statusLabelColor} whitespace-nowrap"
+          >{statusLabel}</span
+        >
+      {/if}
+      <ToolStatusGlyph status={toolCall.status} size={10} />
+      {#if hasPreview}
+        <span class="text-fg-disabled">
+          {#if expanded}
+            <ChevronDown size={10} />
+          {:else}
+            <ChevronRight size={10} />
+          {/if}
+        </span>
+      {/if}
+    </span>
   </div>
 
   {#if expanded}
-    <div transition:slide={{ duration: 150 }}>
+    <div
+      transition:slide={{ duration: 150 }}
+      class="border-t border-border-default"
+    >
       {#if isListAgentsTool}
         <ListAgentsToolRender agents={parseAgentsToolContent(toolCall)} />
       {:else if isListTasksTool}
@@ -187,46 +208,24 @@
           result={parseCreateTaskToolContent(toolCall)}
         />
       {:else}
-        <div class="flex flex-col gap-1.5 pb-1.5">
-          {#each toolCall.content as item}
-            {#if item.type === "text"}
-              <div
-                class="mx-2.5 rounded bg-[rgba(0,0,0,0.03)] px-2 py-1.5 font-[family-name:var(--font-mono)] text-[10.5px] leading-normal text-fg-muted whitespace-pre-wrap"
-              >
-                {stripCodeFence(item.text)}
-              </div>
-            {:else if item.type === "diff"}
-              <div
-                class="mx-2.5 rounded bg-[rgba(0,0,0,0.03)] px-2 py-1.5 font-[family-name:var(--font-mono)] text-[10.5px] leading-normal"
-              >
-                {#if item.oldText != null}
-                  {#each item.oldText.split("\n") as line}
-                    <div
-                      class="rounded-sm bg-removed-bg text-removed-fg px-1 -mx-1"
-                    >
-                      {`- ${line}`}
-                    </div>
-                  {/each}
-                {/if}
-                {#each item.newText.split("\n") as line}
-                  <div class="rounded-sm bg-added-bg text-added-fg px-1 -mx-1">
-                    {`+ ${line}`}
-                  </div>
-                {/each}
-              </div>
-            {:else if item.type === "terminal" && item.output}
-              {@const isFailed = toolCall.status === "failed"}
-              <div
-                class="mx-2.5 rounded px-2 py-1.5 font-[family-name:var(--font-mono)] text-[10.5px] leading-normal whitespace-pre-wrap
-                {isFailed
-                  ? 'bg-[rgba(200,60,60,0.04)] text-removed-fg'
-                  : 'bg-[rgba(0,0,0,0.03)] text-fg-muted'}"
-              >
-                {item.output}
-              </div>
-            {/if}
-          {/each}
-        </div>
+        {#each toolCall.content as item, i (i)}
+          {#if item.type === "text"}
+            <div
+              class="font-[family-name:var(--font-mono)] text-[11.5px] leading-[1.55] text-fg-muted whitespace-pre-wrap"
+              style:padding="8px 10px 10px 32px"
+            >
+              {stripCodeFence(item.text)}
+            </div>
+          {:else if item.type === "diff"}
+            <DiffBody oldText={item.oldText} newText={item.newText} />
+          {:else if item.type === "terminal"}
+            <ShellBody
+              command={extractCommand(toolCall.rawInput)}
+              output={item.output ?? ""}
+              exitCode={item.exitCode ?? null}
+            />
+          {/if}
+        {/each}
       {/if}
     </div>
   {/if}
