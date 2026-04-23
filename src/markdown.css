@@ -275,3 +275,21 @@
   border-radius: 4px;
   margin: 0.5em 0;
 }
+
+/* Shiki dual-theme output — see src/lib/highlight.ts.
+   With defaultColor: false, Shiki emits nested
+   <span style="--shiki-light: #...; --shiki-dark: #...">.
+   We pick which var to paint based on the [data-theme] attribute. */
+.markdown pre code span[style*="--shiki-dark"] {
+  color: var(--shiki-dark);
+}
+
+[data-theme="light"] .markdown pre code span[style*="--shiki-light"] {
+  color: var(--shiki-light);
+}
+
+/* Shiki emits its own inline colors on token spans, so we reset the pre's
+   default foreground to avoid fighting them. */
+.markdown pre code {
+  background: transparent;
+}

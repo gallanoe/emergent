@@ -5,6 +5,7 @@
   import ThinkingBlock from "./ThinkingBlock.svelte";
   import type { DisplayThread, DisplayToolCall } from "../../stores/types";
   import { renderMarkdown } from "../../lib/render-markdown";
+  import { highlightCodeBlocks } from "../../lib/highlight";
   import { getEmergentToolName } from "../../lib/emergent-tool-calls";
   import { ToolRow, Mono } from "../../lib/primitives";
 
@@ -89,6 +90,17 @@
 
     if (!scrollContainer || userScrolledAway) return;
     requestAnimationFrame(() => scrollToBottom());
+  });
+
+  $effect(() => {
+    // Re-run whenever messages change. highlightCodeBlocks is idempotent:
+    // already-highlighted <code> elements are marked with
+    // data-shiki-highlighted and skipped on subsequent passes.
+    if (!scrollContainer) return;
+    // Track the message list length so this effect re-runs on new messages.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const _msgCount = thread?.messages.length;
+    void highlightCodeBlocks(scrollContainer);
   });
 </script>
 
