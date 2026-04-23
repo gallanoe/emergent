@@ -82,6 +82,59 @@
   /* Accent focus ring — see docs/design/v2/project/em-primitives.jsx:205.
      Unified focus-visible outline. Consumed via box-shadow typically. */
   --accent-ring: rgba(250, 250, 250, 0.28);
+
+  /* Typography scale — see docs/design/v2/project/em-foundations.jsx:219–231.
+     Every step exposes size, line-height, weight, and (when relevant)
+     letter-spacing as individual tokens. Consumers compose them; we do
+     not ship a single shorthand token because real call sites almost
+     always override one axis. */
+
+  /* UI · Inter */
+  --type-display-size: 36px;
+  --type-display-lh: 1.1;
+  --type-display-weight: 500;
+  --type-display-tracking: -0.02em;
+
+  --type-title-size: 20px;
+  --type-title-lh: 1.2;
+  --type-title-weight: 600;
+  --type-title-tracking: -0.015em;
+
+  --type-heading-size: 15px;
+  --type-heading-lh: 1.3;
+  --type-heading-weight: 600;
+  --type-heading-tracking: -0.008em;
+
+  --type-body-size: 13px;
+  --type-body-lh: 1.55;
+  --type-body-weight: 400;
+  --type-body-tracking: -0.005em;
+
+  --type-small-size: 12px;
+  --type-small-lh: 1.45;
+  --type-small-weight: 400;
+  --type-small-tracking: -0.005em;
+
+  --type-micro-size: 11px;
+  --type-micro-lh: 1.35;
+  --type-micro-weight: 500;
+  --type-micro-tracking: -0.005em;
+
+  --type-label-size: 10px;
+  --type-label-lh: 1.3;
+  --type-label-weight: 600;
+  --type-label-tracking: 0.08em;
+
+  /* Content · Source Serif 4 */
+  --type-serif-xl-size: 26px;
+  --type-serif-xl-lh: 1.2;
+  --type-serif-xl-weight: 600;
+  --type-serif-xl-tracking: -0.01em;
+
+  --type-serif-md-size: 15px;
+  --type-serif-md-lh: 1.6;
+  --type-serif-md-weight: 400;
+  --type-serif-md-tracking: -0.005em;
 }
 
 [data-theme="light"] {
