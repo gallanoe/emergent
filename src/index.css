@@ -45,6 +45,14 @@
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
   --font-ui: "Inter", -apple-system, system-ui, sans-serif;
   --font-content: "Source Serif 4", Georgia, serif;
+
+  /* Motion durations — see docs/design/v2/project/em-foundations.jsx:290–296.
+     quick: hover + small state flips. base: buttons, tabs, focus rings.
+     view: view fade-ins. reveal: popovers, context menus. */
+  --duration-quick: 120ms;
+  --duration-base: 150ms;
+  --duration-view: 200ms;
+  --duration-reveal: 280ms;
 }
 
 [data-theme="light"] {
@@ -237,4 +245,63 @@ svg.lucide {
   border-radius: 50%;
   background: currentColor;
   animation: em-pulse-ring 1.6s ease-out infinite;
+}
+
+@keyframes em-tc-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Applied to an SVG circle that is the "running" glyph for a tool call.
+   900ms matches docs/design/v2/project/em-tool-calls.jsx:50–55.
+   transform-origin is explicit because SVG transform-origin defaults
+   are inconsistent across engines — without it the spinner can orbit
+   around 0,0 instead of rotating in place. */
+.em-tc-spin {
+  animation: em-tc-spin 900ms linear infinite;
+  transform-origin: center;
+}
+
+@keyframes em-shimmer-text {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Applied to a text node (typically a tool-call verb name) to make it
+   breathe while the call is in flight. 2.2s loop per
+   docs/design/v2/project/em-foundations.jsx:296. Uses background-clip:text
+   so the gradient paints only inside the glyphs. */
+.em-shimmer-text {
+  background: linear-gradient(
+    90deg,
+    var(--color-foreground-muted) 0%,
+    var(--color-foreground-heading) 50%,
+    var(--color-foreground-muted) 100%
+  );
+  background-size: 200% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: em-shimmer-text 2.2s ease-in-out infinite;
+}
+
+/* When the user prefers reduced motion, the global rule above freezes
+   the animation at 0.01ms. That would leave the gradient parked off-
+   screen while color: transparent hides the text entirely. Restore a
+   plain painted foreground instead so the word stays readable. */
+@media (prefers-reduced-motion: reduce) {
+  .em-shimmer-text {
+    background: none;
+    color: var(--color-foreground);
+    -webkit-text-fill-color: currentColor;
+  }
 }
