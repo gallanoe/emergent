@@ -33,6 +33,23 @@ describe("renderMarkdown", () => {
     expect(html).toContain("hi");
   });
 
+  it("emits a callout-icon span with the kind-specific glyph for note", () => {
+    const html = renderMarkdown("> [!NOTE]\n> heads up");
+    expect(html).toContain(`<span class="callout-icon">i</span>`);
+  });
+
+  it("uses a distinct glyph character per callout kind", () => {
+    expect(renderMarkdown("> [!NOTE]\n> x")).toContain(`<span class="callout-icon">i</span>`);
+    expect(renderMarkdown("> [!TIP]\n> x")).toContain(`<span class="callout-icon">✓</span>`);
+    expect(renderMarkdown("> [!WARNING]\n> x")).toContain(`<span class="callout-icon">!</span>`);
+    expect(renderMarkdown("> [!CAUTION]\n> x")).toContain(`<span class="callout-icon">!</span>`);
+  });
+
+  it("preserves the callout title text next to the icon", () => {
+    const html = renderMarkdown("> [!WARNING]\n> careful");
+    expect(html).toMatch(/<span class="callout-icon">!<\/span><span>Warning<\/span>/);
+  });
+
   it("sanitization preserves md-copy button in code fences", () => {
     const html = renderMarkdown("```rust\nfn x() {}\n```");
     expect(html).toMatch(/<button class="md-copy"/);

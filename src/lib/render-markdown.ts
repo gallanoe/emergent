@@ -20,6 +20,16 @@ const ALERT_TITLE: Record<string, string> = {
   important: "Important",
 };
 
+// Single-character glyphs for the filled-circle badge, per
+// docs/design/v2/project/em-markdown.jsx:170-173. `important` is folded
+// into `note` by cssKind mapping below, so it does not need a key here.
+const CALLOUT_GLYPH: Record<string, string> = {
+  note: "i",
+  tip: "✓",
+  warning: "!",
+  caution: "!",
+};
+
 const md = new Marked({ gfm: true, breaks: false, async: false });
 
 md.use({
@@ -42,7 +52,8 @@ md.use({
       const title = ALERT_TITLE[rawKind] ?? rawKind;
       const body = match[2]!.trim();
       const innerHtml = md.parse(body) as string;
-      return `<div class="callout callout-${cssKind}"><div class="callout-title">${escapeHtml(title)}</div>${innerHtml}</div>`;
+      const glyph = CALLOUT_GLYPH[cssKind] ?? CALLOUT_GLYPH.note;
+      return `<div class="callout callout-${cssKind}"><div class="callout-title"><span class="callout-icon">${glyph}</span><span>${escapeHtml(title)}</span></div>${innerHtml}</div>`;
     },
   },
 });

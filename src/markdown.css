@@ -221,11 +221,49 @@
   border-left-color: var(--color-error);
 }
 .markdown .callout-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   margin-bottom: 2px;
+}
+
+/* Filled-circle badge — 16×16, kind-specific fill color, page-background
+   glyph. Values per docs/design/v2/project/em-markdown.jsx:181-186. */
+.markdown .callout-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--color-background);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* Per-kind circle fill. Mirrors the left-border color so badge and rail
+   share a hue. */
+.markdown .callout-note .callout-icon {
+  background: var(--color-fg-muted);
+}
+.markdown .callout-tip .callout-icon {
+  background: var(--color-success);
+}
+.markdown .callout-warning .callout-icon {
+  background: var(--color-warning);
+}
+.markdown .callout-caution .callout-icon {
+  background: var(--color-error);
 }
 
 /* math (KaTeX passthrough; no-op until plugin exists) */
