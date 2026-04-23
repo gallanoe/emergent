@@ -174,7 +174,9 @@ describe("ChatArea", () => {
     expect(screen.getByText("Tasks")).toBeTruthy();
     expect(screen.getByText("1 task")).toBeTruthy();
     expect(screen.getByText("Write migration")).toBeTruthy();
-    expect(screen.getByText("Working")).toBeTruthy();
+    // Working-state tasks render a ● dot (per em-tool-calls.jsx:376-383)
+    // instead of a "Working" label pill.
+    expect(screen.getByText("●")).toBeTruthy();
   });
 
   it("renders custom MCP card for create_task", () => {
