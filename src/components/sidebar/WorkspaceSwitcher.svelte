@@ -9,6 +9,8 @@
     onSelect: (id: string) => void;
     onOpenWorkspaceSettings: () => void;
     onCreateWorkspace: () => void;
+    onOpenOverview: () => void;
+    overviewActive?: boolean;
   }
 
   let {
@@ -17,6 +19,8 @@
     onSelect,
     onOpenWorkspaceSettings,
     onCreateWorkspace,
+    onOpenOverview,
+    overviewActive = false,
   }: Props = $props();
 
   let open = $state(false);
@@ -64,16 +68,14 @@
   <div
     bind:this={rootEl}
     class="relative flex items-stretch gap-[2px] rounded-[7px] transition-colors"
-    class:bg-bg-selected={open}
+    class:bg-bg-selected={open || overviewActive}
   >
     <button
       type="button"
-      class="flex w-full min-w-0 items-center gap-2 rounded-[7px] px-[6px] py-[6px] text-left transition-colors
-        {open ? '' : 'hover:bg-bg-hover'}"
-      title="Workspaces"
-      aria-expanded={open}
-      aria-haspopup="listbox"
-      onclick={() => (open = !open)}
+      class="flex min-w-0 flex-1 items-center gap-2 rounded-[7px] px-[6px] py-[6px] text-left transition-colors
+        {open || overviewActive ? '' : 'hover:bg-bg-hover'}"
+      title="Workspace overview"
+      onclick={onOpenOverview}
     >
       <span
         class="size-5 shrink-0 rounded-[5px] bg-fg-heading text-bg-base flex items-center justify-center text-[11px] font-bold tracking-tight"
@@ -92,9 +94,17 @@
           title={statusLabel(current.containerStatus)}
         ></span>
       </span>
-      <span class="inline-flex shrink-0 text-fg-disabled" aria-hidden="true"
-        ><ChevronDown size={10} /></span
-      >
+    </button>
+    <button
+      type="button"
+      class="inline-flex shrink-0 items-center justify-center rounded-[7px] px-[6px] text-fg-disabled transition-colors
+        {open || overviewActive ? '' : 'hover:bg-bg-hover'}"
+      title="Switch workspace"
+      aria-expanded={open}
+      aria-haspopup="listbox"
+      onclick={() => (open = !open)}
+    >
+      <ChevronDown size={10} />
     </button>
     {#if open}
       <div

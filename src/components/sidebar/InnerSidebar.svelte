@@ -25,11 +25,13 @@
     onCreateAgent: () => void;
     onNewThread: () => void;
     onOpenSwarm: () => void;
+    onOpenOverview: () => void;
     onOpenTasks: () => void;
     onOpenTerminal: () => void;
     onOpenAppSettings: () => void;
     onOpenWorkspaceSettings: () => void;
     onOpenSearch: () => void;
+    overviewActive?: boolean;
   }
 
   let {
@@ -46,11 +48,13 @@
     onCreateAgent,
     onNewThread,
     onOpenSwarm,
+    onOpenOverview,
     onOpenTasks,
     onOpenTerminal,
     onOpenAppSettings,
     onOpenWorkspaceSettings,
     onOpenSearch,
+    overviewActive = false,
   }: Props = $props();
 
   const isMacOS = $derived(
@@ -112,6 +116,8 @@
       onSelect={onSelectWorkspace}
       {onOpenWorkspaceSettings}
       {onCreateWorkspace}
+      {onOpenOverview}
+      {overviewActive}
     />
   </div>
 

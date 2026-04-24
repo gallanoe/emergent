@@ -12,7 +12,7 @@
   const max = $derived(Math.max(...series, 1));
 </script>
 
-<div class="grid grid-cols-[64px_1fr_auto] items-center gap-[10px]">
+<div class="grid grid-cols-[56px_1fr_auto] items-center gap-[10px]">
   <Mono size={10.5} color="var(--color-fg-muted)">{label}</Mono>
   <div class="flex h-[18px] items-end gap-0.5" data-testid="mini-metric-bars">
     {#each series as v, i (i)}

@@ -88,10 +88,13 @@
     }
   });
 
+  const focusClass =
+    "focus-visible:outline-none focus-visible:border-border-focus focus-visible:shadow-[0_0_0_3px_var(--accent-ring)]";
+
   const layoutClass = $derived(
     variant === "link"
-      ? "inline-flex cursor-default items-center gap-1 font-medium tracking-[-0.005em] font-[family-name:var(--font-ui)] transition-[background,color,border-color,box-shadow] duration-150 ease-out select-none"
-      : `inline-flex cursor-default items-center justify-center font-medium tracking-[-0.005em] font-[family-name:var(--font-ui)] transition-[background,color,border-color,box-shadow] duration-150 ease-out select-none ${sz.h} ${sz.px} ${sz.fs} ${sz.gap} ${sz.r}`,
+      ? `inline-flex cursor-default items-center gap-1 font-medium tracking-[-0.005em] font-[family-name:var(--font-ui)] transition-[background,color,border-color,box-shadow] duration-150 ease-out select-none ${focusClass}`
+      : `inline-flex cursor-default items-center justify-center font-medium tracking-[-0.005em] font-[family-name:var(--font-ui)] transition-[background,color,border-color,box-shadow] duration-150 ease-out select-none ${sz.h} ${sz.px} ${sz.fs} ${sz.gap} ${sz.r} ${focusClass}`,
   );
 </script>
 

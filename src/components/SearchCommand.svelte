@@ -83,7 +83,7 @@
   }}
 >
   <div
-    class="w-[520px] max-w-[90vw] rounded-[12px] border border-border-strong bg-bg-elevated shadow-[var(--shadow-lg)] overflow-hidden"
+    class="w-[520px] max-w-[90vw] rounded-[10px] border border-border-strong bg-bg-elevated shadow-[var(--shadow-lg)] overflow-hidden"
     role="dialog"
     aria-modal="true"
     aria-label="Thread search"

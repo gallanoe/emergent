@@ -30,6 +30,7 @@ describe("WorkspaceSwitcher", () => {
         workspaces: ws,
         selectedId: "a",
         onSelect: () => {},
+        onOpenOverview: () => {},
         onOpenWorkspaceSettings: () => {},
         onCreateWorkspace: () => {},
       },
@@ -37,7 +38,8 @@ describe("WorkspaceSwitcher", () => {
     expect(screen.getByText("Alpha")).toBeTruthy();
   });
 
-  it("opens the popover when the main control is clicked (does not call onSelect)", async () => {
+  it("clicking the name zone calls onOpenOverview (does not open popover)", async () => {
+    const onOpenOverview = vi.fn();
     const onSelect = vi.fn();
     const ws = [
       makeWorkspace("a", "Alpha", { state: "running" }),
@@ -48,13 +50,39 @@ describe("WorkspaceSwitcher", () => {
         workspaces: ws,
         selectedId: "a",
         onSelect,
+        onOpenOverview,
         onOpenWorkspaceSettings: () => {},
         onCreateWorkspace: () => {},
       },
     });
     expect(screen.queryByText("New workspace")).toBeNull();
-    await fireEvent.click(screen.getByTitle("Workspaces"));
+    await fireEvent.click(screen.getByTitle("Workspace overview"));
+    expect(onOpenOverview).toHaveBeenCalled();
     expect(onSelect).not.toHaveBeenCalled();
+    expect(screen.queryByText("New workspace")).toBeNull();
+  });
+
+  it("clicking the caret opens the popover", async () => {
+    const onSelect = vi.fn();
+    const onOpenOverview = vi.fn();
+    const ws = [
+      makeWorkspace("a", "Alpha", { state: "running" }),
+      makeWorkspace("b", "Bravo", { state: "building" }),
+    ];
+    render(WorkspaceSwitcher, {
+      props: {
+        workspaces: ws,
+        selectedId: "a",
+        onSelect,
+        onOpenOverview,
+        onOpenWorkspaceSettings: () => {},
+        onCreateWorkspace: () => {},
+      },
+    });
+    expect(screen.queryByText("New workspace")).toBeNull();
+    await fireEvent.click(screen.getByTitle("Switch workspace"));
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(onOpenOverview).not.toHaveBeenCalled();
     expect(screen.getByText("Bravo")).toBeTruthy();
     expect(screen.getByText("Workspace settings")).toBeTruthy();
     expect(screen.getByText("New workspace")).toBeTruthy();
@@ -71,11 +99,12 @@ describe("WorkspaceSwitcher", () => {
         workspaces: ws,
         selectedId: "a",
         onSelect,
+        onOpenOverview: () => {},
         onOpenWorkspaceSettings: () => {},
         onCreateWorkspace: () => {},
       },
     });
-    await fireEvent.click(screen.getByTitle("Workspaces"));
+    await fireEvent.click(screen.getByTitle("Switch workspace"));
     expect(screen.getByText("Running")).toBeTruthy();
     expect(screen.getByText("Building")).toBeTruthy();
     await fireEvent.click(screen.getByText("Bravo"));
@@ -90,11 +119,12 @@ describe("WorkspaceSwitcher", () => {
         workspaces: ws,
         selectedId: "a",
         onSelect: () => {},
+        onOpenOverview: () => {},
         onOpenWorkspaceSettings: () => {},
         onCreateWorkspace,
       },
     });
-    await fireEvent.click(screen.getByTitle("Workspaces"));
+    await fireEvent.click(screen.getByTitle("Switch workspace"));
     await fireEvent.click(screen.getByText("New workspace"));
     expect(onCreateWorkspace).toHaveBeenCalled();
   });
@@ -107,11 +137,12 @@ describe("WorkspaceSwitcher", () => {
         workspaces: ws,
         selectedId: "a",
         onSelect: () => {},
+        onOpenOverview: () => {},
         onOpenWorkspaceSettings,
         onCreateWorkspace: () => {},
       },
     });
-    await fireEvent.click(screen.getByTitle("Workspaces"));
+    await fireEvent.click(screen.getByTitle("Switch workspace"));
     expect(screen.getByText("Workspace settings")).toBeTruthy();
     await fireEvent.click(screen.getByText("Workspace settings"));
     expect(onOpenWorkspaceSettings).toHaveBeenCalledOnce();
