@@ -9,6 +9,7 @@
   import ContextMenu from "../sidebar/ContextMenu.svelte";
   import SystemPromptCard from "./SystemPromptCard.svelte";
   import ThreadListSection from "./ThreadListSection.svelte";
+  import { getFriendlyNameForAgent } from "../../lib/agent-logos";
   import type {
     DisplayAgentDefinition,
     DisplayThread,
@@ -144,7 +145,10 @@
             {#snippet children()}
               {agentDef.threads.length} thread{agentDef.threads.length === 1
                 ? ""
-                : "s"} · cli: {agentDef.cli}
+                : "s"} · {getFriendlyNameForAgent(
+                agentDef.provider,
+                agentDef.cli,
+              )}
             {/snippet}
           </Mono>
         </div>

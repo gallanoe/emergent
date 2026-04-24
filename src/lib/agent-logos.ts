@@ -12,6 +12,16 @@ const PROVIDER_LOGOS: Record<string, string> = {
   opencode: opencodeLogo,
 } as const;
 
+/** Friendly label for each provider id. Kept in sync with the
+ * `KNOWN_AGENTS` table in `emergent-core` `detect.rs`. */
+const PROVIDER_LABELS: Record<string, string> = {
+  claude: "Claude Code",
+  codex: "Codex",
+  gemini: "Gemini",
+  kiro: "Kiro",
+  opencode: "OpenCode",
+} as const;
+
 /**
  * Returns the logo asset URL for a persisted `AgentDefinition.provider` (or
  * `KnownAgent.provider`) — an explicit id chosen when the agent is created, not
@@ -63,4 +73,15 @@ export function getLogoUrlForAgent(
   cli: string | null | undefined,
 ): string | null {
   return getLogoUrlForProvider(provider) ?? getLogoUrlForProvider(inferProviderIdFromCli(cli));
+}
+
+/** Friendly display name (e.g. "Claude Code") resolved from `provider`,
+ * falling back to inference from `cli`, then to the raw `cli` string. */
+export function getFriendlyNameForAgent(
+  provider: string | null | undefined,
+  cli: string | null | undefined,
+): string {
+  const id = provider?.trim().toLowerCase() || inferProviderIdFromCli(cli);
+  if (id && PROVIDER_LABELS[id]) return PROVIDER_LABELS[id];
+  return cli?.trim() || "";
 }

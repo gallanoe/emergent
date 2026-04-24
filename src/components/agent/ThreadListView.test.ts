@@ -63,7 +63,7 @@ describe("ThreadListView", () => {
     });
     expect(screen.getByTitle("Click to rename").textContent).toContain("Architect");
     expect(screen.getByText(/2 threads/)).toBeTruthy();
-    expect(screen.getByText(/cli: claude/)).toBeTruthy();
+    expect(screen.getByText(/Claude Code/)).toBeTruthy();
   });
 
   it("blur with a new name calls onUpdateName", async () => {
