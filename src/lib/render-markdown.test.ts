@@ -45,9 +45,11 @@ describe("renderMarkdown", () => {
     expect(renderMarkdown("> [!CAUTION]\n> x")).toContain(`<span class="callout-icon">!</span>`);
   });
 
-  it("preserves the callout title text next to the icon", () => {
+  it("wraps callout title and body in a .callout-body column next to the icon", () => {
     const html = renderMarkdown("> [!WARNING]\n> careful");
-    expect(html).toMatch(/<span class="callout-icon">!<\/span><span>Warning<\/span>/);
+    expect(html).toMatch(
+      /<span class="callout-icon">!<\/span><div class="callout-body"><div class="callout-title">Warning<\/div>/,
+    );
   });
 
   it("sanitization preserves md-copy button in code fences", () => {
