@@ -94,7 +94,6 @@ export interface AgentDefinition {
   id: string;
   workspace_id: string;
   name: string;
-  role?: string;
   cli: string;
   /** Set at creation from `KnownAgent.provider`; used for logos only. */
   provider?: string | null;
@@ -130,7 +129,6 @@ export interface DisplayThread {
   queuedMessage: string | null;
   configOptions: ConfigOption[];
   errorMessage?: string;
-  role?: string;
   updatedAt: string;
   stopReason: string | null;
   taskId: string | null;
@@ -139,7 +137,6 @@ export interface DisplayThread {
 export interface DisplayAgentDefinition {
   id: string;
   name: string;
-  role?: string;
   cli: string;
   /** Explicit logo id from agent creation; not derived from `cli`. */
   provider: string | null;

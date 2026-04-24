@@ -58,8 +58,6 @@ pub(crate) struct ThreadHandle {
     pub(crate) has_management_permissions: bool,
     /// Whether the thread has received at least one prompt (gates first-turn injection).
     pub(crate) has_prompted: bool,
-    /// Optional role for this thread. Read from parent AgentDefinition.
-    pub(crate) role: Option<String>,
     /// Optional task ID linking this thread to a task.
     pub(crate) task_id: Option<String>,
     /// Set once the agent has signalled task completion. Blocks new prompts so
@@ -163,13 +161,12 @@ impl AgentManager {
         &self,
         workspace_id: WorkspaceId,
         name: String,
-        role: Option<String>,
         cli: String,
         provider: Option<String>,
     ) -> String {
         let id = {
             let mut reg = self.registry.write().await;
-            reg.create_agent(workspace_id.clone(), name, role, cli, provider)
+            reg.create_agent(workspace_id.clone(), name, cli, provider)
         };
         self.persist_agents(&workspace_id).await;
 
@@ -211,12 +208,11 @@ impl AgentManager {
         &self,
         agent_id: &str,
         name: Option<String>,
-        role: Option<String>,
         provider: Option<String>,
     ) -> Result<(), String> {
         let workspace_id = {
             let mut reg = self.registry.write().await;
-            reg.update_agent(agent_id, name, role, provider)?;
+            reg.update_agent(agent_id, name, provider)?;
             reg.get_agent(agent_id).map(|d| d.workspace_id.clone())
         };
         if let Some(ws_id) = workspace_id {
@@ -318,7 +314,6 @@ impl AgentManager {
                 definition.workspace_id,
                 container_id,
                 definition.cli,
-                definition.role,
                 task_id,
             )
             .await
@@ -394,7 +389,6 @@ impl AgentManager {
                 definition.workspace_id,
                 container_id,
                 definition.cli,
-                definition.role,
                 acp_session_id.to_string(),
                 task_id,
             )
@@ -424,9 +418,8 @@ impl AgentManager {
         &self,
         thread_id: &str,
         text: String,
-        role: Option<String>,
     ) -> Result<oneshot::Receiver<Result<(), String>>, String> {
-        self.threads.queue_prompt(thread_id, text, role).await
+        self.threads.queue_prompt(thread_id, text).await
     }
 
     pub async fn notify_prompt_loop(&self, thread_id: &str) {

@@ -379,11 +379,10 @@
     {:else if appState.activeView === "create-agent" && appState.selectedSwarmId}
       <AgentCreatorView
         knownAgents={appState.knownAgents}
-        onCreate={async (cli, name, role, provider) => {
+        onCreate={async (cli, name, provider) => {
           const agentId = await appState.createAgentDefinition(
             appState.selectedSwarmId!,
             name,
-            role,
             cli,
             provider,
           );
@@ -468,10 +467,7 @@
             const threadId = await appState.spawnThread(def.id);
             appState.selectThread(threadId);
           }}
-          onUpdateName={(name) =>
-            appState.updateAgentDefinition(def.id, name, undefined)}
-          onUpdateRole={(role) =>
-            appState.updateAgentDefinition(def.id, undefined, role)}
+          onUpdateName={(name) => appState.updateAgentDefinition(def.id, name)}
           onUpdateSystemPrompt={(next) =>
             appState.updateAgentSystemPrompt(def.id, next)}
           onResumeThread={(id) => appState.resumeThread(id)}

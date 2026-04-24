@@ -21,7 +21,6 @@
     onSelectThread: (id: string) => void;
     onNewThread: () => void;
     onUpdateName: (name: string) => void;
-    onUpdateRole: (role: string) => void;
     onUpdateSystemPrompt: (next: string) => void;
     onResumeThread: (id: string) => void;
     onStopThread: (id: string) => void;
@@ -35,7 +34,6 @@
     onSelectThread,
     onNewThread,
     onUpdateName,
-    onUpdateRole,
     onUpdateSystemPrompt,
     onResumeThread,
     onStopThread,
@@ -44,9 +42,7 @@
   }: Props = $props();
 
   let editingName = $state(false);
-  let editingRole = $state(false);
   let nameDraft = $state("");
-  let roleDraft = $state("");
 
   const conversationThreads = $derived(
     agentDef.threads.filter((t) => !t.taskId),
@@ -142,37 +138,6 @@
               >
                 {agentDef.name}
               </h1>
-            {/if}
-
-            {#if editingRole}
-              <input
-                bind:value={roleDraft}
-                class="border-b border-border-default bg-transparent text-[13px] text-fg-muted outline-none"
-                placeholder="Add role…"
-                onblur={() => {
-                  onUpdateRole(roleDraft.trim());
-                  editingRole = false;
-                }}
-                onkeydown={(e) => {
-                  if (e.key === "Enter") e.currentTarget.blur();
-                  if (e.key === "Escape") {
-                    editingRole = false;
-                  }
-                }}
-              />
-            {:else}
-              <!-- svelte-ignore a11y_click_events_have_key_events -->
-              <!-- svelte-ignore a11y_no_static_element_interactions -->
-              <span
-                class="cursor-text text-[13px] text-fg-muted"
-                onclick={() => {
-                  roleDraft = agentDef.role ?? "";
-                  editingRole = true;
-                }}
-                title="Click to edit role"
-              >
-                {agentDef.role || "Add role…"}
-              </span>
             {/if}
           </div>
           <Mono size={11} color="var(--color-fg-disabled)" class="mt-1">

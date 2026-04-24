@@ -29,7 +29,6 @@ interface ThreadState {
   queuedContent: string;
   configOptions: ConfigOption[];
   errorMessage?: string;
-  role?: string;
   hasPrompted?: boolean;
   acpSessionId?: string | null;
   taskId?: string | null;
@@ -124,13 +123,12 @@ function toDisplayThread(conn: ThreadState): DisplayThread {
     provider: conn.provider,
     name: conn.agentName,
     processStatus: conn.status,
-    preview: conn.role ?? (lastMsg?.content ? lastMsg.content.slice(0, 30) + "..." : ""),
+    preview: lastMsg?.content ? lastMsg.content.slice(0, 30) + "..." : "",
     messages: conn.messages,
     activeToolCalls: Object.values(conn.activeToolCalls),
     queuedMessage: conn.queuedContent || null,
     configOptions: conn.configOptions,
     ...(conn.errorMessage !== undefined && { errorMessage: conn.errorMessage }),
-    ...(conn.role !== undefined && { role: conn.role }),
     updatedAt: conn.messages.at(-1)?.timestamp ?? "just now",
     stopReason: conn.stopReason,
     taskId: conn.taskId ?? null,
@@ -666,16 +664,6 @@ function createAgentStore() {
     delete threads[threadId];
   }
 
-  function setRole(threadId: string, role: string): void {
-    const thread = threads[threadId];
-    if (!thread || thread.hasPrompted) return;
-    if (role) {
-      thread.role = role;
-    } else {
-      delete thread.role;
-    }
-  }
-
   function getThreadsForAgent(agentDefinitionId: string): ThreadState[] {
     return Object.values(threads).filter((t) => t.agentDefinitionId === agentDefinitionId);
   }
@@ -884,7 +872,6 @@ function createAgentStore() {
     registerQueueDumpHandler,
     replayNotifications,
     syncThreadSnapshot,
-    setRole,
   };
 }
 

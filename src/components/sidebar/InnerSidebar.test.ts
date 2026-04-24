@@ -7,7 +7,6 @@ function makeAgentDef(overrides?: Partial<DisplayAgentDefinition>): DisplayAgent
   return {
     id: "agent-1",
     name: "Claude",
-    role: "Researcher",
     cli: "claude",
     provider: "claude",
     systemPrompt: "",
@@ -24,7 +23,7 @@ function makeSwarm(overrides?: Partial<DisplayWorkspace>): DisplayWorkspace {
     containerStatus: { state: "running" },
     agentDefinitions: [
       makeAgentDef(),
-      makeAgentDef({ id: "agent-2", name: "Gemini", role: "Analyst", provider: "gemini" }),
+      makeAgentDef({ id: "agent-2", name: "Gemini", provider: "gemini" }),
     ],
     ...overrides,
   };

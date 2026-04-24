@@ -371,38 +371,20 @@ function createAppState() {
   function getDisplayWorkspaces(): DisplayWorkspace[] {
     if (demoMode) {
       const list = mockState.swarms as unknown as DisplayWorkspace[];
-      return list.map((w) => {
-        const agentDefinitions = w.agentDefinitions.map((ad) => {
-          const systemPrompt = agentSystemPrompts[ad.id] ?? ad.systemPrompt ?? "";
-          const prov = ad.provider ?? null;
-          if (ad.role === undefined) {
-            return {
-              id: ad.id,
-              name: ad.name,
-              cli: ad.cli,
-              provider: prov,
-              systemPrompt,
-              threads: ad.threads,
-            };
-          }
-          return {
-            id: ad.id,
-            name: ad.name,
-            role: ad.role,
-            cli: ad.cli,
-            provider: prov,
-            systemPrompt,
-            threads: ad.threads,
-          };
-        });
-        return {
-          id: w.id,
-          name: w.name,
-          collapsed: w.collapsed,
-          containerStatus: w.containerStatus,
-          agentDefinitions,
-        };
-      });
+      return list.map((w) => ({
+        id: w.id,
+        name: w.name,
+        collapsed: w.collapsed,
+        containerStatus: w.containerStatus,
+        agentDefinitions: w.agentDefinitions.map((ad) => ({
+          id: ad.id,
+          name: ad.name,
+          cli: ad.cli,
+          provider: ad.provider ?? null,
+          systemPrompt: agentSystemPrompts[ad.id] ?? ad.systemPrompt ?? "",
+          threads: ad.threads,
+        })),
+      }));
     }
     return workspaces.map((w) => ({
       id: w.id,
@@ -415,20 +397,9 @@ function createAppState() {
           if (!def) return null;
           const threads = agentStore.getThreadsForAgent(defId);
           const displayThreads = threads.map((t) => agentStore.toDisplayThread(t));
-          if (def.role === undefined) {
-            return {
-              id: def.id,
-              name: def.name,
-              cli: def.cli,
-              provider: def.provider ?? null,
-              systemPrompt: agentSystemPrompts[defId] ?? "",
-              threads: displayThreads,
-            };
-          }
           return {
             id: def.id,
             name: def.name,
-            role: def.role,
             cli: def.cli,
             provider: def.provider ?? null,
             systemPrompt: agentSystemPrompts[defId] ?? "",
@@ -683,7 +654,6 @@ function createAppState() {
     cancelPrompt: agentStore.cancelPrompt,
     setConfig: agentStore.setConfig,
     editQueue: agentStore.editQueue,
-    setRole: agentStore.setRole,
     registerQueueDumpHandler: agentStore.registerQueueDumpHandler,
     connectAgents,
     disconnectAgents,
@@ -740,14 +710,12 @@ function createAppState() {
     async createAgentDefinition(
       workspaceId: string,
       name: string,
-      role: string | undefined,
       cli: string,
       provider: string,
     ): Promise<string> {
       const agentId = await invoke<string>("create_agent", {
         workspaceId,
         name,
-        ...(role !== undefined && { role }),
         cli,
         provider,
       });
@@ -755,7 +723,6 @@ function createAppState() {
         id: agentId,
         workspace_id: workspaceId,
         name,
-        ...(role !== undefined && { role }),
         cli,
         provider,
       };
@@ -763,21 +730,14 @@ function createAppState() {
       if (ws) ws.agentDefinitionIds.push(agentId);
       return agentId;
     },
-    async updateAgentDefinition(
-      agentId: string,
-      name?: string,
-      role?: string,
-      provider?: string,
-    ): Promise<void> {
+    async updateAgentDefinition(agentId: string, name?: string, provider?: string): Promise<void> {
       const payload: Record<string, unknown> = { agentId };
       if (name !== undefined) payload.name = name;
-      if (role !== undefined) payload.role = role;
       if (provider !== undefined) payload.provider = provider;
       await invoke("update_agent", payload);
       const def = agentDefinitions[agentId];
       if (def) {
         if (name !== undefined) def.name = name;
-        if (role !== undefined) def.role = role;
         if (provider !== undefined) def.provider = provider || null;
       }
     },

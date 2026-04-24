@@ -270,7 +270,6 @@ const agentDefinitions: DisplayAgentDefinition[] = [
   {
     id: "a1",
     name: "claude-sonnet",
-    role: "architect",
     cli: "claude",
     provider: "claude",
     systemPrompt: "",
@@ -304,7 +303,6 @@ const agentDefinitions: DisplayAgentDefinition[] = [
   {
     id: "a2",
     name: "codex-validator",
-    role: "reviewer",
     cli: "codex",
     provider: "codex",
     systemPrompt: "",
@@ -344,7 +342,6 @@ const agentDefinitions: DisplayAgentDefinition[] = [
   {
     id: "a4",
     name: "opencode-sweeper",
-    role: "cleanup",
     cli: "opencode",
     provider: "opencode",
     systemPrompt: "",

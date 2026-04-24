@@ -28,7 +28,6 @@ impl AgentRegistry {
         &mut self,
         workspace_id: WorkspaceId,
         name: String,
-        role: Option<String>,
         cli: String,
         provider: Option<String>,
     ) -> String {
@@ -37,7 +36,6 @@ impl AgentRegistry {
             id: id.clone(),
             workspace_id,
             name,
-            role,
             cli,
             provider,
         };
@@ -53,7 +51,6 @@ impl AgentRegistry {
         &mut self,
         agent_id: &str,
         name: Option<String>,
-        role: Option<String>,
         provider: Option<String>,
     ) -> Result<(), String> {
         let def = self
@@ -62,9 +59,6 @@ impl AgentRegistry {
             .ok_or_else(|| format!("Agent definition '{}' not found", agent_id))?;
         if let Some(n) = name {
             def.name = n;
-        }
-        if let Some(r) = role {
-            def.role = Some(r);
         }
         if let Some(p) = provider {
             def.provider = if p.is_empty() { None } else { Some(p) };
@@ -143,13 +137,11 @@ mod tests {
         let id = reg.create_agent(
             ws_id(),
             "Reviewer".into(),
-            Some("Review code".into()),
             "claude --acp".into(),
             Some("claude".into()),
         );
         let def = reg.get_agent(&id).unwrap();
         assert_eq!(def.name, "Reviewer");
-        assert_eq!(def.role, Some("Review code".into()));
         assert_eq!(def.cli, "claude --acp");
         assert_eq!(def.provider, Some("claude".into()));
     }
@@ -160,19 +152,17 @@ mod tests {
         let id = reg.create_agent(
             ws_id(),
             "Old".into(),
-            Some("old role".into()),
             "claude".into(),
             Some("claude".into()),
         );
-        reg.update_agent(&id, Some("New".into()), None, None).unwrap();
+        reg.update_agent(&id, Some("New".into()), None).unwrap();
         assert_eq!(reg.get_agent(&id).unwrap().name, "New");
-        assert_eq!(reg.get_agent(&id).unwrap().role, Some("old role".into()));
     }
 
     #[test]
     fn test_delete_agent() {
         let mut reg = AgentRegistry::new();
-        let id = reg.create_agent(ws_id(), "A".into(), Some("r".into()), "c".into(), None);
+        let id = reg.create_agent(ws_id(), "A".into(), "c".into(), None);
         reg.delete_agent(&id).unwrap();
         assert!(reg.get_agent(&id).is_none());
     }
@@ -186,11 +176,10 @@ mod tests {
     #[test]
     fn test_list_definitions_filters_by_workspace() {
         let mut reg = AgentRegistry::new();
-        reg.create_agent(ws_id(), "A".into(), None, "c".into(), None);
+        reg.create_agent(ws_id(), "A".into(), "c".into(), None);
         reg.create_agent(
             WorkspaceId::from("other"),
             "B".into(),
-            Some("r".into()),
             "c".into(),
             None,
         );

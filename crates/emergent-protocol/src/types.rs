@@ -295,7 +295,6 @@ pub struct AgentDefinition {
     pub id: String,
     pub workspace_id: WorkspaceId,
     pub name: String,
-    pub role: Option<String>,
     pub cli: String,
     /// Chosen at creation from `KnownAgent::provider`; used for branding only.
     #[serde(default, skip_serializing_if = "Option::is_none")]

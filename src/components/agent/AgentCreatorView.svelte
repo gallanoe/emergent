@@ -11,12 +11,7 @@
 
   interface Props {
     knownAgents: KnownAgent[];
-    onCreate: (
-      cli: string,
-      name: string,
-      role: string | undefined,
-      provider: string,
-    ) => void;
+    onCreate: (cli: string, name: string, provider: string) => void;
     onCancel: () => void;
   }
 
@@ -24,7 +19,6 @@
 
   let selectedCli = $state("");
   let name = $state("");
-  let role = $state("");
   let dropdownOpen = $state(false);
 
   $effect(() => {
@@ -43,12 +37,7 @@
 
   function handleCreate() {
     if (!canCreate || !selectedAgent) return;
-    onCreate(
-      selectedCli,
-      name.trim(),
-      role.trim() || undefined,
-      selectedAgent.provider,
-    );
+    onCreate(selectedCli, name.trim(), selectedAgent.provider);
   }
 
   function selectCli(agent: KnownAgent) {
@@ -181,23 +170,6 @@
           placeholder="e.g. Code Reviewer, Test Writer"
           bind:value={name}
         />
-      </div>
-
-      <!-- Role -->
-      <div class="flex flex-col gap-1.5">
-        <label class="text-[11px] font-medium text-fg-muted" for="agent-role">
-          Role
-          <span class="font-normal text-fg-disabled">(optional)</span>
-        </label>
-        <textarea
-          id="agent-role"
-          class="bg-bg-elevated border border-border-default rounded-md px-2.5 py-[7px] text-[12px] text-fg-default font-[var(--font-ui)] w-full min-h-[80px] resize-y leading-relaxed focus:outline-none focus:border-border-focus"
-          placeholder="Describe this agent's purpose."
-          bind:value={role}
-        ></textarea>
-        <span class="text-[10px] text-fg-disabled leading-snug"
-          >Injected into the system prompt on the first turn of each thread.</span
-        >
       </div>
     </div>
   </div>

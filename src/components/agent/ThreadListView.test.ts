@@ -29,7 +29,6 @@ function makeAgentDef(overrides?: Partial<DisplayAgentDefinition>): DisplayAgent
   return {
     id: "ad-1",
     name: "Architect",
-    role: "Planner",
     cli: "claude",
     provider: "claude",
     systemPrompt: "Be brief.",
@@ -44,7 +43,6 @@ const baseCallbacks = {
   onSelectThread: noop,
   onNewThread: noop,
   onUpdateName: noop,
-  onUpdateRole: noop,
   onUpdateSystemPrompt: noop,
   onResumeThread: noop,
   onStopThread: noop,
@@ -100,23 +98,6 @@ describe("ThreadListView", () => {
     await fireEvent.input(input, { target: { value: "X" } });
     await fireEvent.keyDown(input, { key: "Escape" });
     expect(onUpdateName).not.toHaveBeenCalled();
-  });
-
-  it("blur on role field calls onUpdateRole", async () => {
-    const onUpdateRole = vi.fn();
-    render(ThreadListView, {
-      props: {
-        agentDefinition: makeAgentDef({ role: "Planner" }),
-        containerRunning: true,
-        ...baseCallbacks,
-        onUpdateRole,
-      },
-    });
-    await fireEvent.click(screen.getByTitle("Click to edit role"));
-    const input = screen.getByDisplayValue("Planner");
-    await fireEvent.input(input, { target: { value: "Reviewer" } });
-    await fireEvent.blur(input);
-    expect(onUpdateRole).toHaveBeenCalledWith("Reviewer");
   });
 
   it("hero kebab opens agent menu with Delete agent", async () => {

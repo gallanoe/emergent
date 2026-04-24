@@ -106,7 +106,6 @@ impl ThreadManager {
         workspace_id: WorkspaceId,
         container_id: String,
         agent_binary: String,
-        role: Option<String>,
         task_id: Option<String>,
     ) -> Result<String, String> {
         let thread_id = Self::generate_short_id();
@@ -145,7 +144,6 @@ impl ThreadManager {
                 workspace_id,
                 container_id,
                 agent_binary,
-                role,
                 task_id,
                 SessionInit::New,
                 threads,
@@ -209,7 +207,6 @@ impl ThreadManager {
         workspace_id: WorkspaceId,
         container_id: String,
         agent_binary: String,
-        role: Option<String>,
         acp_session_id: String,
         task_id: Option<String>,
     ) -> Result<(), String> {
@@ -251,7 +248,6 @@ impl ThreadManager {
                 workspace_id,
                 container_id,
                 agent_binary,
-                role,
                 task_id,
                 SessionInit::Load { acp_session_id },
                 threads,
@@ -293,7 +289,6 @@ impl ThreadManager {
         &self,
         thread_id: &str,
         text: String,
-        role: Option<String>,
     ) -> Result<oneshot::Receiver<Result<(), String>>, String> {
         let handle_arc = {
             let threads = self.threads.read().await;
@@ -322,13 +317,6 @@ impl ThreadManager {
                 "Thread '{}' is not idle (current status: {})",
                 thread_id, handle.status
             ));
-        }
-
-        // Set role on first prompt if provided.
-        if !handle.has_prompted {
-            if let Some(r) = role {
-                handle.role = Some(r);
-            }
         }
 
         let (reply_tx, reply_rx) = oneshot::channel();
