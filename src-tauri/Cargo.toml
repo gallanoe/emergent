@@ -26,5 +26,5 @@ log = { workspace = true }
 tokio = { workspace = true }
 tauri = { version = "2.10.3", features = ["tray-icon"] }
 tauri-plugin-log = "2"
-tauri-plugin-dialog = "2.6.0"
+tauri-plugin-dialog = "2.7.0"
 bollard = { workspace = true }
