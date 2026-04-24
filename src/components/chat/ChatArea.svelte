@@ -180,7 +180,7 @@
       </div>
     {:else}
       <div
-        class="flex w-full max-w-[740px] flex-col gap-[22px] px-10 pb-7 font-[family-name:var(--font-ui)] text-[14px] leading-[1.58] tracking-[-0.002em] text-fg-default"
+        class="flex w-full max-w-[740px] flex-col gap-[22px] px-10 font-[family-name:var(--font-ui)] text-[12.5px] leading-[1.6] tracking-[-0.002em] text-fg-default"
         class:pt-[60px]={hasTaskBanner}
         class:pt-9={!hasTaskBanner}
       >
@@ -200,7 +200,7 @@
           {:else if message.role === "user"}
             <div class="flex justify-end">
               <div
-                class="max-w-[78%] rounded-[14px] bg-bg-selected px-[14px] py-[10px] text-[14.5px] leading-[1.55] text-fg-default"
+                class="max-w-[78%] rounded-[14px] bg-bg-selected px-[14px] py-[10px] text-[12.5px] leading-[1.55] text-fg-default"
               >
                 <div class="markdown">
                   {@html renderMarkdown(message.content)}
@@ -264,31 +264,20 @@
           </div>
         {/if}
 
-        {#if thread.processStatus === "working"}
-          <div class="flex items-center gap-1.5 text-[12px] text-fg-muted">
-            <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-success"
-            ></span>
-            <span class="tracking-widest">· · ·</span>
-          </div>
-        {/if}
+        <!--
+          Spacer reserves scroll height under the absolutely-positioned
+          composer (ChatInput) so the last message can scroll above it
+          instead of being hidden. A real element is used instead of
+          `padding-bottom` because WebKit/Chromium collapse padding out of
+          the scrollable region for flex children in an overflow-auto
+          parent.
 
-        {#if thread.queuedMessage}
-          <div class="flex justify-end">
-            <button
-              type="button"
-              class="max-w-[78%] rounded-[14px] border border-dashed border-border-default bg-bg-selected/50 px-[14px] py-[10px] text-left text-[13px] text-fg-muted"
-              title="Edit queued message"
-              onclick={() => onEditQueue?.()}
-            >
-              <div
-                class="mb-1 flex items-center gap-2 text-[10px] uppercase tracking-[0.06em] text-fg-disabled"
-              >
-                <Mail size={10} /> Queued
-              </div>
-              {thread.queuedMessage}
-            </button>
-          </div>
-        {/if}
+          Height = composer wrapper total (146px: pt-10 + pb-22 + bubble
+          114). With the content wrapper's `gap-[22px]` adding another
+          22px above the spacer, the last message ends 22px above the
+          composer wrapper top — matching the inter-message gap.
+        -->
+        <div class="h-[146px] shrink-0" aria-hidden="true"></div>
       </div>
     {/if}
   {:else}

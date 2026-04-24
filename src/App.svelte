@@ -250,8 +250,15 @@
     onOpenSearch={() => (searchOpen = true)}
   />
   <main class="relative flex h-full min-h-0 min-w-0 flex-col">
+    <!--
+      Invisible Tauri drag handle across the top of the main pane. Keeps the
+      title-bar grab area usable when the sidebar is collapsed/hidden or the
+      pointer is anywhere outside the sidebar strip. Do NOT remove — without
+      this, the window can only be dragged from the 34px sidebar chrome,
+      which breaks on secondary displays and in sidebar-hidden layouts.
+    -->
     <div
-      class="relative z-[60] h-[38px] flex-shrink-0"
+      class="absolute inset-x-0 top-0 z-40 h-[28px] pointer-events-auto"
       data-tauri-drag-region
       aria-hidden="true"
     ></div>

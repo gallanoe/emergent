@@ -89,7 +89,7 @@ describe("ChatInput", () => {
     expect(onSend).not.toHaveBeenCalled();
   });
 
-  it("shows interrupt and send when working with text", async () => {
+  it("shows only the interrupt button when working", async () => {
     render(ChatInput, {
       props: {
         thread: makeThread({ processStatus: "working" }),
@@ -101,7 +101,9 @@ describe("ChatInput", () => {
     await fireEvent.input(ta, { target: { value: "queue me" } });
     await tick();
     expect(screen.getByTitle("Interrupt")).toBeTruthy();
-    expect(screen.getByTitle("Queue message")).toBeTruthy();
+    // Design calls for a single button at a time — no queue-send affordance.
+    expect(screen.queryByTitle("Queue message")).toBeNull();
+    expect(screen.queryByTitle("Send")).toBeNull();
   });
 
   it("toggles config popover when agent chip is clicked", async () => {

@@ -20,24 +20,31 @@
 
   interface Props {
     toolCall: DisplayToolCall;
+    /** Optional trailing mono meta (e.g. "L1–48", "12 matches", "2.3s"). */
+    meta?: string;
   }
 
-  let { toolCall }: Props = $props();
+  let { toolCall, meta }: Props = $props();
   let emergentToolName = $derived(getEmergentToolName(toolCall.name));
   let isListAgentsTool = $derived(emergentToolName === "list_agents");
   let isListTasksTool = $derived(emergentToolName === "list_tasks");
   let isCreateTaskTool = $derived(emergentToolName === "create_task");
   let isCompleteTaskTool = $derived(emergentToolName === "complete_task");
-  let userToggled = $state<boolean | null>(null);
+
+  // ── Expansion state ────────────────────────────────────────────
+  // Rule: auto-open while running, auto-collapse once resolved. As soon as
+  // the user clicks the chevron we hand them the wheel and stop reacting
+  // to status changes on this row.
+  let userToggled = $state(false);
+  let userExpanded = $state(false);
   let expanded = $derived(
-    userToggled ??
-      (toolCall.kind === "edit" ||
-        (emergentToolName !== null && !isCompleteTaskTool)),
+    userToggled ? userExpanded : toolCall.status === "in_progress",
   );
 
   function toggle() {
     if (!hasPreview) return;
-    userToggled = !expanded;
+    userToggled = true;
+    userExpanded = !expanded;
   }
 
   function onKeydown(e: KeyboardEvent) {
@@ -102,6 +109,8 @@
     );
   });
 
+  // Allow `statusLabel` on any status — design shows `exit 0`, `cached`,
+  // `streaming…` on success too (em-tool-calls.jsx:252-257).
   let statusLabel = $derived.by(() => {
     if (toolCall.status === "failed") {
       const termContent = toolCall.content.find((c) => c.type === "terminal");
@@ -129,26 +138,15 @@
       isCreateTaskTool ||
       (toolCall.content.length > 0 &&
         toolCall.kind !== "read" &&
-        toolCall.status !== "pending" &&
-        toolCall.status !== "in_progress"),
+        toolCall.status !== "pending"),
   );
-
-  // Commands from execute-kind calls live under either `command` or `cmd`
-  // depending on the agent. rawInput is unknown per the ACP spec, so we
-  // fall back across both shapes without typing it further.
-  function extractCommand(rawInput: unknown): string {
-    if (rawInput && typeof rawInput === "object") {
-      const obj = rawInput as Record<string, unknown>;
-      if (typeof obj.command === "string") return obj.command;
-      if (typeof obj.cmd === "string") return obj.cmd;
-    }
-    return "";
-  }
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <div
-  class={hasPreview ? "interactive rounded" : ""}
+  class="rounded-[8px] {expanded
+    ? 'bg-bg-elevated border border-border-default'
+    : 'border border-transparent'} {hasPreview ? 'interactive' : ''}"
   onclick={toggle}
   role={hasPreview ? "button" : undefined}
   tabindex={hasPreview ? 0 : undefined}
@@ -162,7 +160,7 @@
     />
     <span
       data-testid="tool-verb"
-      class="text-[12px] font-[family-name:var(--font-mono)] font-medium text-fg-default min-w-[44px] {toolCall.status ===
+      class="text-[12px] font-[family-name:var(--font-mono)] font-medium text-fg-default min-w-[44px] shrink-0 {toolCall.status ===
       'in_progress'
         ? 'em-shimmer-text'
         : ''}"
@@ -170,27 +168,33 @@
       {verb}
     </span>
     <span
-      class="text-[11px] font-[family-name:var(--font-mono)] text-fg-muted truncate"
+      class="text-[11px] font-[family-name:var(--font-mono)] text-fg-muted truncate min-w-0"
     >
       {target}
     </span>
-    <span class="ml-auto flex items-center gap-1.5 shrink-0">
-      {#if statusLabel}
-        <span class="text-[10px] {statusLabelColor} whitespace-nowrap"
-          >{statusLabel}</span
-        >
-      {/if}
-      <ToolStatusGlyph status={toolCall.status} size={10} />
-      {#if hasPreview}
-        <span class="text-fg-disabled">
-          {#if expanded}
-            <ChevronDown size={10} />
-          {:else}
-            <ChevronRight size={10} />
-          {/if}
-        </span>
-      {/if}
-    </span>
+    {#if hasPreview}
+      <span class="text-fg-disabled shrink-0 inline-flex">
+        {#if expanded}
+          <ChevronDown size={10} />
+        {:else}
+          <ChevronRight size={10} />
+        {/if}
+      </span>
+    {/if}
+    <span class="flex-1 min-w-[4px]"></span>
+    {#if meta}
+      <span
+        class="text-[11px] font-[family-name:var(--font-mono)] text-fg-muted tabular-nums truncate shrink-0 max-w-[40%]"
+      >
+        {meta}
+      </span>
+    {/if}
+    <ToolStatusGlyph status={toolCall.status} size={10} />
+    {#if statusLabel}
+      <span class="text-[10px] {statusLabelColor} whitespace-nowrap shrink-0"
+        >{statusLabel}</span
+      >
+    {/if}
   </div>
 
   {#if expanded}
@@ -220,7 +224,7 @@
             <DiffBody oldText={item.oldText} newText={item.newText} />
           {:else if item.type === "terminal"}
             <ShellBody
-              command={extractCommand(toolCall.rawInput)}
+              rawInput={toolCall.rawInput}
               output={item.output ?? ""}
               exitCode={item.exitCode ?? null}
             />

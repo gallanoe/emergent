@@ -92,14 +92,31 @@
   });
 </script>
 
-<div class="flex justify-center px-10 pb-[22px] pt-[10px]">
+<!--
+  Composer floats absolutely at the bottom of its relative parent so the
+  chat transcript scrolls UNDERNEATH it (iMessage-style). Keep this in sync
+  with ChatArea's bottom padding (~160px) so messages aren't hidden when
+  scrolled to the end.
+
+  - Outer wrapper: `pointer-events-none` so clicks in the px-10 gutters
+    pass through to the transcript.
+  - Bubble: `pointer-events-auto` to restore interactivity on the composer
+    itself.
+  - `bg-bg-elevated` (opaque) rather than the design spec's `bg-bg-bubble`
+    (4% white overlay) so scrolled-under content is cleanly occluded. The
+    bubble token blends with the near-black main pane and reads as a
+    dark rim, not a floating surface.
+-->
+<div
+  class="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex justify-center px-10 pb-[22px] pt-[10px]"
+>
   <div
-    class="relative flex w-full max-w-[760px] flex-col gap-[10px] rounded-[18px] border border-border-default bg-bg-bubble px-[14px] pb-[10px] pt-[14px] shadow-[var(--shadow-sm)]"
+    class="pointer-events-auto relative flex w-full max-w-[760px] flex-col gap-[10px] rounded-[18px] border border-border-default bg-bg-elevated px-[14px] pb-[10px] pt-[14px] shadow-[var(--shadow-sm)]"
   >
     <textarea
       bind:this={textareaEl}
       bind:value={message}
-      class="min-h-[48px] resize-none border-0 bg-transparent px-[6px] py-[4px] font-[family-name:var(--font-ui)] text-[14px] leading-[1.55] text-fg-default outline-none placeholder:text-fg-muted disabled:placeholder:text-fg-disabled"
+      class="min-h-[48px] resize-none border-0 bg-transparent px-[6px] py-[4px] font-[family-name:var(--font-ui)] text-[12.5px] leading-[1.55] text-fg-default outline-none placeholder:text-fg-muted disabled:placeholder:text-fg-disabled"
       placeholder={placeholderText}
       disabled={isDisabled}
       onkeydown={handleKeyDown}
@@ -130,7 +147,7 @@
             />
             <span>{thread.name}</span>
             {#if configSummary}
-              <span class="text-fg-disabled">·</span>
+              <span class="px-[2px] text-fg-disabled">@</span>
               <span class="text-fg-muted">{configSummary}</span>
             {/if}
             <ChevronDown size={10} />
@@ -166,18 +183,18 @@
         >
           <Square size={10} fill="currentColor" />
         </button>
+      {:else}
+        <button
+          type="button"
+          title="Send"
+          disabled={!hasText || isDisabled}
+          class="inline-flex h-[30px] w-[30px] items-center justify-center rounded-full disabled:opacity-40"
+          style="background: var(--color-fg-heading); color: var(--color-background);"
+          onclick={submit}
+        >
+          <ArrowUp size={13} />
+        </button>
       {/if}
-
-      <button
-        type="button"
-        title={isWorking ? "Queue message" : "Send"}
-        disabled={!hasText || isDisabled}
-        class="inline-flex h-[30px] w-[30px] items-center justify-center rounded-full disabled:opacity-40"
-        style="background: var(--color-fg-heading); color: var(--color-background);"
-        onclick={submit}
-      >
-        <ArrowUp size={13} />
-      </button>
     </div>
   </div>
 </div>

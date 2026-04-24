@@ -39,6 +39,11 @@ function msg(
   };
 }
 
+// Content longer than ThinkingBlock's 80-char peek cap, so the full
+// string only appears in the DOM when the block is expanded.
+const LONG_THOUGHT =
+  "Let me carefully analyze this problem step by step and consider every possible edge case.";
+
 describe("ChatArea", () => {
   it("shows placeholder when no thread is selected", () => {
     render(ChatArea, { props: { thread: undefined } });
@@ -107,7 +112,7 @@ describe("ChatArea", () => {
     expect(screen.getByText("(src/bar.ts)")).toBeTruthy();
   });
 
-  it("renders custom MCP card for list_agents", () => {
+  it("renders custom MCP card for list_agents (collapsed by default, expands on click)", async () => {
     const thread = makeThread([
       msg("tool-group", "", "1:00 PM", {
         toolCalls: [
@@ -131,13 +136,18 @@ describe("ChatArea", () => {
       }),
     ]);
     render(ChatArea, { props: { thread } });
+    // Row chrome (verb + target meta) is visible collapsed.
     expect(screen.getByText("Agents")).toBeTruthy();
     expect(screen.getByText("2 agents")).toBeTruthy();
+    // Rich body is hidden until expanded.
+    expect(screen.queryByText("Planner")).toBeNull();
+    const row = screen.getByText("Agents").closest('[role="button"]') as HTMLElement;
+    await fireEvent.click(row);
     expect(screen.getByText("Planner")).toBeTruthy();
     expect(screen.getByText("Reviewer")).toBeTruthy();
   });
 
-  it("renders custom MCP card for list_tasks", () => {
+  it("renders custom MCP card for list_tasks (collapsed by default, expands on click)", async () => {
     const thread = makeThread([
       msg("tool-group", "", "1:00 PM", {
         toolCalls: [
@@ -173,13 +183,16 @@ describe("ChatArea", () => {
     render(ChatArea, { props: { thread } });
     expect(screen.getByText("Tasks")).toBeTruthy();
     expect(screen.getByText("1 task")).toBeTruthy();
+    expect(screen.queryByText("Write migration")).toBeNull();
+    const row = screen.getByText("Tasks").closest('[role="button"]') as HTMLElement;
+    await fireEvent.click(row);
     expect(screen.getByText("Write migration")).toBeTruthy();
     // Working-state tasks render a ● dot (per em-tool-calls.jsx:376-383)
     // instead of a "Working" label pill.
     expect(screen.getByText("●")).toBeTruthy();
   });
 
-  it("renders custom MCP card for create_task", () => {
+  it("renders custom MCP card for create_task (collapsed by default, expands on click)", async () => {
     const thread = makeThread([
       msg("tool-group", "", "1:00 PM", {
         toolCalls: [
@@ -202,6 +215,13 @@ describe("ChatArea", () => {
       }),
     ]);
     render(ChatArea, { props: { thread } });
+    // Collapsed: verb + target (title) visible; body hidden.
+    expect(screen.getAllByText("Create Task")).toHaveLength(1);
+    expect(screen.getAllByText("Write migration")).toHaveLength(1);
+    expect(screen.queryByText("Draft the database migration plan.")).toBeNull();
+    const row = screen.getByText("Create Task").closest('[role="button"]') as HTMLElement;
+    await fireEvent.click(row);
+    // Expanded: verb + body header both say "Create Task" / "Write migration".
     expect(screen.getAllByText("Create Task")).toHaveLength(2);
     expect(screen.getAllByText("Write migration")).toHaveLength(2);
     expect(screen.getByText("Draft the database migration plan.")).toBeTruthy();
@@ -238,74 +258,19 @@ describe("ChatArea", () => {
     expect(screen.queryByText("Complete Task")).toBeNull();
   });
 
-  it("renders thinking block collapsed by default", () => {
-    const thread = makeThread([msg("thinking", "Let me analyze this...", "1:00 PM")]);
+  it("renders thinking block with 'Thought' label and collapsed body by default", () => {
+    const thread = makeThread([msg("thinking", LONG_THOUGHT, "1:00 PM")]);
     render(ChatArea, { props: { thread } });
-    expect(screen.getByText("Thinking")).toBeTruthy();
-    expect(screen.queryByText("Let me analyze this...")).toBeNull();
+    expect(screen.getByText("Thought")).toBeTruthy();
+    // Collapsed: peek shows a truncated slice, full body text is NOT rendered.
+    expect(screen.queryByText(LONG_THOUGHT)).toBeNull();
   });
 
   it("expands thinking block on click", async () => {
-    const thread = makeThread([msg("thinking", "Let me analyze this...", "1:00 PM")]);
+    const thread = makeThread([msg("thinking", LONG_THOUGHT, "1:00 PM")]);
     render(ChatArea, { props: { thread } });
-    await fireEvent.click(screen.getByText("Thinking"));
-    expect(screen.getByText("Let me analyze this...")).toBeTruthy();
-  });
-
-  it("shows working indicator when agent is working", () => {
-    const thread = makeThread([msg("assistant", "Working...", "1:00 PM")], {
-      processStatus: "working",
-    });
-    render(ChatArea, { props: { thread } });
-    expect(screen.getByText("· · ·")).toBeTruthy();
-  });
-
-  it("renders queued message bubble when queuedMessage exists", () => {
-    const thread = makeThread([msg("user", "Do task A", "1:00 PM")], {
-      processStatus: "working",
-      queuedMessage: "Do task B",
-    });
-    render(ChatArea, { props: { thread } });
-    expect(screen.getByText("Do task B")).toBeTruthy();
-    expect(screen.getByText("Queued")).toBeTruthy();
-  });
-
-  it("does not render queued bubble when queuedMessage is null", () => {
-    const thread = makeThread([msg("user", "Do task A", "1:00 PM")], {
-      processStatus: "working",
-      activeToolCalls: [],
-      queuedMessage: null,
-    });
-    render(ChatArea, { props: { thread } });
-    expect(screen.queryByText("Queued")).toBeNull();
-  });
-
-  it("renders multiline queued message with whitespace preserved", () => {
-    const thread = makeThread([], {
-      processStatus: "working",
-      queuedMessage: "Do task B\nDo task C",
-    });
-    render(ChatArea, { props: { thread } });
-    expect(screen.getByText(/Do task B/)).toBeTruthy();
-    expect(screen.getByText(/Do task C/)).toBeTruthy();
-  });
-
-  it("calls onEditQueue when edit button is clicked", async () => {
-    let editCalled = false;
-    const thread = makeThread([], {
-      processStatus: "working",
-      queuedMessage: "Do task B",
-    });
-    render(ChatArea, {
-      props: {
-        thread,
-        onEditQueue: () => {
-          editCalled = true;
-        },
-      },
-    });
-    await fireEvent.click(screen.getByTitle("Edit queued message"));
-    expect(editCalled).toBe(true);
+    await fireEvent.click(screen.getByText("Thought"));
+    expect(screen.getByText(LONG_THOUGHT)).toBeTruthy();
   });
 
   it("shows connecting banner when agent is initializing", () => {
@@ -339,14 +304,6 @@ describe("ChatArea", () => {
     expect(screen.getByText("Failed to connect")).toBeTruthy();
     expect(screen.getByText("Could not start the agent")).toBeTruthy();
     expect(screen.getByText("Connection refused: binary not found")).toBeTruthy();
-  });
-
-  it("hides working indicator when agent is idle", () => {
-    const thread = makeThread([msg("assistant", "Done", "1:00 PM")], {
-      processStatus: "idle",
-    });
-    render(ChatArea, { props: { thread } });
-    expect(screen.queryByText("· · ·")).toBeNull();
   });
 
   it("renders system message as divider", () => {

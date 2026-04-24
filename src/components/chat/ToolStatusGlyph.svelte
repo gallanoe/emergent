@@ -1,8 +1,13 @@
 <script lang="ts">
   import type { DisplayToolCall } from "../../stores/types";
 
+  // Accept the normal `DisplayToolCall["status"]` plus a forward-looking
+  // `"permission"` state. The backend doesn't emit permission yet; the
+  // glyph is ready so the UI can wire it up the moment the state lands.
+  export type ToolStatusGlyphStatus = DisplayToolCall["status"] | "permission";
+
   interface Props {
-    status: DisplayToolCall["status"];
+    status: ToolStatusGlyphStatus;
     size?: number;
   }
 
@@ -11,12 +16,13 @@
   // Colors key off our existing tokens. Pending is muted (disabled fg) because
   // it's "queued and waiting"; completed is intentionally silent (muted fg,
   // not bright success green) to avoid a wall of green on long traces.
-  const COLORS = {
+  const COLORS: Record<ToolStatusGlyphStatus, string> = {
     pending: "var(--color-fg-disabled)",
     in_progress: "var(--color-fg-default)",
     completed: "var(--color-fg-muted)",
     failed: "var(--color-error)",
-  } as const;
+    permission: "var(--color-warning)",
+  };
 
   let color = $derived(COLORS[status]);
 </script>
@@ -89,6 +95,30 @@
       d="M3 3l4 4M7 3l-4 4"
       stroke="currentColor"
       stroke-width="1.4"
+      stroke-linecap="round"
+    />
+  </svg>
+{:else if status === "permission"}
+  <!-- Amber triangle from em-tool-calls.jsx:155-162. Reserved for the
+       backend's future `permission` status; unused today. -->
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 16 16"
+    fill="none"
+    style:color
+    aria-label="permission"
+  >
+    <path
+      d="M8 2l6.5 11.5h-13z"
+      stroke="currentColor"
+      stroke-width="1.6"
+      stroke-linejoin="round"
+    />
+    <path
+      d="M8 6.5v3M8 11.2v.3"
+      stroke="currentColor"
+      stroke-width="1.6"
       stroke-linecap="round"
     />
   </svg>
