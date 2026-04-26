@@ -78,7 +78,7 @@
       case "primary":
         return "border border-transparent bg-accent text-accent-fg";
       case "ghost":
-        return "border border-transparent bg-transparent text-fg-muted";
+        return "border border-transparent bg-transparent text-fg-muted hover:bg-bg-hover hover:text-fg-heading active:bg-bg-active";
       case "danger":
         return "border border-border-default bg-transparent text-error";
       case "link":

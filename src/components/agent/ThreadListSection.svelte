@@ -8,6 +8,7 @@
     threads: DisplayThread[];
     isTask?: boolean;
     emptyHint?: string;
+    activeThreadId?: string | null;
     onNewThread?: () => void;
     onSelectThread: (id: string) => void;
     onMenu: (thread: DisplayThread, x: number, y: number) => void;
@@ -18,6 +19,7 @@
     threads,
     isTask = false,
     emptyHint,
+    activeThreadId = null,
     onNewThread,
     onSelectThread,
     onMenu,
@@ -58,20 +60,25 @@
         <div class="max-h-[240px] overflow-auto">
           {#each threads as thread, i (thread.id)}
             {@const dim = thread.processStatus === "dead"}
+            {@const selected = activeThreadId === thread.id}
             <div
-              class="grid grid-cols-[20px_1fr_80px_28px] items-center gap-[10px] px-3 py-[9px] {i ===
+              class="group grid grid-cols-[20px_1fr_80px_28px] items-center gap-[10px] px-3 py-[9px] transition-colors duration-150 ease-out {i ===
               threads.length - 1
                 ? ''
                 : 'border-b border-border-default'} {dim
                 ? 'opacity-[0.55]'
-                : ''} text-[12.5px]"
+                : ''} {selected
+                ? 'bg-bg-selected hover:brightness-[0.99]'
+                : 'hover:bg-bg-hover'} text-[12.5px]"
             >
               <StatusDot status={thread.processStatus} size={6} />
               <button
                 type="button"
-                class="min-w-0 truncate text-left {dim
-                  ? 'text-fg-muted'
-                  : 'text-fg-heading'}"
+                class="min-w-0 truncate text-left transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-[1.5px] focus-visible:ring-border-focus {selected
+                  ? 'text-fg-heading'
+                  : dim
+                    ? 'text-fg-muted'
+                    : 'text-fg-heading'}"
                 onclick={() => onSelectThread(thread.id)}
               >
                 {thread.name}
@@ -83,9 +90,10 @@
               </Mono>
               <button
                 type="button"
-                class="text-fg-disabled p-1 rounded justify-self-end"
+                class="justify-self-end rounded p-1 text-fg-disabled transition-colors duration-150 ease-out hover:bg-bg-hover hover:text-fg-muted focus-visible:outline-none focus-visible:ring-[1.5px] focus-visible:ring-border-focus"
                 title="Thread actions"
                 onclick={(e) => {
+                  e.stopPropagation();
                   const r = (
                     e.currentTarget as HTMLElement
                   ).getBoundingClientRect();

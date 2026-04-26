@@ -465,6 +465,7 @@
         <ThreadListView
           agentDefinition={def}
           containerRunning={appState.selectedWorkspaceContainerRunning}
+          activeThreadId={appState.selectedThreadId}
           onSelectThread={(id) => appState.selectThread(id)}
           onNewThread={async () => {
             const threadId = await appState.spawnThread(def.id);

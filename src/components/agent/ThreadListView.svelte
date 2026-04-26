@@ -19,6 +19,7 @@
   interface Props {
     agentDefinition: DisplayAgentDefinition;
     containerRunning: boolean;
+    activeThreadId?: string | null;
     onSelectThread: (id: string) => void;
     onNewThread: () => void;
     onUpdateName: (name: string) => void;
@@ -32,6 +33,7 @@
   let {
     agentDefinition: agentDef,
     containerRunning,
+    activeThreadId = null,
     onSelectThread,
     onNewThread,
     onUpdateName,
@@ -193,6 +195,7 @@
         label="Conversations"
         threads={conversationThreads}
         emptyHint="No conversations yet."
+        {activeThreadId}
         {onSelectThread}
         onMenu={(t, x, y) => (threadMenu = { thread: t, x, y })}
         {...containerRunning ? { onNewThread } : {}}
@@ -203,6 +206,7 @@
           label="Task sessions"
           threads={taskSessionThreads}
           isTask
+          {activeThreadId}
           {onSelectThread}
           onMenu={(t, x, y) => (threadMenu = { thread: t, x, y })}
         />
