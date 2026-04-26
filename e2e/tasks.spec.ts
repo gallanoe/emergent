@@ -24,7 +24,7 @@ test("new task is disabled when workspace container is stopped", async ({ page }
   await setupMocks(page);
   await page.goto("/");
 
-  await page.getByTitle("Workspaces").click();
+  await page.getByTitle("Switch workspace").click();
   await page.getByRole("button", { name: "api-migration" }).click();
   await page
     .locator("aside")
