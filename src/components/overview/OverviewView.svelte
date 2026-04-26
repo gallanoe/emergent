@@ -12,7 +12,7 @@
   import MiniMetric from "./MiniMetric.svelte";
   import PipelineRow from "./PipelineRow.svelte";
   import { usageStore } from "../../stores/usage.svelte";
-  import { mockMetrics } from "../../stores/mock-metrics.svelte";
+  import { containerStats } from "../../stores/container-stats.svelte";
   import type {
     DisplayWorkspace,
     DisplayTask,
@@ -88,8 +88,7 @@
     ),
   );
 
-  // TODO(real-metrics)
-  const rt = $derived(mockMetrics.runtimeFor(workspace.id));
+  const rt = $derived(containerStats.runtimeFor(workspace.id));
 
   const runtimeState = $derived(workspace.containerStatus.state);
   const runtimeStateLabel = $derived(
@@ -114,13 +113,13 @@
 
   const runtimeSubtitle = $derived(
     runtimeState === "running"
-      ? `container running · ${rt.memMb} MB`
+      ? `container running · ${fmtMem(rt.memMb)}`
       : `container ${runtimeState}`,
   );
 
   const heroMeta = $derived(
     runtimeState === "running"
-      ? `container running · ${rt.memMb} MB · uptime —`
+      ? `container running · ${fmtMem(rt.memMb)} · uptime —`
       : `container ${runtimeState}`,
   );
 
@@ -131,13 +130,25 @@
   }
 
   function fmtNet(kbps: number): string {
-    if (kbps >= 1000) return `${(kbps / 1000).toFixed(1)} MB/s`;
-    return `${kbps} KB/s`;
+    if (kbps === 0) return "0 KB/s";
+    if (kbps < 0.1) return "<0.1 KB/s";
+    if (kbps >= 1024) return `${(kbps / 1024).toFixed(1)} MB/s`;
+    if (kbps < 10) return `${kbps.toFixed(1)} KB/s`;
+    return `${Math.round(kbps)} KB/s`;
   }
 
-  function fmtMemCap(mb: number): string {
-    if (mb >= 1024) return `${(mb / 1024).toFixed(0)} GB`;
-    return `${mb} MB`;
+  /** Format a memory value in MB to a short human-readable string. */
+  function fmtMem(mb: number): string {
+    if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`;
+    return `${Math.round(mb)} MB`;
+  }
+
+  /** Format a CPU percent value to a short human-readable string. */
+  function fmtCpu(pct: number): string {
+    if (pct < 0.01) return "<0.01%";
+    if (pct < 1) return `${pct.toFixed(2)}%`;
+    if (pct < 10) return `${pct.toFixed(1)}%`;
+    return `${Math.round(pct)}%`;
   }
 
   function agentPct(def: DisplayAgentDefinition): {
@@ -298,12 +309,12 @@
             </div>
             <MiniMetric
               label="CPU"
-              value={`${rt.cpuPct}%`}
+              value={fmtCpu(rt.cpuPct)}
               series={rt.cpuSeries}
             />
             <MiniMetric
               label="Memory"
-              value={`${rt.memMb} MB / ${fmtMemCap(rt.memLimitMb)}`}
+              value={`${fmtMem(rt.memMb)} / ${fmtMem(rt.memLimitMb)}`}
               series={rt.memSeries}
             />
             <MiniMetric

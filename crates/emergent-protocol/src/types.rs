@@ -236,6 +236,16 @@ pub struct WorkspaceStatusChangePayload {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContainerStatsPayload {
+    pub workspace_id: WorkspaceId,
+    pub cpu_percent: f32,
+    pub memory_bytes: u64,
+    pub memory_limit_bytes: u64,
+    pub net_bps: u64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TerminalOutputPayload {
     pub session_id: String,
     #[serde(with = "base64_bytes")]
@@ -466,6 +476,8 @@ pub enum Notification {
     TokenUsage(ThreadTokenUsagePayload),
     #[serde(rename = "thread:turn-usage")]
     TurnUsage(TurnUsagePayload),
+    #[serde(rename = "workspace:container-stats")]
+    ContainerStats(ContainerStatsPayload),
 }
 
 impl Notification {
@@ -491,6 +503,7 @@ impl Notification {
             Notification::SessionReady(_) => "thread:session-ready",
             Notification::TokenUsage(_) => "thread:token-usage",
             Notification::TurnUsage(_) => "thread:turn-usage",
+            Notification::ContainerStats(_) => "workspace:container-stats",
         }
     }
 
@@ -516,6 +529,7 @@ impl Notification {
             Notification::SessionReady(p) => Some(&p.thread_id),
             Notification::TokenUsage(p) => Some(&p.thread_id),
             Notification::TurnUsage(p) => Some(&p.thread_id),
+            Notification::ContainerStats(_) => None,
         }
     }
 }

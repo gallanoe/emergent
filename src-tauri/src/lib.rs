@@ -232,6 +232,9 @@ pub fn run() {
                                 Notification::TaskUpdated(ref p) => {
                                     let _ = bridge_handle.emit(event_name, p);
                                 }
+                                Notification::ContainerStats(p) => {
+                                    let _ = bridge_handle.emit(event_name, p);
+                                }
                             }
                         }
                         Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {

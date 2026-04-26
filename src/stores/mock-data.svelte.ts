@@ -7,7 +7,7 @@ import type {
   DisplayThread,
   DisplayWorkspace,
 } from "./types";
-import { mockMetrics } from "./mock-metrics.svelte";
+import { mockTokenMetrics } from "./mock-token-metrics.svelte";
 
 const T1_MESSAGES: DisplayMessage[] = [
   {
@@ -407,20 +407,11 @@ function agentIdForThread(threadId: string): string | null {
 }
 
 function seedDemoMockMetrics() {
-  mockMetrics.seedAgent("a1", { input: 412, output: 84, cost: 2.61 });
-  mockMetrics.seedAgent("a2", { input: 186, output: 41, cost: 1.18 });
-  mockMetrics.seedAgent("a3", { input: 94, output: 12, cost: 0.38 });
-  mockMetrics.seedAgent("a4", { input: 28, output: 5, cost: 0.09 });
-  mockMetrics.seedAgent("a5", { input: 0, output: 0, cost: 0 });
-  mockMetrics.seedWorkspace("ws1", {
-    cpuPct: 14,
-    memMb: 312,
-    memLimitMb: 2048,
-    netKbps: 1200,
-    cpuSeries: [2, 3, 2, 4, 6, 5, 4, 7, 5, 6, 8, 5],
-    memSeries: [3, 3, 4, 4, 4, 5, 5, 6, 6, 6, 6, 6],
-    netSeries: [1, 0, 2, 4, 1, 3, 0, 2, 5, 3, 1, 2],
-  });
+  mockTokenMetrics.seedAgent("a1", { input: 412, output: 84, cost: 2.61 });
+  mockTokenMetrics.seedAgent("a2", { input: 186, output: 41, cost: 1.18 });
+  mockTokenMetrics.seedAgent("a3", { input: 94, output: 12, cost: 0.38 });
+  mockTokenMetrics.seedAgent("a4", { input: 28, output: 5, cost: 0.09 });
+  mockTokenMetrics.seedAgent("a5", { input: 0, output: 0, cost: 0 });
 }
 
 function createAppState() {

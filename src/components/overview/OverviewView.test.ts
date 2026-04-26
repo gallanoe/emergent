@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/svelte";
 import { mockIPC, clearMocks } from "@tauri-apps/api/mocks";
 import OverviewView from "./OverviewView.svelte";
-import { mockMetrics } from "../../stores/mock-metrics.svelte";
 import type {
   DisplayWorkspace,
   DisplayThread,
@@ -96,7 +95,6 @@ function makeTask(overrides?: Partial<DisplayTask>): DisplayTask {
 
 describe("OverviewView", () => {
   beforeEach(() => {
-    mockMetrics.clear();
     clearMocks();
     // Default mock for get_workspace_usage called by usageStore $effect
     mockIPC((cmd) => {
