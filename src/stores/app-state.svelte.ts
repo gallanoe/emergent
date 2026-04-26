@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { agentStore } from "./agents.svelte";
+import { usageStore } from "./usage.svelte";
 import { dispose as disposeTerminal } from "../components/terminal/terminal-instances";
 import { normalizeThreadSummaryStatus } from "./types";
 import type {
@@ -173,6 +174,7 @@ function createAppState() {
     }
 
     await agentStore.setupListeners();
+    await usageStore.setupListeners();
     await setupListeners();
     await syncLiveThreads();
   }

@@ -366,6 +366,31 @@ pub struct ConfigUpdatePayload {
 }
 
 // ---------------------------------------------------------------------------
+// Turn-usage payload (per-PromptResponse token accounting)
+// ---------------------------------------------------------------------------
+
+pub fn is_zero_u64(v: &u64) -> bool {
+    *v == 0
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TurnUsagePayload {
+    pub thread_id: String,
+    pub workspace_id: String,
+    pub agent_definition_id: String,
+    pub input_tokens: u64,
+    pub output_tokens: u64,
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub cached_read_tokens: u64,
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub cached_write_tokens: u64,
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub thought_tokens: u64,
+    pub total_tokens: u64,
+    pub at: String,
+}
+
+// ---------------------------------------------------------------------------
 // Token-usage payload
 // ---------------------------------------------------------------------------
 
@@ -439,6 +464,8 @@ pub enum Notification {
     SessionReady(SessionReadyPayload),
     #[serde(rename = "thread:token-usage")]
     TokenUsage(ThreadTokenUsagePayload),
+    #[serde(rename = "thread:turn-usage")]
+    TurnUsage(TurnUsagePayload),
 }
 
 impl Notification {
@@ -463,6 +490,7 @@ impl Notification {
             Notification::TaskUpdated(_) => "task:updated",
             Notification::SessionReady(_) => "thread:session-ready",
             Notification::TokenUsage(_) => "thread:token-usage",
+            Notification::TurnUsage(_) => "thread:turn-usage",
         }
     }
 
@@ -487,6 +515,7 @@ impl Notification {
             Notification::TaskUpdated(_) => None,
             Notification::SessionReady(p) => Some(&p.thread_id),
             Notification::TokenUsage(p) => Some(&p.thread_id),
+            Notification::TurnUsage(p) => Some(&p.thread_id),
         }
     }
 }

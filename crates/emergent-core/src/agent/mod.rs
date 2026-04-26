@@ -4,6 +4,7 @@ mod prompt_loop;
 pub mod registry;
 pub mod spawner;
 pub mod thread_manager;
+pub mod usage_store;
 
 pub use registry::AgentRegistry;
 pub use spawner::{AgentProcess, ProcessSpawner, RuntimeCliProcess, RuntimeCliSpawner};

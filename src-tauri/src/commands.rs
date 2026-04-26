@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use tauri::State;
 
+use emergent_core::agent::usage_store::WorkspaceUsageStore;
 use emergent_core::agent::{AgentManager, ThreadMapping};
 use emergent_core::detect;
 use emergent_core::task::TaskManager;
@@ -442,6 +443,17 @@ pub async fn close_terminal_session(
     session_id: String,
 ) -> Result<(), String> {
     workspace_manager.close_terminal_session(&session_id).await
+}
+
+// ── Usage commands ────────────────────────────────────────
+
+#[tauri::command]
+pub async fn get_workspace_usage(
+    manager: State<'_, Arc<AgentManager>>,
+    workspace_id: String,
+) -> Result<WorkspaceUsageStore, String> {
+    let ws_id = emergent_protocol::WorkspaceId::from(workspace_id.as_str());
+    Ok(manager.thread_manager().get_workspace_usage(&ws_id).await)
 }
 
 // ── Task commands ─────────────────────────────────────────

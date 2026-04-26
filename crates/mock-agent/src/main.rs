@@ -18,7 +18,7 @@ use agent_client_protocol::schema::{
     SessionConfigOption, SessionConfigOptionCategory,
     SessionConfigOptionValue, SessionConfigSelectOption, SessionId, SessionNotification,
     SessionUpdate, SetSessionConfigOptionRequest, SetSessionConfigOptionResponse, StopReason,
-    ToolCall, ToolCallId, ToolCallStatus, ToolCallUpdate, ToolCallUpdateFields, UsageUpdate,
+    ToolCall, ToolCallId, ToolCallStatus, ToolCallUpdate, ToolCallUpdateFields, Usage, UsageUpdate,
 };
 use tokio_util::compat::{TokioAsyncReadCompatExt as _, TokioAsyncWriteCompatExt as _};
 
@@ -264,13 +264,19 @@ async fn main() -> acp::schema::Result<()> {
                         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
                     }
                 } else if text_lower.contains("usage") {
-                    // Emit a UsageUpdate then echo back
+                    // Emit a UsageUpdate then echo back. Also attach Usage to the
+                    // PromptResponse so the acp_bridge extraction path is exercised.
                     send_session_update(
                         &cx,
                         &session_id,
                         SessionUpdate::UsageUpdate(UsageUpdate::new(12_340, 200_000)),
                     )?;
                     send_message_chunk(&cx, &session_id, "Usage event emitted.")?;
+                    let usage = Usage::new(1480, 1200, 280);
+                    let _ = responder.respond(
+                        PromptResponse::new(StopReason::EndTurn).usage(usage),
+                    );
+                    return Ok(());
                 } else if text_lower.contains("long response") {
                     // Many chunks
                     for i in 0..20 {

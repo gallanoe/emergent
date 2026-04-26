@@ -11,6 +11,7 @@
   import StatTile from "./StatTile.svelte";
   import MiniMetric from "./MiniMetric.svelte";
   import PipelineRow from "./PipelineRow.svelte";
+  import { usageStore } from "../../stores/usage.svelte";
   import { mockMetrics } from "../../stores/mock-metrics.svelte";
   import type {
     DisplayWorkspace,
@@ -26,6 +27,11 @@
   }
 
   let { workspace, tasks, onSelectThread, onOpenTasks }: Props = $props();
+
+  // Load persisted usage for the current workspace whenever it changes.
+  $effect(() => {
+    usageStore.loadForWorkspace(workspace.id);
+  });
 
   const allThreads = $derived(
     workspace.agentDefinitions.flatMap((d) => d.threads),
@@ -59,30 +65,26 @@
     failed: tasks.filter((t) => t.status === "failed").length,
   });
 
-  // TODO(real-metrics) — all token reads come from the mock store.
   const totalTokens = $derived(
     workspace.agentDefinitions.reduce((s, d) => {
-      const u = mockMetrics.tokenFor(d.id);
-      return s + u.input + u.output;
+      const u = usageStore.agentTotals(d.id);
+      return s + u.totalTokens;
     }, 0),
   );
 
-  // TODO(real-metrics)
   const totalCost = $derived(
     workspace.agentDefinitions.reduce(
-      (s, d) => s + mockMetrics.tokenFor(d.id).cost,
+      (s, d) => s + usageStore.agentTotals(d.id).costAmount,
       0,
     ),
   );
 
-  // TODO(real-metrics)
   const maxUsage = $derived(
     Math.max(
       1,
-      ...workspace.agentDefinitions.map((d) => {
-        const u = mockMetrics.tokenFor(d.id);
-        return u.input + u.output;
-      }),
+      ...workspace.agentDefinitions.map(
+        (d) => usageStore.agentTotals(d.id).totalTokens,
+      ),
     ),
   );
 
@@ -118,7 +120,7 @@
 
   const heroMeta = $derived(
     runtimeState === "running"
-      ? `container running · ${rt.memMb} MB · uptime — · mock`
+      ? `container running · ${rt.memMb} MB · uptime —`
       : `container ${runtimeState}`,
   );
 
@@ -142,13 +144,13 @@
     inputPct: number;
     outputPct: number;
   } {
-    const u = mockMetrics.tokenFor(def.id);
-    const total = u.input + u.output;
+    const u = usageStore.agentTotals(def.id);
+    const total = u.totalTokens;
     const pct = (total / maxUsage) * 100;
     if (total === 0) return { inputPct: 0, outputPct: 0 };
     return {
-      inputPct: (u.input / total) * pct,
-      outputPct: (u.output / total) * pct,
+      inputPct: (u.inputTokens / total) * pct,
+      outputPct: (u.outputTokens / total) * pct,
     };
   }
 
@@ -210,7 +212,7 @@
         />
         <StatTile
           label="Tokens · 24h"
-          value={fmtK(totalTokens * 1000)}
+          value={fmtK(totalTokens)}
           sub={`$${totalCost.toFixed(2)}`}
         />
       </div>
@@ -229,12 +231,12 @@
             >
             <div class="min-w-0 flex-1"></div>
             <Mono size={10} color="var(--color-fg-disabled)"
-              >{fmtK(totalTokens * 1000)}</Mono
+              >{fmtK(totalTokens)}</Mono
             >
           </div>
           <div class="flex flex-col gap-2 px-3.5 py-2.5">
             {#each workspace.agentDefinitions as def (def.id)}
-              {@const u = mockMetrics.tokenFor(def.id)}
+              {@const u = usageStore.agentTotals(def.id)}
               {@const p = agentPct(def)}
               <div
                 class="grid grid-cols-[160px_1fr_72px_52px] items-center gap-2.5"
@@ -264,12 +266,12 @@
                   ></div>
                 </div>
                 <Mono size={10.5} color="var(--color-fg-muted)"
-                  >{fmtK((u.input + u.output) * 1000)}</Mono
+                  >{fmtK(u.totalTokens)}</Mono
                 >
                 <Mono
                   size={10.5}
                   color="var(--color-fg-disabled)"
-                  class="block text-right">${u.cost.toFixed(2)}</Mono
+                  class="block text-right">${u.costAmount.toFixed(2)}</Mono
                 >
               </div>
             {/each}

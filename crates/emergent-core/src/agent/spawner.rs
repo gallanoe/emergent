@@ -52,6 +52,20 @@ pub struct RuntimeCliProcess {
 }
 
 impl RuntimeCliProcess {
+    /// Construct a minimal stub `RuntimeCliProcess` for integration tests.
+    /// The child is a real process (`true`) so `Child` is valid, but stdin/stdout
+    /// are not piped and the cli_program/container_id are empty sentinels.
+    pub fn new_for_test(child: tokio::process::Child) -> Self {
+        Self {
+            child,
+            stdin: None,
+            stdout: None,
+            cli_program: String::new(),
+            container_id: String::new(),
+            pid_file: None,
+        }
+    }
+
     /// Graceful shutdown: kill the in-container process via its recorded PID,
     /// then wait for the host-side exec client to exit (force-killing it on
     /// timeout). Necessary because `<runtime> exec -i` does not forward

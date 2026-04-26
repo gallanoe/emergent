@@ -8,7 +8,7 @@ use agent_client_protocol::schema::{
 use emergent_protocol::{
     ConfigOption, ConfigUpdatePayload, MessageChunkPayload, Notification, PromptCompletePayload,
     ThreadErrorPayload, ThreadTokenUsagePayload, ToolCallContentPayload, ToolCallEventPayload,
-    UserMessagePayload,
+    TurnUsagePayload, UserMessagePayload,
 };
 use tokio::sync::{broadcast, mpsc};
 
@@ -233,6 +233,8 @@ pub(crate) async fn agent_command_loop(
     mut command_rx: mpsc::UnboundedReceiver<AgentCommand>,
     agent_id: String,
     event_tx: broadcast::Sender<Notification>,
+    workspace_id: String,
+    agent_definition_id: String,
 ) {
     while let Some(cmd) = command_rx.recv().await {
         match cmd {
@@ -319,6 +321,25 @@ pub(crate) async fn agent_command_loop(
                             &agent_id,
                             stop_reason
                         );
+
+                        // Emit per-turn usage if the agent reported it.
+                        // No cfg gate needed: "unstable" feature is always active
+                        // at workspace level and emergent-core has no features table.
+                        if let Some(usage) = resp.usage {
+                            let _ = event_tx.send(Notification::TurnUsage(TurnUsagePayload {
+                                thread_id: agent_id.clone(),
+                                workspace_id: workspace_id.clone(),
+                                agent_definition_id: agent_definition_id.clone(),
+                                input_tokens: usage.input_tokens,
+                                output_tokens: usage.output_tokens,
+                                cached_read_tokens: usage.cached_read_tokens.unwrap_or(0),
+                                cached_write_tokens: usage.cached_write_tokens.unwrap_or(0),
+                                thought_tokens: usage.thought_tokens.unwrap_or(0),
+                                total_tokens: usage.total_tokens,
+                                at: chrono::Utc::now().to_rfc3339(),
+                            }));
+                        }
+
                         let _ =
                             event_tx.send(Notification::PromptComplete(PromptCompletePayload {
                                 thread_id: agent_id.clone(),

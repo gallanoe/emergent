@@ -84,6 +84,8 @@ pub(crate) async fn initialize_agent(
 
     let agent_id_for_thread = agent_id.clone();
     let event_tx_clone = event_tx.clone();
+    let workspace_id_str = workspace_id.0.clone();
+    let agent_definition_id_for_loop = agent_definition_id.clone();
 
     // Use a oneshot to receive the session_id + initial config (or error) from the ACP task.
     let (init_tx, init_rx) =
@@ -273,13 +275,17 @@ pub(crate) async fn initialize_agent(
                                 }
                             };
 
-                            // Command loop: receive commands from the main thread
+                            // Command loop: receive commands from the main thread.
+                            // workspace_id and agent_definition_id are forwarded so the
+                            // loop can emit TurnUsage with full attribution context.
                             agent_command_loop(
                                 conn,
                                 session_id,
                                 command_rx,
                                 agent_id,
                                 event_tx_clone,
+                                workspace_id_str,
+                                agent_definition_id_for_loop,
                             )
                             .await;
 
