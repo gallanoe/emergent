@@ -8,9 +8,12 @@
     parseCreateTaskToolInput,
     parseCreateTaskToolContent,
     parseTasksToolContent,
+    parseUpdateTaskToolInput,
+    parseUpdateTaskToolContent,
   } from "../../lib/emergent-tool-calls";
   import type { DisplayToolCall, ToolKind } from "../../stores/types";
   import CreateTaskToolRender from "./CreateTaskToolRender.svelte";
+  import UpdateTaskToolRender from "./UpdateTaskToolRender.svelte";
   import ListAgentsToolRender from "./ListAgentsToolRender.svelte";
   import ListTasksToolRender from "./ListTasksToolRender.svelte";
   import ToolVerbIcon from "./ToolVerbIcon.svelte";
@@ -30,6 +33,7 @@
   let isListTasksTool = $derived(emergentToolName === "list_tasks");
   let isCreateTaskTool = $derived(emergentToolName === "create_task");
   let isCompleteTaskTool = $derived(emergentToolName === "complete_task");
+  let isUpdateTaskTool = $derived(emergentToolName === "update_task");
 
   // ── Expansion state ────────────────────────────────────────────
   // Rule: auto-open while running, auto-collapse once resolved. As soon as
@@ -80,7 +84,9 @@
           ? "Create Task"
           : isCompleteTaskTool
             ? "Task Completed"
-            : (kindVerb[toolCall.kind] ?? "Tool"),
+            : isUpdateTaskTool
+              ? "Update Task"
+              : (kindVerb[toolCall.kind] ?? "Tool"),
   );
 
   let target = $derived.by(() => {
@@ -101,6 +107,9 @@
     }
     if (isCompleteTaskTool) {
       return "";
+    }
+    if (isUpdateTaskTool) {
+      return parseUpdateTaskToolInput(toolCall)?.description ?? "";
     }
     return (
       toolCall.locations[0] ??
@@ -136,6 +145,7 @@
     isListAgentsTool ||
       isListTasksTool ||
       isCreateTaskTool ||
+      isUpdateTaskTool ||
       (toolCall.content.length > 0 &&
         toolCall.kind !== "read" &&
         toolCall.status !== "pending"),
@@ -210,6 +220,11 @@
         <CreateTaskToolRender
           input={parseCreateTaskToolInput(toolCall)}
           result={parseCreateTaskToolContent(toolCall)}
+        />
+      {:else if isUpdateTaskTool}
+        <UpdateTaskToolRender
+          input={parseUpdateTaskToolInput(toolCall)}
+          result={parseUpdateTaskToolContent(toolCall)}
         />
       {:else}
         {#each toolCall.content as item, i (i)}

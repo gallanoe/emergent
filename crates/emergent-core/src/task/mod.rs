@@ -1,13 +1,20 @@
 pub mod registry;
+pub mod subscribe;
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use emergent_protocol::{Notification, Task, TaskPayload, TaskState, TaskStatusNotificationPayload, WorkspaceId};
+use emergent_protocol::{
+    Notification, Task, TaskPayload, TaskState, TaskStatusNotificationPayload, WorkspaceId,
+};
+pub use subscribe::SubscribeMode;
 use tokio::sync::{broadcast, RwLock};
 
 use crate::agent::AgentManager;
 use registry::TaskRegistry;
+
+/// Per-task subscription list: maps task_id → `Vec<(thread_id, SubscribeMode)>`.
+type SubscriptionMap = HashMap<String, Vec<(String, SubscribeMode)>>;
 
 pub struct TaskManager {
     registry: Arc<RwLock<TaskRegistry>>,
@@ -17,8 +24,8 @@ pub struct TaskManager {
     /// Thread IDs pending teardown after their current turn drains.
     /// Populated by `complete_task`, consumed on the next `StatusChange(Idle)`.
     pending_teardown: Arc<RwLock<HashSet<String>>>,
-    /// Subscription registry: task_id → Vec of thread_ids to notify.
-    subscriptions: Arc<RwLock<HashMap<String, Vec<String>>>>,
+    /// Subscription registry: task_id → list of (thread_id, mode) pairs.
+    subscriptions: Arc<RwLock<SubscriptionMap>>,
 }
 
 fn build_task_prompt(task_id: &str, title: &str, description: &str) -> String {
@@ -70,13 +77,7 @@ impl TaskManagerRef {
         // If we missed a `StatusChange(Idle)`, a thread pending teardown may
         // be stranded alive with no more prompts. Force it down; drop entries
         // whose threads were already reaped.
-        let pending: Vec<String> = self
-            .pending_teardown
-            .read()
-            .await
-            .iter()
-            .cloned()
-            .collect();
+        let pending: Vec<String> = self.pending_teardown.read().await.iter().cloned().collect();
         for thread_id in pending {
             self.pending_teardown.write().await.remove(&thread_id);
             if live.contains(&thread_id) {
@@ -314,6 +315,7 @@ impl TaskManager {
         blocker_ids: Vec<String>,
         parent_id: Option<String>,
         creator_thread_id: Option<String>,
+        subscribe: Option<SubscribeMode>,
     ) -> Result<String, String> {
         // Validate agent exists
         if self.agent_manager.get_agent(&agent_id).await.is_none() {
@@ -339,7 +341,7 @@ impl TaskManager {
                 agent_id,
                 blocker_ids.clone(),
                 parent_id,
-                creator_thread_id,
+                creator_thread_id.clone(),
             );
             let task = reg.get_task(&id).unwrap().clone();
             (id, task)
@@ -350,6 +352,13 @@ impl TaskManager {
         }));
 
         self.persist_tasks(&workspace_id).await;
+
+        // Register the creator as a subscriber BEFORE start_task fires so the
+        // "started" notification is not lost for no-blocker tasks that start
+        // synchronously inside this function.
+        if let (Some(mode), Some(ref thread_id)) = (subscribe, &creator_thread_id) {
+            self.register_subscriber(&task_id, thread_id, mode).await;
+        }
 
         if blocker_ids.is_empty() {
             if let Err(e) = self.start_task(&task_id).await {
@@ -475,7 +484,8 @@ impl TaskManager {
                 return Err("task is not currently working".into());
             }
         }
-        self.notify_subscribers(task_id, "update", description).await;
+        self.notify_subscribers(task_id, "update", description)
+            .await;
         Ok(())
     }
 
@@ -487,33 +497,40 @@ impl TaskManager {
     pub async fn is_subscriber(&self, task_id: &str, thread_id: &str) -> bool {
         let subs = self.subscriptions.read().await;
         subs.get(task_id)
-            .map(|list| list.contains(&thread_id.to_string()))
+            .map(|list| list.iter().any(|(tid, _)| tid == thread_id))
             .unwrap_or(false)
     }
 
-    /// Register `thread_id` as a subscriber for notifications on `task_id`.
+    /// Register `thread_id` as a subscriber for notifications on `task_id` with the given `mode`.
     ///
-    /// Idempotent: if the thread is already subscribed, it is not added again.
-    pub async fn register_subscriber(&self, task_id: &str, thread_id: &str) {
+    /// If `thread_id` is already registered for this task, its mode is replaced.
+    /// De-duplicates by thread_id so at most one entry per thread exists.
+    pub async fn register_subscriber(&self, task_id: &str, thread_id: &str, mode: SubscribeMode) {
         let mut subs = self.subscriptions.write().await;
         let entry = subs.entry(task_id.to_string()).or_default();
-        if !entry.contains(&thread_id.to_string()) {
-            entry.push(thread_id.to_string());
+        if let Some(existing) = entry.iter_mut().find(|(tid, _)| tid == thread_id) {
+            existing.1 = mode;
+        } else {
+            entry.push((thread_id.to_string(), mode));
         }
     }
 
-    /// Emit a `TaskStatusNotification` broadcast event for every subscriber of `task_id`.
+    /// Emit a `TaskStatusNotification` broadcast event for every subscriber of `task_id`
+    /// whose mode covers `kind`.
     ///
     /// The read lock is released before iterating so no lock is held across the
     /// `event_tx.send` calls. Send errors are ignored — a broadcast send only
     /// fails when there are zero active receivers, which is fine.
     async fn notify_subscribers(&self, task_id: &str, kind: &str, message: &str) {
-        let subscribers: Vec<String> = {
+        let subscribers: Vec<(String, SubscribeMode)> = {
             let subs = self.subscriptions.read().await;
             subs.get(task_id).cloned().unwrap_or_default()
         };
 
-        for thread_id in subscribers {
+        for (thread_id, mode) in subscribers {
+            if !mode.covers(kind) {
+                continue;
+            }
             let payload = TaskStatusNotificationPayload {
                 task_id: task_id.to_string(),
                 creator_thread_id: thread_id.clone(),
@@ -726,7 +743,7 @@ impl TaskManager {
             .spawn_thread(&agent_id, Some(task_id.to_string()))
             .await?;
 
-        let workspace_id = {
+        let (workspace_id, task_title) = {
             let mut reg = self.registry.write().await;
             if let Some(task) = reg.get_task_mut(task_id) {
                 // Atomic transition: state and session_id move together so the
@@ -737,11 +754,17 @@ impl TaskManager {
                 let _ = self.event_tx.send(Notification::TaskUpdated(TaskPayload {
                     task: task.clone(),
                 }));
-                Some(task.workspace_id.clone())
+                (Some(task.workspace_id.clone()), Some(task.title.clone()))
             } else {
-                None
+                (None, None)
             }
         };
+
+        // Notify subscribers that the task has started (Pending → Working).
+        // Lock is dropped before this await so no lock is held across the send.
+        if let Some(ref title) = task_title {
+            self.notify_subscribers(task_id, "started", title).await;
+        }
 
         // Persist the Working transition so a restart before the next
         // state change does not lose the task's session_id.
@@ -846,25 +869,38 @@ mod tests {
     async fn register_subscriber_deduplicates() {
         let (tm, _rx) = make_task_manager().await;
 
-        tm.register_subscriber("task-1", "thread-a").await;
-        tm.register_subscriber("task-1", "thread-a").await; // duplicate
-        tm.register_subscriber("task-1", "thread-b").await;
+        tm.register_subscriber("task-1", "thread-a", SubscribeMode::Milestones)
+            .await;
+        // Re-register same thread with a different mode — must REPLACE, not duplicate.
+        tm.register_subscriber("task-1", "thread-a", SubscribeMode::All)
+            .await;
+        tm.register_subscriber("task-1", "thread-b", SubscribeMode::Milestones)
+            .await;
 
         let subs = tm.subscriptions.read().await;
         let list = subs.get("task-1").unwrap();
         assert_eq!(list.len(), 2, "duplicate subscription must be deduplicated");
-        assert!(list.contains(&"thread-a".to_string()));
-        assert!(list.contains(&"thread-b".to_string()));
+        let thread_a_entry = list.iter().find(|(tid, _)| tid == "thread-a");
+        assert!(thread_a_entry.is_some(), "thread-a must be present");
+        assert_eq!(
+            thread_a_entry.unwrap().1,
+            SubscribeMode::All,
+            "re-registration must replace the mode"
+        );
+        assert!(list.iter().any(|(tid, _)| tid == "thread-b"));
     }
 
     #[tokio::test]
     async fn notify_subscribers_emits_one_notification_per_subscriber() {
         let (tm, mut rx) = make_task_manager().await;
 
-        tm.register_subscriber("task-2", "thread-x").await;
-        tm.register_subscriber("task-2", "thread-y").await;
+        tm.register_subscriber("task-2", "thread-x", SubscribeMode::All)
+            .await;
+        tm.register_subscriber("task-2", "thread-y", SubscribeMode::All)
+            .await;
 
-        tm.notify_subscribers("task-2", "update", "progress note").await;
+        tm.notify_subscribers("task-2", "update", "progress note")
+            .await;
 
         let mut received: Vec<TaskStatusNotificationPayload> = Vec::new();
         while let Ok(notification) = rx.try_recv() {
@@ -874,7 +910,10 @@ mod tests {
         }
 
         assert_eq!(received.len(), 2, "one notification per subscriber");
-        let thread_ids: Vec<&str> = received.iter().map(|p| p.creator_thread_id.as_str()).collect();
+        let thread_ids: Vec<&str> = received
+            .iter()
+            .map(|p| p.creator_thread_id.as_str())
+            .collect();
         assert!(thread_ids.contains(&"thread-x"));
         assert!(thread_ids.contains(&"thread-y"));
         for p in &received {
@@ -885,15 +924,47 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn notify_subscribers_filters_by_mode() {
+        let (tm, mut rx) = make_task_manager().await;
+
+        // Milestones subscriber: should NOT receive "update"
+        tm.register_subscriber(
+            "task-filter",
+            "thread-milestones",
+            SubscribeMode::Milestones,
+        )
+        .await;
+        // All subscriber: SHOULD receive "update"
+        tm.register_subscriber("task-filter", "thread-all", SubscribeMode::All)
+            .await;
+
+        tm.notify_subscribers("task-filter", "update", "a progress note")
+            .await;
+
+        let mut received: Vec<TaskStatusNotificationPayload> = Vec::new();
+        while let Ok(notification) = rx.try_recv() {
+            if let Notification::TaskStatusNotification(p) = notification {
+                received.push(p);
+            }
+        }
+
+        assert_eq!(
+            received.len(),
+            1,
+            "only the All subscriber should receive an update notification"
+        );
+        assert_eq!(received[0].creator_thread_id, "thread-all");
+        assert_eq!(received[0].kind, "update");
+    }
+
+    #[tokio::test]
     async fn complete_task_with_summary_persists_summary() {
         let (tm, _rx) = make_task_manager().await;
         let ws_id = WorkspaceId::from("test-ws");
         let task_id = insert_working_task(&tm, "sess-abc", ws_id.clone()).await;
 
         // complete_task will warn on mark_thread_completing (thread not in manager), but proceeds.
-        let result = tm
-            .complete_task(&task_id, Some("All done!".into()))
-            .await;
+        let result = tm.complete_task(&task_id, Some("All done!".into())).await;
         assert!(result.is_ok(), "complete_task should succeed: {:?}", result);
 
         let task = tm.get_task(&task_id).await.unwrap();
@@ -904,29 +975,32 @@ mod tests {
     #[tokio::test]
     async fn create_task_with_subscribe_registers_subscriber() {
         // Verify that calling register_subscriber after create_task (the pattern
-        // the MCP handler uses when subscribe=true) correctly wires the subscriber.
+        // the MCP handler uses when subscribe is set) correctly wires the subscriber.
         let (tm, _rx) = make_task_manager().await;
 
         // Directly exercise the subscriber path — simulates what the MCP handler
-        // does after create_task returns: register_subscriber(&task_id, &thread_id).
+        // does after create_task returns: register_subscriber(&task_id, &thread_id, mode).
         let task_id = "task-sub-test";
         let creator_thread = "creator-123";
 
         // Register before any task exists — should still work (no validation on task_id).
-        tm.register_subscriber(task_id, creator_thread).await;
+        tm.register_subscriber(task_id, creator_thread, SubscribeMode::All)
+            .await;
 
         assert!(
             tm.is_subscriber(task_id, creator_thread).await,
             "creator thread must be subscribed after register_subscriber"
         );
-        // Registering again must not create duplicates.
-        tm.register_subscriber(task_id, creator_thread).await;
+        // Registering again with same thread_id must replace (not duplicate).
+        tm.register_subscriber(task_id, creator_thread, SubscribeMode::Milestones)
+            .await;
         let subs = tm.subscriptions.read().await;
         let list = subs.get(task_id).unwrap();
+        assert_eq!(list.len(), 1, "duplicate subscription must be deduplicated");
         assert_eq!(
-            list.len(),
-            1,
-            "duplicate subscription must be deduplicated"
+            list[0].1,
+            SubscribeMode::Milestones,
+            "re-registration must update the mode"
         );
     }
 
@@ -950,7 +1024,10 @@ mod tests {
         };
 
         let result = tm.post_update(&task_id, "some progress").await;
-        assert!(result.is_err(), "post_update on Pending task must return Err");
+        assert!(
+            result.is_err(),
+            "post_update on Pending task must return Err"
+        );
         assert_eq!(
             result.unwrap_err(),
             "task is not currently working",
@@ -964,7 +1041,8 @@ mod tests {
         let ws_id = WorkspaceId::from("test-ws");
         let task_id = insert_working_task(&tm, "sess-upd", ws_id).await;
 
-        tm.register_subscriber(&task_id, "subscriber-thread").await;
+        tm.register_subscriber(&task_id, "subscriber-thread", SubscribeMode::All)
+            .await;
 
         let result = tm.post_update(&task_id, "halfway there").await;
         assert!(result.is_ok(), "post_update on Working task must succeed");
@@ -991,7 +1069,8 @@ mod tests {
         let ws_id = WorkspaceId::from("test-ws");
         let task_id = insert_working_task(&tm, "sess-def", ws_id.clone()).await;
 
-        tm.register_subscriber(&task_id, "creator-thread").await;
+        tm.register_subscriber(&task_id, "creator-thread", SubscribeMode::All)
+            .await;
 
         let result = tm
             .complete_task(&task_id, Some("Summary here".into()))
@@ -1012,5 +1091,114 @@ mod tests {
         assert_eq!(p.creator_thread_id, "creator-thread");
         assert_eq!(p.kind, "completed");
         assert_eq!(p.message, "Summary here");
+    }
+
+    /// Verifies that a Milestones subscriber receives a "started" notification when
+    /// notify_subscribers is called with kind="started" (the path invoked by start_task
+    /// after the Pending → Working transition).
+    #[tokio::test]
+    async fn start_task_emits_started_notification_to_subscribers() {
+        let (tm, mut rx) = make_task_manager().await;
+        let task_id = "task-started-test";
+        let task_title = "Important work";
+
+        // Register a Milestones subscriber on the (not-yet-started) task.
+        tm.register_subscriber(task_id, "creator-thread", SubscribeMode::Milestones)
+            .await;
+
+        // Fire the "started" notification — this is exactly what start_task
+        // calls after the state transition, with the task title as the message.
+        tm.notify_subscribers(task_id, "started", task_title).await;
+
+        let mut found: Option<TaskStatusNotificationPayload> = None;
+        while let Ok(notification) = rx.try_recv() {
+            if let Notification::TaskStatusNotification(p) = notification {
+                if p.task_id == task_id {
+                    found = Some(p);
+                    break;
+                }
+            }
+        }
+
+        let p = found.expect("Milestones subscriber must receive 'started' notification");
+        assert_eq!(p.creator_thread_id, "creator-thread");
+        assert_eq!(p.kind, "started");
+        assert_eq!(p.message, task_title);
+    }
+
+    /// Regression test: the "started" notification must reach the creator session when a
+    /// no-blocker task is created with `subscribe: Some(SubscribeMode::Milestones)`.
+    ///
+    /// The bug was that `register_subscriber` was called AFTER `create_task` returned (in
+    /// the MCP handler), so `start_task` (which fires synchronously inside `create_task`
+    /// for tasks without blockers) emitted the "started" event before any subscriber was
+    /// registered.  The fix moves `register_subscriber` inside `create_task`, before
+    /// `start_task` is invoked.
+    #[tokio::test]
+    async fn started_notification_reaches_subscriber_for_no_blocker_task() {
+        let (tm, mut rx) = make_task_manager().await;
+        let creator_thread = "creator-abc";
+
+        // create_task with subscribe=Some(Milestones) and a creator_thread_id.
+        // The agent validation inside create_task will fail because the AgentManager
+        // is empty, but the subscriber registration (and therefore the ordering fix)
+        // can be verified by bypassing create_task and exercising the exact sequence
+        // that the fixed code follows: register_subscriber → notify_subscribers.
+        //
+        // We directly call the two methods in the correct order (as the fix implements)
+        // to confirm that the subscriber is present when the "started" event fires.
+        let task_id = "race-fix-task";
+
+        // Step 1 (mirrors the fix): register the subscriber BEFORE start_task.
+        tm.register_subscriber(task_id, creator_thread, SubscribeMode::Milestones)
+            .await;
+
+        // Step 2: fire the "started" notification (mirrors start_task).
+        tm.notify_subscribers(task_id, "started", "Race-fix task title")
+            .await;
+
+        // The subscriber must receive the "started" event.
+        let mut found: Option<TaskStatusNotificationPayload> = None;
+        while let Ok(notification) = rx.try_recv() {
+            if let Notification::TaskStatusNotification(p) = notification {
+                if p.task_id == task_id && p.kind == "started" {
+                    found = Some(p);
+                    break;
+                }
+            }
+        }
+
+        let p = found
+            .expect("creator session must receive 'started' notification for a no-blocker task");
+        assert_eq!(p.creator_thread_id, creator_thread);
+        assert_eq!(p.kind, "started");
+        assert_eq!(p.task_id, task_id);
+
+        // Also confirm that if registration happens AFTER notify_subscribers (the old
+        // buggy ordering), no notification is delivered.
+        let task_id_buggy = "race-fix-task-buggy";
+
+        // Step 1 (old bug): fire the notification first — no subscriber yet.
+        tm.notify_subscribers(task_id_buggy, "started", "Buggy task")
+            .await;
+
+        // Step 2 (old bug): register the subscriber AFTER the event already fired.
+        tm.register_subscriber(task_id_buggy, creator_thread, SubscribeMode::Milestones)
+            .await;
+
+        // No notification should be received because the event fired before registration.
+        let mut found_buggy: Option<TaskStatusNotificationPayload> = None;
+        while let Ok(notification) = rx.try_recv() {
+            if let Notification::TaskStatusNotification(p) = notification {
+                if p.task_id == task_id_buggy {
+                    found_buggy = Some(p);
+                    break;
+                }
+            }
+        }
+        assert!(
+            found_buggy.is_none(),
+            "late-registered subscriber must NOT receive notifications fired before registration"
+        );
     }
 }

@@ -1,6 +1,11 @@
 import type { DisplayTask, DisplayToolCall } from "../stores/types";
 
-export type EmergentToolName = "create_task" | "list_tasks" | "complete_task" | "list_agents";
+export type EmergentToolName =
+  | "create_task"
+  | "list_tasks"
+  | "complete_task"
+  | "update_task"
+  | "list_agents";
 
 export interface EmergentAgentSummary {
   id: string;
@@ -19,6 +24,15 @@ export interface CreateTaskToolInput {
 }
 
 export interface CompleteTaskToolResult {
+  task_id: string;
+  status: string;
+}
+
+export interface UpdateTaskToolInput {
+  description: string;
+}
+
+export interface UpdateTaskToolResult {
   task_id: string;
   status: string;
 }
@@ -51,6 +65,7 @@ export function getEmergentToolName(name: string): EmergentToolName | null {
   if (lower.endsWith("create_task")) return "create_task";
   if (lower.endsWith("list_tasks")) return "list_tasks";
   if (lower.endsWith("complete_task")) return "complete_task";
+  if (lower.endsWith("update_task")) return "update_task";
   if (lower.endsWith("list_agents")) return "list_agents";
   return null;
 }
@@ -81,4 +96,15 @@ export function parseCompleteTaskToolContent(
 
 export function parseCreateTaskToolInput(toolCall: DisplayToolCall): CreateTaskToolInput | null {
   return parseValue<CreateTaskToolInput>(toolCall.rawInput);
+}
+
+export function parseUpdateTaskToolInput(toolCall: DisplayToolCall): UpdateTaskToolInput | null {
+  return parseValue<UpdateTaskToolInput>(toolCall.rawInput);
+}
+
+export function parseUpdateTaskToolContent(toolCall: DisplayToolCall): UpdateTaskToolResult | null {
+  return (
+    parseValue<UpdateTaskToolResult>(toolCall.rawOutput) ??
+    parseJson<UpdateTaskToolResult>(firstTextContent(toolCall))
+  );
 }
