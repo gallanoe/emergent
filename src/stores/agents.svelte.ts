@@ -32,6 +32,7 @@ interface ThreadState {
   hasPrompted?: boolean;
   acpSessionId?: string | null;
   taskId?: string | null;
+  tokenUsage?: { used: number; size: number } | undefined;
 }
 
 // ── Event payloads from Rust ────────────────────────────────────
@@ -96,6 +97,14 @@ interface ConfigUpdatePayload {
   changes: { option_name: string; new_value_name: string }[];
 }
 
+interface ThreadTokenUsagePayload {
+  thread_id: string;
+  used_tokens: number;
+  context_size: number;
+  cost_amount?: number;
+  cost_currency?: string;
+}
+
 // ── Store ───────────────────────────────────────────────────────
 
 interface ChunkBuffer {
@@ -132,6 +141,7 @@ function toDisplayThread(conn: ThreadState): DisplayThread {
     updatedAt: conn.messages.at(-1)?.timestamp ?? "just now",
     stopReason: conn.stopReason,
     taskId: conn.taskId ?? null,
+    tokenUsage: conn.tokenUsage,
   };
 }
 
@@ -451,6 +461,12 @@ function createAgentStore() {
     }
   }
 
+  function handleTokenUsage(payload: ThreadTokenUsagePayload) {
+    const thread = threads[payload.thread_id];
+    if (!thread) return;
+    thread.tokenUsage = { used: payload.used_tokens, size: payload.context_size };
+  }
+
   // ── Event listener setup ──────────────────────────────────────
 
   async function setupListeners() {
@@ -502,6 +518,11 @@ function createAgentStore() {
         handleSystemMessage(e.payload),
       ),
     );
+    listenerCleanup.push(
+      await listen<ThreadTokenUsagePayload>("thread:token-usage", (e) =>
+        handleTokenUsage(e.payload),
+      ),
+    );
     listenersReady = true;
   }
 
@@ -537,6 +558,7 @@ function createAgentStore() {
       configOptions: [],
       acpSessionId,
       taskId: taskId ?? null,
+      tokenUsage: undefined,
     };
   }
 
@@ -564,6 +586,7 @@ function createAgentStore() {
       stopReason: null,
       queuedContent: "",
       configOptions: [],
+      tokenUsage: undefined,
     };
 
     return threadId;

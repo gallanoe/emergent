@@ -6,276 +6,303 @@
 //! - "slow response": chunks with 200ms delay
 //! - "error": returns an ACP error
 //! - "long response": streams many chunks
+//! - "usage": emits a UsageUpdate (12_340 / 200_000) then a message
 //! - "request permission": triggers a permission request callback
 
-use std::cell::{Cell, RefCell};
+use std::sync::{Arc, Mutex};
 
-use agent_client_protocol::{self as acp, Client as _};
-use tokio::sync::{mpsc, oneshot};
+use agent_client_protocol as acp;
+use agent_client_protocol::schema::{
+    AgentCapabilities, ContentBlock, ContentChunk, InitializeRequest, InitializeResponse,
+    Implementation, NewSessionRequest, NewSessionResponse, PromptRequest, PromptResponse,
+    SessionConfigOption, SessionConfigOptionCategory,
+    SessionConfigOptionValue, SessionConfigSelectOption, SessionId, SessionNotification,
+    SessionUpdate, SetSessionConfigOptionRequest, SetSessionConfigOptionResponse, StopReason,
+    ToolCall, ToolCallId, ToolCallStatus, ToolCallUpdate, ToolCallUpdateFields, UsageUpdate,
+};
 use tokio_util::compat::{TokioAsyncReadCompatExt as _, TokioAsyncWriteCompatExt as _};
 
-struct MockAgent {
-    notify_tx: mpsc::UnboundedSender<(acp::SessionNotification, oneshot::Sender<()>)>,
-    next_session_id: Cell<u64>,
-    model: RefCell<String>,
-    thinking: RefCell<String>,
+// ---------------------------------------------------------------------------
+// Shared mock state
+// ---------------------------------------------------------------------------
+
+struct MockState {
+    next_session_id: u64,
+    model: String,
+    thinking: String,
 }
 
-impl MockAgent {
-    fn new(
-        notify_tx: mpsc::UnboundedSender<(acp::SessionNotification, oneshot::Sender<()>)>,
-    ) -> Self {
+impl MockState {
+    fn new() -> Self {
         Self {
-            notify_tx,
-            next_session_id: Cell::new(0),
-            model: RefCell::new("sonnet-4".into()),
-            thinking: RefCell::new("high".into()),
+            next_session_id: 0,
+            model: "sonnet-4".into(),
+            thinking: "high".into(),
         }
     }
 
-    fn build_config_options(&self) -> Vec<acp::SessionConfigOption> {
-        let model = self.model.borrow().clone();
-        let thinking = self.thinking.borrow().clone();
+    fn build_config_options(&self) -> Vec<SessionConfigOption> {
+        let model = self.model.clone();
+        let thinking = self.thinking.clone();
         vec![
-            acp::SessionConfigOption::select(
+            SessionConfigOption::select(
                 "model",
                 "Model",
                 model,
                 vec![
-                    acp::SessionConfigSelectOption::new("opus-4", "Opus 4"),
-                    acp::SessionConfigSelectOption::new("sonnet-4", "Sonnet 4"),
-                    acp::SessionConfigSelectOption::new("haiku-3.5", "Haiku 3.5"),
+                    SessionConfigSelectOption::new("opus-4", "Opus 4"),
+                    SessionConfigSelectOption::new("sonnet-4", "Sonnet 4"),
+                    SessionConfigSelectOption::new("haiku-3.5", "Haiku 3.5"),
                 ],
             )
-            .category(acp::SessionConfigOptionCategory::Model),
-            acp::SessionConfigOption::select(
+            .category(SessionConfigOptionCategory::Model),
+            SessionConfigOption::select(
                 "thinking",
                 "Thinking",
                 thinking,
                 vec![
-                    acp::SessionConfigSelectOption::new("off", "Off"),
-                    acp::SessionConfigSelectOption::new("low", "Low"),
-                    acp::SessionConfigSelectOption::new("high", "High"),
+                    SessionConfigSelectOption::new("off", "Off"),
+                    SessionConfigSelectOption::new("low", "Low"),
+                    SessionConfigSelectOption::new("high", "High"),
                 ],
             )
-            .category(acp::SessionConfigOptionCategory::ThoughtLevel),
+            .category(SessionConfigOptionCategory::ThoughtLevel),
         ]
     }
+}
 
-    fn send_notification(
-        &self,
-        session_id: &acp::SessionId,
-        update: acp::SessionUpdate,
-    ) -> Result<oneshot::Receiver<()>, acp::Error> {
-        let (tx, rx) = oneshot::channel();
-        self.notify_tx
-            .send((
-                acp::SessionNotification::new(session_id.clone(), update),
-                tx,
-            ))
-            .map_err(|_| acp::Error::internal_error())?;
-        Ok(rx)
-    }
+// ---------------------------------------------------------------------------
+// Notification helpers
+// ---------------------------------------------------------------------------
 
-    fn send_message_chunk(
-        &self,
-        session_id: &acp::SessionId,
-        text: &str,
-    ) -> Result<oneshot::Receiver<()>, acp::Error> {
-        self.send_notification(
-            session_id,
-            acp::SessionUpdate::AgentMessageChunk(acp::ContentChunk::new(text.into())),
-        )
-    }
+fn send_session_update(
+    cx: &acp::ConnectionTo<acp::Client>,
+    session_id: &SessionId,
+    update: SessionUpdate,
+) -> acp::schema::Result<()> {
+    cx.send_notification(SessionNotification::new(session_id.clone(), update))
+        .map_err(|e| acp::schema::Error::internal_error().data(e.to_string()))
+}
 
-    fn send_thinking_chunk(
-        &self,
-        session_id: &acp::SessionId,
-        text: &str,
-    ) -> Result<oneshot::Receiver<()>, acp::Error> {
-        self.send_notification(
-            session_id,
-            acp::SessionUpdate::AgentThoughtChunk(acp::ContentChunk::new(text.into())),
-        )
+fn send_message_chunk(
+    cx: &acp::ConnectionTo<acp::Client>,
+    session_id: &SessionId,
+    text: &str,
+) -> acp::schema::Result<()> {
+    send_session_update(
+        cx,
+        session_id,
+        SessionUpdate::AgentMessageChunk(ContentChunk::new(text.into())),
+    )
+}
+
+fn send_thinking_chunk(
+    cx: &acp::ConnectionTo<acp::Client>,
+    session_id: &SessionId,
+    text: &str,
+) -> acp::schema::Result<()> {
+    send_session_update(
+        cx,
+        session_id,
+        SessionUpdate::AgentThoughtChunk(ContentChunk::new(text.into())),
+    )
+}
+
+/// Extract a string value from `SessionConfigOptionValue`.
+/// With `unstable_boolean_config` enabled, the value is an enum; extract the
+/// `ValueId` string or fall back to the debug representation.
+fn config_value_to_string(value: &SessionConfigOptionValue) -> String {
+    match value {
+        SessionConfigOptionValue::ValueId { value: id } => id.to_string(),
+        // Boolean variant is gated on unstable_boolean_config — include a
+        // catch-all to handle any future variants gracefully.
+        _ => {
+            log::warn!("Unexpected SessionConfigOptionValue variant in mock agent");
+            String::new()
+        }
     }
 }
 
-#[async_trait::async_trait(?Send)]
-impl acp::Agent for MockAgent {
-    async fn initialize(
-        &self,
-        _args: acp::InitializeRequest,
-    ) -> Result<acp::InitializeResponse, acp::Error> {
-        Ok(acp::InitializeResponse::new(acp::ProtocolVersion::V1)
-            .agent_info(acp::Implementation::new("mock-agent", "0.1.0").title("Mock Agent")))
-    }
-
-    async fn authenticate(
-        &self,
-        _args: acp::AuthenticateRequest,
-    ) -> Result<acp::AuthenticateResponse, acp::Error> {
-        Ok(acp::AuthenticateResponse::default())
-    }
-
-    async fn new_session(
-        &self,
-        _args: acp::NewSessionRequest,
-    ) -> Result<acp::NewSessionResponse, acp::Error> {
-        let id = self.next_session_id.get();
-        self.next_session_id.set(id + 1);
-        Ok(
-            acp::NewSessionResponse::new(id.to_string())
-                .config_options(self.build_config_options()),
-        )
-    }
-
-    async fn set_session_config_option(
-        &self,
-        args: acp::SetSessionConfigOptionRequest,
-    ) -> Result<acp::SetSessionConfigOptionResponse, acp::Error> {
-        let config_id = args.config_id.to_string();
-        let value = args.value.to_string();
-
-        match config_id.as_str() {
-            "model" => *self.model.borrow_mut() = value,
-            "thinking" => *self.thinking.borrow_mut() = value,
-            _ => return Err(acp::Error::invalid_params()),
-        }
-
-        Ok(acp::SetSessionConfigOptionResponse::new(
-            self.build_config_options(),
-        ))
-    }
-
-    async fn prompt(&self, args: acp::PromptRequest) -> Result<acp::PromptResponse, acp::Error> {
-        // Extract prompt text
-        let text = args
-            .prompt
-            .iter()
-            .filter_map(|c| match c {
-                acp::ContentBlock::Text(tc) => Some(tc.text.as_str()),
-                _ => None,
-            })
-            .collect::<Vec<_>>()
-            .join(" ");
-
-        let text_lower = text.to_lowercase();
-
-        if text_lower.contains("error") {
-            return Err(acp::Error::internal_error());
-        }
-
-        if text_lower.contains("think first") {
-            // Emit thinking chunks, then message
-            self.send_thinking_chunk(&args.session_id, "Let me think about this...")
-                .map_err(|_| acp::Error::internal_error())?
-                .await
-                .map_err(|_| acp::Error::internal_error())?;
-            self.send_thinking_chunk(&args.session_id, " I need to consider the options.")
-                .map_err(|_| acp::Error::internal_error())?
-                .await
-                .map_err(|_| acp::Error::internal_error())?;
-            self.send_message_chunk(&args.session_id, "After thinking, here is my response.")
-                .map_err(|_| acp::Error::internal_error())?
-                .await
-                .map_err(|_| acp::Error::internal_error())?;
-        } else if text_lower.contains("use tools") {
-            // Emit a tool call, then a message
-            let tool_call_id = acp::ToolCallId::new("tc-001");
-            self.send_notification(
-                &args.session_id,
-                acp::SessionUpdate::ToolCall(
-                    acp::ToolCall::new(tool_call_id.clone(), "Read file")
-                        .status(acp::ToolCallStatus::Pending),
-                ),
-            )
-            .map_err(|_| acp::Error::internal_error())?
-            .await
-            .map_err(|_| acp::Error::internal_error())?;
-
-            let fields = acp::ToolCallUpdateFields::new().status(acp::ToolCallStatus::Completed);
-            self.send_notification(
-                &args.session_id,
-                acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(tool_call_id, fields)),
-            )
-            .map_err(|_| acp::Error::internal_error())?
-            .await
-            .map_err(|_| acp::Error::internal_error())?;
-
-            self.send_message_chunk(&args.session_id, "I read the file successfully.")
-                .map_err(|_| acp::Error::internal_error())?
-                .await
-                .map_err(|_| acp::Error::internal_error())?;
-        } else if text_lower.contains("slow response") {
-            // Chunks with delay
-            for chunk in ["Slow ", "response ", "coming ", "through."] {
-                self.send_message_chunk(&args.session_id, chunk)
-                    .map_err(|_| acp::Error::internal_error())?
-                    .await
-                    .map_err(|_| acp::Error::internal_error())?;
-                tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-            }
-        } else if text_lower.contains("long response") {
-            // Many chunks
-            for i in 0..20 {
-                self.send_message_chunk(
-                    &args.session_id,
-                    &format!("Chunk {} of a long response. ", i + 1),
-                )
-                .map_err(|_| acp::Error::internal_error())?
-                .await
-                .map_err(|_| acp::Error::internal_error())?;
-            }
-        } else {
-            // Default: echo back in chunks
-            let response = format!("Echo: {}", text);
-            let chunk_size = (response.len() / 3).max(1);
-            for chunk in response.as_bytes().chunks(chunk_size) {
-                let s = String::from_utf8_lossy(chunk);
-                self.send_message_chunk(&args.session_id, &s)
-                    .map_err(|_| acp::Error::internal_error())?
-                    .await
-                    .map_err(|_| acp::Error::internal_error())?;
-            }
-        }
-
-        Ok(acp::PromptResponse::new(acp::StopReason::EndTurn))
-    }
-
-    async fn cancel(&self, _args: acp::CancelNotification) -> Result<(), acp::Error> {
-        Ok(())
-    }
-}
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
 
 #[tokio::main(flavor = "current_thread")]
-async fn main() -> acp::Result<()> {
+async fn main() -> acp::schema::Result<()> {
     env_logger::init();
 
     let outgoing = tokio::io::stdout().compat_write();
     let incoming = tokio::io::stdin().compat();
+    let transport = acp::ByteStreams::new(outgoing, incoming);
 
-    let local_set = tokio::task::LocalSet::new();
-    local_set
-        .run_until(async move {
-            let (tx, mut rx) = mpsc::unbounded_channel();
-            let (conn, handle_io) =
-                acp::AgentSideConnection::new(MockAgent::new(tx), outgoing, incoming, |fut| {
-                    tokio::task::spawn_local(fut);
-                });
+    let state = Arc::new(Mutex::new(MockState::new()));
 
-            // Background task to forward notifications to client
-            tokio::task::spawn_local(async move {
-                while let Some((notification, done_tx)) = rx.recv().await {
-                    let result = conn.session_notification(notification).await;
-                    if let Err(e) = result {
-                        log::error!("Failed to send notification: {e}");
-                        break;
+    let state_new = state.clone();
+    let state_set_config = state.clone();
+
+    acp::Agent
+        .builder()
+        .name("mock-agent")
+        .on_receive_request(
+            async move |_req: InitializeRequest,
+                        responder: acp::Responder<InitializeResponse>,
+                        _cx: acp::ConnectionTo<acp::Client>| {
+                let _ = responder.respond(
+                    InitializeResponse::new(acp::schema::ProtocolVersion::V1)
+                        .agent_info(
+                            Implementation::new("mock-agent", "0.1.0").title("Mock Agent"),
+                        )
+                        .agent_capabilities(AgentCapabilities::new()),
+                );
+                Ok(())
+            },
+            acp::on_receive_request!(),
+        )
+        .on_receive_request(
+            async move |_req: NewSessionRequest,
+                        responder: acp::Responder<NewSessionResponse>,
+                        _cx: acp::ConnectionTo<acp::Client>| {
+                let (session_id, config_options) = {
+                    let mut st = state_new.lock().unwrap();
+                    let id = st.next_session_id;
+                    st.next_session_id += 1;
+                    let config = st.build_config_options();
+                    (id.to_string(), config)
+                };
+                let _ = responder
+                    .respond(NewSessionResponse::new(session_id).config_options(config_options));
+                Ok(())
+            },
+            acp::on_receive_request!(),
+        )
+        .on_receive_request(
+            async move |args: SetSessionConfigOptionRequest,
+                        responder: acp::Responder<SetSessionConfigOptionResponse>,
+                        _cx: acp::ConnectionTo<acp::Client>| {
+                let config_id = args.config_id.to_string();
+                let value_str = config_value_to_string(&args.value);
+                let result = {
+                    let mut st = state_set_config.lock().unwrap();
+                    match config_id.as_str() {
+                        "model" => {
+                            st.model = value_str;
+                            Ok(st.build_config_options())
+                        }
+                        "thinking" => {
+                            st.thinking = value_str;
+                            Ok(st.build_config_options())
+                        }
+                        _ => Err(acp::schema::Error::invalid_params()),
                     }
-                    done_tx.send(()).ok();
+                };
+                match result {
+                    Ok(config_options) => {
+                        let _ = responder
+                            .respond(SetSessionConfigOptionResponse::new(config_options));
+                    }
+                    Err(e) => {
+                        let _ = responder.respond_with_error(e);
+                    }
                 }
-            });
+                Ok(())
+            },
+            acp::on_receive_request!(),
+        )
+        .on_receive_request(
+            async move |args: PromptRequest,
+                        responder: acp::Responder<PromptResponse>,
+                        cx: acp::ConnectionTo<acp::Client>| {
+                let session_id = args.session_id.clone();
 
-            handle_io.await
-        })
+                // Extract prompt text
+                let text = args
+                    .prompt
+                    .iter()
+                    .filter_map(|c| match c {
+                        ContentBlock::Text(tc) => Some(tc.text.as_str()),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" ");
+
+                let text_lower = text.to_lowercase();
+
+                if text_lower.contains("error") {
+                    let _ = responder.respond_with_error(acp::schema::Error::internal_error());
+                    return Ok(());
+                }
+
+                if text_lower.contains("think first") {
+                    // Emit thinking chunks, then message
+                    send_thinking_chunk(&cx, &session_id, "Let me think about this...")?;
+                    send_thinking_chunk(&cx, &session_id, " I need to consider the options.")?;
+                    send_message_chunk(&cx, &session_id, "After thinking, here is my response.")?;
+                } else if text_lower.contains("use tools") {
+                    // Emit a tool call, then a message
+                    let tool_call_id = ToolCallId::new("tc-001");
+                    send_session_update(
+                        &cx,
+                        &session_id,
+                        SessionUpdate::ToolCall(
+                            ToolCall::new(tool_call_id.clone(), "Read file")
+                                .status(ToolCallStatus::Pending),
+                        ),
+                    )?;
+
+                    let fields = ToolCallUpdateFields::new().status(ToolCallStatus::Completed);
+                    send_session_update(
+                        &cx,
+                        &session_id,
+                        SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(tool_call_id, fields)),
+                    )?;
+
+                    send_message_chunk(&cx, &session_id, "I read the file successfully.")?;
+                } else if text_lower.contains("slow response") {
+                    // Chunks with delay
+                    for chunk in ["Slow ", "response ", "coming ", "through."] {
+                        send_message_chunk(&cx, &session_id, chunk)?;
+                        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+                    }
+                } else if text_lower.contains("usage") {
+                    // Emit a UsageUpdate then echo back
+                    send_session_update(
+                        &cx,
+                        &session_id,
+                        SessionUpdate::UsageUpdate(UsageUpdate::new(12_340, 200_000)),
+                    )?;
+                    send_message_chunk(&cx, &session_id, "Usage event emitted.")?;
+                } else if text_lower.contains("long response") {
+                    // Many chunks
+                    for i in 0..20 {
+                        send_message_chunk(
+                            &cx,
+                            &session_id,
+                            &format!("Chunk {} of a long response. ", i + 1),
+                        )?;
+                    }
+                } else {
+                    // Default: echo back in chunks
+                    let response = format!("Echo: {}", text);
+                    let chunk_size = (response.len() / 3).max(1);
+                    for chunk in response.as_bytes().chunks(chunk_size) {
+                        let s = String::from_utf8_lossy(chunk);
+                        send_message_chunk(&cx, &session_id, &s)?;
+                    }
+                }
+
+                let _ = responder.respond(PromptResponse::new(StopReason::EndTurn));
+                Ok(())
+            },
+            acp::on_receive_request!(),
+        )
+        .on_receive_dispatch(
+            async move |message: acp::Dispatch, cx: acp::ConnectionTo<acp::Client>| {
+                // Handle cancel notifications (fire-and-forget, no response needed).
+                // For any unrecognized requests, respond with method_not_found.
+                message.respond_with_error(acp::schema::Error::method_not_found(), cx)
+            },
+            acp::on_receive_dispatch!(),
+        )
+        .connect_to(transport)
         .await
 }

@@ -21,6 +21,7 @@ function makeThread(overrides?: Partial<DisplayThread>): DisplayThread {
     configOptions: [],
     stopReason: null,
     taskId: null,
+    tokenUsage: undefined,
     ...overrides,
   };
 }
@@ -165,5 +166,29 @@ describe("ChatInput", () => {
     await tick();
     const ta = screen.getByRole("textbox") as HTMLTextAreaElement;
     expect(ta.value).toBe("from queue");
+  });
+
+  it("shows context usage ring when tokenUsage is set", async () => {
+    render(ChatInput, {
+      props: {
+        thread: makeThread({
+          tokenUsage: { used: 23400, size: 200000 },
+        }),
+        demoMode: false,
+        onSend: () => {},
+      },
+    });
+    expect(screen.getByLabelText("Context usage")).toBeTruthy();
+  });
+
+  it("hides context usage ring when tokenUsage is undefined", () => {
+    render(ChatInput, {
+      props: {
+        thread: makeThread({ tokenUsage: undefined }),
+        demoMode: false,
+        onSend: () => {},
+      },
+    });
+    expect(screen.queryByLabelText("Context usage")).toBeNull();
   });
 });

@@ -213,6 +213,9 @@ pub fn run() {
                                 Notification::SessionReady(p) => {
                                     let _ = bridge_handle.emit(event_name, p);
                                 }
+                                Notification::TokenUsage(p) => {
+                                    let _ = bridge_handle.emit(event_name, p);
+                                }
                                 Notification::TaskCreated(ref p) => {
                                     let _ = bridge_handle.emit(event_name, p);
                                 }

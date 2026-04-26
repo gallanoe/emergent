@@ -1,28 +1,30 @@
-use agent_client_protocol as acp;
+use agent_client_protocol::schema::{
+    SessionConfigKind, SessionConfigOption, SessionConfigOptionCategory, SessionConfigSelectOptions,
+};
 use emergent_protocol::{
     ConfigChangeEntry, ConfigOption, ConfigSelectGroup, ConfigSelectOption, ConfigSelectOptions,
 };
 
 /// Convert ACP SessionConfigOption list to our protocol types.
-pub fn convert_config_options(acp_options: &[acp::SessionConfigOption]) -> Vec<ConfigOption> {
+pub fn convert_config_options(acp_options: &[SessionConfigOption]) -> Vec<ConfigOption> {
     acp_options.iter().filter_map(convert_one).collect()
 }
 
-fn convert_one(opt: &acp::SessionConfigOption) -> Option<ConfigOption> {
-    let acp::SessionConfigKind::Select(select) = &opt.kind else {
+fn convert_one(opt: &SessionConfigOption) -> Option<ConfigOption> {
+    let SessionConfigKind::Select(select) = &opt.kind else {
         return None; // Only select options supported
     };
 
     let category = opt.category.as_ref().map(|c| match c {
-        acp::SessionConfigOptionCategory::Model => "model".to_string(),
-        acp::SessionConfigOptionCategory::ThoughtLevel => "thought_level".to_string(),
-        acp::SessionConfigOptionCategory::Mode => "mode".to_string(),
-        acp::SessionConfigOptionCategory::Other(s) => s.clone(),
+        SessionConfigOptionCategory::Model => "model".to_string(),
+        SessionConfigOptionCategory::ThoughtLevel => "thought_level".to_string(),
+        SessionConfigOptionCategory::Mode => "mode".to_string(),
+        SessionConfigOptionCategory::Other(s) => s.clone(),
         _ => "other".to_string(),
     });
 
     let options = match &select.options {
-        acp::SessionConfigSelectOptions::Ungrouped(opts) => ConfigSelectOptions::Ungrouped(
+        SessionConfigSelectOptions::Ungrouped(opts) => ConfigSelectOptions::Ungrouped(
             opts.iter()
                 .map(|o| ConfigSelectOption {
                     value: o.value.to_string(),
@@ -30,7 +32,7 @@ fn convert_one(opt: &acp::SessionConfigOption) -> Option<ConfigOption> {
                 })
                 .collect(),
         ),
-        acp::SessionConfigSelectOptions::Grouped(groups) => ConfigSelectOptions::Grouped(
+        SessionConfigSelectOptions::Grouped(groups) => ConfigSelectOptions::Grouped(
             groups
                 .iter()
                 .map(|g| ConfigSelectGroup {

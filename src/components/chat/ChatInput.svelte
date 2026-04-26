@@ -82,6 +82,10 @@
     }
   }
 
+  function fmtK(n: number): string {
+    return n >= 1000 ? `${Math.round(n / 1000)}k` : String(n);
+  }
+
   $effect(() => {
     if (!configOpen) return;
     function onKey(e: KeyboardEvent) {
@@ -163,6 +167,49 @@
       {/if}
 
       <div class="min-w-0 flex-1"></div>
+
+      {#if thread?.tokenUsage && thread.tokenUsage.size > 0}
+        {@const fill = Math.min(
+          thread.tokenUsage.used / thread.tokenUsage.size,
+          1,
+        )}
+        {@const C = 2 * Math.PI * 5.5}
+        <span
+          class="inline-flex h-[30px] w-[30px] items-center justify-center text-fg-muted"
+          title="{fmtK(thread.tokenUsage.used)} / {fmtK(
+            thread.tokenUsage.size,
+          )} ({Math.round(fill * 100)}%)"
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 14 14"
+            aria-label="Context usage"
+          >
+            <circle
+              cx="7"
+              cy="7"
+              r="5.5"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              opacity="0.2"
+            />
+            <circle
+              cx="7"
+              cy="7"
+              r="5.5"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-dasharray={C}
+              stroke-dashoffset={C * (1 - fill)}
+              stroke-linecap="round"
+              transform="rotate(-90 7 7)"
+            />
+          </svg>
+        </span>
+      {/if}
 
       <button
         type="button"

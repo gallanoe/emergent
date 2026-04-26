@@ -132,6 +132,7 @@ export interface DisplayThread {
   updatedAt: string;
   stopReason: string | null;
   taskId: string | null;
+  tokenUsage?: { used: number; size: number } | undefined;
 }
 
 export interface DisplayAgentDefinition {

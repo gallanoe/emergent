@@ -366,6 +366,21 @@ pub struct ConfigUpdatePayload {
 }
 
 // ---------------------------------------------------------------------------
+// Token-usage payload
+// ---------------------------------------------------------------------------
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ThreadTokenUsagePayload {
+    pub thread_id: String,
+    pub used_tokens: u64,
+    pub context_size: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cost_amount: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cost_currency: Option<String>,
+}
+
+// ---------------------------------------------------------------------------
 // Agent definition notification payloads
 // ---------------------------------------------------------------------------
 
@@ -422,6 +437,8 @@ pub enum Notification {
     TaskUpdated(crate::TaskPayload),
     #[serde(rename = "thread:session-ready")]
     SessionReady(SessionReadyPayload),
+    #[serde(rename = "thread:token-usage")]
+    TokenUsage(ThreadTokenUsagePayload),
 }
 
 impl Notification {
@@ -445,6 +462,7 @@ impl Notification {
             Notification::TaskCreated(_) => "task:created",
             Notification::TaskUpdated(_) => "task:updated",
             Notification::SessionReady(_) => "thread:session-ready",
+            Notification::TokenUsage(_) => "thread:token-usage",
         }
     }
 
@@ -468,6 +486,7 @@ impl Notification {
             Notification::TaskCreated(_) => None,
             Notification::TaskUpdated(_) => None,
             Notification::SessionReady(p) => Some(&p.thread_id),
+            Notification::TokenUsage(p) => Some(&p.thread_id),
         }
     }
 }
@@ -589,6 +608,29 @@ mod tests {
         let restored: Notification = serde_json::from_str(&json).unwrap();
         assert_eq!(restored.event_name(), "workspace:status-change");
         assert!(restored.thread_id().is_none());
+    }
+
+    #[test]
+    fn token_usage_notification_roundtrips() {
+        let n = Notification::TokenUsage(ThreadTokenUsagePayload {
+            thread_id: "t1".into(),
+            used_tokens: 23_400,
+            context_size: 200_000,
+            cost_amount: None,
+            cost_currency: None,
+        });
+        let json = serde_json::to_string(&n).unwrap();
+        assert!(json.contains("thread:token-usage"));
+        assert!(json.contains("23400"));
+        let r: Notification = serde_json::from_str(&json).unwrap();
+        match r {
+            Notification::TokenUsage(p) => {
+                assert_eq!(p.thread_id, "t1");
+                assert_eq!(p.used_tokens, 23_400);
+                assert_eq!(p.context_size, 200_000);
+            }
+            _ => panic!("wrong variant"),
+        }
     }
 
     #[test]
