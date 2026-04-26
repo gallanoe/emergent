@@ -14,6 +14,7 @@
     working: "var(--color-success)",
     initializing: "var(--color-warning)",
     building: "var(--color-warning)",
+    cancelling: "var(--color-warning)",
     error: "var(--color-error)",
     dead: "var(--color-fg-disabled)",
     stopped: "var(--color-fg-disabled)",

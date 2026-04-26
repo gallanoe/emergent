@@ -55,7 +55,13 @@
     agentId: string;
     agentName: string;
     agentProvider: string;
-    status: "idle" | "working" | "initializing" | "error" | "dead";
+    status:
+      | "idle"
+      | "working"
+      | "initializing"
+      | "cancelling"
+      | "error"
+      | "dead";
   };
 
   const searchThreads = $derived.by<ThreadHit[]>(() => {

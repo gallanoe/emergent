@@ -124,6 +124,10 @@ pub(crate) async fn prompt_loop(
             match &send_result {
                 Ok(()) => {
                     handle.status = AgentStatus::Idle;
+                    let _ = event_tx.send(Notification::StatusChange(StatusChangePayload {
+                        thread_id: agent_id.clone(),
+                        status: AgentStatus::Idle.to_string(),
+                    }));
                 }
                 Err(_) => {
                     handle.status = AgentStatus::Error;

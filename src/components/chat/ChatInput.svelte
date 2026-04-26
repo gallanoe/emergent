@@ -1,5 +1,12 @@
 <script lang="ts">
-  import { Plus, Mic, ArrowUp, Square, ChevronDown } from "@lucide/svelte";
+  import {
+    Plus,
+    Mic,
+    ArrowUp,
+    Square,
+    ChevronDown,
+    Loader,
+  } from "@lucide/svelte";
   import ConfigPopover from "./ConfigPopover.svelte";
   import { AgentAvatar } from "../../lib/primitives";
   import type { DisplayThread } from "../../stores/types";
@@ -37,7 +44,11 @@
     }
   });
 
-  const isWorking = $derived(thread?.processStatus === "working");
+  const isWorking = $derived(
+    thread?.processStatus === "working" ||
+      thread?.processStatus === "cancelling",
+  );
+  const isCancelling = $derived(thread?.processStatus === "cancelling");
   const hasText = $derived(message.trim().length > 0);
   const isDisabled = $derived(
     demoMode ||
@@ -221,15 +232,27 @@
       </button>
 
       {#if isWorking}
-        <button
-          type="button"
-          title="Interrupt"
-          class="inline-flex h-[30px] w-[30px] items-center justify-center rounded-full"
-          style="background: var(--color-fg-heading); color: var(--color-background);"
-          onclick={() => onInterrupt?.()}
-        >
-          <Square size={10} fill="currentColor" />
-        </button>
+        {#if isCancelling}
+          <button
+            type="button"
+            title="Stopping…"
+            disabled
+            class="inline-flex h-[30px] w-[30px] items-center justify-center rounded-full disabled:opacity-60"
+            style="background: var(--color-fg-heading); color: var(--color-background);"
+          >
+            <Loader size={10} />
+          </button>
+        {:else}
+          <button
+            type="button"
+            title="Interrupt"
+            class="inline-flex h-[30px] w-[30px] items-center justify-center rounded-full"
+            style="background: var(--color-fg-heading); color: var(--color-background);"
+            onclick={() => onInterrupt?.()}
+          >
+            <Square size={10} fill="currentColor" />
+          </button>
+        {/if}
       {:else}
         <button
           type="button"

@@ -58,6 +58,8 @@ export interface DisplayMessage {
   toolCalls?: DisplayToolCall[];
   timestamp: string;
   nudgeCount?: number;
+  pending?: boolean;
+  cancelled?: boolean;
 }
 
 export interface NudgeDeliveredPayload {
@@ -70,7 +72,7 @@ export interface TopologyChangedPayload {
   thread_id_b: string;
 }
 
-export type ThreadProcessStatus = "initializing" | "idle" | "working" | "error";
+export type ThreadProcessStatus = "initializing" | "idle" | "working" | "cancelling" | "error";
 
 export type ThreadSummaryStatus = ThreadProcessStatus | "dead";
 
@@ -80,6 +82,7 @@ export function normalizeThreadSummaryStatus(raw: string): ThreadSummaryStatus {
     case "initializing":
     case "idle":
     case "working":
+    case "cancelling":
     case "error":
     case "dead":
       return raw;

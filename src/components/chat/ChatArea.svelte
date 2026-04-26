@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Loader, Check, XCircle, Mail } from "@lucide/svelte";
+  import { Loader, Check, XCircle, Mail, Square } from "@lucide/svelte";
   import StreamingText from "./StreamingText.svelte";
   import ToolCallRow from "./ToolCallRow.svelte";
   import ThinkingBlock from "./ThinkingBlock.svelte";
@@ -197,14 +197,27 @@
                 {@html renderMarkdown(message.content)}
               </div>
             {/if}
+            {#if message.cancelled}
+              <div
+                class="flex items-center gap-[6px] text-[11px] text-fg-disabled mt-[4px]"
+              >
+                <Square size={10} />
+                <span>Stopped</span>
+              </div>
+            {/if}
           {:else if message.role === "user"}
             <div class="flex justify-end">
               <div
-                class="max-w-[78%] rounded-[14px] bg-bg-selected px-[14px] py-[10px] text-[12.5px] leading-[1.55] text-fg-default"
+                class="max-w-[78%] rounded-[14px] bg-bg-selected px-[14px] py-[10px] text-[12.5px] leading-[1.55] text-fg-default {message.pending
+                  ? 'opacity-60'
+                  : ''}"
               >
                 <div class="markdown">
                   {@html renderMarkdown(message.content)}
                 </div>
+                {#if message.pending}
+                  <span class="text-[10px] text-fg-disabled ml-1">Queued</span>
+                {/if}
                 {#if message.nudgeCount}
                   <div class="my-1.5 h-px bg-border-default"></div>
                   <div

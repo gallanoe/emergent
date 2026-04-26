@@ -7,6 +7,7 @@ const dotStatuses = [
   "working",
   "initializing",
   "building",
+  "cancelling",
   "error",
   "dead",
   "stopped",
@@ -17,6 +18,7 @@ const expectedVar: Record<(typeof dotStatuses)[number], string> = {
   working: "var(--color-success)",
   initializing: "var(--color-warning)",
   building: "var(--color-warning)",
+  cancelling: "var(--color-warning)",
   error: "var(--color-error)",
   dead: "var(--color-fg-disabled)",
   stopped: "var(--color-fg-disabled)",
@@ -43,6 +45,11 @@ describe("StatusDot", () => {
 
     const { container: idle } = render(StatusDot, { props: { status: "idle" } });
     expect(idle.querySelector("span")?.className).not.toContain("em-dot-pulse");
+
+    const { container: cancelling } = render(StatusDot, {
+      props: { status: "cancelling" },
+    });
+    expect(cancelling.querySelector("span")?.className).not.toContain("em-dot-pulse");
   });
 
   it("forwards size to width and height", () => {
