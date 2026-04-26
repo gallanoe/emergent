@@ -315,6 +315,18 @@ describe("ChatArea", () => {
     expect(screen.getByText("Management permissions have been granted.")).toBeTruthy();
   });
 
+  it("renders sending:true user message without opacity or Queued label (P0-1)", () => {
+    // After P0-1, sending:true is an in-flight marker only — no dimming or label.
+    const thread = makeThread([msg("user", "In-flight message", "1:00 PM", { sending: true })]);
+    const { container } = render(ChatArea, { props: { thread } });
+    expect(screen.getByText("In-flight message")).toBeTruthy();
+    // No "Queued" label
+    expect(screen.queryByText("Queued")).toBeNull();
+    // No opacity-60 class on the bubble
+    const bubble = container.querySelector(".opacity-60");
+    expect(bubble).toBeNull();
+  });
+
   it("copies fenced code when md-copy is clicked", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     const prev = navigator.clipboard;

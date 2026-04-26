@@ -51,6 +51,15 @@ export interface ConfigOption {
   options: ConfigSelectOption[] | ConfigSelectGroup[];
 }
 
+/** An item waiting in the pre-submission queue (not yet sent to the agent). */
+export interface QueueItem {
+  id: string;
+  content: string;
+  submittedAt: number;
+  /** Set to true when the thread errors while this item is queued. Item stays in the queue with error styling. */
+  failed?: boolean;
+}
+
 export interface DisplayMessage {
   id: string;
   role: "assistant" | "thinking" | "user" | "tool-group" | "system" | "nudge";
@@ -58,7 +67,8 @@ export interface DisplayMessage {
   toolCalls?: DisplayToolCall[];
   timestamp: string;
   nudgeCount?: number;
-  pending?: boolean;
+  /** True while the merged prompt is in-flight (IPC call sent, echo not yet received). */
+  sending?: boolean;
   cancelled?: boolean;
 }
 

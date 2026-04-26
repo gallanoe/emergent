@@ -9,6 +9,7 @@ src-tauri/target/
 *.tsbuildinfo
 .DS_Store
 *.log
+sample.logs
 docs/
 .superpowers/
 .worktrees/

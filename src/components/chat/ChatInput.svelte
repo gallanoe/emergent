@@ -8,41 +8,51 @@
     Loader,
   } from "@lucide/svelte";
   import ConfigPopover from "./ConfigPopover.svelte";
+  import QueuedMessages from "./QueuedMessages.svelte";
   import { AgentAvatar } from "../../lib/primitives";
-  import type { DisplayThread } from "../../stores/types";
+  import type { DisplayThread, QueueItem } from "../../stores/types";
 
   interface Props {
     thread: DisplayThread | undefined;
     demoMode: boolean;
     containerRunning?: boolean;
-    externalContent?: { text: string; seq: number } | null;
+    pendingQueue?: QueueItem[];
+    /**
+     * Push-to-composer channel. The parent increments `seq` each time it
+     * wants to inject text into the textarea. The $effect below fires
+     * whenever `seq` changes and updates the textarea value.
+     *
+     * Symmetric to the `externalContent`/`pushToInput` pattern that was
+     * removed in P0-A. The new Edit button is its consumer: the parent
+     * removes the item from the queue (removeQueueItem) and simultaneously
+     * bumps this prop so the composer receives the item's text.
+     */
+    pushToComposer?: { text: string; seq: number };
     onSend: (text: string) => void;
     onInterrupt?: () => void;
     onSetConfig?: (configId: string, value: string) => void;
+    onRemoveQueueItem?: (id: string) => void;
+    onEditQueueItem?: (id: string, content: string) => void;
+    onClearQueue?: () => void;
   }
 
   let {
     thread,
     demoMode,
     containerRunning = true,
-    externalContent = null,
+    pendingQueue = [],
+    pushToComposer,
     onSend,
     onInterrupt,
     onSetConfig,
+    onRemoveQueueItem,
+    onEditQueueItem,
+    onClearQueue,
   }: Props = $props();
 
   let message = $state("");
   let textareaEl: HTMLTextAreaElement | undefined = $state();
   let configOpen = $state(false);
-
-  let consumedSeq = $state(-1);
-  $effect(() => {
-    if (externalContent && externalContent.seq !== consumedSeq) {
-      consumedSeq = externalContent.seq;
-      message = externalContent.text;
-      requestAnimationFrame(() => textareaEl?.focus());
-    }
-  });
 
   const isWorking = $derived(
     thread?.processStatus === "working" ||
@@ -77,6 +87,25 @@
       .map((o) => o.current_value)
       .slice(0, 3)
       .join(" · ");
+  });
+
+  // ── Push-to-composer channel ───────────────────────────────────────────────
+  // Fires whenever the parent increments pushToComposer.seq (e.g. after an
+  // Edit-queue action). Reads seq synchronously so it's tracked as a dep.
+  //
+  // `lastAppliedSeq` starts at -1 so the first real seq (0 or higher) only
+  // triggers an update when it is strictly different — preventing mount-time
+  // clobber when switching threads where seq was already applied.
+  let lastAppliedSeq = $state(-1);
+
+  $effect(() => {
+    if (!pushToComposer) return;
+    const { seq, text } = pushToComposer; // read both synchronously to track deps
+    if (seq === lastAppliedSeq) return;
+    lastAppliedSeq = seq;
+    message = text;
+    // Focus the textarea so the user can immediately edit or send.
+    textareaEl?.focus();
   });
 
   function submit() {
@@ -115,16 +144,31 @@
 
   - Outer wrapper: `pointer-events-none` so clicks in the px-10 gutters
     pass through to the transcript.
-  - Bubble: `pointer-events-auto` to restore interactivity on the composer
-    itself.
+  - Inner children: `pointer-events-auto` to restore interactivity on the
+    queue panel and composer card.
+  - The outer wrapper is a flex column so the queue card and composer card
+    are siblings with a visible gap between them. When the queue is empty
+    the {#if} leaves no DOM node, so there is no leftover gap.
   - `bg-bg-elevated` (opaque) rather than the design spec's `bg-bg-bubble`
     (4% white overlay) so scrolled-under content is cleanly occluded. The
     bubble token blends with the near-black main pane and reads as a
     dark rim, not a floating surface.
 -->
 <div
-  class="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex justify-center px-10 pb-[22px] pt-[10px]"
+  class="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex flex-col items-center gap-[10px] px-10 pb-[22px] pt-[10px]"
 >
+  {#if pendingQueue.length > 0}
+    <div class="pointer-events-auto w-full max-w-[760px]">
+      <QueuedMessages
+        items={pendingQueue}
+        working={isWorking}
+        onRemove={(id) => onRemoveQueueItem?.(id)}
+        onEdit={(id, content) => onEditQueueItem?.(id, content)}
+        onClearAll={() => onClearQueue?.()}
+      />
+    </div>
+  {/if}
+
   <div
     class="pointer-events-auto relative flex w-full max-w-[760px] flex-col gap-[10px] rounded-[18px] border border-border-default bg-bg-elevated px-[14px] pb-[10px] pt-[14px] shadow-[var(--shadow-sm)]"
   >

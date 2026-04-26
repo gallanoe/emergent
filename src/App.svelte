@@ -35,8 +35,6 @@
     WorkspaceStatusChangePayload,
   } from "./stores/types";
 
-  let externalContent = $state<{ text: string; seq: number } | null>(null);
-  let seq = 0;
   let showCreateWorkspace = $state(false);
   let workspaceMenu = $state<{
     x: number;
@@ -45,6 +43,27 @@
   } | null>(null);
   let deleteTarget = $state<{ id: string; name: string } | null>(null);
   let searchOpen = $state(false);
+
+  // Push-to-composer channel for the Edit-queue action.
+  // Incrementing seq triggers the $effect in ChatInput, which sets the
+  // textarea value to `text` and focuses it. The item is also removed from
+  // the queue via removeQueueItem before this fires.
+  let composerPush = $state<{ text: string; seq: number }>({
+    text: "",
+    seq: 0,
+  });
+
+  function handleEditQueueItem(
+    threadId: string | null,
+    id: string,
+    content: string,
+  ) {
+    if (!threadId) return;
+    // Use the content captured at click-time (passed in) rather than re-reading
+    // from the queue, which may already be empty if the queue drained concurrently.
+    appState.removeQueueItem(threadId, id);
+    composerPush = { text: content, seq: composerPush.seq + 1 };
+  }
 
   // Local mirror of SearchCommand's ThreadHit shape. Re-exporting types
   // from .svelte files is a known rough edge; duplicating the shape here
@@ -151,10 +170,6 @@
       (!appState.demoMode && appState.swarms.length === 0),
   );
 
-  function pushToInput(text: string) {
-    externalContent = { text, seq: ++seq };
-  }
-
   function onGlobalKeydown(e: KeyboardEvent) {
     const meta = e.metaKey || e.ctrlKey;
     if (!meta || e.altKey || e.shiftKey) return;
@@ -199,29 +214,11 @@
       },
     );
 
-    // Register handler for queue dump on error.
-    // Only dump if the errored agent is currently selected — otherwise
-    // the content would be sent to the wrong agent.
-    appState.registerQueueDumpHandler((agentId: string, content: string) => {
-      if (agentId === appState.selectedAgentId) {
-        pushToInput(content);
-      }
-    });
-
     return () => {
       window.removeEventListener("keydown", onGlobalKeydown);
       unlistenPromise.then((fn) => fn());
     };
   });
-
-  function handleEditQueue() {
-    const agent = appState.selectedAgent;
-    if (!agent) return;
-    const content = appState.editQueue(agent.id);
-    if (content) {
-      pushToInput(content);
-    }
-  }
 
   async function handleNewThread() {
     const agentId = appState.selectedAgentId;
@@ -516,16 +513,13 @@
           {#if task}
             <ChatTaskBanner {task} onOpen={(id) => appState.selectTask(id)} />
           {/if}
-          <ChatArea
-            {thread}
-            hasTaskBanner={task != null}
-            onEditQueue={handleEditQueue}
-          />
+          <ChatArea {thread} hasTaskBanner={task != null} />
           <ChatInput
             {thread}
             demoMode={appState.demoMode}
             containerRunning={appState.selectedWorkspaceContainerRunning}
-            {externalContent}
+            pendingQueue={appState.selectedThreadPendingQueue}
+            pushToComposer={composerPush}
             onSend={(text) => {
               const threadId = appState.selectedThreadId;
               if (threadId) appState.sendPrompt(threadId, text);
@@ -537,6 +531,16 @@
             onSetConfig={(configId, value) => {
               const threadId = appState.selectedThreadId;
               if (threadId) appState.setConfig(threadId, configId, value);
+            }}
+            onRemoveQueueItem={(id) => {
+              const threadId = appState.selectedThreadId;
+              if (threadId) appState.removeQueueItem(threadId, id);
+            }}
+            onEditQueueItem={(id, content) =>
+              handleEditQueueItem(appState.selectedThreadId, id, content)}
+            onClearQueue={() => {
+              const threadId = appState.selectedThreadId;
+              if (threadId) appState.clearQueue(threadId);
             }}
           />
         </div>
@@ -562,16 +566,13 @@
       </div>
     {:else}
       <div class="relative flex min-h-0 min-w-0 flex-1 flex-col">
-        <ChatArea
-          thread={appState.selectedAgent}
-          hasTaskBanner={false}
-          onEditQueue={handleEditQueue}
-        />
+        <ChatArea thread={appState.selectedAgent} hasTaskBanner={false} />
         <ChatInput
           thread={appState.selectedAgent}
           demoMode={appState.demoMode}
           containerRunning={appState.selectedWorkspaceContainerRunning}
-          {externalContent}
+          pendingQueue={appState.selectedThreadPendingQueue}
+          pushToComposer={composerPush}
           onSend={(text) => {
             const agent = appState.selectedAgent;
             if (agent) appState.sendPrompt(agent.id, text);
@@ -583,6 +584,16 @@
           onSetConfig={(configId, value) => {
             const agent = appState.selectedAgent;
             if (agent) appState.setConfig(agent.id, configId, value);
+          }}
+          onRemoveQueueItem={(id) => {
+            const threadId = appState.selectedThreadId;
+            if (threadId) appState.removeQueueItem(threadId, id);
+          }}
+          onEditQueueItem={(id, content) =>
+            handleEditQueueItem(appState.selectedThreadId, id, content)}
+          onClearQueue={() => {
+            const threadId = appState.selectedThreadId;
+            if (threadId) appState.clearQueue(threadId);
           }}
         />
       </div>

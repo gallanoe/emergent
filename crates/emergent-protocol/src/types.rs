@@ -58,6 +58,10 @@ pub struct PromptCompletePayload {
 pub struct UserMessagePayload {
     pub thread_id: String,
     pub content: String,
+    /// True only for the first `UserMessageChunk` of a manager-initiated turn.
+    /// Agents that emit zero echoes, sub-agent synthetic messages, or subsequent
+    /// chunks of the same turn all carry `false`.
+    pub is_echo: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

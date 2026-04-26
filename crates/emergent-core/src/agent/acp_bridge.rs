@@ -1,3 +1,6 @@
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+
 use agent_client_protocol as acp;
 use agent_client_protocol::schema::{
     CancelNotification, ConfigOptionUpdate, ContentBlock, PromptRequest,
@@ -90,11 +93,18 @@ pub(crate) fn extract_text(content: &ContentBlock) -> String {
 
 /// Process a single `SessionUpdate` notification and emit zero or more
 /// `emergent_protocol::Notification` events on the broadcast channel.
+///
+/// `expect_echo` is an `AtomicBool` set to `true` by the command loop just
+/// before each manager-initiated `AgentCommand::Prompt` is sent. The first
+/// `UserMessageChunk` observed while the flag is `true` is tagged
+/// `is_echo: true` and the flag is cleared. All other chunks carry
+/// `is_echo: false`, including spontaneous / sub-agent messages.
 pub(crate) fn handle_session_update(
     agent_id: &str,
     update: SessionUpdate,
     event_tx: &broadcast::Sender<Notification>,
     config: &std::sync::Arc<std::sync::Mutex<Vec<ConfigOption>>>,
+    expect_echo: &Arc<AtomicBool>,
 ) {
     match update {
         SessionUpdate::AgentMessageChunk(chunk) => {
@@ -148,9 +158,14 @@ pub(crate) fn handle_session_update(
         }
         SessionUpdate::UserMessageChunk(chunk) => {
             let text = extract_text(&chunk.content);
+            // Consume the echo flag: the first chunk of a manager-initiated turn
+            // gets is_echo=true, all subsequent chunks (or spontaneous messages)
+            // get is_echo=false.
+            let is_echo = expect_echo.swap(false, Ordering::Relaxed);
             let _ = event_tx.send(Notification::UserMessage(UserMessagePayload {
                 thread_id: agent_id.to_string(),
                 content: text,
+                is_echo,
             }));
         }
         SessionUpdate::AgentThoughtChunk(chunk) => {
@@ -227,6 +242,7 @@ pub(crate) fn build_permission_response(
 /// Process commands from the main thread on the ACP thread.
 /// Handles prompt/cancel/config/shutdown while supporting concurrent
 /// cancel and config changes during an in-flight prompt.
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn agent_command_loop(
     conn: acp::ConnectionTo<acp::Agent>,
     session_id: acp::schema::SessionId,
@@ -235,6 +251,7 @@ pub(crate) async fn agent_command_loop(
     event_tx: broadcast::Sender<Notification>,
     workspace_id: String,
     agent_definition_id: String,
+    expect_echo: Arc<AtomicBool>,
 ) {
     while let Some(cmd) = command_rx.recv().await {
         match cmd {
@@ -255,6 +272,11 @@ pub(crate) async fn agent_command_loop(
                         acp::schema::TextContent::new(text),
                     )],
                 );
+
+                // Signal to the notification handler that the next
+                // UserMessageChunk belongs to this manager-initiated turn
+                // and should be tagged is_echo=true.
+                expect_echo.store(true, Ordering::Relaxed);
 
                 // Use select! so cancel commands are handled immediately
                 // while the prompt is in-flight.
@@ -312,6 +334,10 @@ pub(crate) async fn agent_command_loop(
                         }
                     }
                 }
+
+                // Fixup 1: unconditionally clear expect_echo at turn boundary so the flag
+                // never leaks into the next turn when an agent emits zero UserMessageChunks.
+                expect_echo.store(false, Ordering::SeqCst);
 
                 match prompt_result {
                     Ok(resp) => {
@@ -415,8 +441,9 @@ mod tests {
         let (tx, mut rx) = broadcast::channel(8);
         let config = std::sync::Arc::new(std::sync::Mutex::new(vec![]));
         {
+            let expect_echo = Arc::new(AtomicBool::new(false));
             let update = SessionUpdate::UsageUpdate(UsageUpdate::new(12_340, 200_000));
-            handle_session_update("thread-1", update, &tx, &config);
+            handle_session_update("thread-1", update, &tx, &config, &expect_echo);
             let n = rx.try_recv().expect("notification sent");
             match n {
                 Notification::TokenUsage(p) => {
@@ -427,6 +454,128 @@ mod tests {
                 }
                 _ => panic!("expected TokenUsage"),
             }
+        }
+    }
+
+    #[test]
+    fn user_message_chunk_echo_flag_is_consumed_on_first_chunk() {
+        let (tx, mut rx) = broadcast::channel(8);
+        let config = std::sync::Arc::new(std::sync::Mutex::new(vec![]));
+
+        // Simulate manager-initiated turn: expect_echo set to true.
+        let expect_echo = Arc::new(AtomicBool::new(true));
+
+        // First chunk — should be tagged is_echo=true and flag cleared.
+        let first_chunk = SessionUpdate::UserMessageChunk(
+            agent_client_protocol::schema::ContentChunk::new("hello".into()),
+        );
+        handle_session_update("t1", first_chunk, &tx, &config, &expect_echo);
+        let n = rx.try_recv().expect("first notification sent");
+        match n {
+            Notification::UserMessage(p) => {
+                assert_eq!(p.thread_id, "t1");
+                assert!(p.is_echo, "first chunk of manager turn must be is_echo=true");
+            }
+            _ => panic!("expected UserMessage"),
+        }
+        assert!(
+            !expect_echo.load(Ordering::Relaxed),
+            "expect_echo must be false after first chunk consumed it"
+        );
+
+        // Second chunk of the same turn — is_echo must be false.
+        let second_chunk = SessionUpdate::UserMessageChunk(
+            agent_client_protocol::schema::ContentChunk::new(" world".into()),
+        );
+        handle_session_update("t1", second_chunk, &tx, &config, &expect_echo);
+        let n2 = rx.try_recv().expect("second notification sent");
+        match n2 {
+            Notification::UserMessage(p) => {
+                assert!(!p.is_echo, "subsequent chunks must be is_echo=false");
+            }
+            _ => panic!("expected UserMessage"),
+        }
+    }
+
+    /// Fixup 1 regression: when an agent emits zero UserMessageChunks for a turn
+    /// (e.g. Claude Code), `expect_echo` must NOT leak into the next turn.
+    /// Simulate by: set expect_echo=true, emit no UserMessageChunk (mimicking
+    /// the command loop's `expect_echo.store(false)` at turn boundary), then
+    /// start the next turn and verify only its first chunk carries is_echo=true.
+    #[test]
+    fn expect_echo_flag_cleared_after_zero_chunk_turn() {
+        let (tx, mut rx) = broadcast::channel(16);
+        let config = std::sync::Arc::new(std::sync::Mutex::new(vec![]));
+
+        // Turn N: flag armed, but no UserMessageChunk arrives (zero-echo agent).
+        let expect_echo = Arc::new(AtomicBool::new(true));
+        // Simulate what the command loop does at the end of prompt_result:
+        expect_echo.store(false, Ordering::SeqCst);
+
+        // Verify flag is cleared — no stale arm entering turn N+1.
+        assert!(
+            !expect_echo.load(Ordering::Relaxed),
+            "expect_echo must be false after turn-boundary clear"
+        );
+
+        // Turn N+1: arm the flag again for the new prompt.
+        expect_echo.store(true, Ordering::Relaxed);
+
+        // First chunk of turn N+1 — must be tagged is_echo=true.
+        let first = SessionUpdate::UserMessageChunk(
+            agent_client_protocol::schema::ContentChunk::new("turn n+1 msg".into()),
+        );
+        handle_session_update("t-zero", first, &tx, &config, &expect_echo);
+        let n = rx.try_recv().expect("first chunk emitted");
+        match n {
+            Notification::UserMessage(p) => {
+                assert!(
+                    p.is_echo,
+                    "first chunk of turn N+1 must be is_echo=true after zero-echo turn N"
+                );
+            }
+            _ => panic!("expected UserMessage"),
+        }
+
+        // Second chunk of turn N+1 — flag consumed, must be false.
+        assert!(
+            !expect_echo.load(Ordering::Relaxed),
+            "flag must be cleared after first chunk of turn N+1"
+        );
+        let second = SessionUpdate::UserMessageChunk(
+            agent_client_protocol::schema::ContentChunk::new("continuation".into()),
+        );
+        handle_session_update("t-zero", second, &tx, &config, &expect_echo);
+        let n2 = rx.try_recv().expect("second chunk emitted");
+        match n2 {
+            Notification::UserMessage(p) => {
+                assert!(
+                    !p.is_echo,
+                    "second chunk of turn N+1 must be is_echo=false"
+                );
+            }
+            _ => panic!("expected UserMessage"),
+        }
+    }
+
+    #[test]
+    fn spontaneous_user_message_chunk_carries_is_echo_false() {
+        let (tx, mut rx) = broadcast::channel(8);
+        let config = std::sync::Arc::new(std::sync::Mutex::new(vec![]));
+
+        // expect_echo starts false — simulates a spontaneous / sub-agent message.
+        let expect_echo = Arc::new(AtomicBool::new(false));
+
+        let chunk = SessionUpdate::UserMessageChunk(
+            agent_client_protocol::schema::ContentChunk::new("spontaneous".into()),
+        );
+        handle_session_update("t2", chunk, &tx, &config, &expect_echo);
+        let n = rx.try_recv().expect("notification sent");
+        match n {
+            Notification::UserMessage(p) => {
+                assert!(!p.is_echo, "spontaneous message must be is_echo=false");
+            }
+            _ => panic!("expected UserMessage"),
         }
     }
 }

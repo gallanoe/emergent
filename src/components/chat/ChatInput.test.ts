@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
-import { tick } from "svelte";
+import { tick, flushSync } from "svelte";
 import { render, screen, fireEvent } from "@testing-library/svelte";
 import ChatInput from "./ChatInput.svelte";
-import type { DisplayThread } from "../../stores/types";
+import type { DisplayThread, QueueItem } from "../../stores/types";
 
 function makeThread(overrides?: Partial<DisplayThread>): DisplayThread {
   return {
@@ -154,20 +154,6 @@ describe("ChatInput", () => {
     expect(screen.queryByText("Model")).toBeNull();
   });
 
-  it("applies externalContent text on mount", async () => {
-    render(ChatInput, {
-      props: {
-        thread: makeThread(),
-        demoMode: false,
-        externalContent: { text: "from queue", seq: 1 },
-        onSend: () => {},
-      },
-    });
-    await tick();
-    const ta = screen.getByRole("textbox") as HTMLTextAreaElement;
-    expect(ta.value).toBe("from queue");
-  });
-
   it("shows context usage ring when tokenUsage is set", async () => {
     render(ChatInput, {
       props: {
@@ -190,5 +176,109 @@ describe("ChatInput", () => {
       },
     });
     expect(screen.queryByLabelText("Context usage")).toBeNull();
+  });
+
+  describe("QueuedMessages visibility", () => {
+    it("renders QueuedMessages when pendingQueue is non-empty", () => {
+      const pendingQueue: QueueItem[] = [
+        { id: "q1", content: "queued text", submittedAt: Date.now() },
+      ];
+      render(ChatInput, {
+        props: {
+          thread: makeThread({ processStatus: "working" }),
+          demoMode: false,
+          pendingQueue,
+          onSend: () => {},
+        },
+      });
+      // QueuedMessages renders a <ul> containing row buttons with aria-expanded
+      const rowBtn = screen.getByRole("button", { name: /queued message 1/i });
+      expect(rowBtn).toBeTruthy();
+      expect(screen.getByText("queued text")).toBeTruthy();
+    });
+
+    it("does not render QueuedMessages when pendingQueue is empty", () => {
+      render(ChatInput, {
+        props: {
+          thread: makeThread({ processStatus: "working" }),
+          demoMode: false,
+          pendingQueue: [],
+          onSend: () => {},
+        },
+      });
+      expect(screen.queryByRole("button", { name: /queued message/i })).toBeNull();
+    });
+
+    it("does not render QueuedMessages when pendingQueue is not provided", () => {
+      render(ChatInput, {
+        props: {
+          thread: makeThread(),
+          demoMode: false,
+          onSend: () => {},
+        },
+      });
+      expect(screen.queryByRole("button", { name: /queued message/i })).toBeNull();
+    });
+  });
+
+  describe("pushToComposer seq guard", () => {
+    it("updates textarea when seq is incremented", async () => {
+      const { rerender } = render(ChatInput, {
+        props: {
+          thread: makeThread(),
+          demoMode: false,
+          onSend: () => {},
+          pushToComposer: { text: "", seq: 0 },
+        },
+      });
+
+      await rerender({
+        thread: makeThread(),
+        demoMode: false,
+        onSend: () => {},
+        pushToComposer: { text: "hello from queue", seq: 1 },
+      });
+      flushSync();
+      await tick();
+
+      const ta = screen.getByRole("textbox") as HTMLTextAreaElement;
+      expect(ta.value).toBe("hello from queue");
+    });
+
+    it("does NOT update textarea when seq is repeated with different text", async () => {
+      const { rerender } = render(ChatInput, {
+        props: {
+          thread: makeThread(),
+          demoMode: false,
+          onSend: () => {},
+          pushToComposer: { text: "", seq: 0 },
+        },
+      });
+
+      // First bump: seq 0 → 1, text = "original"
+      await rerender({
+        thread: makeThread(),
+        demoMode: false,
+        onSend: () => {},
+        pushToComposer: { text: "original", seq: 1 },
+      });
+      flushSync();
+      await tick();
+
+      const ta = screen.getByRole("textbox") as HTMLTextAreaElement;
+      expect(ta.value).toBe("original");
+
+      // Second pass: same seq=1, different text — must NOT clobber
+      await rerender({
+        thread: makeThread(),
+        demoMode: false,
+        onSend: () => {},
+        pushToComposer: { text: "should not appear", seq: 1 },
+      });
+      flushSync();
+      await tick();
+
+      expect(ta.value).toBe("original");
+    });
   });
 });

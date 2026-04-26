@@ -8,6 +8,7 @@ import {
   type DisplayThread,
   type DisplayToolCall,
   type NudgeDeliveredPayload,
+  type QueueItem,
   type SystemMessagePayload,
   type ToolCallContentItem,
   type ToolKind,
@@ -26,7 +27,8 @@ interface ThreadState {
   messages: DisplayMessage[];
   activeToolCalls: Record<string, DisplayToolCall>;
   stopReason: string | null;
-  queuedContent: string;
+  /** Pre-submission queue: items waiting to be drained on the next idle transition. */
+  pendingQueue: QueueItem[];
   configOptions: ConfigOption[];
   errorMessage?: string;
   hasPrompted?: boolean;
@@ -34,7 +36,6 @@ interface ThreadState {
   taskId?: string | null;
   tokenUsage?: { used: number; size: number } | undefined;
   drainQueueOnIdle?: boolean;
-  suppressNextUserEcho?: boolean;
 }
 
 // ── Event payloads from Rust ────────────────────────────────────
@@ -76,6 +77,7 @@ interface PromptCompletePayload {
 interface UserMessagePayload {
   thread_id: string;
   content: string;
+  is_echo: boolean;
 }
 
 interface ThreadErrorPayload {
@@ -137,7 +139,7 @@ function toDisplayThread(conn: ThreadState): DisplayThread {
     preview: lastMsg?.content ? lastMsg.content.slice(0, 30) + "..." : "",
     messages: conn.messages,
     activeToolCalls: Object.values(conn.activeToolCalls),
-    queuedMessage: conn.queuedContent || null,
+    queuedMessage: conn.pendingQueue.at(-1)?.content ?? null,
     configOptions: conn.configOptions,
     ...(conn.errorMessage !== undefined && { errorMessage: conn.errorMessage }),
     updatedAt: conn.messages.at(-1)?.timestamp ?? "just now",
@@ -152,13 +154,6 @@ function createAgentStore() {
   let threads: Record<string, ThreadState> = $state({});
   let listenerCleanup: UnlistenFn[] = [];
   let listenersReady = false;
-
-  // Callback for dumping queued content to the input on error
-  let onQueueDump: ((threadId: string, content: string) => void) | null = null;
-
-  function registerQueueDumpHandler(handler: (threadId: string, content: string) => void) {
-    onQueueDump = handler;
-  }
 
   function getThread(threadId: string): ThreadState | undefined {
     return threads[threadId];
@@ -339,22 +334,24 @@ function createAgentStore() {
 
     thread.stopReason = payload.stop_reason;
 
-    // B3b: mark the last assistant message as cancelled when stop reason indicates so
+    // B3b: mark the last assistant message as cancelled when stop reason indicates so.
+    // Also clear any in-flight sending bubble when the prompt was cancelled.
     if (payload.stop_reason.includes("Cancelled")) {
       const lastAssistant = thread.messages.toReversed().find((m) => m.role === "assistant");
       if (lastAssistant) {
         lastAssistant.cancelled = true;
       }
-    }
-
-    // B3c: if there is queued content, clear all pending bubbles and set drain flag.
-    // Do NOT call sendPrompt here — the race is fixed by B3d (drain happens on idle event).
-    if (thread.queuedContent) {
+      // Clear sending flag on any in-flight bubble (step 5: prompt-cancelled transition)
       for (const msg of thread.messages) {
-        if (msg.pending) {
-          msg.pending = false;
+        if (msg.sending) {
+          msg.sending = false;
         }
       }
+    }
+
+    // B3c: if there are queued items, set drain flag.
+    // Do NOT call sendPrompt here — the race is fixed by B3d (drain happens on idle event).
+    if (thread.pendingQueue.length > 0) {
       thread.drainQueueOnIdle = true;
       return;
     }
@@ -368,23 +365,21 @@ function createAgentStore() {
     const thread = threads[payload.thread_id];
     if (!thread) return;
 
-    // B6: collect pending user bubbles, remove them from messages,
-    // and prepend their content to queuedContent so it surfaces in the composer.
-    const pendingMessages = thread.messages.filter((m) => m.pending === true);
-    if (pendingMessages.length > 0) {
-      thread.messages = thread.messages.filter((m) => !m.pending);
-      const pendingContent = pendingMessages.map((m) => m.content).join("\n\n");
-      thread.queuedContent = pendingContent
-        ? pendingContent + (thread.queuedContent ? "\n\n" + thread.queuedContent : "")
-        : thread.queuedContent;
+    // Step 5 (IPC async error transition): clear sending flag on any in-flight bubble.
+    for (const msg of thread.messages) {
+      if (msg.sending) {
+        msg.sending = false;
+      }
     }
 
-    if (thread.queuedContent && onQueueDump) {
-      const queued = thread.queuedContent;
-      thread.queuedContent = "";
-      onQueueDump(payload.thread_id, queued);
+    // Mark every queued item as failed — items remain in the chip stack with error styling.
+    for (const item of thread.pendingQueue) {
+      item.failed = true;
     }
 
+    // Fixup 2: clear drainQueueOnIdle so a stale idle event cannot trigger a
+    // drain against an erroring thread.
+    thread.drainQueueOnIdle = false;
     thread.status = "error";
     thread.errorMessage = payload.message;
   }
@@ -393,10 +388,16 @@ function createAgentStore() {
     const thread = threads[payload.thread_id];
     if (!thread) return;
 
-    // B7: swallow the backend echo for the merged queue prompt
-    if (thread.suppressNextUserEcho) {
-      thread.suppressNextUserEcho = false;
-      return;
+    // B7: if this is the echo of our own send_prompt call, flip the in-flight
+    // sending bubble to sending=false (confirming the agent received it) and skip
+    // the push — we already have the bubble in thread.messages.
+    if (payload.is_echo) {
+      const sendingBubble = thread.messages.findLast((m) => m.sending === true);
+      if (sendingBubble) {
+        sendingBubble.sending = false;
+        return;
+      }
+      // No sending bubble found (e.g. replay path) — fall through to normal push.
     }
 
     thread.messages.push({
@@ -442,12 +443,37 @@ function createAgentStore() {
 
     thread.status = next;
 
-    // B3d: drain queued content once the backend confirms idle
-    if (next === "idle" && thread.drainQueueOnIdle) {
+    // B3d: drain queued items once the backend confirms idle
+    if (next === "idle" && thread.drainQueueOnIdle && thread.pendingQueue.length > 0) {
       thread.drainQueueOnIdle = false;
-      const queued = thread.queuedContent;
-      thread.queuedContent = "";
-      void sendPrompt(thread.id, queued);
+      const items = thread.pendingQueue;
+      const joinedText = items.map((item) => item.content).join("\n\n");
+      thread.pendingQueue = [];
+
+      // Push a single sending bubble for the drained content
+      thread.messages.push({
+        id: crypto.randomUUID(),
+        role: "user",
+        content: joinedText,
+        timestamp: new Date().toLocaleTimeString([], {
+          hour: "numeric",
+          minute: "2-digit",
+        }),
+        sending: true,
+      });
+
+      thread.status = "working";
+
+      invoke("send_prompt", { threadId: thread.id, text: joinedText }).catch((err) => {
+        // Step 5: IPC sync error transition — clear sending flag, set error status
+        for (const msg of thread.messages) {
+          if (msg.sending) {
+            msg.sending = false;
+          }
+        }
+        thread.status = "error";
+        console.error("send_prompt (drain) failed:", err);
+      });
     }
   }
 
@@ -604,7 +630,7 @@ function createAgentStore() {
       messages: [],
       activeToolCalls: {},
       stopReason: null,
-      queuedContent: "",
+      pendingQueue: [],
       configOptions: [],
       acpSessionId,
       taskId: taskId ?? null,
@@ -634,11 +660,10 @@ function createAgentStore() {
       messages: [],
       activeToolCalls: {},
       stopReason: null,
-      queuedContent: "",
+      pendingQueue: [],
       configOptions: [],
       tokenUsage: undefined,
       drainQueueOnIdle: false,
-      suppressNextUserEcho: false,
     };
 
     return threadId;
@@ -648,25 +673,21 @@ function createAgentStore() {
     const thread = threads[threadId];
     if (!thread) throw new Error(`Thread ${threadId} not found`);
 
-    // Queue path: thread is busy or cancelling, accumulate content
+    // Queue path: thread is busy or cancelling — accumulate in pendingQueue.
+    // Do NOT push to thread.messages here; the chip stack (P0-1) renders pendingQueue.
     if (thread.status === "working" || thread.status === "cancelling") {
-      thread.queuedContent = thread.queuedContent ? thread.queuedContent + "\n\n" + text : text;
-      thread.messages.push({
+      thread.pendingQueue.push({
         id: crypto.randomUUID(),
-        role: "user",
         content: text,
-        timestamp: new Date().toLocaleTimeString([], {
-          hour: "numeric",
-          minute: "2-digit",
-        }),
-        pending: true,
+        submittedAt: Date.now(),
       });
-      thread.suppressNextUserEcho = true;
       return;
     }
 
     thread.hasPrompted = true;
 
+    // Push a sending bubble that will be confirmed (sending=false) when the
+    // agent echoes back a UserMessageChunk with is_echo=true.
     thread.messages.push({
       id: crypto.randomUUID(),
       role: "user",
@@ -675,11 +696,18 @@ function createAgentStore() {
         hour: "numeric",
         minute: "2-digit",
       }),
+      sending: true,
     });
 
     thread.status = "working";
 
     invoke("send_prompt", { threadId, text }).catch((err) => {
+      // Step 5: IPC sync error transition — clear sending flag, set error status
+      for (const msg of thread.messages) {
+        if (msg.sending) {
+          msg.sending = false;
+        }
+      }
       thread.status = "error";
       console.error("send_prompt failed:", err);
     });
@@ -690,15 +718,44 @@ function createAgentStore() {
     if (!thread || thread.status !== "working") return;
     flushChunkBuffers();
     thread.status = "cancelling";
-    await invoke("cancel_prompt", { threadId });
+    // Fixup 3: catch IPC rejection so a failed cancel_prompt doesn't leave a
+    // stuck sending=true bubble in the thread.
+    try {
+      await invoke("cancel_prompt", { threadId });
+    } catch (err) {
+      // Clear any in-flight sending bubble and put the thread in error state.
+      for (const msg of thread.messages) {
+        if (msg.sending) {
+          msg.sending = false;
+        }
+      }
+      thread.status = "error";
+      console.error("cancel_prompt failed:", err);
+    }
   }
 
-  function editQueue(threadId: string): string {
+  /** Remove one item from pendingQueue by id. No-op if not found. */
+  function removeQueueItem(threadId: string, itemId: string): void {
     const thread = threads[threadId];
-    if (!thread) return "";
-    const content = thread.queuedContent;
-    thread.queuedContent = "";
-    return content;
+    if (!thread) return;
+    thread.pendingQueue = thread.pendingQueue.filter((item) => item.id !== itemId);
+  }
+
+  /** Replace the content of one pendingQueue item in place; preserves id and submittedAt. */
+  function updateQueueItem(threadId: string, itemId: string, content: string): void {
+    const thread = threads[threadId];
+    if (!thread) return;
+    const item = thread.pendingQueue.find((i) => i.id === itemId);
+    if (item) {
+      item.content = content;
+    }
+  }
+
+  /** Clear all pending queue items for a thread. */
+  function clearQueue(threadId: string): void {
+    const thread = threads[threadId];
+    if (!thread) return;
+    thread.pendingQueue = [];
   }
 
   async function setConfig(threadId: string, configId: string, value: string): Promise<void> {
@@ -727,12 +784,17 @@ function createAgentStore() {
   function resetThreadState(threadId: string): void {
     const thread = threads[threadId];
     if (!thread) return;
+    // Step 5: thread/app shutdown transition — clear sending on all messages before clearing array
+    for (const msg of thread.messages) {
+      if (msg.sending) {
+        msg.sending = false;
+      }
+    }
     thread.messages = [];
     thread.activeToolCalls = {};
-    thread.queuedContent = "";
+    thread.pendingQueue = [];
     thread.stopReason = null;
     thread.drainQueueOnIdle = false;
-    thread.suppressNextUserEcho = false;
     delete thread.errorMessage;
   }
 
@@ -960,8 +1022,9 @@ function createAgentStore() {
     stopThread,
     deleteThread,
     setConfig,
-    editQueue,
-    registerQueueDumpHandler,
+    removeQueueItem,
+    updateQueueItem,
+    clearQueue,
     replayNotifications,
     syncThreadSnapshot,
     // Exposed for testing only — do not call from production components
@@ -986,10 +1049,9 @@ function createAgentStore() {
           messages: [],
           activeToolCalls: {},
           stopReason: null,
-          queuedContent: "",
+          pendingQueue: [],
           configOptions: [],
           drainQueueOnIdle: false,
-          suppressNextUserEcho: false,
           ...partial,
         } as ThreadState;
       },

@@ -655,8 +655,9 @@ function createAppState() {
     sendPrompt: agentStore.sendPrompt,
     cancelPrompt: agentStore.cancelPrompt,
     setConfig: agentStore.setConfig,
-    editQueue: agentStore.editQueue,
-    registerQueueDumpHandler: agentStore.registerQueueDumpHandler,
+    removeQueueItem: agentStore.removeQueueItem,
+    updateQueueItem: agentStore.updateQueueItem,
+    clearQueue: agentStore.clearQueue,
     connectAgents,
     disconnectAgents,
     selectWorkspace,
@@ -677,6 +678,10 @@ function createAppState() {
       const conn = agentStore.getThread(selectedThreadId);
       if (!conn) return undefined;
       return agentStore.toDisplayThread(conn);
+    },
+    get selectedThreadPendingQueue() {
+      if (!selectedThreadId) return [];
+      return agentStore.getThread(selectedThreadId)?.pendingQueue ?? [];
     },
     get selectedAgentDef(): DisplayAgentDefinition | undefined {
       if (demoMode) {

@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use agent_client_protocol as acp;
@@ -96,6 +97,13 @@ pub(crate) async fn initialize_agent(
     let config_for_notif = config_state.clone();
     let config_for_init = config_state.clone();
 
+    // Echo flag: set to true by the command loop before each manager-initiated
+    // prompt; consumed (set to false) by the notification handler on the first
+    // UserMessageChunk it sees for that turn.
+    let expect_echo = Arc::new(AtomicBool::new(false));
+    let expect_echo_for_notif = expect_echo.clone();
+    let expect_echo_for_loop = expect_echo.clone();
+
     // Build the byte-stream transport for the ACP connection.
     let outgoing = child_stdin.compat_write();
     let incoming = child_stdout.compat();
@@ -132,6 +140,7 @@ pub(crate) async fn initialize_agent(
                                     notification.update,
                                     &event_tx,
                                     &config_for_notif,
+                                    &expect_echo_for_notif,
                                 );
                                 Ok(())
                             }
@@ -286,6 +295,7 @@ pub(crate) async fn initialize_agent(
                                 event_tx_clone,
                                 workspace_id_str,
                                 agent_definition_id_for_loop,
+                                expect_echo_for_loop,
                             )
                             .await;
 

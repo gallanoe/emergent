@@ -686,3 +686,85 @@ async fn recorder_broadcast_channel_turn_and_cost_coverage() {
     );
     assert_eq!(snap.agents[0].turn_count, 3);
 }
+
+// ---------------------------------------------------------------------------
+// is_echo field: UserMessagePayload wire-format and Notification roundtrip
+// ---------------------------------------------------------------------------
+// Verifies the contract that the frontend depends on:
+//   - is_echo=true serialises and deserialises correctly
+//   - is_echo=false likewise
+//   - The Notification::UserMessage variant carries the field through the
+//     broadcast channel (the path taken by handle_session_update)
+
+#[tokio::test]
+async fn user_message_payload_is_echo_roundtrips_through_notification() {
+    use emergent_protocol::{Notification, UserMessagePayload};
+    use tokio::sync::broadcast;
+
+    // ── (a) Serialisation roundtrip for is_echo=true ─────────────────────────
+    let echo_payload = UserMessagePayload {
+        thread_id: "t-echo".into(),
+        content: "hello".into(),
+        is_echo: true,
+    };
+    let json = serde_json::to_string(&echo_payload).unwrap();
+    assert!(
+        json.contains("\"is_echo\":true"),
+        "is_echo=true must appear in JSON; got: {}",
+        json
+    );
+    let restored: UserMessagePayload = serde_json::from_str(&json).unwrap();
+    assert!(restored.is_echo);
+
+    // ── (b) Serialisation roundtrip for is_echo=false ────────────────────────
+    let non_echo_payload = UserMessagePayload {
+        thread_id: "t-spontaneous".into(),
+        content: "spontaneous".into(),
+        is_echo: false,
+    };
+    let json2 = serde_json::to_string(&non_echo_payload).unwrap();
+    assert!(
+        json2.contains("\"is_echo\":false"),
+        "is_echo=false must appear in JSON; got: {}",
+        json2
+    );
+    let restored2: UserMessagePayload = serde_json::from_str(&json2).unwrap();
+    assert!(!restored2.is_echo);
+
+    // ── (c) Full Notification roundtrip through broadcast channel ─────────────
+    let (tx, mut rx) = broadcast::channel::<Notification>(8);
+
+    let _ = tx.send(Notification::UserMessage(UserMessagePayload {
+        thread_id: "t-echo".into(),
+        content: "hello".into(),
+        is_echo: true,
+    }));
+    let n = rx.try_recv().expect("notification sent");
+    match n {
+        Notification::UserMessage(p) => {
+            assert_eq!(p.thread_id, "t-echo");
+            assert!(
+                p.is_echo,
+                "is_echo must survive the broadcast channel roundtrip"
+            );
+        }
+        _ => panic!("expected UserMessage notification"),
+    }
+
+    // ── (d) Non-echo notification through broadcast channel ───────────────────
+    let _ = tx.send(Notification::UserMessage(UserMessagePayload {
+        thread_id: "t-spontaneous".into(),
+        content: "spontaneous".into(),
+        is_echo: false,
+    }));
+    let n2 = rx.try_recv().expect("non-echo notification sent");
+    match n2 {
+        Notification::UserMessage(p) => {
+            assert!(
+                !p.is_echo,
+                "spontaneous message must carry is_echo=false"
+            );
+        }
+        _ => panic!("expected UserMessage notification"),
+    }
+}
