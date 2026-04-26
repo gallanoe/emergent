@@ -1,4 +1,3 @@
-<!-- src/components/ContextMenu.svelte -->
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import type { MenuItem } from "../../stores/types";
@@ -53,21 +52,22 @@
 
 <div
   bind:this={menuEl}
-  class="fixed bg-bg-elevated border border-border-strong rounded-md shadow-[0_4px_16px_rgba(0,0,0,0.1),0_1px_4px_rgba(0,0,0,0.06)] py-1 min-w-[150px] z-[200]"
+  class="fixed z-[200] min-w-[180px] rounded-[8px] border border-border-strong bg-bg-elevated p-1 shadow-[var(--shadow-md)]"
   style="left: {adjustedX}px; top: {adjustedY}px;"
   data-testid="context-menu"
 >
   {#each items as item (item.id)}
     {#if item.separator}
-      <div class="h-px bg-border-default my-[3px]"></div>
+      <div class="mx-[6px] my-1 h-px bg-border-default"></div>
     {:else}
       <button
-        class="flex items-center gap-2 w-full px-3 py-[5px] text-[11px] text-left
-          {item.danger ? 'text-error' : 'text-fg-default'}
-          {item.disabled ? 'opacity-45 pointer-events-none' : ''}
-          {item.danger && !item.disabled
-          ? 'hover:bg-error/5'
-          : 'hover:bg-bg-hover'}"
+        type="button"
+        class="flex w-full items-center gap-2 rounded-[5px] px-[10px] py-[6px] text-left text-[12px]
+          {item.disabled
+          ? 'cursor-not-allowed text-fg-disabled hover:bg-transparent'
+          : item.danger
+            ? 'cursor-default text-error hover:bg-error/10'
+            : 'cursor-default text-fg-default hover:bg-bg-hover'}"
         onclick={() => {
           if (!item.disabled) onSelect(item.id);
         }}

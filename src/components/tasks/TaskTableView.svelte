@@ -1,33 +1,38 @@
 <script lang="ts">
+  import { Plus, Lock } from "@lucide/svelte";
+  import { Button, Mono, TaskStatusPill } from "../../lib/primitives";
   import type { DisplayTask } from "../../stores/types";
-  import { Lock } from "@lucide/svelte";
 
   interface Props {
     tasks: DisplayTask[];
     selectedTaskId: string | null;
-    agentScoped?: boolean;
-    agentNames?: Record<string, string>;
-    onSelectTask: (taskId: string) => void;
+    agentNames: Record<string, string>;
+    containerRunning: boolean;
+    onSelectTask: (id: string) => void;
     onNavigateToSession?: (threadId: string) => void;
+    onCreateTask: () => void;
   }
 
   let {
     tasks,
     selectedTaskId,
-    agentScoped = false,
-    agentNames = {},
+    agentNames,
+    containerRunning,
     onSelectTask,
     onNavigateToSession,
+    onCreateTask,
   }: Props = $props();
 
-  function handleRowClick(task: DisplayTask) {
-    // If the task has a session, navigate to the chat view; otherwise open detail sidebar
-    if (task.session_id && onNavigateToSession) {
-      onNavigateToSession(task.session_id);
-    } else {
-      onSelectTask(task.id);
-    }
-  }
+  type Filter = "all" | "working" | "pending" | "completed" | "failed";
+  let filter = $state<Filter>("all");
+
+  const FILTERS: Filter[] = [
+    "all",
+    "working",
+    "pending",
+    "completed",
+    "failed",
+  ];
 
   const statusOrder: Record<string, number> = {
     working: 0,
@@ -36,150 +41,154 @@
     failed: 3,
   };
 
-  const sortedTasks = $derived(
-    tasks.toSorted((a, b) => {
-      const statusDiff =
-        (statusOrder[a.status] ?? 99) - (statusOrder[b.status] ?? 99);
-      if (statusDiff !== 0) return statusDiff;
-      // Oldest first within each group (natural creation order).
-      return (
-        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-      );
-    }),
-  );
+  const filteredAndSorted = $derived.by(() => {
+    const base =
+      filter === "all" ? tasks : tasks.filter((t) => t.status === filter);
+    return base.toSorted((a, b) => {
+      const s = (statusOrder[a.status] ?? 99) - (statusOrder[b.status] ?? 99);
+      return s !== 0 ? s : a.id.localeCompare(b.id);
+    });
+  });
 
-  function statusClasses(status: string): string {
-    switch (status) {
-      case "working":
-        return "text-success bg-success/10 border-success/20";
-      case "pending":
-        return "text-fg-muted bg-bg-selected border-border-strong";
-      case "completed":
-        return "text-fg-muted bg-bg-selected border-border-strong";
-      case "failed":
-        return "text-error bg-error/10 border-error/20";
-      default:
-        return "text-fg-muted bg-bg-selected border-border-strong";
-    }
+  function countFor(f: Filter): number {
+    return f === "all"
+      ? tasks.length
+      : tasks.filter((t) => t.status === f).length;
   }
 
-  function statusLabel(status: string): string {
-    switch (status) {
-      case "working":
-        return "Working";
-      case "pending":
-        return "Pending";
-      case "completed":
-        return "Done";
-      case "failed":
-        return "Failed";
-      default:
-        return status;
+  function handleRowClick(task: DisplayTask) {
+    if (task.session_id && onNavigateToSession) {
+      onNavigateToSession(task.session_id);
+    } else {
+      onSelectTask(task.id);
     }
-  }
-
-  function blockerCount(task: DisplayTask): number {
-    return task.blocker_ids.length;
   }
 </script>
 
-<div class="border border-border-default rounded-lg overflow-hidden">
-  <!-- Header -->
-  <div
-    class="grid items-center bg-bg-elevated border-b border-border-default text-[10px] font-medium text-fg-muted"
-    style="grid-template-columns: 72px 62px 1fr 72px {agentScoped
-      ? ''
-      : '72px '}80px;"
-  >
-    <div class="px-2.5 py-2">Task</div>
-    <div class="py-2 px-1">Status</div>
-    <div class="px-2 py-2">Title</div>
-    <div class="px-1.5 py-2">Parent</div>
-    {#if !agentScoped}
-      <div class="px-1.5 py-2">Agent</div>
-    {/if}
-    <div class="px-1.5 py-2">Blockers</div>
+<div class="flex min-h-0 min-w-0 flex-1 flex-col">
+  <div class="flex items-baseline gap-[10px] px-5 pt-5">
+    <h1 class="text-[20px] font-semibold tracking-[-0.01em] text-fg-heading">
+      Tasks
+    </h1>
+    <Mono size={11} color="var(--color-fg-disabled)">
+      {#snippet children()}
+        {filteredAndSorted.length} shown · {tasks.length} total
+      {/snippet}
+    </Mono>
   </div>
 
-  <!-- Rows -->
-  {#each sortedTasks as task (task.id)}
-    {@const isCompleted =
-      task.status === "completed" || task.status === "failed"}
-    <button
-      class="grid items-center w-full border-b border-border-default last:border-b-0 cursor-pointer transition-colors
-             {task.id === selectedTaskId
-        ? 'bg-bg-selected'
-        : 'hover:bg-bg-hover'}
-             {isCompleted ? 'opacity-50' : ''}"
-      style="grid-template-columns: 72px 62px 1fr 72px {agentScoped
-        ? ''
-        : '72px '}80px;"
-      onclick={() => handleRowClick(task)}
+  <div
+    class="flex flex-1 flex-col gap-[10px] overflow-hidden px-5 pb-[14px] pt-3 min-h-0"
+  >
+    <div class="flex items-center gap-[6px]">
+      {#each FILTERS as f (f)}
+        {@const active = filter === f}
+        <button
+          type="button"
+          class="inline-flex items-center gap-[6px] rounded-md border px-[10px] py-[4px] text-[11px] font-medium capitalize
+                 {active
+            ? 'border-border-strong bg-bg-selected text-fg-heading'
+            : 'border-border-default text-fg-muted hover:bg-bg-hover'}"
+          onclick={() => (filter = f)}
+        >
+          <span>{f}</span>
+          <span
+            class="font-mono text-[10px] {active
+              ? 'text-fg-muted'
+              : 'text-fg-disabled'}"
+          >
+            {countFor(f)}
+          </span>
+        </button>
+      {/each}
+
+      <div class="flex-1"></div>
+
+      <Button
+        variant="secondary"
+        size="xs"
+        disabled={!containerRunning}
+        title={containerRunning
+          ? "Create a new task"
+          : "Start the workspace container to create tasks"}
+        onclick={onCreateTask}
+      >
+        {#snippet icon()}<Plus size={11} />{/snippet}
+        {#snippet children()}New task{/snippet}
+      </Button>
+    </div>
+
+    <div
+      class="min-h-0 flex-1 overflow-hidden overflow-y-auto rounded-[8px] border border-border-default"
     >
-      <div class="px-2.5 py-2 text-[10px] font-mono text-fg-disabled truncate">
-        {task.id}
+      <div
+        class="sticky top-0 z-[1] grid grid-cols-[80px_80px_1fr_80px_120px_72px] border-b border-border-default bg-bg-elevated text-[10px] font-medium uppercase tracking-[0.06em] text-fg-muted"
+      >
+        <div class="px-[10px] py-2">Task</div>
+        <div class="px-1 py-2">Status</div>
+        <div class="px-2 py-2">Title</div>
+        <div class="px-[6px] py-2">Parent</div>
+        <div class="px-[6px] py-2">Agent</div>
+        <div class="px-[6px] py-2">Blockers</div>
       </div>
-      <div class="py-2 px-1">
-        <span
-          class="inline-flex items-center gap-1 text-[9px] font-medium border rounded-full px-1.5 py-0.5 {statusClasses(
-            task.status,
-          )}"
+
+      {#each filteredAndSorted as t, i (t.id)}
+        {@const dim = t.status === "completed" || t.status === "failed"}
+        {@const selected = selectedTaskId === t.id}
+        <button
+          type="button"
+          aria-label={`Task ${t.id}: ${t.title}`}
+          class="grid w-full grid-cols-[80px_80px_1fr_80px_120px_72px] items-center text-left
+                 {i === filteredAndSorted.length - 1
+            ? ''
+            : 'border-b border-border-default'}
+                 {selected ? 'bg-bg-selected' : 'hover:bg-bg-hover'}
+                 {dim ? 'opacity-[0.55]' : ''}"
+          onclick={() => handleRowClick(t)}
         >
-          {#if task.status === "working"}
-            <span class="w-1 h-1 rounded-full bg-success animate-pulse"></span>
-          {:else if task.status === "pending"}
-            <span class="w-1 h-1 rounded-full bg-fg-disabled"></span>
-          {:else if task.status === "completed"}
-            <svg
-              width="9"
-              height="9"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.5"
-              class="text-success"><polyline points="20 6 9 17 4 12" /></svg
-            >
-          {:else}
-            <span class="w-1 h-1 rounded-full bg-error"></span>
-          {/if}
-          {statusLabel(task.status)}
-        </span>
-      </div>
-      <div class="px-2 py-2 min-w-0 text-left">
-        <div
-          class="text-[11px] truncate {isCompleted
-            ? 'text-fg-muted'
-            : 'text-fg-heading'}"
-        >
-          {task.title}
-        </div>
-      </div>
-      <div class="px-1.5 py-2 text-[10px] font-mono text-fg-disabled truncate">
-        {task.parent_id ?? "—"}
-      </div>
-      {#if !agentScoped}
-        <div class="px-1.5 py-2 text-[10px] text-fg-muted truncate">
-          {agentNames[task.agent_id] ?? task.agent_id}
+          <div
+            class="px-[10px] py-[10px] font-mono text-[10px] text-fg-disabled"
+          >
+            {t.id}
+          </div>
+          <div class="px-1 py-[10px]">
+            <TaskStatusPill status={t.status} />
+          </div>
+          <div
+            class="truncate px-2 py-[10px] text-[12px] {dim
+              ? 'text-fg-muted'
+              : 'text-fg-heading'}"
+          >
+            {t.title}
+          </div>
+          <div
+            class="px-[6px] py-[10px] font-mono text-[10px] text-fg-disabled"
+          >
+            {t.parent_id ?? "—"}
+          </div>
+          <div class="truncate px-[6px] py-[10px] text-[11px] text-fg-muted">
+            {agentNames[t.agent_id] ?? t.agent_id}
+          </div>
+          <div class="px-[6px] py-[10px]">
+            {#if t.blocker_ids.length > 0}
+              <span
+                class="inline-flex items-center gap-1 rounded-full border border-warning/25 bg-warning/10 px-[7px] py-0.5 text-[10px] text-warning"
+              >
+                <Lock size={9} />
+                {t.blocker_ids.length}
+              </span>
+            {:else}
+              <span class="text-[10px] text-fg-disabled">—</span>
+            {/if}
+          </div>
+        </button>
+      {/each}
+
+      {#if filteredAndSorted.length === 0}
+        <div class="px-4 py-6 text-center text-[12px] text-fg-disabled">
+          No tasks match "{filter}".
         </div>
       {/if}
-      <div class="px-1.5 py-2">
-        {#if blockerCount(task) > 0}
-          <span
-            class="inline-flex items-center gap-1 text-[9px] text-warning bg-warning/10 border border-warning/20 rounded-full px-1.5 py-0.5"
-          >
-            <Lock size={9} />
-            {blockerCount(task)}
-          </span>
-        {:else}
-          <span class="text-[10px] text-fg-disabled">&mdash;</span>
-        {/if}
-      </div>
-    </button>
-  {/each}
-
-  {#if sortedTasks.length === 0}
-    <div class="px-4 py-8 text-center text-[11px] text-fg-disabled">
-      No tasks yet
     </div>
-  {/if}
+  </div>
 </div>

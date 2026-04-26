@@ -236,6 +236,16 @@ pub struct WorkspaceStatusChangePayload {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContainerStatsPayload {
+    pub workspace_id: WorkspaceId,
+    pub cpu_percent: f32,
+    pub memory_bytes: u64,
+    pub memory_limit_bytes: u64,
+    pub net_bps: u64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TerminalOutputPayload {
     pub session_id: String,
     #[serde(with = "base64_bytes")]
@@ -282,6 +292,8 @@ pub struct KnownAgent {
     /// The full command string used to spawn the agent (e.g. "gemini --experimental-acp").
     pub command: String,
     pub available: bool,
+    /// Stable id for UI assets (e.g. logos), not inferred from the command string.
+    pub provider: String,
 }
 
 // ---------------------------------------------------------------------------
@@ -293,8 +305,10 @@ pub struct AgentDefinition {
     pub id: String,
     pub workspace_id: WorkspaceId,
     pub name: String,
-    pub role: Option<String>,
     pub cli: String,
+    /// Chosen at creation from `KnownAgent::provider`; used for branding only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -362,6 +376,46 @@ pub struct ConfigUpdatePayload {
 }
 
 // ---------------------------------------------------------------------------
+// Turn-usage payload (per-PromptResponse token accounting)
+// ---------------------------------------------------------------------------
+
+pub fn is_zero_u64(v: &u64) -> bool {
+    *v == 0
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TurnUsagePayload {
+    pub thread_id: String,
+    pub workspace_id: String,
+    pub agent_definition_id: String,
+    pub input_tokens: u64,
+    pub output_tokens: u64,
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub cached_read_tokens: u64,
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub cached_write_tokens: u64,
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub thought_tokens: u64,
+    pub total_tokens: u64,
+    pub at: String,
+}
+
+// ---------------------------------------------------------------------------
+// Token-usage payload
+// ---------------------------------------------------------------------------
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ThreadTokenUsagePayload {
+    pub thread_id: String,
+    pub used_tokens: u64,
+    pub context_size: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cost_amount: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cost_currency: Option<String>,
+}
+
+// ---------------------------------------------------------------------------
 // Agent definition notification payloads
 // ---------------------------------------------------------------------------
 
@@ -418,6 +472,12 @@ pub enum Notification {
     TaskUpdated(crate::TaskPayload),
     #[serde(rename = "thread:session-ready")]
     SessionReady(SessionReadyPayload),
+    #[serde(rename = "thread:token-usage")]
+    TokenUsage(ThreadTokenUsagePayload),
+    #[serde(rename = "thread:turn-usage")]
+    TurnUsage(TurnUsagePayload),
+    #[serde(rename = "workspace:container-stats")]
+    ContainerStats(ContainerStatsPayload),
 }
 
 impl Notification {
@@ -441,6 +501,9 @@ impl Notification {
             Notification::TaskCreated(_) => "task:created",
             Notification::TaskUpdated(_) => "task:updated",
             Notification::SessionReady(_) => "thread:session-ready",
+            Notification::TokenUsage(_) => "thread:token-usage",
+            Notification::TurnUsage(_) => "thread:turn-usage",
+            Notification::ContainerStats(_) => "workspace:container-stats",
         }
     }
 
@@ -464,6 +527,9 @@ impl Notification {
             Notification::TaskCreated(_) => None,
             Notification::TaskUpdated(_) => None,
             Notification::SessionReady(p) => Some(&p.thread_id),
+            Notification::TokenUsage(p) => Some(&p.thread_id),
+            Notification::TurnUsage(p) => Some(&p.thread_id),
+            Notification::ContainerStats(_) => None,
         }
     }
 }
@@ -585,6 +651,29 @@ mod tests {
         let restored: Notification = serde_json::from_str(&json).unwrap();
         assert_eq!(restored.event_name(), "workspace:status-change");
         assert!(restored.thread_id().is_none());
+    }
+
+    #[test]
+    fn token_usage_notification_roundtrips() {
+        let n = Notification::TokenUsage(ThreadTokenUsagePayload {
+            thread_id: "t1".into(),
+            used_tokens: 23_400,
+            context_size: 200_000,
+            cost_amount: None,
+            cost_currency: None,
+        });
+        let json = serde_json::to_string(&n).unwrap();
+        assert!(json.contains("thread:token-usage"));
+        assert!(json.contains("23400"));
+        let r: Notification = serde_json::from_str(&json).unwrap();
+        match r {
+            Notification::TokenUsage(p) => {
+                assert_eq!(p.thread_id, "t1");
+                assert_eq!(p.used_tokens, 23_400);
+                assert_eq!(p.context_size, 200_000);
+            }
+            _ => panic!("wrong variant"),
+        }
     }
 
     #[test]

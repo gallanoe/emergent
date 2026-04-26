@@ -1,367 +1,260 @@
 <script lang="ts">
+  import { EllipsisVertical, Play, Square, Trash2 } from "@lucide/svelte";
+  import {
+    AgentAvatar,
+    ConfirmDialog,
+    Mono,
+    SLabel,
+  } from "../../lib/primitives";
+  import ContextMenu from "../sidebar/ContextMenu.svelte";
+  import SystemPromptCard from "./SystemPromptCard.svelte";
+  import ThreadListSection from "./ThreadListSection.svelte";
+  import { getFriendlyNameForAgent } from "../../lib/agent-logos";
   import type {
     DisplayAgentDefinition,
     DisplayThread,
-    DisplayTask,
-    AgentStatus,
+    MenuItem,
   } from "../../stores/types";
-  import { Settings, Plus, EllipsisVertical } from "@lucide/svelte";
-  import ConfirmDialog from "../ConfirmDialog.svelte";
-  import TaskTableView from "../tasks/TaskTableView.svelte";
 
   interface Props {
     agentDefinition: DisplayAgentDefinition;
-    tasks: DisplayTask[];
-    activeTab: "threads" | "tasks";
     containerRunning: boolean;
-    onSelectThread: (threadId: string) => void;
+    onSelectThread: (id: string) => void;
     onNewThread: () => void;
-    onOpenSettings: () => void;
-    onResumeThread: (threadId: string) => void;
-    onStopThread: (threadId: string) => void;
-    onDeleteThread: (threadId: string) => void;
-    onSelectTask: (taskId: string) => void;
-    onSelectTab: (tab: "threads" | "tasks") => void;
+    onUpdateName: (name: string) => void;
+    onUpdateSystemPrompt: (next: string) => void;
+    onResumeThread: (id: string) => void;
+    onStopThread: (id: string) => void;
+    onDeleteThread: (id: string) => void;
+    onDeleteAgent: () => void;
   }
 
   let {
-    agentDefinition,
-    tasks,
-    activeTab,
+    agentDefinition: agentDef,
     containerRunning,
     onSelectThread,
     onNewThread,
-    onOpenSettings,
+    onUpdateName,
+    onUpdateSystemPrompt,
     onResumeThread,
     onStopThread,
     onDeleteThread,
-    onSelectTask,
-    onSelectTab,
+    onDeleteAgent,
   }: Props = $props();
 
+  let editingName = $state(false);
+  let nameDraft = $state("");
+
   const conversationThreads = $derived(
-    agentDefinition.threads.filter((t) => !t.taskId),
+    agentDef.threads.filter((t) => !t.taskId),
   );
-  const taskSessionThreads = $derived(
-    agentDefinition.threads.filter((t) => t.taskId),
-  );
+  const taskSessionThreads = $derived(agentDef.threads.filter((t) => t.taskId));
 
-  let menuThreadId = $state<string | null>(null);
-  let menuPos = $state({ x: 0, y: 0 });
-  let deleteThreadId = $state<string | null>(null);
+  let agentMenu = $state<{ x: number; y: number } | null>(null);
+  let threadMenu = $state<{
+    thread: DisplayThread;
+    x: number;
+    y: number;
+  } | null>(null);
+  let deleteThreadTarget = $state<DisplayThread | null>(null);
+  let deleteAgentConfirm = $state(false);
 
-  function statusColor(status: AgentStatus | "dead"): string {
-    switch (status) {
-      case "idle":
-        return "bg-success";
-      case "working":
-        return "bg-success animate-pulse";
-      case "error":
-        return "bg-error";
-      case "initializing":
-        return "bg-warning animate-pulse";
-      case "dead":
-        return "bg-fg-disabled opacity-40";
-      default:
-        return "bg-fg-disabled";
+  const agentMenuItems: MenuItem[] = [
+    { id: "delete", label: "Delete agent", icon: Trash2, danger: true },
+  ];
+
+  function threadMenuItems(t: DisplayThread): MenuItem[] {
+    const alive =
+      t.processStatus === "idle" ||
+      t.processStatus === "working" ||
+      t.processStatus === "initializing";
+    if (alive) {
+      return [
+        { id: "stop", label: "Stop", icon: Square },
+        { id: "sep", label: "", separator: true },
+        { id: "delete", label: "Delete", icon: Trash2, danger: true },
+      ];
     }
+    return [
+      { id: "start", label: "Start", icon: Play, disabled: !containerRunning },
+      { id: "sep", label: "", separator: true },
+      { id: "delete", label: "Delete", icon: Trash2, danger: true },
+    ];
   }
 
-  function isAlive(status: AgentStatus | "dead"): boolean {
-    return (
-      status === "idle" || status === "working" || status === "initializing"
-    );
+  function handleThreadAction(id: string) {
+    if (!threadMenu) return;
+    const t = threadMenu.thread;
+    threadMenu = null;
+    if (id === "stop") onStopThread(t.id);
+    else if (id === "start") onResumeThread(t.id);
+    else if (id === "delete") deleteThreadTarget = t;
   }
 
-  function relativeTime(timestamp: string): string {
-    if (!timestamp || timestamp === "just now") return "just now";
-    return timestamp;
-  }
-
-  function openMenu(e: MouseEvent, threadId: string) {
-    e.stopPropagation();
-    if (menuThreadId === threadId) {
-      menuThreadId = null;
-    } else {
-      const btn = e.currentTarget as HTMLElement;
-      const rect = btn.getBoundingClientRect();
-      menuPos = { x: rect.right, y: rect.bottom + 4 };
-      menuThreadId = threadId;
-    }
-  }
-
-  function handleAction(
-    action: "resume" | "stop" | "delete",
-    thread: DisplayThread,
-  ) {
-    menuThreadId = null;
-    switch (action) {
-      case "resume":
-        onResumeThread(thread.id);
-        break;
-      case "stop":
-        onStopThread(thread.id);
-        break;
-      case "delete":
-        deleteThreadId = thread.id;
-        break;
-    }
+  function handleAgentAction(id: string) {
+    agentMenu = null;
+    if (id === "delete") deleteAgentConfirm = true;
   }
 </script>
 
-<!-- Close menu on click outside -->
-{#if menuThreadId}
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div
-    class="fixed inset-0 z-40"
-    onclick={() => (menuThreadId = null)}
-    onkeydown={() => {}}
-  ></div>
-{/if}
-
-<div class="flex flex-col min-h-0 flex-1">
-  <!-- Top bar -->
-  <div
-    class="flex items-center h-[38px] px-5 border-b border-border-default flex-shrink-0 relative z-[60]"
-  >
-    <span class="text-[13px] font-semibold text-fg-heading flex-1 truncate"
-      >{agentDefinition.name}</span
-    >
-    <button
-      class="interactive flex items-center justify-center w-[26px] h-[26px] rounded-[5px] text-fg-muted"
-      title="Agent settings"
-      onclick={onOpenSettings}
-    >
-      <Settings size={14} />
-    </button>
-  </div>
-
-  <!-- Segmented control -->
-  <div class="px-5 pt-3">
-    <div
-      class="inline-flex items-center bg-bg-elevated border border-border-default rounded-lg p-[3px]"
-    >
-      <button
-        class="px-4 py-[5px] rounded-md text-[11px] font-medium transition-colors
-               {activeTab === 'threads'
-          ? 'bg-bg-hover text-fg-heading shadow-sm'
-          : 'text-fg-disabled'}"
-        onclick={() => onSelectTab("threads")}
-      >
-        Threads
-        <span
-          class="ml-1 text-[10px] {activeTab === 'threads'
-            ? 'text-fg-muted'
-            : 'text-fg-disabled'}"
-        >
-          {agentDefinition.threads.length}
-        </span>
-      </button>
-      <button
-        class="px-4 py-[5px] rounded-md text-[11px] font-medium transition-colors
-               {activeTab === 'tasks'
-          ? 'bg-bg-hover text-fg-heading shadow-sm'
-          : 'text-fg-disabled'}"
-        onclick={() => onSelectTab("tasks")}
-      >
-        Tasks
-        <span
-          class="ml-1 text-[10px] {activeTab === 'tasks'
-            ? 'text-fg-muted'
-            : 'text-fg-disabled'}"
-        >
-          {tasks.length}
-        </span>
-      </button>
-    </div>
-  </div>
-
-  {#if activeTab === "threads"}
-    <!-- Thread list -->
-    <div class="flex-1 overflow-y-auto p-3">
-      <div class="flex items-center justify-between px-2.5 pb-2">
-        <span class="text-[11px] text-fg-disabled">
-          {agentDefinition.threads.length} thread{agentDefinition.threads
-            .length !== 1
-            ? "s"
-            : ""}
-        </span>
+<div class="flex min-h-0 min-w-0 flex-1 flex-col">
+  <div class="flex-1 overflow-y-auto">
+    <div class="mx-auto flex max-w-[720px] flex-col gap-7 px-8 pb-10 pt-7">
+      <div class="flex items-start gap-4">
+        <AgentAvatar
+          provider={agentDef.provider}
+          cli={agentDef.cli}
+          name={agentDef.name}
+          size={44}
+        />
+        <div class="min-w-0 flex-1">
+          <div class="flex flex-wrap items-baseline gap-[10px]">
+            {#if editingName}
+              <input
+                bind:value={nameDraft}
+                class="border-b border-border-default bg-transparent text-[22px] font-semibold tracking-[-0.01em] text-fg-heading outline-none"
+                onblur={() => {
+                  if (nameDraft.trim() && nameDraft !== agentDef.name) {
+                    onUpdateName(nameDraft.trim());
+                  }
+                  editingName = false;
+                }}
+                onkeydown={(e) => {
+                  if (e.key === "Enter") e.currentTarget.blur();
+                  if (e.key === "Escape") {
+                    editingName = false;
+                  }
+                }}
+              />
+            {:else}
+              <!-- svelte-ignore a11y_click_events_have_key_events -->
+              <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+              <h1
+                class="cursor-text text-[22px] font-semibold tracking-[-0.01em] text-fg-heading"
+                onclick={() => {
+                  nameDraft = agentDef.name;
+                  editingName = true;
+                }}
+                title="Click to rename"
+              >
+                {agentDef.name}
+              </h1>
+            {/if}
+          </div>
+          <Mono size={11} color="var(--color-fg-disabled)" class="mt-1">
+            {#snippet children()}
+              {agentDef.threads.length} thread{agentDef.threads.length === 1
+                ? ""
+                : "s"} · {getFriendlyNameForAgent(
+                agentDef.provider,
+                agentDef.cli,
+              )}
+            {/snippet}
+          </Mono>
+        </div>
         <button
-          class="text-[11px] text-fg-muted border border-border-default rounded-md px-3 py-1 hover:bg-bg-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-          onclick={onNewThread}
-          disabled={!containerRunning}
-          title={containerRunning
-            ? "Create a new thread"
-            : "Start the workspace container to create threads"}
+          type="button"
+          title="Agent actions"
+          class="rounded p-1 text-fg-muted"
+          onclick={(e) => {
+            const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+            agentMenu = { x: r.right, y: r.bottom + 4 };
+          }}
         >
-          <span class="flex items-center gap-1.5">
-            <Plus size={12} />
-            New thread
-          </span>
+          <EllipsisVertical size={14} />
         </button>
       </div>
 
-      <div
-        class="text-[10px] font-medium uppercase tracking-wider text-fg-disabled px-2.5 pt-3 pb-1"
-      >
-        Conversations
-      </div>
+      <SystemPromptCard
+        prompt={agentDef.systemPrompt}
+        onSave={(next) => onUpdateSystemPrompt(next)}
+      />
 
-      {#if conversationThreads.length === 0}
-        <div class="px-2.5 py-4 text-[11px] text-fg-disabled text-center">
-          No threads yet. Create one to start a conversation.
+      <section class="flex flex-col gap-[10px]">
+        <SLabel>MCP servers</SLabel>
+        <div
+          class="flex items-center gap-3 rounded-[10px] border border-dashed border-border-strong px-4 py-[14px]"
+        >
+          <Mono
+            size={10}
+            color="var(--color-fg-muted)"
+            class="uppercase tracking-[0.06em]"
+          >
+            {#snippet children()}To design{/snippet}
+          </Mono>
+          <span class="text-[12px] leading-[1.5] text-fg-muted">
+            Per-agent MCP server bindings (swarm, filesystem, github…). Shape
+            not yet settled.
+          </span>
         </div>
-      {:else}
-        <div class="max-h-[280px] overflow-y-auto relative">
-          {#each conversationThreads as thread (thread.id)}
-            <div
-              class="relative group mt-0.5 flex items-center rounded-md hover:bg-bg-hover transition-colors"
-            >
-              <button
-                class="flex items-center gap-2 flex-1 min-w-0 px-2.5 py-[7px] text-[12px] text-fg-muted hover:text-fg-heading transition-colors"
-                onclick={() => onSelectThread(thread.id)}
-              >
-                <span
-                  class="w-[6px] h-[6px] rounded-full flex-shrink-0 {statusColor(
-                    thread.processStatus,
-                  )}"
-                ></span>
-                <span
-                  class="text-[12px] flex-shrink-0 opacity-70 w-4 text-center"
-                  >💬</span
-                >
-                <span class="flex-1 truncate text-left">{thread.name}</span>
-                <span
-                  class="text-[11px] text-fg-disabled flex-shrink-0 group-hover:hidden"
-                  >{relativeTime(thread.updatedAt)}</span
-                >
-              </button>
-              <!-- Kebab menu trigger -->
-              <button
-                class="flex items-center justify-center w-[26px] h-[26px] flex-shrink-0 rounded-[4px] text-fg-disabled opacity-0 group-hover:opacity-100 hover:text-fg-muted transition-all mr-0.5"
-                title="Thread actions"
-                onclick={(e) => openMenu(e, thread.id)}
-              >
-                <EllipsisVertical size={13} />
-              </button>
-            </div>
-          {/each}
-          <!-- Fade hint for overflow -->
-          {#if conversationThreads.length > 5}
-            <div
-              class="absolute bottom-0 left-0 right-1.5 h-6 bg-gradient-to-t from-bg-base to-transparent pointer-events-none"
-            ></div>
-          {/if}
-        </div>
-      {/if}
+      </section>
+
+      <ThreadListSection
+        label="Conversations"
+        threads={conversationThreads}
+        emptyHint="No conversations yet."
+        {onSelectThread}
+        onMenu={(t, x, y) => (threadMenu = { thread: t, x, y })}
+        {...containerRunning ? { onNewThread } : {}}
+      />
 
       {#if taskSessionThreads.length > 0}
-        <div
-          class="text-[10px] font-medium uppercase tracking-wider text-fg-disabled px-2.5 pt-4 pb-1"
-        >
-          Task Sessions
-        </div>
-
-        {#each taskSessionThreads as thread (thread.id)}
-          <div
-            class="relative group mt-0.5 flex items-center rounded-md hover:bg-bg-hover transition-colors"
-          >
-            <button
-              class="flex items-center gap-2 flex-1 min-w-0 px-2.5 py-[7px] text-[12px] text-fg-muted hover:text-fg-heading transition-colors"
-              onclick={() => onSelectThread(thread.id)}
-            >
-              <span
-                class="w-[6px] h-[6px] rounded-full flex-shrink-0 {statusColor(
-                  thread.processStatus,
-                )}"
-              ></span>
-              <svg
-                width="13"
-                height="13"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                class="flex-shrink-0 opacity-70"
-                ><path d="m3 17 2 2 4-4" /><path d="m3 7 2 2 4-4" /><path
-                  d="M13 6h8"
-                /><path d="M13 12h8" /><path d="M13 18h8" /></svg
-              >
-              <span class="flex-1 truncate text-left">{thread.name}</span>
-              <span class="text-[10px] font-mono text-fg-disabled flex-shrink-0"
-                >{thread.taskId}</span
-              >
-            </button>
-            <!-- Kebab menu trigger -->
-            <button
-              class="flex items-center justify-center w-[26px] h-[26px] flex-shrink-0 rounded-[4px] text-fg-disabled opacity-0 group-hover:opacity-100 hover:text-fg-muted transition-all mr-0.5"
-              title="Thread actions"
-              onclick={(e) => openMenu(e, thread.id)}
-            >
-              <EllipsisVertical size={13} />
-            </button>
-          </div>
-        {/each}
+        <ThreadListSection
+          label="Task sessions"
+          threads={taskSessionThreads}
+          isTask
+          {onSelectThread}
+          onMenu={(t, x, y) => (threadMenu = { thread: t, x, y })}
+        />
       {/if}
     </div>
-  {:else}
-    <div class="p-3">
-      <TaskTableView
-        {tasks}
-        selectedTaskId={null}
-        agentScoped={true}
-        {onSelectTask}
-        onNavigateToSession={onSelectThread}
-      />
-    </div>
-  {/if}
+  </div>
 </div>
 
-{#if menuThreadId}
-  {@const thread = agentDefinition.threads.find((t) => t.id === menuThreadId)}
-  {#if thread}
-    <div
-      class="fixed z-50 bg-bg-elevated border border-border-strong rounded-lg p-1 shadow-lg min-w-[130px]"
-      style="left: {menuPos.x}px; top: {menuPos.y}px; transform: translateX(-100%);"
-    >
-      {#if isAlive(thread.processStatus)}
-        <button
-          class="flex items-center w-full px-2.5 py-[6px] rounded-md text-[11px] text-fg-muted hover:bg-bg-hover hover:text-fg-heading"
-          onclick={() => handleAction("stop", thread)}
-        >
-          Stop
-        </button>
-      {:else}
-        <button
-          class="flex items-center w-full px-2.5 py-[6px] rounded-md text-[11px] text-fg-muted hover:bg-bg-hover hover:text-fg-heading disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-fg-muted"
-          onclick={() => handleAction("resume", thread)}
-          disabled={!containerRunning}
-          title={containerRunning
-            ? "Resume this thread"
-            : "Start the workspace container to resume threads"}
-        >
-          Start
-        </button>
-      {/if}
-      <button
-        class="flex items-center w-full px-2.5 py-[6px] rounded-md text-[11px] text-error hover:bg-error/10"
-        onclick={() => handleAction("delete", thread)}
-      >
-        Delete
-      </button>
-    </div>
-  {/if}
+{#if agentMenu}
+  <ContextMenu
+    x={agentMenu.x}
+    y={agentMenu.y}
+    items={agentMenuItems}
+    onSelect={handleAgentAction}
+    onClose={() => (agentMenu = null)}
+  />
 {/if}
 
-{#if deleteThreadId}
+{#if threadMenu}
+  <ContextMenu
+    x={threadMenu.x}
+    y={threadMenu.y}
+    items={threadMenuItems(threadMenu.thread)}
+    onSelect={handleThreadAction}
+    onClose={() => (threadMenu = null)}
+  />
+{/if}
+
+{#if deleteThreadTarget}
   <ConfirmDialog
     title="Delete thread?"
-    description="This thread and its session will be permanently removed."
+    description="This thread and its session mapping will be permanently removed."
     confirmLabel="Delete"
+    confirmVariant="danger"
     onConfirm={() => {
-      if (deleteThreadId) onDeleteThread(deleteThreadId);
-      deleteThreadId = null;
+      onDeleteThread(deleteThreadTarget!.id);
+      deleteThreadTarget = null;
     }}
-    onCancel={() => (deleteThreadId = null)}
+    onCancel={() => (deleteThreadTarget = null)}
+  />
+{/if}
+
+{#if deleteAgentConfirm}
+  <ConfirmDialog
+    title="Delete {agentDef.name}?"
+    description="This agent definition and all its threads will be removed."
+    confirmLabel="Delete"
+    confirmVariant="danger"
+    onConfirm={() => {
+      onDeleteAgent();
+      deleteAgentConfirm = false;
+    }}
+    onCancel={() => (deleteAgentConfirm = false)}
   />
 {/if}

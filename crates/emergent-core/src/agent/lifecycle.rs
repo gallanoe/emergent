@@ -1,8 +1,11 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use acp::Agent as _;
 use agent_client_protocol as acp;
+use agent_client_protocol::schema::{
+    HttpHeader, Implementation, LoadSessionRequest, LoadSessionResponse, McpServer, McpServerHttp,
+    NewSessionRequest, ProtocolVersion, SessionId,
+};
 use emergent_protocol::{
     AgentStatus, ConfigOption, ConfigUpdatePayload, Notification, SessionReadyPayload,
     StatusChangePayload, WorkspaceId,
@@ -10,7 +13,9 @@ use emergent_protocol::{
 use tokio::sync::{broadcast, mpsc, oneshot, Mutex, RwLock};
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
-use super::acp_bridge::{agent_command_loop, EmergentClient};
+use super::acp_bridge::{
+    agent_command_loop, build_permission_response, handle_session_update,
+};
 use super::prompt_loop::prompt_loop;
 use super::spawner::AgentProcess;
 use super::{AgentCommand, ThreadHandle};
@@ -24,7 +29,7 @@ pub(crate) enum SessionInit {
 }
 
 fn initial_config_from_load_response(
-    load_resp: acp::LoadSessionResponse,
+    load_resp: LoadSessionResponse,
     config_state: &[ConfigOption],
 ) -> Vec<ConfigOption> {
     load_resp
@@ -43,7 +48,6 @@ pub(crate) async fn initialize_agent(
     workspace_id: WorkspaceId,
     container_id: String,
     agent_binary: String,
-    role: Option<String>,
     task_id: Option<String>,
     session_init: SessionInit,
     agents: Arc<RwLock<HashMap<String, Arc<Mutex<ThreadHandle>>>>>,
@@ -79,14 +83,26 @@ pub(crate) async fn initialize_agent(
     let (command_tx, command_rx) = mpsc::unbounded_channel::<AgentCommand>();
 
     let agent_id_for_thread = agent_id.clone();
-    let agent_workdir_for_thread = agent_workdir.clone();
     let event_tx_clone = event_tx.clone();
+    let workspace_id_str = workspace_id.0.clone();
+    let agent_definition_id_for_loop = agent_definition_id.clone();
 
-    // Use a oneshot to receive the session_id + initial config (or error) from the LocalSet thread.
+    // Use a oneshot to receive the session_id + initial config (or error) from the ACP task.
     let (init_tx, init_rx) =
-        oneshot::channel::<Result<(acp::SessionId, Vec<ConfigOption>), String>>();
+        oneshot::channel::<Result<(SessionId, Vec<ConfigOption>), String>>();
 
-    // Spawn a dedicated thread running a LocalSet for the !Send ACP connection.
+    // The config state is shared between the notification handler and the command loop.
+    let config_state = Arc::new(std::sync::Mutex::new(Vec::<ConfigOption>::new()));
+    let config_for_notif = config_state.clone();
+    let config_for_init = config_state.clone();
+
+    // Build the byte-stream transport for the ACP connection.
+    let outgoing = child_stdin.compat_write();
+    let incoming = child_stdout.compat();
+    let transport = acp::ByteStreams::new(outgoing, incoming);
+
+    // Spawn a dedicated OS thread with its own tokio runtime for the ACP connection.
+    // The 0.11.1 SDK requires Send futures, so LocalSet is no longer needed.
     let thread_handle = std::thread::Builder::new()
         .name(format!("acp-agent-{}", &agent_id))
         .spawn(move || {
@@ -96,125 +112,191 @@ pub(crate) async fn initialize_agent(
                 .expect("Failed to build tokio runtime for agent thread");
 
             let agent_id = agent_id_for_thread;
-            let local = tokio::task::LocalSet::new();
-            local.block_on(&rt, async move {
-                let outgoing = child_stdin.compat_write();
-                let incoming = child_stdout.compat();
 
-                let aid = agent_id.clone();
-                let config_state =
-                    std::sync::Arc::new(std::sync::Mutex::new(Vec::<ConfigOption>::new()));
-                let client = EmergentClient::new(
-                    agent_id.clone(),
-                    event_tx_clone.clone(),
-                    config_state.clone(),
-                );
-
-                let (conn, handle_io) =
-                    acp::ClientSideConnection::new(client, outgoing, incoming, |fut| {
-                        tokio::task::spawn_local(fut);
-                    });
-
-                // Spawn I/O handler
-                tokio::task::spawn_local(async move {
-                    if let Err(e) = handle_io.await {
-                        log::error!("ACP I/O error for agent {}: {}", aid, e);
-                    }
-                });
-
-                // Initialize + create/load session
-                log::debug!("Agent {} starting ACP handshake", &agent_id);
-                let init_result = async {
-                    conn.initialize(
-                        acp::InitializeRequest::new(acp::ProtocolVersion::V1).client_info(
-                            acp::Implementation::new("emergent", "0.1.0").title("Emergent"),
-                        ),
+            rt.block_on(async move {
+                let connect_result = acp::Client
+                    .builder()
+                    .on_receive_notification(
+                        {
+                            let agent_id = agent_id.clone();
+                            let event_tx = event_tx_clone.clone();
+                            async move |notification: acp::schema::SessionNotification,
+                                        _cx: acp::ConnectionTo<acp::Agent>| {
+                                log::trace!(
+                                    "Agent {} received ACP session update: {:?}",
+                                    &agent_id,
+                                    std::mem::discriminant(&notification.update)
+                                );
+                                handle_session_update(
+                                    &agent_id,
+                                    notification.update,
+                                    &event_tx,
+                                    &config_for_notif,
+                                );
+                                Ok(())
+                            }
+                        },
+                        acp::on_receive_notification!(),
                     )
-                    .await
-                    .map_err(|e| format!("ACP initialize failed: {}", e))?;
+                    .on_receive_request(
+                        async move |args: acp::schema::RequestPermissionRequest,
+                                    responder: acp::Responder<
+                            acp::schema::RequestPermissionResponse,
+                        >,
+                                    _connection: acp::ConnectionTo<acp::Agent>| {
+                            let response = build_permission_response(&args);
+                            let _ = responder.respond(response);
+                            Ok(())
+                        },
+                        acp::on_receive_request!(),
+                    )
+                    .connect_with(transport, {
+                        let agent_id = agent_id.clone();
+                        let event_tx_clone = event_tx_clone.clone();
+                        async move |conn: acp::ConnectionTo<acp::Agent>| {
+                            log::debug!("Agent {} starting ACP handshake", &agent_id);
 
-                    // Build MCP server config for swarm communication (HTTP)
-                    let mcp_config = acp::McpServer::Http(
-                        acp::McpServerHttp::new(
-                            "emergent-swarm",
-                            format!("http://{}:{}/mcp", mcp_host_alias, mcp_port),
-                        )
-                        .headers(vec![acp::HttpHeader::new(
-                            "Authorization",
-                            format!("Bearer {}", bearer_token),
-                        )]),
-                    );
+                            // Initialize
+                            conn.send_request(
+                                acp::schema::InitializeRequest::new(ProtocolVersion::V1)
+                                    .client_info(
+                                        Implementation::new("emergent", "0.1.0")
+                                            .title("Emergent"),
+                                    ),
+                            )
+                            .block_task()
+                            .await
+                            .map_err(|e| {
+                                acp::schema::Error::internal_error()
+                                    .data(format!("ACP initialize failed: {}", e))
+                            })?;
 
-                    match session_init {
-                        SessionInit::New => {
-                            let session_resp = conn
-                                .new_session(
-                                    acp::NewSessionRequest::new(&agent_workdir_for_thread)
-                                        .mcp_servers(vec![mcp_config]),
+                            // Build MCP server config for swarm communication (HTTP)
+                            let mcp_config = McpServer::Http(
+                                McpServerHttp::new(
+                                    "emergent-swarm",
+                                    format!("http://{}:{}/mcp", mcp_host_alias, mcp_port),
                                 )
-                                .await
-                                .map_err(|e| format!("ACP new_session failed: {}", e))?;
-
-                            let initial_config = session_resp
-                                .config_options
-                                .as_deref()
-                                .map(crate::config::convert_config_options)
-                                .unwrap_or_default();
-
-                            *config_state.lock().unwrap() = initial_config.clone();
-
-                            Ok::<_, String>((session_resp.session_id, initial_config))
-                        }
-                        SessionInit::Load { acp_session_id } => {
-                            log::info!(
-                                "Agent {} loading existing session {}",
-                                &agent_id,
-                                &acp_session_id,
+                                .headers(vec![HttpHeader::new(
+                                    "Authorization",
+                                    format!("Bearer {}", bearer_token),
+                                )]),
                             );
-                            let session_id = acp::SessionId::new(acp_session_id);
 
-                            let load_resp = conn
-                                .load_session(
-                                    acp::LoadSessionRequest::new(
-                                        session_id.clone(),
-                                        &agent_workdir_for_thread,
-                                    )
-                                    .mcp_servers(vec![mcp_config]),
-                                )
-                                .await
-                                .map_err(|e| format!("ACP load_session failed: {}", e))?;
+                            let init_result: Result<(SessionId, Vec<ConfigOption>), String> =
+                                async {
+                                    match session_init {
+                                        SessionInit::New => {
+                                            let session_resp = conn
+                                                .send_request(
+                                                    NewSessionRequest::new(&agent_workdir)
+                                                        .mcp_servers(vec![mcp_config]),
+                                                )
+                                                .block_task()
+                                                .await
+                                                .map_err(|e| {
+                                                    format!("ACP new_session failed: {}", e)
+                                                })?;
 
-                            let config_snapshot = config_state.lock().unwrap().clone();
-                            let initial_config =
-                                initial_config_from_load_response(load_resp, &config_snapshot);
-                            *config_state.lock().unwrap() = initial_config.clone();
+                                            let initial_config = session_resp
+                                                .config_options
+                                                .as_deref()
+                                                .map(crate::config::convert_config_options)
+                                                .unwrap_or_default();
 
-                            Ok::<_, String>((session_id, initial_config))
+                                            *config_for_init.lock().unwrap() =
+                                                initial_config.clone();
+
+                                            Ok((session_resp.session_id, initial_config))
+                                        }
+                                        SessionInit::Load { acp_session_id } => {
+                                            log::info!(
+                                                "Agent {} loading existing session {}",
+                                                &agent_id,
+                                                &acp_session_id,
+                                            );
+                                            let session_id = SessionId::new(acp_session_id);
+
+                                            let load_resp = conn
+                                                .send_request(
+                                                    LoadSessionRequest::new(
+                                                        session_id.clone(),
+                                                        &agent_workdir,
+                                                    )
+                                                    .mcp_servers(vec![mcp_config]),
+                                                )
+                                                .block_task()
+                                                .await
+                                                .map_err(|e| {
+                                                    format!("ACP load_session failed: {}", e)
+                                                })?;
+
+                                            let config_snapshot =
+                                                config_for_init.lock().unwrap().clone();
+                                            let initial_config =
+                                                initial_config_from_load_response(
+                                                    load_resp,
+                                                    &config_snapshot,
+                                                );
+                                            *config_for_init.lock().unwrap() =
+                                                initial_config.clone();
+
+                                            Ok((session_id, initial_config))
+                                        }
+                                    }
+                                }
+                                .await;
+
+                            let session_id = match init_result {
+                                Ok((sid, config)) => {
+                                    log::debug!(
+                                        "Agent {} ACP session established: {:?}",
+                                        &agent_id,
+                                        sid
+                                    );
+                                    let _ = init_tx.send(Ok((sid.clone(), config)));
+                                    let _ =
+                                        event_tx_clone.send(Notification::SessionReady(
+                                            SessionReadyPayload {
+                                                thread_id: agent_id.clone(),
+                                                acp_session_id: sid.0.to_string(),
+                                            },
+                                        ));
+                                    sid
+                                }
+                                Err(e) => {
+                                    log::error!(
+                                        "Agent {} ACP handshake failed: {}",
+                                        &agent_id,
+                                        e
+                                    );
+                                    let _ = init_tx.send(Err(e));
+                                    return Ok(());
+                                }
+                            };
+
+                            // Command loop: receive commands from the main thread.
+                            // workspace_id and agent_definition_id are forwarded so the
+                            // loop can emit TurnUsage with full attribution context.
+                            agent_command_loop(
+                                conn,
+                                session_id,
+                                command_rx,
+                                agent_id,
+                                event_tx_clone,
+                                workspace_id_str,
+                                agent_definition_id_for_loop,
+                            )
+                            .await;
+
+                            Ok(())
                         }
-                    }
+                    })
+                    .await;
+
+                if let Err(e) = connect_result {
+                    log::error!("ACP connection error for agent {}: {}", agent_id, e);
                 }
-                .await;
-
-                let session_id = match init_result {
-                    Ok((sid, config)) => {
-                        log::debug!("Agent {} ACP session established: {:?}", &agent_id, sid);
-                        let _ = init_tx.send(Ok((sid.clone(), config)));
-                        let _ =
-                            event_tx_clone.send(Notification::SessionReady(SessionReadyPayload {
-                                thread_id: agent_id.clone(),
-                                acp_session_id: sid.0.to_string(),
-                            }));
-                        sid
-                    }
-                    Err(e) => {
-                        log::error!("Agent {} ACP handshake failed: {}", &agent_id, e);
-                        let _ = init_tx.send(Err(e));
-                        return;
-                    }
-                };
-
-                // Command loop: receive commands from the main thread
-                agent_command_loop(conn, session_id, command_rx, agent_id, event_tx_clone).await;
             });
         })
         .map_err(|e| format!("Failed to spawn agent thread: {}", e))?;
@@ -237,7 +319,6 @@ pub(crate) async fn initialize_agent(
         config_options: initial_config.clone(),
         has_management_permissions: false,
         has_prompted: is_resume,
-        role,
         task_id,
         completing: false,
         last_prompted_permissions: false,
@@ -282,24 +363,27 @@ pub(crate) async fn initialize_agent(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use agent_client_protocol::schema::{
+        SessionConfigOption, SessionConfigOptionCategory, SessionConfigSelectOption,
+    };
 
-    fn sample_option(current_value: &str) -> acp::SessionConfigOption {
-        acp::SessionConfigOption::select(
+    fn sample_option(current_value: &str) -> SessionConfigOption {
+        SessionConfigOption::select(
             "model",
             "Model",
             current_value.to_string(),
             vec![
-                acp::SessionConfigSelectOption::new("opus-4", "Opus 4"),
-                acp::SessionConfigSelectOption::new("sonnet-4", "Sonnet 4"),
+                SessionConfigSelectOption::new("opus-4", "Opus 4"),
+                SessionConfigSelectOption::new("sonnet-4", "Sonnet 4"),
             ],
         )
-        .category(acp::SessionConfigOptionCategory::Model)
+        .category(SessionConfigOptionCategory::Model)
     }
 
     #[test]
     fn load_response_config_takes_priority_on_resume() {
         let load_resp =
-            acp::LoadSessionResponse::new().config_options(vec![sample_option("opus-4")]);
+            LoadSessionResponse::new().config_options(vec![sample_option("opus-4")]);
         let fallback = vec![ConfigOption {
             id: "model".into(),
             name: "Model".into(),
@@ -345,7 +429,7 @@ mod tests {
             ]),
         }];
 
-        let initial = initial_config_from_load_response(acp::LoadSessionResponse::new(), &fallback);
+        let initial = initial_config_from_load_response(LoadSessionResponse::new(), &fallback);
 
         assert_eq!(initial.len(), fallback.len());
         assert_eq!(initial[0].id, fallback[0].id);

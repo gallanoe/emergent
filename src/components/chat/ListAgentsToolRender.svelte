@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { AgentAvatar, Chip, StatusDot } from "../../lib/primitives";
   import type { EmergentAgentSummary } from "../../lib/emergent-tool-calls";
 
   interface Props {
@@ -6,29 +7,31 @@
   }
 
   let { agents }: Props = $props();
+
+  // EmergentAgentSummary carries only {id, name}; provider and live
+  // status aren't in this payload. We render with provider=null (falls
+  // back to monogram via AgentAvatar) and status="idle" as neutral
+  // defaults. Wiring richer data would require backend changes; tracked
+  // separately.
 </script>
 
-<div class="py-1.5 flex flex-col gap-1 px-2.5">
+<div class="flex flex-col gap-1" style:padding="8px 10px 10px 32px">
   {#if agents.length === 0}
-    <div
-      class="rounded bg-[rgba(0,0,0,0.03)] px-2 py-1.5 text-[11px] text-fg-muted"
-    >
-      No agents available
-    </div>
+    <div class="text-[11px] text-fg-muted">No agents available</div>
   {:else}
-    {#each agents as agent}
+    {#each agents as agent (agent.id)}
       <div
-        class="flex items-center gap-2 rounded bg-[rgba(0,0,0,0.03)] px-2 py-1.5"
+        class="grid items-center gap-2"
+        style:grid-template-columns="auto 1fr auto"
       >
-        <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-success"></span>
-        <span class="min-w-0 truncate text-[11px] font-medium text-fg-default"
-          >{agent.name}</span
-        >
-        <span
-          class="ml-auto text-[9px] font-[family-name:var(--font-mono)] text-fg-disabled"
-        >
-          {agent.id}
-        </span>
+        <AgentAvatar provider={null} name={agent.name} size={20} />
+        <span class="text-[12px] text-fg-default truncate">{agent.name}</span>
+        <Chip tone="mono">
+          {#snippet icon()}
+            <StatusDot status="idle" size={5} />
+          {/snippet}
+          ready
+        </Chip>
       </div>
     {/each}
   {/if}

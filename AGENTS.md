@@ -32,7 +32,7 @@ src/                          # Frontend (Svelte 5 + TypeScript)
 ├── components/               # Svelte components
 │   ├── agent/                # AgentCreatorView, AgentSettingsView, ThreadListView
 │   ├── chat/                 # ChatArea, ChatInput
-│   ├── swarm/                # SwarmRail, SwarmView
+│   ├── swarm/                # (reserved; swarm view removed in v1)
 │   ├── sidebar/              # InnerSidebar, ContextMenu, AgentPickerPopover
 │   ├── settings/             # SettingsView, GeneralTab, ContainerTab
 │   ├── terminal/             # TerminalView (xterm.js)

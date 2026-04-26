@@ -17,11 +17,44 @@ describe("renderMarkdown", () => {
     expect(html).toContain("<strong>bold</strong>");
   });
 
-  it("renders fenced code blocks", () => {
-    const html = renderMarkdown("```js\nconst x = 1;\n```");
-    expect(html).toContain("<pre>");
-    expect(html).toContain("<code");
-    expect(html).toContain("const x = 1;");
+  it("renders fenced code blocks with header, language, and copy control", () => {
+    const html = renderMarkdown("```rust\nfn x() {}\n```");
+    expect(html).toContain('<div class="md-pre-wrap">');
+    expect(html).toContain('<span class="md-lang">rust</span>');
+    expect(html).toContain('<button class="md-copy" type="button">Copy</button>');
+    expect(html).toContain("fn x() {}");
+    expect(html).toContain('<code class="language-rust">');
+  });
+
+  it("renders GFM note callout with callout-note class", () => {
+    const html = renderMarkdown("> [!NOTE]\n> hi");
+    expect(html).toContain('class="callout callout-note"');
+    expect(html).toContain("callout-title");
+    expect(html).toContain("hi");
+  });
+
+  it("emits a callout-icon span with the kind-specific glyph for note", () => {
+    const html = renderMarkdown("> [!NOTE]\n> heads up");
+    expect(html).toContain(`<span class="callout-icon">i</span>`);
+  });
+
+  it("uses a distinct glyph character per callout kind", () => {
+    expect(renderMarkdown("> [!NOTE]\n> x")).toContain(`<span class="callout-icon">i</span>`);
+    expect(renderMarkdown("> [!TIP]\n> x")).toContain(`<span class="callout-icon">✓</span>`);
+    expect(renderMarkdown("> [!WARNING]\n> x")).toContain(`<span class="callout-icon">!</span>`);
+    expect(renderMarkdown("> [!CAUTION]\n> x")).toContain(`<span class="callout-icon">!</span>`);
+  });
+
+  it("wraps callout title and body in a .callout-body column next to the icon", () => {
+    const html = renderMarkdown("> [!WARNING]\n> careful");
+    expect(html).toMatch(
+      /<span class="callout-icon">!<\/span><div class="callout-body"><div class="callout-title">Warning<\/div>/,
+    );
+  });
+
+  it("sanitization preserves md-copy button in code fences", () => {
+    const html = renderMarkdown("```rust\nfn x() {}\n```");
+    expect(html).toMatch(/<button class="md-copy"/);
   });
 
   it("renders GFM tables", () => {

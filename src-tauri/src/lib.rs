@@ -125,6 +125,13 @@ pub fn run() {
                             .await;
                     }
 
+                    // Seed in-memory usage totals from the persisted threads.json
+                    // so the OverviewView dashboard shows correct values after restart.
+                    manager
+                        .thread_manager()
+                        .seed_usage_from_dir(ws_id, workspace_path)
+                        .await;
+
                     if matches!(
                         ws.container_status,
                         emergent_protocol::ContainerStatus::Running
@@ -213,10 +220,19 @@ pub fn run() {
                                 Notification::SessionReady(p) => {
                                     let _ = bridge_handle.emit(event_name, p);
                                 }
+                                Notification::TokenUsage(p) => {
+                                    let _ = bridge_handle.emit(event_name, p);
+                                }
+                                Notification::TurnUsage(p) => {
+                                    let _ = bridge_handle.emit(event_name, p);
+                                }
                                 Notification::TaskCreated(ref p) => {
                                     let _ = bridge_handle.emit(event_name, p);
                                 }
                                 Notification::TaskUpdated(ref p) => {
+                                    let _ = bridge_handle.emit(event_name, p);
+                                }
+                                Notification::ContainerStats(p) => {
                                     let _ = bridge_handle.emit(event_name, p);
                                 }
                             }
@@ -278,6 +294,7 @@ pub fn run() {
             commands::write_terminal,
             commands::resize_terminal,
             commands::close_terminal_session,
+            commands::get_workspace_usage,
             commands::create_task,
             commands::list_tasks,
             commands::get_task,

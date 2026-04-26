@@ -1,7 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { agentStore } from "./agents.svelte";
+import { usageStore } from "./usage.svelte";
 import { dispose as disposeTerminal } from "../components/terminal/terminal-instances";
+import { normalizeThreadSummaryStatus } from "./types";
 import type {
   ActiveView,
   AgentDefinition,
@@ -30,6 +32,7 @@ interface KnownAgent {
   name: string;
   command: string;
   available: boolean;
+  provider: string;
 }
 
 interface HistoryNotification {
@@ -57,13 +60,7 @@ function createAppState() {
   let knownAgents = $state<KnownAgent[]>([]);
   let agentConnections = $state<Record<string, string[]>>({});
   let selectedWorkspaceId = $state<string | null>(null);
-  let activeView = $state<ActiveView>("swarm");
-  // Previous view stashed when navigating to agent-chat from the tasks view,
-  // so the back button returns to where the user came from.
-  let chatReturnView = $state<ActiveView | null>(null);
-  // Which segmented-control tab is active inside ThreadListView. Persisted in
-  // appState so it survives the agent-chat round-trip (the component remounts).
-  let agentViewTab = $state<"threads" | "tasks">("threads");
+  let activeView = $state<ActiveView>("overview");
   let runtimePreference = $state<ContainerRuntimePreference>({
     selected_runtime: "docker",
   });
@@ -72,6 +69,8 @@ function createAppState() {
   let tasks = $state<Record<string, DisplayTask>>({});
   let selectedTaskId = $state<string | null>(null);
   let taskSidebarMode = $state<"detail" | "create" | null>(null);
+  /** Per-agent system prompt; frontend-only (see DisplayAgentDefinition.systemPrompt). */
+  let agentSystemPrompts = $state<Record<string, string>>({});
   let initializePromise: Promise<void> | null = null;
   let listenerCleanup: UnlistenFn[] = [];
   let listenersReady = false;
@@ -175,6 +174,7 @@ function createAppState() {
     }
 
     await agentStore.setupListeners();
+    await usageStore.setupListeners();
     await setupListeners();
     await syncLiveThreads();
   }
@@ -213,7 +213,7 @@ function createAppState() {
       ]);
 
       agentStore.syncThreadSnapshot(thread.id, {
-        status: thread.status as "initializing" | "idle" | "working" | "error" | "dead",
+        status: normalizeThreadSummaryStatus(String(thread.status)),
         acpSessionId: thread.acp_session_id,
         history,
         configOptions,
@@ -222,7 +222,14 @@ function createAppState() {
   }
 
   async function initialize() {
-    if (demoMode) return;
+    if (demoMode) {
+      mockState.seedDemoMockMetrics();
+      const firstWs = (mockState.swarms as unknown as DisplayWorkspace[])[0];
+      if (firstWs && !selectedWorkspaceId) {
+        selectedWorkspaceId = firstWs.id;
+      }
+      return;
+    }
 
     if (!initializePromise) {
       initializePromise = setupAfterConnect().catch((e) => {
@@ -307,14 +314,6 @@ function createAppState() {
     return id;
   }
 
-  async function killThread(threadId: string): Promise<void> {
-    await agentStore.killThread(threadId);
-
-    if (selectedAgentId === threadId) {
-      selectedAgentId = null;
-    }
-  }
-
   async function startContainer(workspaceId: string) {
     await invoke("start_container", { workspaceId });
   }
@@ -372,7 +371,23 @@ function createAppState() {
   // ── Computed display data ─────────────────────────────────────
 
   function getDisplayWorkspaces(): DisplayWorkspace[] {
-    if (demoMode) return mockState.swarms as unknown as DisplayWorkspace[];
+    if (demoMode) {
+      const list = mockState.swarms as unknown as DisplayWorkspace[];
+      return list.map((w) => ({
+        id: w.id,
+        name: w.name,
+        collapsed: w.collapsed,
+        containerStatus: w.containerStatus,
+        agentDefinitions: w.agentDefinitions.map((ad) => ({
+          id: ad.id,
+          name: ad.name,
+          cli: ad.cli,
+          provider: ad.provider ?? null,
+          systemPrompt: agentSystemPrompts[ad.id] ?? ad.systemPrompt ?? "",
+          threads: ad.threads,
+        })),
+      }));
+    }
     return workspaces.map((w) => ({
       id: w.id,
       name: w.name,
@@ -384,19 +399,12 @@ function createAppState() {
           if (!def) return null;
           const threads = agentStore.getThreadsForAgent(defId);
           const displayThreads = threads.map((t) => agentStore.toDisplayThread(t));
-          if (def.role === undefined) {
-            return {
-              id: def.id,
-              name: def.name,
-              cli: def.cli,
-              threads: displayThreads,
-            };
-          }
           return {
             id: def.id,
             name: def.name,
-            role: def.role,
             cli: def.cli,
+            provider: def.provider ?? null,
+            systemPrompt: agentSystemPrompts[defId] ?? "",
             threads: displayThreads,
           };
         })
@@ -407,7 +415,9 @@ function createAppState() {
   // ── Task management ──────────────────────────────────────────
 
   const workspaceTasks = $derived(
-    Object.values(tasks).filter((t) => t.workspace_id === selectedWorkspaceId),
+    demoMode
+      ? mockState.getWorkspaceTasks(selectedWorkspaceId)
+      : Object.values(tasks).filter((t) => t.workspace_id === selectedWorkspaceId),
   );
 
   const activeWorkspaceTaskCount = $derived(
@@ -435,6 +445,18 @@ function createAppState() {
     activeView = "tasks";
     selectedTaskId = null;
     taskSidebarMode = null;
+  }
+
+  function showOverview() {
+    activeView = "overview";
+  }
+
+  function showAppSettings() {
+    activeView = "app-settings";
+  }
+
+  function showWorkspaceSettings() {
+    activeView = "settings";
   }
 
   async function createTask(
@@ -480,14 +502,9 @@ function createAppState() {
     await refreshConnections(agentIdB);
   }
 
-  async function setAgentPermissions(agentId: string, enabled: boolean) {
-    agentStore.setManagementPermissions(agentId, enabled);
-    await invoke("set_thread_permissions", { threadId: agentId, enabled });
-  }
-
   function selectWorkspace(workspaceId: string) {
     selectedWorkspaceId = workspaceId;
-    activeView = "swarm";
+    activeView = "overview";
     // Clear any task sidebar state scoped to the previous workspace
     selectedTaskId = null;
     taskSidebarMode = null;
@@ -495,17 +512,12 @@ function createAppState() {
 
   function selectAgent(agentId: string) {
     if (demoMode) {
-      selectedAgentId = agentId;
+      mockState.selectedAgentId = agentId;
       selectedThreadId = null;
-      activeView = "agent-chat";
+      activeView = "agent-threads";
       return;
     }
 
-    if (agentId !== selectedAgentId) {
-      // Reset the segmented tab when switching to a different agent so the
-      // user lands on Threads by default.
-      agentViewTab = "threads";
-    }
     selectedAgentId = agentId;
     selectedThreadId = null;
     // Find which workspace this agent belongs to and select it
@@ -515,10 +527,14 @@ function createAppState() {
   }
 
   function selectThread(threadId: string) {
-    // Remember the view we came from so back navigation returns there
-    if (activeView === "tasks" || activeView === "agent-threads") {
-      chatReturnView = activeView;
+    if (demoMode) {
+      selectedThreadId = threadId;
+      const owner = mockState.agentIdForThread(threadId);
+      if (owner) mockState.selectedAgentId = owner;
+      activeView = "agent-chat";
+      return;
     }
+
     selectedThreadId = threadId;
     activeView = "agent-chat";
 
@@ -549,17 +565,6 @@ function createAppState() {
     }
   }
 
-  function backToThreads() {
-    selectedThreadId = null;
-    activeView = chatReturnView ?? "agent-threads";
-    chatReturnView = null;
-  }
-
-  function openAgentSettings() {
-    selectedThreadId = null;
-    activeView = "agent-settings";
-  }
-
   function getSelectedSwarm(): DisplayWorkspace | undefined {
     if (demoMode) {
       const swarmList = mockState.swarms as unknown as DisplayWorkspace[];
@@ -571,7 +576,7 @@ function createAppState() {
 
   function getSelectedThread(): DisplayThread | undefined {
     if (demoMode) {
-      return mockState.selectedAgent;
+      return mockState.resolveSelectedThread(selectedThreadId);
     }
     // In chat view, look up by thread ID (threads store is keyed by thread ID)
     const lookupId = selectedThreadId ?? selectedAgentId;
@@ -621,7 +626,11 @@ function createAppState() {
       return getSelectedSwarm();
     },
     get selectedWorkspaceContainerRunning(): boolean {
-      if (demoMode) return true;
+      if (demoMode) {
+        const list = mockState.swarms as unknown as DisplayWorkspace[];
+        const ws = list.find((w) => w.id === selectedWorkspaceId) ?? list[0];
+        return ws?.containerStatus.state === "running";
+      }
       const ws = workspaces.find((w) => w.id === selectedWorkspaceId);
       return ws?.containerStatus.state === "running";
     },
@@ -637,7 +646,6 @@ function createAppState() {
     initialize,
     createWorkspace,
     toggleSwarmCollapsed,
-    killThread,
     updateWorkspace,
     deleteWorkspace,
     setContainerRuntimePreference,
@@ -648,16 +656,12 @@ function createAppState() {
     cancelPrompt: agentStore.cancelPrompt,
     setConfig: agentStore.setConfig,
     editQueue: agentStore.editQueue,
-    setRole: agentStore.setRole,
     registerQueueDumpHandler: agentStore.registerQueueDumpHandler,
     connectAgents,
     disconnectAgents,
-    setAgentPermissions,
     selectWorkspace,
     selectAgent,
     selectThread,
-    backToThreads,
-    openAgentSettings,
     startCreatingAgent() {
       activeView = "create-agent";
     },
@@ -665,18 +669,40 @@ function createAppState() {
       return selectedThreadId;
     },
     get selectedThread() {
+      if (demoMode) {
+        if (!selectedThreadId) return undefined;
+        return mockState.findThread(selectedThreadId);
+      }
       if (!selectedThreadId) return undefined;
       const conn = agentStore.getThread(selectedThreadId);
       if (!conn) return undefined;
       return agentStore.toDisplayThread(conn);
     },
     get selectedAgentDef(): DisplayAgentDefinition | undefined {
+      if (demoMode) {
+        const id = mockState.selectedAgentId;
+        if (!id) return undefined;
+        const swarmList = mockState.swarms as unknown as DisplayWorkspace[];
+        for (const ws of swarmList) {
+          const def = ws.agentDefinitions.find((d) => d.id === id);
+          if (def) {
+            return {
+              ...def,
+              systemPrompt: agentSystemPrompts[id] ?? def.systemPrompt ?? "",
+              threads: def.threads,
+            };
+          }
+        }
+        return undefined;
+      }
       if (!selectedAgentId) return undefined;
       const def = agentDefinitions[selectedAgentId];
       if (!def) return undefined;
       const threads = agentStore.getThreadsForAgent(selectedAgentId);
       return {
         ...def,
+        provider: def.provider ?? null,
+        systemPrompt: agentSystemPrompts[selectedAgentId] ?? "",
         threads: threads.map((t) => agentStore.toDisplayThread(t)),
       };
     },
@@ -686,33 +712,40 @@ function createAppState() {
     async createAgentDefinition(
       workspaceId: string,
       name: string,
-      role: string | undefined,
       cli: string,
+      provider: string,
     ): Promise<string> {
       const agentId = await invoke<string>("create_agent", {
         workspaceId,
         name,
-        ...(role !== undefined && { role }),
         cli,
+        provider,
       });
       agentDefinitions[agentId] = {
         id: agentId,
         workspace_id: workspaceId,
         name,
-        ...(role !== undefined && { role }),
         cli,
+        provider,
       };
       const ws = workspaces.find((w) => w.id === workspaceId);
       if (ws) ws.agentDefinitionIds.push(agentId);
       return agentId;
     },
-    async updateAgentDefinition(agentId: string, name?: string, role?: string): Promise<void> {
-      await invoke("update_agent", { agentId, name, role });
+    async updateAgentDefinition(agentId: string, name?: string, provider?: string): Promise<void> {
+      const payload: Record<string, unknown> = { agentId };
+      if (name !== undefined) payload.name = name;
+      if (provider !== undefined) payload.provider = provider;
+      await invoke("update_agent", payload);
       const def = agentDefinitions[agentId];
       if (def) {
         if (name !== undefined) def.name = name;
-        if (role !== undefined) def.role = role;
+        if (provider !== undefined) def.provider = provider || null;
       }
+    },
+    updateAgentSystemPrompt(agentId: string, next: string) {
+      // Display-only until `AgentDefinition` / `update_agent` gain a persisted system-prompt field (post-redesign).
+      agentSystemPrompts[agentId] = next;
     },
     async deleteAgentDefinition(agentId: string): Promise<void> {
       await invoke("delete_agent", { agentId });
@@ -722,7 +755,7 @@ function createAppState() {
       }
       if (selectedAgentId === agentId) {
         selectedAgentId = null;
-        activeView = "swarm";
+        activeView = "overview";
       }
     },
     async spawnThread(agentId: string): Promise<string> {
@@ -782,12 +815,6 @@ function createAppState() {
     get activeWorkspaceTaskCount() {
       return activeWorkspaceTaskCount;
     },
-    get agentViewTab() {
-      return agentViewTab;
-    },
-    setAgentViewTab(tab: "threads" | "tasks") {
-      agentViewTab = tab;
-    },
     get agentTasks() {
       return agentTasks;
     },
@@ -795,6 +822,9 @@ function createAppState() {
     openCreateTask,
     closeTaskSidebar,
     showTasks,
+    showOverview,
+    showAppSettings,
+    showWorkspaceSettings,
     createTask,
     get terminalSessionIds() {
       return terminalSessionIds;

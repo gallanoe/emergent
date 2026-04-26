@@ -222,7 +222,7 @@ impl TaskManager {
             }
 
             let prompt = build_task_prompt(&task_id, &title, &description);
-            match agent_manager.queue_prompt(thread_id, prompt, None).await {
+            match agent_manager.queue_prompt(thread_id, prompt).await {
                 Ok(_reply_rx) => {
                     // Drop the receiver — task completion is driven by the agent calling complete_task.
                 }

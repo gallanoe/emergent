@@ -113,6 +113,10 @@ Availability is detected inside each running workspace container.
 | Kiro        | `kiro-cli acp`                          |
 | OpenCode    | `opencode acp`                          |
 
+## v1 redesign
+
+The v1 UI redesign ships on branch `redesign/v1`. Playwright regression coverage lives under `e2e/`, and artboard sign-off is recorded in `e2e/phase-7-visual-qa.md`. The only tagged follow-ups in the frontend tree are `TODO(real-metrics)` and `TODO(search)`.
+
 ## License
 
 MIT

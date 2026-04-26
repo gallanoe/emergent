@@ -37,10 +37,9 @@ pub(crate) async fn prompt_loop(
         };
 
         // Determine injection parameters
-        let (is_first_turn, role, permission_change) = {
+        let (is_first_turn, permission_change) = {
             let handle = handle_arc.lock().await;
             let first = !handle.has_prompted;
-            let role_ref = if first { handle.role.clone() } else { None };
             let perm_change =
                 if handle.has_management_permissions != handle.last_prompted_permissions {
                     let msg = if handle.has_management_permissions {
@@ -52,11 +51,10 @@ pub(crate) async fn prompt_loop(
                 } else {
                     None
                 };
-            (first, role_ref, perm_change)
+            (first, perm_change)
         };
 
-        let system_block =
-            build_system_block(is_first_turn, role.as_deref(), permission_change.as_deref());
+        let system_block = build_system_block(is_first_turn, permission_change.as_deref());
 
         // Emit permission change system message to frontend
         if let Some(ref perm_msg) = permission_change {
@@ -126,6 +124,10 @@ pub(crate) async fn prompt_loop(
             match &send_result {
                 Ok(()) => {
                     handle.status = AgentStatus::Idle;
+                    let _ = event_tx.send(Notification::StatusChange(StatusChangePayload {
+                        thread_id: agent_id.clone(),
+                        status: AgentStatus::Idle.to_string(),
+                    }));
                 }
                 Err(_) => {
                     handle.status = AgentStatus::Error;

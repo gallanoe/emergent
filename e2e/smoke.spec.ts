@@ -2,27 +2,20 @@
 import { test, expect } from "@playwright/test";
 import { setupMocks } from "./helpers";
 
-test("app renders with swarm UI", async ({ page }) => {
+test("demo shell shows overview then agent chat", async ({ page }) => {
   await setupMocks(page);
   await page.goto("/");
 
-  // InnerSidebar renders with swarm name
-  await expect(page.locator("text=website-redesign").first()).toBeVisible();
+  await expect(page.locator("h1", { hasText: "emergent-core" })).toBeVisible();
+  await expect(page.getByText("overview", { exact: true }).first()).toBeVisible();
 
-  // Swarm view nav is visible
-  await expect(page.locator("text=Swarm").first()).toBeVisible();
+  await expect(page.locator("aside").getByText("AGENTS", { exact: true })).toBeVisible();
 
-  // Agent cards are visible in SwarmView
-  await expect(page.locator("text=Refactoring the navigatio").first()).toBeVisible();
+  await page.locator("aside").getByTestId("sidebar-agent-a1").click();
 
-  // Click an agent to open chat view
-  await page.locator("text=Refactoring the navigati").first().click();
+  await page.getByRole("button", { name: "refine quantization" }).click();
 
-  // Chat messages render
-  await expect(
-    page.locator("text=analyzing the current navigation structure").first(),
-  ).toBeVisible();
+  await expect(page.getByText("analyzing the current navigation structure").first()).toBeVisible();
 
-  // Chat input is visible
   await expect(page.locator("textarea")).toBeVisible();
 });

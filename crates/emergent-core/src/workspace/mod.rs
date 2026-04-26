@@ -1,5 +1,6 @@
 pub mod container;
 mod state;
+pub mod stats;
 pub mod terminal;
 
 pub use state::{
@@ -7,13 +8,16 @@ pub use state::{
     WorkspaceMetadata, WorkspaceState,
 };
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 use emergent_protocol::{
     ContainerRuntimePreference, ContainerRuntimeStatus, Notification, WorkspaceEntry,
     WorkspaceInfo, WorkspaceStatusChangePayload,
 };
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, Mutex};
+use tokio::task::JoinHandle;
+use tokio_util::sync::CancellationToken;
 
 const DEFAULT_DOCKERFILE: &str = "\
 FROM ubuntu:24.04
@@ -55,12 +59,15 @@ RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} @openai/code
 CMD [\"sleep\", \"infinity\"]
 ";
 
+type StatPollers = Mutex<HashMap<WorkspaceId, (JoinHandle<()>, CancellationToken)>>;
+
 pub struct WorkspaceManager {
     state: SharedWorkspaceState,
     event_tx: broadcast::Sender<Notification>,
     runtime: crate::runtime::SharedRuntime,
     workspaces_dir: PathBuf,
     terminal_sessions: terminal::TerminalSessions,
+    stat_pollers: StatPollers,
 }
 
 impl WorkspaceManager {
@@ -77,6 +84,7 @@ impl WorkspaceManager {
             runtime,
             workspaces_dir,
             terminal_sessions: terminal::new_terminal_sessions(),
+            stat_pollers: Mutex::new(HashMap::new()),
         }
     }
 
@@ -100,6 +108,41 @@ impl WorkspaceManager {
 
     async fn container_extra_hosts(&self) -> Option<Vec<String>> {
         self.runtime.read().await.container_extra_hosts()
+    }
+
+    async fn cancel_stat_poller(&self, workspace_id: &WorkspaceId) {
+        if let Some((handle, token)) = self.stat_pollers.lock().await.remove(workspace_id) {
+            token.cancel();
+            handle.abort();
+        }
+    }
+
+    /// Start a stats poller for `workspace_id` if one is not already running.
+    ///
+    /// This is idempotent: if `stat_pollers` already contains an entry for this
+    /// workspace the function returns immediately without touching the existing
+    /// poller. Use `cancel_stat_poller` first when you need to force-restart
+    /// (e.g. after a container restart).
+    async fn ensure_stat_poller(&self, workspace_id: &WorkspaceId, container_name: &str) {
+        // Check under lock, then release before doing async work.
+        {
+            let pollers = self.stat_pollers.lock().await;
+            if pollers.contains_key(workspace_id) {
+                return;
+            }
+        }
+        if let Some(docker) = self.runtime_client().await {
+            let (handle, token) = stats::ContainerStatsPoller::start(
+                workspace_id.clone(),
+                container_name.to_owned(),
+                docker,
+                self.event_tx.clone(),
+            );
+            self.stat_pollers
+                .lock()
+                .await
+                .insert(workspace_id.clone(), (handle, token));
+        }
     }
 
     fn emit_status(&self, workspace_id: &WorkspaceId, status: ContainerStatus) {
@@ -166,6 +209,13 @@ impl WorkspaceManager {
                     };
                     workspace.container_status = status.clone();
                 }
+            }
+
+            if status == ContainerStatus::Running {
+                let container_name = container::container_name(&workspace_id);
+                self.ensure_stat_poller(&workspace_id, &container_name).await;
+            } else {
+                self.cancel_stat_poller(&workspace_id).await;
             }
 
             self.emit_status(&workspace_id, status);
@@ -240,6 +290,8 @@ impl WorkspaceManager {
                 (ContainerStatus::Stopped, None)
             };
 
+            let is_running = container_status == ContainerStatus::Running;
+
             let workspace = Workspace {
                 name: metadata.name,
                 path: entry_path,
@@ -251,7 +303,12 @@ impl WorkspaceManager {
                 .write()
                 .await
                 .workspaces
-                .insert(workspace_id, workspace);
+                .insert(workspace_id.clone(), workspace);
+
+            if is_running {
+                let container_name = container::container_name(&workspace_id);
+                self.ensure_stat_poller(&workspace_id, &container_name).await;
+            }
         }
 
         Ok(())
@@ -385,7 +442,8 @@ impl WorkspaceManager {
                 .ok_or_else(|| format!("Workspace '{}' not found", id))?
         };
 
-        // Close any terminal sessions for this workspace
+        // Stop stats poller and terminal sessions before removing the container
+        self.cancel_stat_poller(id).await;
         terminal::close_sessions_for_workspace(&self.terminal_sessions, id).await;
 
         // Stop and remove container if the selected runtime is available.
@@ -571,6 +629,12 @@ impl WorkspaceManager {
 
             self.emit_status(id, ContainerStatus::Running);
 
+            // Cancel any existing poller for this workspace (handles re-entrancy
+            // from a container restart) then start a fresh one.
+            self.cancel_stat_poller(id).await;
+            let container_name = container::container_name(id);
+            self.ensure_stat_poller(id, &container_name).await;
+
             Ok(())
         }
         .await;
@@ -600,7 +664,8 @@ impl WorkspaceManager {
                 .ok_or_else(|| format!("No running container for workspace '{}'", id))?
         };
 
-        // Close any terminal sessions for this workspace
+        // Stop stats poller and terminal sessions before removing the container
+        self.cancel_stat_poller(id).await;
         terminal::close_sessions_for_workspace(&self.terminal_sessions, id).await;
 
         container::stop_and_remove_container(&client, &container_id).await?;

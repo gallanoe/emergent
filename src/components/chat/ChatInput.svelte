@@ -1,39 +1,40 @@
 <script lang="ts">
   import {
-    Sparkles,
-    Lightbulb,
-    Wand,
-    ChevronDown,
+    Plus,
+    Mic,
     ArrowUp,
     Square,
+    ChevronDown,
+    Loader,
   } from "@lucide/svelte";
   import ConfigPopover from "./ConfigPopover.svelte";
-  import type { ConfigOption, DisplayThread } from "../../stores/types";
+  import { AgentAvatar } from "../../lib/primitives";
+  import type { DisplayThread } from "../../stores/types";
 
   interface Props {
-    agent: DisplayThread | undefined;
+    thread: DisplayThread | undefined;
     demoMode: boolean;
     containerRunning?: boolean;
+    externalContent?: { text: string; seq: number } | null;
     onSend: (text: string) => void;
     onInterrupt?: () => void;
     onSetConfig?: (configId: string, value: string) => void;
-    externalContent?: { text: string; seq: number } | null;
   }
 
   let {
-    agent,
+    thread,
     demoMode,
     containerRunning = true,
+    externalContent = null,
     onSend,
     onInterrupt,
     onSetConfig,
-    externalContent = null,
   }: Props = $props();
+
   let message = $state("");
   let textareaEl: HTMLTextAreaElement | undefined = $state();
+  let configOpen = $state(false);
 
-  // When external content is pushed (edit queue / error dump), set it.
-  // Uses a seq counter so identical content can be pushed multiple times.
   let consumedSeq = $state(-1);
   $effect(() => {
     if (externalContent && externalContent.seq !== consumedSeq) {
@@ -43,164 +44,227 @@
     }
   });
 
-  let isWorking = $derived(agent?.status === "working");
-  let hasText = $derived(message.trim().length > 0);
-  let openConfigId = $state<string | null>(null);
-
-  let isDisabled = $derived(
+  const isWorking = $derived(
+    thread?.processStatus === "working" ||
+      thread?.processStatus === "cancelling",
+  );
+  const isCancelling = $derived(thread?.processStatus === "cancelling");
+  const hasText = $derived(message.trim().length > 0);
+  const isDisabled = $derived(
     demoMode ||
-      !agent ||
+      !thread ||
       !containerRunning ||
-      agent.status === "initializing" ||
-      agent.status === "error" ||
-      agent.status === "dead",
+      thread.processStatus === "initializing" ||
+      thread.processStatus === "error" ||
+      thread.processStatus === "dead",
   );
 
-  let placeholderText = $derived.by(() => {
+  const placeholderText = $derived.by(() => {
     if (demoMode) return "Demo mode — input disabled";
-    if (!agent) return "Select an agent...";
-    if (!containerRunning) return "Container stopped — start it to chat";
-    if (agent.status === "initializing") return "Connecting to agent…";
-    if (agent.status === "error") return "Agent unavailable";
-    if (agent.status === "dead") return "Thread stopped";
-    return `Message ${agent.name}…`;
+    if (!thread) return "Select a thread";
+    if (!containerRunning) return "Start the container to send messages";
+    if (thread.processStatus === "initializing") return "Connecting to agent…";
+    if (thread.processStatus === "error") return "Agent unavailable";
+    if (thread.processStatus === "dead") return "Thread stopped";
+    return `Message ${thread.name}…`;
   });
 
-  const CATEGORY_ICONS: Record<string, typeof Sparkles> = {
-    model: Sparkles,
-    thought_level: Lightbulb,
-    mode: Wand,
-  };
+  const configSummary = $derived.by(() => {
+    const opts = thread?.configOptions ?? [];
+    if (opts.length === 0) return thread?.cli ?? "";
+    return opts
+      .filter((o) => o.current_value)
+      .map((o) => o.current_value)
+      .slice(0, 3)
+      .join(" · ");
+  });
 
-  const CATEGORY_COLORS: Record<string, string> = {
-    model: "bg-accent-soft text-accent-text",
-    thought_level: "bg-[rgba(34,197,94,0.1)] text-success",
-    mode: "bg-[rgba(196,138,26,0.1)] text-warning",
-  };
-
-  function flatOptions(opt: ConfigOption): { value: string; name: string }[] {
-    if (opt.options.length === 0) return [];
-    if (opt.options[0] && "label" in opt.options[0]) {
-      return (
-        opt.options as {
-          label: string;
-          options: { value: string; name: string }[];
-        }[]
-      ).flatMap((g) => g.options);
-    }
-    return opt.options as { value: string; name: string }[];
-  }
-
-  function currentValueName(opt: ConfigOption): string {
-    const all = flatOptions(opt);
-    return (
-      all.find((o) => o.value === opt.current_value)?.name ?? opt.current_value
-    );
-  }
-
-  function handleSend() {
+  function submit() {
     const text = message.trim();
-    if (!text || demoMode || !agent) return;
+    if (!text || isDisabled) return;
     onSend(text);
     message = "";
   }
 
-  function handleInterrupt() {
-    if (onInterrupt) onInterrupt();
-  }
-
-  function handleKeydown(e: KeyboardEvent) {
+  function handleKeyDown(e: KeyboardEvent) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      handleSend();
+      submit();
     }
   }
+
+  function fmtK(n: number): string {
+    return n >= 1000 ? `${Math.round(n / 1000)}k` : String(n);
+  }
+
+  $effect(() => {
+    if (!configOpen) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") configOpen = false;
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  });
 </script>
 
+<!--
+  Composer floats absolutely at the bottom of its relative parent so the
+  chat transcript scrolls UNDERNEATH it (iMessage-style). Keep this in sync
+  with ChatArea's bottom padding (~160px) so messages aren't hidden when
+  scrolled to the end.
+
+  - Outer wrapper: `pointer-events-none` so clicks in the px-10 gutters
+    pass through to the transcript.
+  - Bubble: `pointer-events-auto` to restore interactivity on the composer
+    itself.
+  - `bg-bg-elevated` (opaque) rather than the design spec's `bg-bg-bubble`
+    (4% white overlay) so scrolled-under content is cleanly occluded. The
+    bubble token blends with the near-black main pane and reads as a
+    dark rim, not a floating surface.
+-->
 <div
-  class="absolute bottom-0 left-0 right-0 px-10 pb-3 pointer-events-none z-10"
+  class="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex justify-center px-10 pb-[22px] pt-[10px]"
 >
   <div
-    class="pointer-events-auto border border-border-strong rounded-lg transition-colors duration-150 focus-within:border-border-focus bg-bg-base/55 backdrop-blur-xl backdrop-saturate-[1.3]"
+    class="pointer-events-auto relative flex w-full max-w-[760px] flex-col gap-[10px] rounded-[18px] border border-border-default bg-bg-elevated px-[14px] pb-[10px] pt-[14px] shadow-[var(--shadow-sm)]"
   >
     <textarea
       bind:this={textareaEl}
-      class="w-full px-3 py-2.5 text-[12px] text-fg-default bg-transparent resize-none leading-relaxed placeholder:text-fg-disabled outline-none"
-      placeholder={placeholderText}
-      rows="1"
-      disabled={isDisabled}
       bind:value={message}
-      onkeydown={handleKeydown}
+      class="min-h-[48px] resize-none border-0 bg-transparent px-[6px] py-[4px] font-[family-name:var(--font-ui)] text-[12.5px] leading-[1.55] text-fg-default outline-none placeholder:text-fg-muted disabled:placeholder:text-fg-disabled"
+      placeholder={placeholderText}
+      disabled={isDisabled}
+      onkeydown={handleKeyDown}
     ></textarea>
-    <div class="flex items-center px-3 py-2 border-t border-border-default">
-      <div class="flex items-center gap-1.5">
-        {#each agent?.configOptions ?? [] as opt, i}
-          {#if i > 0}
-            <div class="w-px h-3.5 bg-border-default"></div>
-          {/if}
-          <div class="relative">
-            <button
-              class="interactive flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded border border-transparent hover:border-border-default
-                {opt.category && CATEGORY_COLORS[opt.category]
-                ? CATEGORY_COLORS[opt.category]
-                : 'bg-accent-soft text-fg-muted'}
-                {openConfigId === opt.id ? '!border-border-strong' : ''}"
-              onclick={() => {
-                openConfigId = openConfigId === opt.id ? null : opt.id;
-              }}
-              disabled={isDisabled}
-            >
-              {#if opt.category && CATEGORY_ICONS[opt.category]}
-                {@const Icon = CATEGORY_ICONS[opt.category]}
-                <Icon size={12} />
-              {/if}
-              {currentValueName(opt)}
-              <ChevronDown
-                size={10}
-                class="opacity-50 transition-transform duration-150 {openConfigId ===
-                opt.id
-                  ? ''
-                  : 'rotate-180'}"
-              />
-            </button>
-            {#if openConfigId === opt.id}
-              <ConfigPopover
-                configOption={opt}
-                onSelect={(value) => {
-                  onSetConfig?.(opt.id, value);
-                  openConfigId = null;
-                }}
-                onClose={() => {
-                  openConfigId = null;
-                }}
-              />
+
+    <div class="flex items-center gap-[6px]">
+      <button
+        type="button"
+        title="Attach (coming soon)"
+        disabled
+        class="inline-flex h-[30px] w-[30px] items-center justify-center rounded-full text-fg-muted disabled:opacity-40"
+      >
+        <Plus size={13} />
+      </button>
+
+      {#if thread}
+        <div class="relative">
+          <button
+            type="button"
+            class="inline-flex h-[28px] items-center gap-[6px] rounded-full bg-bg-hover px-[10px] text-[11.5px] font-medium text-fg-default"
+            onclick={() => (configOpen = !configOpen)}
+          >
+            <AgentAvatar
+              provider={thread.provider}
+              cli={thread.cli}
+              name={thread.name}
+              size={13}
+            />
+            <span>{thread.name}</span>
+            {#if configSummary}
+              <span class="px-[2px] text-fg-disabled">@</span>
+              <span class="text-fg-muted">{configSummary}</span>
             {/if}
-          </div>
-        {/each}
-      </div>
-      <div class="ml-auto flex items-center gap-1.5">
-        {#if isWorking && !demoMode}
-          <button
-            class="interactive w-6 h-6 flex items-center justify-center bg-error text-white rounded-md"
-            onclick={handleInterrupt}
+            <ChevronDown size={10} />
+          </button>
+          {#if configOpen && thread}
+            <ConfigPopover
+              configs={thread.configOptions}
+              onSetConfig={(id, v) => onSetConfig?.(id, v)}
+              onClose={() => (configOpen = false)}
+            />
+          {/if}
+        </div>
+      {/if}
+
+      <div class="min-w-0 flex-1"></div>
+
+      {#if thread?.tokenUsage && thread.tokenUsage.size > 0}
+        {@const fill = Math.min(
+          thread.tokenUsage.used / thread.tokenUsage.size,
+          1,
+        )}
+        {@const C = 2 * Math.PI * 5.5}
+        <span
+          class="inline-flex h-[30px] w-[30px] items-center justify-center text-fg-muted"
+          title="{fmtK(thread.tokenUsage.used)} / {fmtK(
+            thread.tokenUsage.size,
+          )} ({Math.round(fill * 100)}%)"
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 14 14"
+            aria-label="Context usage"
           >
-            <Square size={12} />
+            <circle
+              cx="7"
+              cy="7"
+              r="5.5"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              opacity="0.2"
+            />
+            <circle
+              cx="7"
+              cy="7"
+              r="5.5"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-dasharray={C}
+              stroke-dashoffset={C * (1 - fill)}
+              stroke-linecap="round"
+              transform="rotate(-90 7 7)"
+            />
+          </svg>
+        </span>
+      {/if}
+
+      <button
+        type="button"
+        title="Voice (coming soon)"
+        disabled
+        class="inline-flex h-[30px] w-[30px] items-center justify-center rounded-full text-fg-muted disabled:opacity-40"
+      >
+        <Mic size={12} />
+      </button>
+
+      {#if isWorking}
+        {#if isCancelling}
+          <button
+            type="button"
+            title="Stopping…"
+            disabled
+            class="inline-flex h-[30px] w-[30px] items-center justify-center rounded-full disabled:opacity-60"
+            style="background: var(--color-fg-heading); color: var(--color-background);"
+          >
+            <Loader size={10} />
+          </button>
+        {:else}
+          <button
+            type="button"
+            title="Interrupt"
+            class="inline-flex h-[30px] w-[30px] items-center justify-center rounded-full"
+            style="background: var(--color-fg-heading); color: var(--color-background);"
+            onclick={() => onInterrupt?.()}
+          >
+            <Square size={10} fill="currentColor" />
           </button>
         {/if}
-        {#if !isWorking || hasText}
-          <button
-            class="interactive w-6 h-6 flex items-center justify-center rounded-md {hasText &&
-            !demoMode &&
-            agent
-              ? 'bg-accent text-bg-base'
-              : 'bg-fg-disabled text-bg-base'}"
-            onclick={handleSend}
-            disabled={isDisabled || !hasText}
-          >
-            <ArrowUp size={12} />
-          </button>
-        {/if}
-      </div>
+      {:else}
+        <button
+          type="button"
+          title="Send"
+          disabled={!hasText || isDisabled}
+          class="inline-flex h-[30px] w-[30px] items-center justify-center rounded-full disabled:opacity-40"
+          style="background: var(--color-fg-heading); color: var(--color-background);"
+          onclick={submit}
+        >
+          <ArrowUp size={13} />
+        </button>
+      {/if}
     </div>
   </div>
 </div>

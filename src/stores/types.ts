@@ -58,6 +58,8 @@ export interface DisplayMessage {
   toolCalls?: DisplayToolCall[];
   timestamp: string;
   nudgeCount?: number;
+  pending?: boolean;
+  cancelled?: boolean;
 }
 
 export interface NudgeDeliveredPayload {
@@ -70,7 +72,24 @@ export interface TopologyChangedPayload {
   thread_id_b: string;
 }
 
-export type AgentStatus = "initializing" | "idle" | "working" | "error";
+export type ThreadProcessStatus = "initializing" | "idle" | "working" | "cancelling" | "error";
+
+export type ThreadSummaryStatus = ThreadProcessStatus | "dead";
+
+/** Coerce backend thread status strings to a known union; unknown → `"dead"`. */
+export function normalizeThreadSummaryStatus(raw: string): ThreadSummaryStatus {
+  switch (raw) {
+    case "initializing":
+    case "idle":
+    case "working":
+    case "cancelling":
+    case "error":
+    case "dead":
+      return raw;
+    default:
+      return "dead";
+  }
+}
 
 // ── Agent/Thread remodel types ─────────────────────────────
 
@@ -78,14 +97,15 @@ export interface AgentDefinition {
   id: string;
   workspace_id: string;
   name: string;
-  role?: string;
   cli: string;
+  /** Set at creation from `KnownAgent.provider`; used for logos only. */
+  provider?: string | null;
 }
 
 export interface ThreadSummary {
   id: string;
   agent_id: string;
-  status: string;
+  status: ThreadSummaryStatus;
   workspace_id: string;
   acp_session_id: string | null;
 }
@@ -102,27 +122,30 @@ export interface DisplayThread {
   agentId: string;
   workspaceId: string;
   cli: string;
+  /** Same as the parent agent definition's `provider` when known. */
+  provider: string | null;
   name: string;
-  status: AgentStatus | "dead";
-  processStatus: AgentStatus | "dead";
+  processStatus: ThreadProcessStatus | "dead";
   preview: string;
   messages: DisplayMessage[];
   activeToolCalls: DisplayToolCall[];
   queuedMessage: string | null;
   configOptions: ConfigOption[];
-  hasManagementPermissions: boolean;
   errorMessage?: string;
-  role?: string;
   updatedAt: string;
   stopReason: string | null;
   taskId: string | null;
+  tokenUsage?: { used: number; size: number } | undefined;
 }
 
 export interface DisplayAgentDefinition {
   id: string;
   name: string;
-  role?: string;
   cli: string;
+  /** Explicit logo id from agent creation; not derived from `cli`. */
+  provider: string | null;
+  /** Client-only until backend exposes a persisted field. */
+  systemPrompt: string;
   threads: DisplayThread[];
 }
 
@@ -156,12 +179,12 @@ export interface AgentDeletedPayload {
 }
 
 export type ActiveView =
-  | "swarm"
+  | "overview"
   | "agent-threads"
   | "agent-chat"
-  | "agent-settings"
   | "create-agent"
   | "settings"
+  | "app-settings"
   | "terminal"
   | "tasks";
 
@@ -211,9 +234,6 @@ export interface DisplayWorkspace {
   containerStatus: ContainerStatus;
   agentDefinitions: DisplayAgentDefinition[];
 }
-
-/** @deprecated Use DisplayWorkspace instead */
-export type DisplaySwarm = DisplayWorkspace;
 
 export interface SystemMessagePayload {
   thread_id: string;

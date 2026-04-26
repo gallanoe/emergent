@@ -1,16 +1,17 @@
 <script lang="ts">
-  import { AGENT_LOGOS } from "../../lib/agent-logos";
+  import { AgentAvatar } from "../../lib/primitives";
   import { ChevronDown } from "@lucide/svelte";
 
   interface KnownAgent {
     name: string;
     command: string;
     available: boolean;
+    provider: string;
   }
 
   interface Props {
     knownAgents: KnownAgent[];
-    onCreate: (cli: string, name: string, role: string | undefined) => void;
+    onCreate: (cli: string, name: string, provider: string) => void;
     onCancel: () => void;
   }
 
@@ -18,7 +19,6 @@
 
   let selectedCli = $state("");
   let name = $state("");
-  let role = $state("");
   let dropdownOpen = $state(false);
 
   $effect(() => {
@@ -36,8 +36,8 @@
   const canCreate = $derived(name.trim().length > 0 && selectedCli.length > 0);
 
   function handleCreate() {
-    if (!canCreate) return;
-    onCreate(selectedCli, name.trim(), role.trim() || undefined);
+    if (!canCreate || !selectedAgent) return;
+    onCreate(selectedCli, name.trim(), selectedAgent.provider);
   }
 
   function selectCli(agent: KnownAgent) {
@@ -82,18 +82,13 @@
             onclick={() => (dropdownOpen = !dropdownOpen)}
           >
             {#if selectedAgent}
-              {#if AGENT_LOGOS[selectedAgent.name]}
-                <img
-                  src={AGENT_LOGOS[selectedAgent.name]}
-                  alt=""
-                  class="w-[18px] h-[18px] rounded flex-shrink-0"
-                />
-              {:else}
-                <span
-                  class="w-[18px] h-[18px] rounded bg-bg-hover flex items-center justify-center text-[10px] font-semibold text-fg-muted flex-shrink-0"
-                  >{selectedAgent.name.charAt(0)}</span
-                >
-              {/if}
+              <AgentAvatar
+                provider={selectedAgent.provider}
+                cli={selectedAgent.command}
+                name={selectedAgent.name}
+                size={18}
+                class="flex-shrink-0"
+              />
               <span class="flex-1 text-left flex items-center gap-1.5">
                 <span class="text-fg-heading">{selectedAgent.name}</span>
                 <span
@@ -136,18 +131,13 @@
                   disabled={!agent.available}
                   onclick={() => selectCli(agent)}
                 >
-                  {#if AGENT_LOGOS[agent.name]}
-                    <img
-                      src={AGENT_LOGOS[agent.name]}
-                      alt=""
-                      class="w-[18px] h-[18px] rounded flex-shrink-0"
-                    />
-                  {:else}
-                    <span
-                      class="w-[18px] h-[18px] rounded bg-bg-hover flex items-center justify-center text-[10px] font-semibold text-fg-muted flex-shrink-0"
-                      >{agent.name.charAt(0)}</span
-                    >
-                  {/if}
+                  <AgentAvatar
+                    provider={agent.provider}
+                    cli={agent.command}
+                    name={agent.name}
+                    size={18}
+                    class="flex-shrink-0"
+                  />
                   <div class="flex-1 text-left">
                     <div class="text-fg-heading font-medium">{agent.name}</div>
                     <div
@@ -180,23 +170,6 @@
           placeholder="e.g. Code Reviewer, Test Writer"
           bind:value={name}
         />
-      </div>
-
-      <!-- Role -->
-      <div class="flex flex-col gap-1.5">
-        <label class="text-[11px] font-medium text-fg-muted" for="agent-role">
-          Role
-          <span class="font-normal text-fg-disabled">(optional)</span>
-        </label>
-        <textarea
-          id="agent-role"
-          class="bg-bg-elevated border border-border-default rounded-md px-2.5 py-[7px] text-[12px] text-fg-default font-[var(--font-ui)] w-full min-h-[80px] resize-y leading-relaxed focus:outline-none focus:border-border-focus"
-          placeholder="Describe this agent's purpose."
-          bind:value={role}
-        ></textarea>
-        <span class="text-[10px] text-fg-disabled leading-snug"
-          >Injected into the system prompt on the first turn of each thread.</span
-        >
       </div>
     </div>
   </div>

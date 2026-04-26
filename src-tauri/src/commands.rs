@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use tauri::State;
 
+use emergent_core::agent::usage_store::WorkspaceUsageStore;
 use emergent_core::agent::{AgentManager, ThreadMapping};
 use emergent_core::detect;
 use emergent_core::task::TaskManager;
@@ -35,11 +36,11 @@ pub async fn create_agent(
     manager: State<'_, Arc<AgentManager>>,
     workspace_id: String,
     name: String,
-    role: Option<String>,
     cli: String,
+    provider: Option<String>,
 ) -> Result<String, String> {
     let ws_id = emergent_protocol::WorkspaceId::from(workspace_id.as_str());
-    Ok(manager.create_agent(ws_id, name, role, cli).await)
+    Ok(manager.create_agent(ws_id, name, cli, provider).await)
 }
 
 #[tauri::command]
@@ -47,9 +48,9 @@ pub async fn update_agent(
     manager: State<'_, Arc<AgentManager>>,
     agent_id: String,
     name: Option<String>,
-    role: Option<String>,
+    provider: Option<String>,
 ) -> Result<(), String> {
-    manager.update_agent(&agent_id, name, role).await
+    manager.update_agent(&agent_id, name, provider).await
 }
 
 #[tauri::command]
@@ -138,9 +139,8 @@ pub async fn send_prompt(
     manager: State<'_, Arc<AgentManager>>,
     thread_id: String,
     text: String,
-    role: Option<String>,
 ) -> Result<(), String> {
-    let reply_rx = manager.queue_prompt(&thread_id, text, role).await?;
+    let reply_rx = manager.queue_prompt(&thread_id, text).await?;
     reply_rx
         .await
         .map_err(|_| "Agent prompt loop terminated".to_string())?
@@ -443,6 +443,17 @@ pub async fn close_terminal_session(
     session_id: String,
 ) -> Result<(), String> {
     workspace_manager.close_terminal_session(&session_id).await
+}
+
+// ── Usage commands ────────────────────────────────────────
+
+#[tauri::command]
+pub async fn get_workspace_usage(
+    manager: State<'_, Arc<AgentManager>>,
+    workspace_id: String,
+) -> Result<WorkspaceUsageStore, String> {
+    let ws_id = emergent_protocol::WorkspaceId::from(workspace_id.as_str());
+    Ok(manager.thread_manager().get_workspace_usage(&ws_id).await)
 }
 
 // ── Task commands ─────────────────────────────────────────

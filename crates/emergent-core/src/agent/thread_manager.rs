@@ -9,6 +9,9 @@ use emergent_protocol::{
 use tokio::sync::{broadcast, oneshot, Mutex, RwLock};
 
 use super::lifecycle::SessionInit;
+use super::usage_store::{
+    apply_cost_delta, apply_turn_delta, PersistedWorkspaceState, TurnDelta, WorkspaceUsageStore,
+};
 use super::{lifecycle, AgentCommand, ThreadHandle};
 
 /// Persisted thread-to-session mapping (stored in threads.json).
@@ -31,6 +34,13 @@ pub struct ThreadManager {
     pub(crate) mcp_port: std::sync::atomic::AtomicU16,
     pub(crate) workspace_state: crate::workspace::SharedWorkspaceState,
     pub(crate) runtime: crate::runtime::SharedRuntime,
+    /// Per-workspace aggregated usage totals + recent turn ring buffer.
+    pub(crate) usage_stores: Arc<RwLock<HashMap<WorkspaceId, WorkspaceUsageStore>>>,
+    /// Last cumulative token snapshot per ACP session ID (for delta calculation).
+    /// Keyed by acp_session_id. Cleared on kill (not on Dead status change).
+    pub(crate) last_session_snapshots: Arc<RwLock<HashMap<String, TurnDelta>>>,
+    /// Last cumulative cost snapshot per ACP session ID.
+    pub(crate) last_cost_snapshots: Arc<RwLock<HashMap<String, f64>>>,
 }
 
 impl ThreadManager {
@@ -43,18 +53,165 @@ impl ThreadManager {
         let history: Arc<RwLock<HashMap<String, Vec<Notification>>>> =
             Arc::new(RwLock::new(HashMap::new()));
 
+        let usage_stores: Arc<RwLock<HashMap<WorkspaceId, WorkspaceUsageStore>>> =
+            Arc::new(RwLock::new(HashMap::new()));
+        let last_session_snapshots: Arc<RwLock<HashMap<String, TurnDelta>>> =
+            Arc::new(RwLock::new(HashMap::new()));
+        let last_cost_snapshots: Arc<RwLock<HashMap<String, f64>>> =
+            Arc::new(RwLock::new(HashMap::new()));
+
+        // Create the threads map up-front so the recorder task and `Self` share
+        // the same Arc. This lets the recorder resolve acp_session_id from live
+        // handles when keying the snapshot maps.
+        let threads: Arc<RwLock<HashMap<String, Arc<Mutex<ThreadHandle>>>>> =
+            Arc::new(RwLock::new(HashMap::new()));
+
         // Spawn background task to record all notifications into per-thread history
+        // and to aggregate TurnUsage / TokenUsage into the usage stores.
         let history_clone = history.clone();
+        let usage_stores_clone = usage_stores.clone();
+        let snapshots_clone = last_session_snapshots.clone();
+        let cost_snapshots_clone = last_cost_snapshots.clone();
+        let ws_state_clone = workspace_state.clone();
+        let threads_recorder_ref = threads.clone();
         let mut recorder_rx: broadcast::Receiver<Notification> = event_tx.subscribe();
         tokio::spawn(async move {
             loop {
                 match recorder_rx.recv().await {
                     Ok(notification) => {
+                        // --- history ---
                         if let Some(thread_id) = notification.thread_id() {
                             let mut h = history_clone.write().await;
                             h.entry(thread_id.to_string())
                                 .or_default()
-                                .push(notification);
+                                .push(notification.clone());
+                        }
+
+                        // --- usage aggregation ---
+                        match &notification {
+                            Notification::TurnUsage(p) => {
+                                let ws_id = WorkspaceId::from(p.workspace_id.as_str());
+
+                                // Key the cumulative snapshot by acp_session_id so that
+                                // when a thread is killed and a new session opens, the
+                                // high-water mark from the previous session is not reused
+                                // (which would clamp the first delta of the new session to
+                                // zero via saturating_sub). Fall back to thread_id only
+                                // when no live handle with an acp_session_id is found.
+                                let acp_session_key = {
+                                    let threads = threads_recorder_ref.read().await;
+                                    threads
+                                        .get(&p.thread_id)
+                                        .and_then(|h| {
+                                            // Avoid holding the outer RwLock while awaiting
+                                            // the inner Mutex — use try_lock to keep it non-blocking.
+                                            h.try_lock().ok().and_then(|g| g.acp_session_id.clone())
+                                        })
+                                        .unwrap_or_else(|| p.thread_id.clone())
+                                };
+
+                                // Compute delta from last cumulative snapshot for this session.
+                                // ACP usage values are cumulative across the session lifetime.
+                                let delta = {
+                                    let mut snap = snapshots_clone.write().await;
+                                    let prev = snap.entry(acp_session_key.clone()).or_default();
+                                    let d = TurnDelta {
+                                        input_tokens: p.input_tokens.saturating_sub(prev.input_tokens),
+                                        output_tokens: p.output_tokens.saturating_sub(prev.output_tokens),
+                                        cached_read_tokens: p.cached_read_tokens.saturating_sub(prev.cached_read_tokens),
+                                        cached_write_tokens: p.cached_write_tokens.saturating_sub(prev.cached_write_tokens),
+                                        thought_tokens: p.thought_tokens.saturating_sub(prev.thought_tokens),
+                                        total_tokens: p.total_tokens.saturating_sub(prev.total_tokens),
+                                    };
+                                    // Update snapshot to current cumulative value.
+                                    prev.input_tokens = p.input_tokens;
+                                    prev.output_tokens = p.output_tokens;
+                                    prev.cached_read_tokens = p.cached_read_tokens;
+                                    prev.cached_write_tokens = p.cached_write_tokens;
+                                    prev.thought_tokens = p.thought_tokens;
+                                    prev.total_tokens = p.total_tokens;
+                                    d
+                                };
+
+                                {
+                                    let mut stores = usage_stores_clone.write().await;
+                                    let store = stores.entry(ws_id.clone()).or_default();
+                                    apply_turn_delta(store, &p.agent_definition_id, &delta, &p.at);
+                                }
+
+                                // Persist after every turn.
+                                Self::persist_workspace_state_static(
+                                    &usage_stores_clone,
+                                    &ws_id,
+                                    &ws_state_clone,
+                                )
+                                .await;
+                            }
+                            Notification::TokenUsage(p) => {
+                                // Accumulate cost deltas. Keyed by acp_session_id so that
+                                // a new session after a kill starts from 0.
+                                if let Some(cost_amount) = p.cost_amount {
+                                    // Resolve agent_definition_id, workspace_id, and
+                                    // acp_session_key for this thread. Skip silently if
+                                    // the thread is not found (race on shutdown).
+                                    let thread_context = {
+                                        let threads = threads_recorder_ref.read().await;
+                                        threads.get(&p.thread_id).and_then(|h| {
+                                            h.try_lock().ok().map(|g| {
+                                                (
+                                                    g.agent_id.clone(),
+                                                    g.workspace_id.clone(),
+                                                    g.acp_session_id
+                                                        .clone()
+                                                        .unwrap_or_else(|| p.thread_id.clone()),
+                                                )
+                                            })
+                                        })
+                                    };
+
+                                    if let Some((agent_definition_id, ws_id, acp_session_key)) =
+                                        thread_context
+                                    {
+                                        let cost_delta = {
+                                            let mut cs = cost_snapshots_clone.write().await;
+                                            let prev =
+                                                cs.entry(acp_session_key).or_insert(0.0);
+                                            // cost_amount is cumulative for the session.
+                                            let delta = cost_amount - *prev;
+                                            *prev = cost_amount;
+                                            // A zero or negative delta means we already
+                                            // accounted for this cost; skip.
+                                            if delta > 0.0 { delta } else { 0.0 }
+                                        };
+
+                                        if cost_delta > 0.0 {
+                                            let currency_str = p
+                                                .cost_currency
+                                                .as_deref()
+                                                .unwrap_or("usd");
+                                            {
+                                                let mut stores =
+                                                    usage_stores_clone.write().await;
+                                                let store =
+                                                    stores.entry(ws_id.clone()).or_default();
+                                                apply_cost_delta(
+                                                    store,
+                                                    &agent_definition_id,
+                                                    cost_delta,
+                                                    currency_str,
+                                                );
+                                            }
+                                            Self::persist_workspace_state_static(
+                                                &usage_stores_clone,
+                                                &ws_id,
+                                                &ws_state_clone,
+                                            )
+                                            .await;
+                                        }
+                                    }
+                                }
+                            }
+                            _ => {}
                         }
                     }
                     Err(broadcast::error::RecvError::Lagged(n)) => {
@@ -66,7 +223,7 @@ impl ThreadManager {
         });
 
         Self {
-            threads: Arc::new(RwLock::new(HashMap::new())),
+            threads,
             dormant_threads: Arc::new(RwLock::new(HashMap::new())),
             event_tx,
             history,
@@ -74,6 +231,9 @@ impl ThreadManager {
             mcp_port: std::sync::atomic::AtomicU16::new(0),
             workspace_state,
             runtime,
+            usage_stores,
+            last_session_snapshots,
+            last_cost_snapshots,
         }
     }
 
@@ -81,6 +241,12 @@ impl ThreadManager {
     pub fn set_mcp_port(&self, port: u16) {
         self.mcp_port
             .store(port, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// Return a clone of the broadcast sender. Used in integration tests to
+    /// inject synthetic notifications through the real recorder path.
+    pub fn event_sender(&self) -> broadcast::Sender<Notification> {
+        self.event_tx.clone()
     }
 
     /// Generate a short 8-character hex ID from random bytes.
@@ -106,7 +272,6 @@ impl ThreadManager {
         workspace_id: WorkspaceId,
         container_id: String,
         agent_binary: String,
-        role: Option<String>,
         task_id: Option<String>,
     ) -> Result<String, String> {
         let thread_id = Self::generate_short_id();
@@ -132,6 +297,7 @@ impl ThreadManager {
         let ws_id_for_persist = workspace_id.clone();
         let threads_for_persist = self.threads.clone();
         let dormant_for_persist = self.dormant_threads.clone();
+        let usage_stores_for_persist = self.usage_stores.clone();
         let token_registry_for_cleanup = self.token_registry.clone();
         let runtime = self.runtime.read().await;
         let cli_program = runtime.cli_program().to_string();
@@ -145,7 +311,6 @@ impl ThreadManager {
                 workspace_id,
                 container_id,
                 agent_binary,
-                role,
                 task_id,
                 SessionInit::New,
                 threads,
@@ -160,7 +325,7 @@ impl ThreadManager {
             {
                 Ok(()) => {
                     log::info!("Thread {} spawned successfully", &id);
-                    // Persist thread mappings after successful init
+                    // Persist thread mappings + usage after successful init
                     let workspace_dir = {
                         let state = ws_state.read().await;
                         state
@@ -175,8 +340,17 @@ impl ThreadManager {
                             &ws_id_for_persist,
                         )
                         .await;
-                        if let Err(e) = Self::save_to_dir(&mappings, &dir).await {
-                            log::error!("Failed to persist thread mappings: {}", e);
+                        let usage = {
+                            let stores = usage_stores_for_persist.read().await;
+                            stores.get(&ws_id_for_persist).cloned().unwrap_or_default()
+                        };
+                        let state = PersistedWorkspaceState {
+                            schema_version: 1,
+                            threads: mappings,
+                            usage,
+                        };
+                        if let Err(e) = Self::save_state_to_dir(&state, &dir).await {
+                            log::error!("Failed to persist workspace state: {}", e);
                         }
                     }
                 }
@@ -209,7 +383,6 @@ impl ThreadManager {
         workspace_id: WorkspaceId,
         container_id: String,
         agent_binary: String,
-        role: Option<String>,
         acp_session_id: String,
         task_id: Option<String>,
     ) -> Result<(), String> {
@@ -251,7 +424,6 @@ impl ThreadManager {
                 workspace_id,
                 container_id,
                 agent_binary,
-                role,
                 task_id,
                 SessionInit::Load { acp_session_id },
                 threads,
@@ -293,7 +465,6 @@ impl ThreadManager {
         &self,
         thread_id: &str,
         text: String,
-        role: Option<String>,
     ) -> Result<oneshot::Receiver<Result<(), String>>, String> {
         let handle_arc = {
             let threads = self.threads.read().await;
@@ -322,13 +493,6 @@ impl ThreadManager {
                 "Thread '{}' is not idle (current status: {})",
                 thread_id, handle.status
             ));
-        }
-
-        // Set role on first prompt if provided.
-        if !handle.has_prompted {
-            if let Some(r) = role {
-                handle.role = Some(r);
-            }
         }
 
         let (reply_tx, reply_rx) = oneshot::channel();
@@ -450,8 +614,35 @@ impl ThreadManager {
 
     /// Kill a thread: shut down its subprocess if live, remove it from the
     /// in-memory maps (live and dormant), and purge its entry from
-    /// `threads.json`.
+    /// `threads.json`. Also clears session snapshots so the next session
+    /// starts fresh (avoids double-counting on resume with a new session ID).
     pub async fn kill_thread(&self, thread_id: &str) -> Result<(), String> {
+        // Resolve the current acp_session_id before we tear down the live handle,
+        // so we can clear the primary snapshot key (keyed by acp_session_id).
+        let acp_session_id_opt: Option<String> = {
+            let threads = self.threads.read().await;
+            threads
+                .get(thread_id)
+                .and_then(|h| h.try_lock().ok().and_then(|g| g.acp_session_id.clone()))
+        };
+
+        // Clear usage snapshots so the next session starts fresh.
+        // Primary key is acp_session_id; also remove by thread_id as a defensive fallback.
+        {
+            let mut snap = self.last_session_snapshots.write().await;
+            if let Some(ref sid) = acp_session_id_opt {
+                snap.remove(sid.as_str());
+            }
+            snap.remove(thread_id);
+        }
+        {
+            let mut cs = self.last_cost_snapshots.write().await;
+            if let Some(ref sid) = acp_session_id_opt {
+                cs.remove(sid.as_str());
+            }
+            cs.remove(thread_id);
+        }
+
         // Try the live path first. shutdown_thread demotes to dormant;
         // since this is a kill, we then also purge from dormant.
         if let Some(workspace_id) = self.shutdown_thread(thread_id).await? {
@@ -774,6 +965,20 @@ impl ThreadManager {
         flat
     }
 
+    /// Inject a usage delta for a workspace. Intended for integration tests
+    /// only — production code populates the store via the recorder background task.
+    pub async fn apply_usage_delta_for_test(
+        &self,
+        workspace_id: &WorkspaceId,
+        agent_id: &str,
+        delta: &super::usage_store::TurnDelta,
+        at: &str,
+    ) {
+        let mut stores = self.usage_stores.write().await;
+        let store = stores.entry(workspace_id.clone()).or_default();
+        super::usage_store::apply_turn_delta(store, agent_id, delta, at);
+    }
+
     /// Register a workspace in the manager's shared state. Intended for
     /// integration tests — production code flows through `WorkspaceManager`.
     pub async fn register_workspace_for_test(
@@ -795,11 +1000,83 @@ impl ThreadManager {
         );
     }
 
+    /// Register a fake live thread in the threads map for integration tests.
+    /// The handle has a stub process and an mpsc channel that is never polled.
+    /// Intended for recorder-path tests that need to resolve `acp_session_id`
+    /// from the live map without spawning a real container.
+    pub async fn register_live_thread_for_test(
+        &self,
+        thread_id: String,
+        agent_definition_id: String,
+        workspace_id: WorkspaceId,
+        acp_session_id: Option<String>,
+    ) {
+        use crate::agent::spawner::RuntimeCliProcess;
+        use tokio::sync::mpsc;
+
+        let (command_tx, _command_rx) = mpsc::unbounded_channel();
+
+        // Spawn a no-op child process that exits immediately. This is the
+        // minimal `Child` required by `RuntimeCliProcess`.
+        let child = tokio::process::Command::new("true")
+            .spawn()
+            .expect("failed to spawn 'true' for test stub");
+        let process = RuntimeCliProcess::new_for_test(child);
+
+        let handle = super::ThreadHandle {
+            agent_id: agent_definition_id,
+            acp_session_id,
+            status: emergent_protocol::AgentStatus::Idle,
+            workspace_id,
+            command_tx,
+            process,
+            thread_handle: None,
+            config_options: Vec::new(),
+            has_management_permissions: false,
+            has_prompted: false,
+            task_id: None,
+            completing: false,
+            last_prompted_permissions: false,
+            prompt_notify: Arc::new(tokio::sync::Notify::new()),
+            pending_prompt: None,
+            prompt_loop_handle: None,
+        };
+
+        let mut threads = self.threads.write().await;
+        threads.insert(thread_id, Arc::new(Mutex::new(handle)));
+    }
+
+    /// Update the `acp_session_id` on a live thread handle. Used in tests to
+    /// simulate session renewal after a kill+respawn cycle.
+    pub async fn set_acp_session_id_for_test(
+        &self,
+        thread_id: &str,
+        acp_session_id: Option<String>,
+    ) {
+        let threads = self.threads.read().await;
+        if let Some(h) = threads.get(thread_id) {
+            h.lock().await.acp_session_id = acp_session_id;
+        }
+    }
+
+    /// Remove the cumulative token snapshot for a given acp_session_id.
+    /// Mirrors what `kill_thread` does; exposed for integration tests.
+    pub async fn clear_session_snapshot_for_test(&self, acp_session_id: &str) {
+        self.last_session_snapshots
+            .write()
+            .await
+            .remove(acp_session_id);
+        self.last_cost_snapshots
+            .write()
+            .await
+            .remove(acp_session_id);
+    }
+
     // -----------------------------------------------------------------------
     // Persistence
     // -----------------------------------------------------------------------
 
-    /// Persist all thread mappings for a given workspace to `threads.json`.
+    /// Persist all thread mappings + usage store for a given workspace.
     pub async fn persist_threads_for_workspace(&self, workspace_id: &WorkspaceId) {
         let workspace_dir = {
             let state = self.workspace_state.read().await;
@@ -815,8 +1092,57 @@ impl ThreadManager {
             workspace_id,
         )
         .await;
-        if let Err(e) = Self::save_to_dir(&mappings, &workspace_dir).await {
-            log::error!("Failed to persist thread mappings: {}", e);
+
+        let usage = {
+            let stores = self.usage_stores.read().await;
+            stores.get(workspace_id).cloned().unwrap_or_default()
+        };
+
+        let state = PersistedWorkspaceState {
+            schema_version: 1,
+            threads: mappings,
+            usage,
+        };
+
+        if let Err(e) = Self::save_state_to_dir(&state, &workspace_dir).await {
+            log::error!("Failed to persist workspace state: {}", e);
+        }
+    }
+
+    /// Static helper used from recorder task to persist usage without a &self ref.
+    async fn persist_workspace_state_static(
+        usage_stores: &Arc<RwLock<HashMap<WorkspaceId, WorkspaceUsageStore>>>,
+        workspace_id: &WorkspaceId,
+        ws_state: &crate::workspace::SharedWorkspaceState,
+    ) {
+        let workspace_dir = {
+            let state = ws_state.read().await;
+            match state.workspaces.get(workspace_id) {
+                Some(ws) => ws.path.clone(),
+                None => return,
+            }
+        };
+
+        // We only have the usage half here; threads are not available.
+        // Write a partial file update: read current threads from disk, merge usage.
+        let current_threads = match Self::load_full_state_from_dir(&workspace_dir).await {
+            Ok(s) => s.threads,
+            Err(_) => Vec::new(),
+        };
+
+        let usage = {
+            let stores = usage_stores.read().await;
+            stores.get(workspace_id).cloned().unwrap_or_default()
+        };
+
+        let state = PersistedWorkspaceState {
+            schema_version: 1,
+            threads: current_threads,
+            usage,
+        };
+
+        if let Err(e) = Self::save_state_to_dir(&state, &workspace_dir).await {
+            log::error!("Failed to persist usage to workspace state: {}", e);
         }
     }
 
@@ -857,12 +1183,15 @@ impl ThreadManager {
         out
     }
 
-    async fn save_to_dir(mappings: &[ThreadMapping], workspace_dir: &Path) -> Result<(), String> {
-        let json = serde_json::to_string_pretty(mappings)
-            .map_err(|e| format!("Failed to serialize thread mappings: {}", e))?;
+    async fn save_state_to_dir(
+        state: &PersistedWorkspaceState,
+        workspace_dir: &Path,
+    ) -> Result<(), String> {
+        let json = serde_json::to_string_pretty(state)
+            .map_err(|e| format!("Failed to serialize workspace state: {}", e))?;
         let path = workspace_dir.join("threads.json");
         let tmp_path = workspace_dir.join("threads.json.tmp");
-        tokio::fs::write(&tmp_path, json)
+        tokio::fs::write(&tmp_path, &json)
             .await
             .map_err(|e| format!("Failed to write threads.json.tmp: {}", e))?;
         tokio::fs::rename(&tmp_path, &path)
@@ -871,17 +1200,65 @@ impl ThreadManager {
         Ok(())
     }
 
-    /// Load persisted thread mappings from `threads.json`.
-    pub async fn load_from_dir(workspace_dir: &Path) -> Result<Vec<ThreadMapping>, String> {
+    /// Load full persisted state (threads + usage) from `threads.json`.
+    /// Handles v0 (bare array) and v1 (envelope object) formats.
+    async fn load_full_state_from_dir(
+        workspace_dir: &Path,
+    ) -> Result<PersistedWorkspaceState, String> {
         let path = workspace_dir.join("threads.json");
         if !path.exists() {
-            return Ok(Vec::new());
+            return Ok(PersistedWorkspaceState::default());
         }
         let raw = tokio::fs::read_to_string(&path)
             .await
             .map_err(|e| format!("Failed to read threads.json: {}", e))?;
-        let mappings: Vec<ThreadMapping> = serde_json::from_str(&raw)
-            .map_err(|e| format!("Failed to parse threads.json: {}", e))?;
-        Ok(mappings)
+
+        // Two-attempt backward-compat parse:
+        // v1 files start with `{`, v0 files with `[`.
+        match serde_json::from_str::<PersistedWorkspaceState>(&raw) {
+            Ok(envelope) => Ok(envelope),
+            Err(_) => {
+                // Try v0: bare Vec<ThreadMapping>
+                let threads: Vec<ThreadMapping> = serde_json::from_str(&raw)
+                    .map_err(|e| format!("Failed to parse threads.json: {}", e))?;
+                Ok(PersistedWorkspaceState {
+                    schema_version: 0,
+                    threads,
+                    usage: Default::default(),
+                })
+            }
+        }
+    }
+
+    /// Load persisted thread mappings from `threads.json`.
+    /// Returns only the thread list (backward-compat shim used by callers that
+    /// do not need usage data).
+    pub async fn load_from_dir(workspace_dir: &Path) -> Result<Vec<ThreadMapping>, String> {
+        Ok(Self::load_full_state_from_dir(workspace_dir).await?.threads)
+    }
+
+    /// Seed the in-memory usage store for a workspace from persisted state.
+    pub async fn seed_usage_from_dir(&self, workspace_id: &WorkspaceId, workspace_dir: &Path) {
+        match Self::load_full_state_from_dir(workspace_dir).await {
+            Ok(state) => {
+                if !state.usage.agents.is_empty() || !state.usage.recent_turns.is_empty() {
+                    let mut stores = self.usage_stores.write().await;
+                    stores.insert(workspace_id.clone(), state.usage);
+                }
+            }
+            Err(e) => {
+                log::warn!(
+                    "Failed to seed usage for workspace '{}': {}",
+                    workspace_id,
+                    e
+                );
+            }
+        }
+    }
+
+    /// Return the current usage snapshot for a workspace.
+    pub async fn get_workspace_usage(&self, workspace_id: &WorkspaceId) -> WorkspaceUsageStore {
+        let stores = self.usage_stores.read().await;
+        stores.get(workspace_id).cloned().unwrap_or_default()
     }
 }
