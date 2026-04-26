@@ -38,6 +38,20 @@ pub struct CreateTaskParams {
     pub agent_id: String,
     /// Optional list of task IDs that must complete first
     pub blocker_ids: Option<Vec<String>>,
+    /// If true, route this task's status updates and completion to the calling session as queue notifications.
+    pub subscribe: Option<bool>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct UpdateTaskParams {
+    /// Human-readable progress description routed to the task's creator.
+    pub description: String,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct CompleteTaskParams {
+    /// Optional summary describing what was accomplished. Sent to the session that created this task if it subscribed.
+    pub summary: Option<String>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -57,6 +71,12 @@ struct AvailableAgent {
 #[derive(Debug, Serialize)]
 struct CreateTaskResult {
     task_id: String,
+}
+
+#[derive(Debug, Serialize)]
+struct UpdateTaskResult {
+    task_id: String,
+    status: &'static str,
 }
 
 #[derive(Debug, Serialize)]
@@ -153,12 +173,21 @@ impl McpHandler {
                 params.agent_id,
                 params.blocker_ids.unwrap_or_default(),
                 parent_id,
+                Some(thread_id.clone()),
             )
             .await
             .map_err(|e| rmcp::model::ErrorData::internal_error(e, None))?;
 
-        let json = serde_json::to_string_pretty(&CreateTaskResult { task_id })
-            .map_err(|e| rmcp::model::ErrorData::internal_error(e.to_string(), None))?;
+        if params.subscribe == Some(true) {
+            self.task_manager
+                .register_subscriber(&task_id, &thread_id)
+                .await;
+        }
+
+        let json = serde_json::to_string_pretty(&CreateTaskResult {
+            task_id: task_id.clone(),
+        })
+        .map_err(|e| rmcp::model::ErrorData::internal_error(e.to_string(), None))?;
         Ok(rmcp::model::CallToolResult::success(vec![
             rmcp::model::Content::text(json),
         ]))
@@ -242,11 +271,12 @@ impl McpHandler {
         ]))
     }
 
-    /// Mark the current task as completed. Only available in task sessions.
+    /// Post a progress update on the current task. Sent to the session that created this task if it subscribed.
     #[tool]
-    async fn complete_task(
+    async fn update_task(
         &self,
         Extension(parts): Extension<http::request::Parts>,
+        Parameters(params): Parameters<UpdateTaskParams>,
     ) -> Result<rmcp::model::CallToolResult, rmcp::model::ErrorData> {
         let task_id = self
             .task_id_from_parts(&parts)
@@ -254,7 +284,34 @@ impl McpHandler {
             .map_err(|e| rmcp::model::ErrorData::internal_error(e, None))?;
 
         self.task_manager
-            .complete_task(&task_id)
+            .post_update(&task_id, &params.description)
+            .await
+            .map_err(|e| rmcp::model::ErrorData::internal_error(e, None))?;
+
+        let json = serde_json::to_string_pretty(&UpdateTaskResult {
+            task_id,
+            status: "ok",
+        })
+        .map_err(|e| rmcp::model::ErrorData::internal_error(e.to_string(), None))?;
+        Ok(rmcp::model::CallToolResult::success(vec![
+            rmcp::model::Content::text(json),
+        ]))
+    }
+
+    /// Mark the current task as completed. Only available in task sessions.
+    #[tool]
+    async fn complete_task(
+        &self,
+        Extension(parts): Extension<http::request::Parts>,
+        Parameters(params): Parameters<CompleteTaskParams>,
+    ) -> Result<rmcp::model::CallToolResult, rmcp::model::ErrorData> {
+        let task_id = self
+            .task_id_from_parts(&parts)
+            .await
+            .map_err(|e| rmcp::model::ErrorData::internal_error(e, None))?;
+
+        self.task_manager
+            .complete_task(&task_id, params.summary)
             .await
             .map_err(|e| rmcp::model::ErrorData::internal_error(e, None))?;
 
@@ -288,7 +345,10 @@ impl ServerHandler for McpHandler {
                 .tool_router
                 .list_all()
                 .into_iter()
-                .filter(|t| is_task_session || t.name != "complete_task")
+                .filter(|t| {
+                    is_task_session
+                        || (t.name != "complete_task" && t.name != "update_task")
+                })
                 .collect();
             Ok(rmcp::model::ListToolsResult {
                 tools,

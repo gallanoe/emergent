@@ -37,9 +37,10 @@ pub(crate) async fn prompt_loop(
         };
 
         // Determine injection parameters
-        let (is_first_turn, permission_change) = {
+        let (is_first_turn, is_task_session, permission_change) = {
             let handle = handle_arc.lock().await;
             let first = !handle.has_prompted;
+            let task_session = handle.task_id.is_some();
             let perm_change =
                 if handle.has_management_permissions != handle.last_prompted_permissions {
                     let msg = if handle.has_management_permissions {
@@ -51,10 +52,11 @@ pub(crate) async fn prompt_loop(
                 } else {
                     None
                 };
-            (first, perm_change)
+            (first, task_session, perm_change)
         };
 
-        let system_block = build_system_block(is_first_turn, permission_change.as_deref());
+        let system_block =
+            build_system_block(is_first_turn, is_task_session, permission_change.as_deref());
 
         // Emit permission change system message to frontend
         if let Some(ref perm_msg) = permission_change {

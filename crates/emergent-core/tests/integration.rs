@@ -180,6 +180,59 @@ async fn test_list_tools_shows_complete_task_for_task_session() {
 }
 
 #[tokio::test]
+async fn test_list_tools_hides_update_task_for_conversation_session() {
+    // `update_task` must not appear for conversation sessions — it is only
+    // meaningful inside task sessions.
+    let (url, registry, _manager) = spawn_test_server().await;
+    let token = registry.register("conversation-agent-2", None);
+    let client = reqwest::Client::new();
+
+    let (status, _) = post_mcp(&client, &url, mcp_init_body(), Some(&token)).await;
+    assert_eq!(status, 200);
+
+    let list_body = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/list",
+        "params": {}
+    })
+    .to_string();
+    let (status, body) = post_mcp(&client, &url, list_body, Some(&token)).await;
+    assert_eq!(status, 200);
+    assert!(
+        !body.contains("\"update_task\""),
+        "update_task must be hidden for conversation sessions, got: {}",
+        body
+    );
+}
+
+#[tokio::test]
+async fn test_list_tools_shows_update_task_for_task_session() {
+    // `update_task` must appear for task sessions.
+    let (url, registry, _manager) = spawn_test_server().await;
+    let token = registry.register("task-agent-2", Some("task-99".to_string()));
+    let client = reqwest::Client::new();
+
+    let (status, _) = post_mcp(&client, &url, mcp_init_body(), Some(&token)).await;
+    assert_eq!(status, 200);
+
+    let list_body = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/list",
+        "params": {}
+    })
+    .to_string();
+    let (status, body) = post_mcp(&client, &url, list_body, Some(&token)).await;
+    assert_eq!(status, 200);
+    assert!(
+        body.contains("\"update_task\""),
+        "update_task must be visible for task sessions, got: {}",
+        body
+    );
+}
+
+#[tokio::test]
 async fn test_invalid_token_tool_call_returns_error() {
     let (url, _registry, _manager) = spawn_test_server().await;
     let client = reqwest::Client::new();

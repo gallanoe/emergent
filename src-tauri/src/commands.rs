@@ -476,6 +476,7 @@ pub async fn create_task(
             agent_id,
             blocker_ids,
             parent_id,
+            None, // no creator_thread_id for Tauri-initiated tasks
         )
         .await
 }

@@ -1,9 +1,9 @@
 pub mod registry;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use emergent_protocol::{Notification, Task, TaskPayload, TaskState, WorkspaceId};
+use emergent_protocol::{Notification, Task, TaskPayload, TaskState, TaskStatusNotificationPayload, WorkspaceId};
 use tokio::sync::{broadcast, RwLock};
 
 use crate::agent::AgentManager;
@@ -17,6 +17,8 @@ pub struct TaskManager {
     /// Thread IDs pending teardown after their current turn drains.
     /// Populated by `complete_task`, consumed on the next `StatusChange(Idle)`.
     pending_teardown: Arc<RwLock<HashSet<String>>>,
+    /// Subscription registry: task_id → Vec of thread_ids to notify.
+    subscriptions: Arc<RwLock<HashMap<String, Vec<String>>>>,
 }
 
 fn build_task_prompt(task_id: &str, title: &str, description: &str) -> String {
@@ -105,6 +107,7 @@ impl TaskManager {
             event_tx,
             prompted_sessions: Arc::new(RwLock::new(HashSet::new())),
             pending_teardown: Arc::new(RwLock::new(HashSet::new())),
+            subscriptions: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -301,6 +304,7 @@ impl TaskManager {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn create_task(
         &self,
         workspace_id: WorkspaceId,
@@ -309,6 +313,7 @@ impl TaskManager {
         agent_id: String,
         blocker_ids: Vec<String>,
         parent_id: Option<String>,
+        creator_thread_id: Option<String>,
     ) -> Result<String, String> {
         // Validate agent exists
         if self.agent_manager.get_agent(&agent_id).await.is_none() {
@@ -334,6 +339,7 @@ impl TaskManager {
                 agent_id,
                 blocker_ids.clone(),
                 parent_id,
+                creator_thread_id,
             );
             let task = reg.get_task(&id).unwrap().clone();
             (id, task)
@@ -360,7 +366,11 @@ impl TaskManager {
         Ok(task_id)
     }
 
-    pub async fn complete_task(&self, task_id: &str) -> Result<(), String> {
+    pub async fn complete_task(
+        &self,
+        task_id: &str,
+        summary: Option<String>,
+    ) -> Result<(), String> {
         let (workspace_id, session_id) = {
             let mut reg = self.registry.write().await;
             let task = reg
@@ -378,6 +388,7 @@ impl TaskManager {
             task.state = TaskState::Completed {
                 session_id: session_id.clone(),
             };
+            task.summary = summary.clone();
             let workspace_id = task.workspace_id.clone();
             let _ = self.event_tx.send(Notification::TaskUpdated(TaskPayload {
                 task: task.clone(),
@@ -400,6 +411,13 @@ impl TaskManager {
             .write()
             .await
             .insert(session_id.clone());
+
+        self.notify_subscribers(
+            task_id,
+            "completed",
+            summary.as_deref().unwrap_or("Task completed"),
+        )
+        .await;
 
         self.persist_tasks(&workspace_id).await;
         self.start_unblocked_tasks(&workspace_id).await;
@@ -442,6 +460,70 @@ impl TaskManager {
         reg.get_task(task_id)
             .cloned()
             .ok_or_else(|| format!("Task '{}' not found", task_id))
+    }
+
+    /// Post a progress update for `task_id` and route it to all subscribers.
+    ///
+    /// Returns `Err` if the task does not exist or is not in the `Working` state.
+    pub async fn post_update(&self, task_id: &str, description: &str) -> Result<(), String> {
+        {
+            let reg = self.registry.read().await;
+            let task = reg
+                .get_task(task_id)
+                .ok_or_else(|| format!("Task '{}' not found", task_id))?;
+            if !matches!(task.state, TaskState::Working { .. }) {
+                return Err("task is not currently working".into());
+            }
+        }
+        self.notify_subscribers(task_id, "update", description).await;
+        Ok(())
+    }
+
+    /// Return `true` if `thread_id` is a subscriber for `task_id`.
+    ///
+    /// Used in tests to verify subscriber registration without exposing the
+    /// full subscription map.
+    #[cfg(test)]
+    pub async fn is_subscriber(&self, task_id: &str, thread_id: &str) -> bool {
+        let subs = self.subscriptions.read().await;
+        subs.get(task_id)
+            .map(|list| list.contains(&thread_id.to_string()))
+            .unwrap_or(false)
+    }
+
+    /// Register `thread_id` as a subscriber for notifications on `task_id`.
+    ///
+    /// Idempotent: if the thread is already subscribed, it is not added again.
+    pub async fn register_subscriber(&self, task_id: &str, thread_id: &str) {
+        let mut subs = self.subscriptions.write().await;
+        let entry = subs.entry(task_id.to_string()).or_default();
+        if !entry.contains(&thread_id.to_string()) {
+            entry.push(thread_id.to_string());
+        }
+    }
+
+    /// Emit a `TaskStatusNotification` broadcast event for every subscriber of `task_id`.
+    ///
+    /// The read lock is released before iterating so no lock is held across the
+    /// `event_tx.send` calls. Send errors are ignored — a broadcast send only
+    /// fails when there are zero active receivers, which is fine.
+    async fn notify_subscribers(&self, task_id: &str, kind: &str, message: &str) {
+        let subscribers: Vec<String> = {
+            let subs = self.subscriptions.read().await;
+            subs.get(task_id).cloned().unwrap_or_default()
+        };
+
+        for thread_id in subscribers {
+            let payload = TaskStatusNotificationPayload {
+                task_id: task_id.to_string(),
+                creator_thread_id: thread_id.clone(),
+                kind: kind.to_string(),
+                message: message.to_string(),
+            };
+            self.event_tx
+                .send(Notification::TaskStatusNotification(payload))
+                .ok();
+        }
     }
 
     pub async fn list_tasks_for_agent(&self, agent_id: &str) -> Vec<Task> {
@@ -699,16 +781,236 @@ impl TaskManager {
 
 #[cfg(test)]
 mod tests {
-    use super::build_task_prompt;
+    use super::*;
+    use crate::agent::AgentManager;
+    use crate::mcp::TokenRegistry;
+    use emergent_protocol::TaskStatusNotificationPayload;
+
+    fn build_task_prompt_exposed(task_id: &str, title: &str, description: &str) -> String {
+        build_task_prompt(task_id, title, description)
+    }
 
     #[test]
     fn task_prompt_includes_completion_instruction() {
-        let prompt = build_task_prompt("task-42", "Ship it", "Wrap up the feature.");
+        let prompt = build_task_prompt_exposed("task-42", "Ship it", "Wrap up the feature.");
 
         assert!(prompt.contains("Task task-42: Ship it"));
         assert!(prompt.contains("Wrap up the feature."));
         assert!(prompt.contains("`complete_task`"));
         assert!(prompt.contains("mark it done"));
         assert!(prompt.contains("session will end"));
+    }
+
+    /// Creates a minimal TaskManager backed by an empty AgentManager.
+    async fn make_task_manager() -> (TaskManager, broadcast::Receiver<Notification>) {
+        let registry = Arc::new(TokenRegistry::new());
+        let workspace_state = crate::workspace::new_shared_state();
+        let (event_tx, event_rx) = tokio::sync::broadcast::channel(1024);
+        let runtime = crate::runtime::load_shared_runtime().await;
+        let agent_manager = Arc::new(AgentManager::new(
+            workspace_state,
+            event_tx.clone(),
+            registry,
+            runtime,
+        ));
+        let tm = TaskManager::new(agent_manager, event_tx);
+        (tm, event_rx)
+    }
+
+    /// Insert a task into the registry with Working state (bypassing start_task).
+    /// Returns the generated task ID.
+    async fn insert_working_task(
+        tm: &TaskManager,
+        session_id: &str,
+        workspace_id: WorkspaceId,
+    ) -> String {
+        let mut reg = tm.registry.write().await;
+        let id = reg.create_task(
+            workspace_id,
+            "Test task".into(),
+            "desc".into(),
+            "agent-1".into(),
+            vec![],
+            None,
+            None,
+        );
+        if let Some(task) = reg.get_task_mut(&id) {
+            task.state = TaskState::Working {
+                session_id: session_id.to_string(),
+            };
+        }
+        id
+    }
+
+    #[tokio::test]
+    async fn register_subscriber_deduplicates() {
+        let (tm, _rx) = make_task_manager().await;
+
+        tm.register_subscriber("task-1", "thread-a").await;
+        tm.register_subscriber("task-1", "thread-a").await; // duplicate
+        tm.register_subscriber("task-1", "thread-b").await;
+
+        let subs = tm.subscriptions.read().await;
+        let list = subs.get("task-1").unwrap();
+        assert_eq!(list.len(), 2, "duplicate subscription must be deduplicated");
+        assert!(list.contains(&"thread-a".to_string()));
+        assert!(list.contains(&"thread-b".to_string()));
+    }
+
+    #[tokio::test]
+    async fn notify_subscribers_emits_one_notification_per_subscriber() {
+        let (tm, mut rx) = make_task_manager().await;
+
+        tm.register_subscriber("task-2", "thread-x").await;
+        tm.register_subscriber("task-2", "thread-y").await;
+
+        tm.notify_subscribers("task-2", "update", "progress note").await;
+
+        let mut received: Vec<TaskStatusNotificationPayload> = Vec::new();
+        while let Ok(notification) = rx.try_recv() {
+            if let Notification::TaskStatusNotification(p) = notification {
+                received.push(p);
+            }
+        }
+
+        assert_eq!(received.len(), 2, "one notification per subscriber");
+        let thread_ids: Vec<&str> = received.iter().map(|p| p.creator_thread_id.as_str()).collect();
+        assert!(thread_ids.contains(&"thread-x"));
+        assert!(thread_ids.contains(&"thread-y"));
+        for p in &received {
+            assert_eq!(p.task_id, "task-2");
+            assert_eq!(p.kind, "update");
+            assert_eq!(p.message, "progress note");
+        }
+    }
+
+    #[tokio::test]
+    async fn complete_task_with_summary_persists_summary() {
+        let (tm, _rx) = make_task_manager().await;
+        let ws_id = WorkspaceId::from("test-ws");
+        let task_id = insert_working_task(&tm, "sess-abc", ws_id.clone()).await;
+
+        // complete_task will warn on mark_thread_completing (thread not in manager), but proceeds.
+        let result = tm
+            .complete_task(&task_id, Some("All done!".into()))
+            .await;
+        assert!(result.is_ok(), "complete_task should succeed: {:?}", result);
+
+        let task = tm.get_task(&task_id).await.unwrap();
+        assert!(task.state.is_completed(), "task must be Completed");
+        assert_eq!(task.summary, Some("All done!".into()));
+    }
+
+    #[tokio::test]
+    async fn create_task_with_subscribe_registers_subscriber() {
+        // Verify that calling register_subscriber after create_task (the pattern
+        // the MCP handler uses when subscribe=true) correctly wires the subscriber.
+        let (tm, _rx) = make_task_manager().await;
+
+        // Directly exercise the subscriber path — simulates what the MCP handler
+        // does after create_task returns: register_subscriber(&task_id, &thread_id).
+        let task_id = "task-sub-test";
+        let creator_thread = "creator-123";
+
+        // Register before any task exists — should still work (no validation on task_id).
+        tm.register_subscriber(task_id, creator_thread).await;
+
+        assert!(
+            tm.is_subscriber(task_id, creator_thread).await,
+            "creator thread must be subscribed after register_subscriber"
+        );
+        // Registering again must not create duplicates.
+        tm.register_subscriber(task_id, creator_thread).await;
+        let subs = tm.subscriptions.read().await;
+        let list = subs.get(task_id).unwrap();
+        assert_eq!(
+            list.len(),
+            1,
+            "duplicate subscription must be deduplicated"
+        );
+    }
+
+    #[tokio::test]
+    async fn post_update_on_non_working_task_returns_err() {
+        let (tm, _rx) = make_task_manager().await;
+        let ws_id = WorkspaceId::from("test-ws");
+
+        // Insert a task in Pending state (not Working) via the registry directly.
+        let task_id = {
+            let mut reg = tm.registry.write().await;
+            reg.create_task(
+                ws_id,
+                "Test task".into(),
+                "desc".into(),
+                "agent-1".into(),
+                vec![],
+                None,
+                None,
+            )
+        };
+
+        let result = tm.post_update(&task_id, "some progress").await;
+        assert!(result.is_err(), "post_update on Pending task must return Err");
+        assert_eq!(
+            result.unwrap_err(),
+            "task is not currently working",
+            "error message must match"
+        );
+    }
+
+    #[tokio::test]
+    async fn post_update_on_working_task_emits_notification() {
+        let (tm, mut rx) = make_task_manager().await;
+        let ws_id = WorkspaceId::from("test-ws");
+        let task_id = insert_working_task(&tm, "sess-upd", ws_id).await;
+
+        tm.register_subscriber(&task_id, "subscriber-thread").await;
+
+        let result = tm.post_update(&task_id, "halfway there").await;
+        assert!(result.is_ok(), "post_update on Working task must succeed");
+
+        let mut found: Option<TaskStatusNotificationPayload> = None;
+        while let Ok(notification) = rx.try_recv() {
+            if let Notification::TaskStatusNotification(p) = notification {
+                if p.task_id == task_id {
+                    found = Some(p);
+                    break;
+                }
+            }
+        }
+
+        let p = found.expect("expected a TaskStatusNotification");
+        assert_eq!(p.creator_thread_id, "subscriber-thread");
+        assert_eq!(p.kind, "update");
+        assert_eq!(p.message, "halfway there");
+    }
+
+    #[tokio::test]
+    async fn complete_task_notifies_registered_subscribers() {
+        let (tm, mut rx) = make_task_manager().await;
+        let ws_id = WorkspaceId::from("test-ws");
+        let task_id = insert_working_task(&tm, "sess-def", ws_id.clone()).await;
+
+        tm.register_subscriber(&task_id, "creator-thread").await;
+
+        let result = tm
+            .complete_task(&task_id, Some("Summary here".into()))
+            .await;
+        assert!(result.is_ok());
+
+        let mut found: Option<TaskStatusNotificationPayload> = None;
+        while let Ok(notification) = rx.try_recv() {
+            if let Notification::TaskStatusNotification(p) = notification {
+                if p.task_id == task_id {
+                    found = Some(p);
+                    break;
+                }
+            }
+        }
+
+        let p = found.expect("expected a TaskStatusNotification for the task");
+        assert_eq!(p.creator_thread_id, "creator-thread");
+        assert_eq!(p.kind, "completed");
+        assert_eq!(p.message, "Summary here");
     }
 }

@@ -261,6 +261,14 @@ pub struct TerminalExitedPayload {
     pub session_id: String,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TaskStatusNotificationPayload {
+    pub task_id: String,
+    pub creator_thread_id: String,
+    pub kind: String,
+    pub message: String,
+}
+
 mod base64_bytes {
     use base64::Engine;
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -474,6 +482,8 @@ pub enum Notification {
     TaskCreated(crate::TaskPayload),
     #[serde(rename = "task:updated")]
     TaskUpdated(crate::TaskPayload),
+    #[serde(rename = "task:status-notification")]
+    TaskStatusNotification(TaskStatusNotificationPayload),
     #[serde(rename = "thread:session-ready")]
     SessionReady(SessionReadyPayload),
     #[serde(rename = "thread:token-usage")]
@@ -504,6 +514,7 @@ impl Notification {
             Notification::AgentDeleted(_) => "agent:definition-deleted",
             Notification::TaskCreated(_) => "task:created",
             Notification::TaskUpdated(_) => "task:updated",
+            Notification::TaskStatusNotification(_) => "task:status-notification",
             Notification::SessionReady(_) => "thread:session-ready",
             Notification::TokenUsage(_) => "thread:token-usage",
             Notification::TurnUsage(_) => "thread:turn-usage",
@@ -530,6 +541,7 @@ impl Notification {
             Notification::AgentDeleted(_) => None,
             Notification::TaskCreated(_) => None,
             Notification::TaskUpdated(_) => None,
+            Notification::TaskStatusNotification(p) => Some(&p.creator_thread_id),
             Notification::SessionReady(p) => Some(&p.thread_id),
             Notification::TokenUsage(p) => Some(&p.thread_id),
             Notification::TurnUsage(p) => Some(&p.thread_id),

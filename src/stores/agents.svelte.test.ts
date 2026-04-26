@@ -361,6 +361,91 @@ describe("Fixup 3: cancelPrompt IPC failure clears sending bubble", () => {
   });
 });
 
+// ── task:status-notification handler ─────────────────────────────────────────
+
+describe("handleTaskStatusNotification", () => {
+  it("pushes a kind='task-notification' item to pendingQueue of the target thread", () => {
+    makeThread("t-tsn-idle", "working");
+    const thread = agentStore.threads["t-tsn-idle"]!;
+
+    agentStore._test.handleTaskStatusNotification({
+      task_id: "task-42",
+      creator_thread_id: "t-tsn-idle",
+      kind: "update",
+      message: "halfway done",
+    });
+    flushSync();
+
+    expect(thread.pendingQueue).toHaveLength(1);
+    const item = thread.pendingQueue[0]!;
+    expect(item.kind).toBe("task-notification");
+    expect(item.content).toBe("[Task task-42] update: halfway done");
+  });
+
+  it("arms drainQueueOnIdle when thread is working", () => {
+    makeThread("t-tsn-working", "working");
+    const thread = agentStore.threads["t-tsn-working"]!;
+
+    agentStore._test.handleTaskStatusNotification({
+      task_id: "task-1",
+      creator_thread_id: "t-tsn-working",
+      kind: "completed",
+      message: "done",
+    });
+    flushSync();
+
+    expect(thread.drainQueueOnIdle).toBe(true);
+    expect(thread.pendingQueue).toHaveLength(1);
+  });
+
+  it("drains immediately when thread is idle, calling send_prompt", async () => {
+    makeThread("t-tsn-drain", "idle");
+    const thread = agentStore.threads["t-tsn-drain"]!;
+
+    const sendCalled = vi.fn().mockResolvedValue(null);
+    mockIPC((cmd) => {
+      if (cmd === "send_prompt") {
+        sendCalled();
+        return Promise.resolve(null);
+      }
+    });
+
+    agentStore._test.handleTaskStatusNotification({
+      task_id: "task-99",
+      creator_thread_id: "t-tsn-drain",
+      kind: "update",
+      message: "progress report",
+    });
+    flushSync();
+
+    // Queue drained — no items remain
+    expect(thread.pendingQueue).toHaveLength(0);
+
+    // A sending bubble was pushed
+    const sendingBubble = thread.messages.find((m) => m.sending === true);
+    expect(sendingBubble).toBeDefined();
+    expect(sendingBubble?.content).toBe("[Task task-99] update: progress report");
+
+    // Thread status set to working
+    expect(thread.status).toBe("working");
+
+    // invoke was called
+    await Promise.resolve();
+    expect(sendCalled).toHaveBeenCalled();
+  });
+
+  it("is a no-op when creator_thread_id does not match any thread", () => {
+    expect(() => {
+      agentStore._test.handleTaskStatusNotification({
+        task_id: "task-x",
+        creator_thread_id: "no-such-thread",
+        kind: "update",
+        message: "ignored",
+      });
+    }).not.toThrow();
+  });
+});
+
 // ── Store interface: removed legacy exports ────────────────────────────────────
 
 describe("removed legacy exports", () => {

@@ -167,6 +167,7 @@
           {#each items as item, i (item.id)}
             {@const isSelected = selectedId === item.id}
             {@const isFailed = item.failed === true}
+            {@const isTaskNotification = item.kind === "task-notification"}
             <li
               class="{i > 0 ? 'border-t border-border-default' : ''} {isFailed
                 ? 'border-l-2 border-l-error/50'
@@ -182,21 +183,29 @@
                 style="grid-template-columns: 28px 1fr auto;"
                 aria-label="Queued message {i + 1} of {items.length}{isFailed
                   ? ' — failed'
-                  : ''}"
+                  : ''}{isTaskNotification ? ' (task notification)' : ''}"
                 aria-expanded={isSelected}
                 onclick={() => toggleRow(item.id)}
                 onkeydown={(e) => handleRowKey(e, item.id)}
               >
-                <!-- Index — 2-digit mono, dimmer when not selected or failed -->
-                <span
-                  class="pt-[2px] font-[family-name:var(--font-mono)] text-[10.5px] font-medium leading-none tracking-[0.02em] {isFailed
-                    ? 'text-error'
-                    : isSelected
-                      ? 'text-fg-default'
-                      : 'text-fg-disabled'}"
-                >
-                  {String(i + 1).padStart(2, "0")}
-                </span>
+                <!-- Index or task badge -->
+                {#if isTaskNotification}
+                  <span
+                    class="queue-row__badge pt-[2px] font-[family-name:var(--font-mono)] text-[9px] font-medium uppercase leading-none tracking-[0.06em] text-fg-disabled"
+                  >
+                    task
+                  </span>
+                {:else}
+                  <span
+                    class="pt-[2px] font-[family-name:var(--font-mono)] text-[10.5px] font-medium leading-none tracking-[0.02em] {isFailed
+                      ? 'text-error'
+                      : isSelected
+                        ? 'text-fg-default'
+                        : 'text-fg-disabled'}"
+                  >
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                {/if}
 
                 <!-- Preview text: truncated when collapsed, full when expanded -->
                 <span
@@ -209,60 +218,65 @@
                   {item.content}
                 </span>
 
-                <!-- Action gutter: stopPropagation so clicks don't toggle row -->
-                <div
-                  class="flex items-center gap-[2px]"
-                  onclick={(e) => e.stopPropagation()}
-                  role="presentation"
-                >
-                  <!-- Edit — pulls item back into the composer -->
-                  <button
-                    type="button"
-                    title="Edit — pull back into composer"
-                    aria-label="Edit queued message: {item.content}"
-                    class="inline-flex h-[22px] w-[22px] items-center justify-center rounded-[5px] text-fg-disabled transition-colors duration-[var(--duration-quick)] hover:bg-bg-hover hover:text-fg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-border-focus"
-                    onclick={(e) => handleEdit(e, item)}
+                <!-- Action gutter: omitted for task-notification rows -->
+                {#if !isTaskNotification}
+                  <div
+                    class="flex items-center gap-[2px]"
+                    onclick={(e) => e.stopPropagation()}
+                    role="presentation"
                   >
-                    <svg
-                      width="11"
-                      height="11"
-                      viewBox="0 0 16 16"
-                      fill="none"
-                      aria-hidden="true"
+                    <!-- Edit — pulls item back into the composer -->
+                    <button
+                      type="button"
+                      title="Edit — pull back into composer"
+                      aria-label="Edit queued message: {item.content}"
+                      class="inline-flex h-[22px] w-[22px] items-center justify-center rounded-[5px] text-fg-disabled transition-colors duration-[var(--duration-quick)] hover:bg-bg-hover hover:text-fg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-border-focus"
+                      onclick={(e) => handleEdit(e, item)}
                     >
-                      <path
-                        d="M11 2.5l2.5 2.5L5.5 13H3v-2.5L11 2.5z"
-                        stroke="currentColor"
-                        stroke-width="1.4"
-                        stroke-linejoin="round"
-                      />
-                    </svg>
-                  </button>
+                      <svg
+                        width="11"
+                        height="11"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M11 2.5l2.5 2.5L5.5 13H3v-2.5L11 2.5z"
+                          stroke="currentColor"
+                          stroke-width="1.4"
+                          stroke-linejoin="round"
+                        />
+                      </svg>
+                    </button>
 
-                  <!-- Remove -->
-                  <button
-                    type="button"
-                    title="Remove from queue"
-                    aria-label="Remove queued message: {item.content}"
-                    class="inline-flex h-[22px] w-[22px] items-center justify-center rounded-[5px] text-fg-disabled transition-colors duration-[var(--duration-quick)] hover:bg-bg-hover hover:text-fg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-border-focus"
-                    onclick={(e) => handleRemove(e, item.id)}
-                  >
-                    <svg
-                      width="11"
-                      height="11"
-                      viewBox="0 0 16 16"
-                      fill="none"
-                      aria-hidden="true"
+                    <!-- Remove -->
+                    <button
+                      type="button"
+                      title="Remove from queue"
+                      aria-label="Remove queued message: {item.content}"
+                      class="inline-flex h-[22px] w-[22px] items-center justify-center rounded-[5px] text-fg-disabled transition-colors duration-[var(--duration-quick)] hover:bg-bg-hover hover:text-fg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-border-focus"
+                      onclick={(e) => handleRemove(e, item.id)}
                     >
-                      <path
-                        d="M4 4l8 8M12 4l-8 8"
-                        stroke="currentColor"
-                        stroke-width="1.4"
-                        stroke-linecap="round"
-                      />
-                    </svg>
-                  </button>
-                </div>
+                      <svg
+                        width="11"
+                        height="11"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M4 4l8 8M12 4l-8 8"
+                          stroke="currentColor"
+                          stroke-width="1.4"
+                          stroke-linecap="round"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                {:else}
+                  <!-- Empty gutter placeholder so the grid column is still allocated -->
+                  <div aria-hidden="true"></div>
+                {/if}
               </div>
             </li>
           {/each}

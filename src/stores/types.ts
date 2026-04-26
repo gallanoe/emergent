@@ -58,6 +58,20 @@ export interface QueueItem {
   submittedAt: number;
   /** Set to true when the thread errors while this item is queued. Item stays in the queue with error styling. */
   failed?: boolean;
+  /**
+   * Discriminates user-typed items from system-injected notifications.
+   * Absence (undefined) implies "user".
+   */
+  kind?: "user" | "task-notification";
+}
+
+/** Wire-format payload for the `task:status-notification` Tauri event.
+ *  Field names match the Rust struct (snake_case, no serde rename_all). */
+export interface TaskStatusNotificationPayload {
+  task_id: string;
+  creator_thread_id: string;
+  kind: string;
+  message: string;
 }
 
 export interface DisplayMessage {

@@ -232,6 +232,9 @@ pub fn run() {
                                 Notification::TaskUpdated(ref p) => {
                                     let _ = bridge_handle.emit(event_name, p);
                                 }
+                                Notification::TaskStatusNotification(ref p) => {
+                                    let _ = bridge_handle.emit(event_name, p);
+                                }
                                 Notification::ContainerStats(p) => {
                                     let _ = bridge_handle.emit(event_name, p);
                                 }

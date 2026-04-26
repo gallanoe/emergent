@@ -10,6 +10,7 @@ import {
   type NudgeDeliveredPayload,
   type QueueItem,
   type SystemMessagePayload,
+  type TaskStatusNotificationPayload,
   type ToolCallContentItem,
   type ToolKind,
 } from "./types";
@@ -445,35 +446,7 @@ function createAgentStore() {
 
     // B3d: drain queued items once the backend confirms idle
     if (next === "idle" && thread.drainQueueOnIdle && thread.pendingQueue.length > 0) {
-      thread.drainQueueOnIdle = false;
-      const items = thread.pendingQueue;
-      const joinedText = items.map((item) => item.content).join("\n\n");
-      thread.pendingQueue = [];
-
-      // Push a single sending bubble for the drained content
-      thread.messages.push({
-        id: crypto.randomUUID(),
-        role: "user",
-        content: joinedText,
-        timestamp: new Date().toLocaleTimeString([], {
-          hour: "numeric",
-          minute: "2-digit",
-        }),
-        sending: true,
-      });
-
-      thread.status = "working";
-
-      invoke("send_prompt", { threadId: thread.id, text: joinedText }).catch((err) => {
-        // Step 5: IPC sync error transition — clear sending flag, set error status
-        for (const msg of thread.messages) {
-          if (msg.sending) {
-            msg.sending = false;
-          }
-        }
-        thread.status = "error";
-        console.error("send_prompt (drain) failed:", err);
-      });
+      drainQueueNow(thread);
     }
   }
 
@@ -543,6 +516,72 @@ function createAgentStore() {
     thread.tokenUsage = { used: payload.used_tokens, size: payload.context_size };
   }
 
+  /**
+   * Drain the pending queue for a thread that is currently idle.
+   * Shared by both the status-change handler (B3d) and the task-notification
+   * handler (when the thread is already idle when a notification arrives).
+   *
+   * Precondition: caller must have verified `thread.pendingQueue.length > 0`
+   * and `thread.status === "idle"` before calling.
+   */
+  function drainQueueNow(thread: ThreadState) {
+    thread.drainQueueOnIdle = false;
+    const items = thread.pendingQueue;
+    const joinedText = items.map((item) => item.content).join("\n\n");
+    thread.pendingQueue = [];
+
+    thread.messages.push({
+      id: crypto.randomUUID(),
+      role: "user",
+      content: joinedText,
+      timestamp: new Date().toLocaleTimeString([], {
+        hour: "numeric",
+        minute: "2-digit",
+      }),
+      sending: true,
+    });
+
+    thread.status = "working";
+
+    invoke("send_prompt", { threadId: thread.id, text: joinedText }).catch((err) => {
+      for (const msg of thread.messages) {
+        if (msg.sending) {
+          msg.sending = false;
+        }
+      }
+      thread.status = "error";
+      console.error("send_prompt (drain) failed:", err);
+    });
+  }
+
+  function handleTaskStatusNotification(payload: TaskStatusNotificationPayload) {
+    const thread = threads[payload.creator_thread_id];
+    if (!thread) {
+      console.debug(`[task:status-notification] thread not found: ${payload.creator_thread_id}`);
+      return;
+    }
+
+    const content = `[Task ${payload.task_id}] ${payload.kind}: ${payload.message}`;
+
+    thread.pendingQueue.push({
+      id: crypto.randomUUID(),
+      content,
+      submittedAt: Date.now(),
+      kind: "task-notification",
+    });
+
+    // If the thread is already idle and not draining, arm the drain flag and
+    // drain immediately so the agent processes the notification right away.
+    if (thread.status === "idle") {
+      thread.drainQueueOnIdle = true;
+      drainQueueNow(thread);
+    } else {
+      // Thread is working/cancelling/etc. — arm the flag so the existing
+      // drain-on-idle path (handleStatusChange) picks it up when idle arrives.
+      thread.drainQueueOnIdle = true;
+    }
+  }
+
   // ── Event listener setup ──────────────────────────────────────
 
   async function setupListeners() {
@@ -597,6 +636,11 @@ function createAgentStore() {
     listenerCleanup.push(
       await listen<ThreadTokenUsagePayload>("thread:token-usage", (e) =>
         handleTokenUsage(e.payload),
+      ),
+    );
+    listenerCleanup.push(
+      await listen<TaskStatusNotificationPayload>("task:status-notification", (e) =>
+        handleTaskStatusNotification(e.payload),
       ),
     );
     listenersReady = true;
@@ -1033,6 +1077,7 @@ function createAgentStore() {
       handleStatusChange,
       handleError,
       handleUserMessage,
+      handleTaskStatusNotification,
       get chunkBuffers() {
         return chunkBuffers;
       },

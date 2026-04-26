@@ -74,6 +74,12 @@ pub struct Task {
     pub state: TaskState,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub parent_id: Option<String>,
+    /// Optional summary written by the agent when calling `complete_task`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
+    /// The thread ID of the session that created this task via `create_task`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub creator_thread_id: Option<String>,
     pub blocker_ids: Vec<String>,
     pub agent_id: String,
     pub workspace_id: WorkspaceId,
@@ -138,6 +144,8 @@ mod tests {
                 session_id: "s1".into(),
             },
             parent_id: None,
+            summary: None,
+            creator_thread_id: None,
             blocker_ids: vec![],
             agent_id: "a1".into(),
             workspace_id: WorkspaceId::from("ws1"),
@@ -156,6 +164,8 @@ mod tests {
             description: "y".into(),
             state: TaskState::Pending,
             parent_id: None,
+            summary: None,
+            creator_thread_id: None,
             blocker_ids: vec![],
             agent_id: "a1".into(),
             workspace_id: WorkspaceId::from("ws1"),

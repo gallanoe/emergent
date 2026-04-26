@@ -2,11 +2,19 @@
 const SWARM_GUIDE: &str = "\
 You are part of an Emergent multi-agent swarm. Other agents may be working alongside you in the same workspace.";
 
+/// Task-session tool guide — injected on first turn of a task session.
+const TASK_SESSION_GUIDE: &str = "\
+You are running as a task session. Two additional tools are available to you:
+
+- `update_task`: Call this whenever you make meaningful progress. The `description` argument is shown to the session that created this task. Use it to report intermediate results, decisions, or status updates.
+- `complete_task`: Marks this task as done. Accepts an optional `summary` parameter — use it to tell the creator what was accomplished. Your session ends after the turn in which you call `complete_task`.";
+
 /// Build the `<emergent-system>` block to prepend to a prompt.
 ///
 /// Returns `None` if there is nothing to inject.
 pub fn build_system_block(
     is_first_turn: bool,
+    is_task_session: bool,
     permission_change: Option<&str>,
 ) -> Option<String> {
     let mut sections = Vec::new();
@@ -17,6 +25,9 @@ pub fn build_system_block(
         sections.push(
             "Messages wrapped in <emergent-system> tags are instructions from Emergent, not from the user.".to_string(),
         );
+        if is_task_session {
+            sections.push(TASK_SESSION_GUIDE.to_string());
+        }
         has_content = true;
     }
 
@@ -41,7 +52,7 @@ mod tests {
 
     #[test]
     fn first_turn() {
-        let block = build_system_block(true, None).unwrap();
+        let block = build_system_block(true, false, None).unwrap();
         assert!(block.starts_with("<emergent-system>"));
         assert!(block.ends_with("</emergent-system>"));
         assert!(block.contains("multi-agent swarm"));
@@ -51,6 +62,7 @@ mod tests {
     #[test]
     fn runtime_permission_only() {
         let block = build_system_block(
+            false,
             false,
             Some("Management permissions have been granted."),
         )
@@ -63,6 +75,7 @@ mod tests {
     fn first_turn_merged_with_permission() {
         let block = build_system_block(
             true,
+            false,
             Some("Management permissions have been revoked."),
         )
         .unwrap();
@@ -76,6 +89,32 @@ mod tests {
 
     #[test]
     fn nothing_to_inject() {
-        assert!(build_system_block(false, None).is_none());
+        assert!(build_system_block(false, false, None).is_none());
+    }
+
+    #[test]
+    fn task_session_first_turn_includes_update_task_and_summary() {
+        let block = build_system_block(true, true, None).unwrap();
+        assert!(
+            block.contains("update_task"),
+            "task session block must mention update_task"
+        );
+        assert!(
+            block.contains("summary"),
+            "task session block must mention summary"
+        );
+    }
+
+    #[test]
+    fn non_task_session_first_turn_omits_task_tools() {
+        let block = build_system_block(true, false, None).unwrap();
+        assert!(
+            !block.contains("update_task"),
+            "non-task session block must not mention update_task"
+        );
+        assert!(
+            !block.contains("summary"),
+            "non-task session block must not mention summary"
+        );
     }
 }

@@ -25,6 +25,7 @@ impl TaskRegistry {
         Self::default()
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn create_task(
         &mut self,
         workspace_id: WorkspaceId,
@@ -33,6 +34,7 @@ impl TaskRegistry {
         agent_id: String,
         blocker_ids: Vec<String>,
         parent_id: Option<String>,
+        creator_thread_id: Option<String>,
     ) -> String {
         let id = generate_id();
         let task = Task {
@@ -41,6 +43,8 @@ impl TaskRegistry {
             description,
             state: TaskState::Pending,
             parent_id,
+            summary: None,
+            creator_thread_id,
             blocker_ids,
             agent_id,
             workspace_id,
@@ -160,6 +164,7 @@ mod tests {
             "agent-1".into(),
             vec![],
             None,
+            None,
         );
         let task = reg.get_task(&id).unwrap();
         assert_eq!(task.title, "Build auth");
@@ -171,13 +176,14 @@ mod tests {
     #[test]
     fn test_list_tasks_filters_by_workspace() {
         let mut reg = TaskRegistry::new();
-        reg.create_task(ws_id(), "A".into(), "d".into(), "a1".into(), vec![], None);
+        reg.create_task(ws_id(), "A".into(), "d".into(), "a1".into(), vec![], None, None);
         reg.create_task(
             WorkspaceId::from("other"),
             "B".into(),
             "d".into(),
             "a2".into(),
             vec![],
+            None,
             None,
         );
         let list = reg.list_tasks(&ws_id());
@@ -195,6 +201,7 @@ mod tests {
             "agent-1".into(),
             vec![],
             None,
+            None,
         );
         reg.create_task(
             ws_id(),
@@ -202,6 +209,7 @@ mod tests {
             "d".into(),
             "agent-2".into(),
             vec![],
+            None,
             None,
         );
         let list = reg.list_tasks_for_agent("agent-1");
@@ -212,7 +220,7 @@ mod tests {
     #[test]
     fn test_find_unblocked_tasks_no_blockers() {
         let mut reg = TaskRegistry::new();
-        let id = reg.create_task(ws_id(), "A".into(), "d".into(), "a".into(), vec![], None);
+        let id = reg.create_task(ws_id(), "A".into(), "d".into(), "a".into(), vec![], None, None);
         let unblocked = reg.find_unblocked_tasks(&ws_id());
         assert_eq!(unblocked, vec![id]);
     }
@@ -227,6 +235,7 @@ mod tests {
             "a".into(),
             vec![],
             None,
+            None,
         );
         reg.create_task(
             ws_id(),
@@ -234,6 +243,7 @@ mod tests {
             "d".into(),
             "a".into(),
             vec![blocker_id.clone()],
+            None,
             None,
         );
         let unblocked = reg.find_unblocked_tasks(&ws_id());
@@ -251,6 +261,7 @@ mod tests {
             "a".into(),
             vec![],
             None,
+            None,
         );
         let blocked_id = reg.create_task(
             ws_id(),
@@ -258,6 +269,7 @@ mod tests {
             "d".into(),
             "a".into(),
             vec![blocker_id.clone()],
+            None,
             None,
         );
         reg.get_task_mut(&blocker_id).unwrap().state = TaskState::Completed {
@@ -277,6 +289,7 @@ mod tests {
             "agent-1".into(),
             vec![],
             None,
+            None,
         );
         assert!(reg.agent_has_active_tasks("agent-1"));
         assert!(!reg.agent_has_active_tasks("agent-2"));
@@ -290,7 +303,7 @@ mod tests {
     async fn test_save_and_load_roundtrip() {
         let dir = tempfile::tempdir().unwrap();
         let mut reg = TaskRegistry::new();
-        let id = reg.create_task(ws_id(), "A".into(), "desc".into(), "a".into(), vec![], None);
+        let id = reg.create_task(ws_id(), "A".into(), "desc".into(), "a".into(), vec![], None, None);
         reg.save_to_dir(&ws_id(), dir.path()).await.unwrap();
 
         let mut reg2 = TaskRegistry::new();
