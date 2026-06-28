@@ -1066,6 +1066,7 @@ dependencies = [
  "getrandom 0.3.4",
  "hex",
  "http",
+ "libc",
  "log",
  "portable-pty",
  "reqwest 0.12.28",

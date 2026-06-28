@@ -6,6 +6,13 @@ use emergent_protocol::{Notification, TerminalExitedPayload, TerminalOutputPaylo
 use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
 use tokio::sync::broadcast;
 
+#[cfg(unix)]
+use libc::{SIGKILL, SIGTERM};
+#[cfg(not(unix))]
+const SIGTERM: i32 = 15;
+#[cfg(not(unix))]
+const SIGKILL: i32 = 9;
+
 /// Sessions are held behind a std Mutex (not a tokio one) so the blocking PTY
 /// reader thread can remove its own entry on exit, and so no map lock is ever
 /// held across a blocking PTY write. Every lock here is brief — never across an
@@ -35,15 +42,11 @@ fn default_shell() -> String {
 }
 
 /// Signal a whole process group (`kill -<signal> -<pgid>`). No-op off unix.
-fn signal_group(pgid: i32, signal: &str) {
+fn signal_group(pgid: i32, signal: i32) {
     #[cfg(unix)]
-    {
-        let _ = std::process::Command::new("kill")
-            .arg(format!("-{signal}"))
-            .arg(format!("-{pgid}"))
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status();
+    // SAFETY: `killpg` is async-signal-safe; `pgid` is the shell's process group.
+    unsafe {
+        let _ = libc::killpg(pgid, signal);
     }
     #[cfg(not(unix))]
     {
@@ -84,8 +87,8 @@ impl TerminalSession {
     /// EOF, reaps the child, and removes the session from the map.
     pub fn close(self) {
         if let Some(pgid) = self.pgid {
-            signal_group(pgid, "TERM");
-            signal_group(pgid, "KILL");
+            signal_group(pgid, SIGTERM);
+            signal_group(pgid, SIGKILL);
         }
     }
 }
@@ -157,7 +160,7 @@ pub async fn create_session(
     let tx = event_tx.clone();
     let sid = session_id.clone();
     let sessions_for_reader = sessions.clone();
-    std::thread::Builder::new()
+    let reader_spawn = std::thread::Builder::new()
         .name(format!("term-{}", session_id))
         .spawn(move || {
             let mut buf = [0u8; 4096];
@@ -181,8 +184,16 @@ pub async fn create_session(
             let _ = tx.send(Notification::TerminalExited(TerminalExitedPayload {
                 session_id: sid,
             }));
-        })
-        .map_err(|e| format!("Failed to spawn terminal reader thread: {}", e))?;
+        });
+
+    if let Err(e) = reader_spawn {
+        // The reader thread failed to spawn — remove the just-inserted session
+        // and kill the shell so neither is leaked.
+        if let Some(s) = sessions.lock().unwrap().remove(&session_id) {
+            s.close();
+        }
+        return Err(format!("Failed to spawn terminal reader thread: {}", e));
+    }
 
     Ok(session_id)
 }

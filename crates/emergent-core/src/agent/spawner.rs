@@ -1,6 +1,13 @@
 use async_trait::async_trait;
 use tokio::io::{AsyncRead, AsyncWrite};
 
+#[cfg(unix)]
+use libc::{SIGKILL, SIGTERM};
+#[cfg(not(unix))]
+const SIGTERM: i32 = 15;
+#[cfg(not(unix))]
+const SIGKILL: i32 = 9;
+
 /// A spawned agent process, providing stdin/stdout for the ACP byte stream.
 #[async_trait]
 pub trait AgentProcess: Send {
@@ -62,7 +69,7 @@ impl LocalProcess {
     /// then SIGKILL the group (and the child) if it has not exited.
     pub async fn shutdown(&mut self, timeout: std::time::Duration) -> Result<(), String> {
         // Graceful: SIGTERM the group, give the leader time to exit.
-        self.signal_group("TERM").await;
+        self.signal_group(SIGTERM);
         if tokio::time::timeout(timeout, self.child.wait())
             .await
             .is_err()
@@ -72,24 +79,20 @@ impl LocalProcess {
         // Always sweep the group with SIGKILL: even when the leader exits
         // promptly on SIGTERM, grandchildren (bunx -> node, MCP helpers) that
         // ignore or are slow on SIGTERM must not be left orphaned.
-        self.signal_group("KILL").await;
+        self.signal_group(SIGKILL);
         Ok(())
     }
 
-    /// Send a signal to the whole process group. No-op on non-Unix or when the
-    /// pid is unavailable (already reaped).
-    async fn signal_group(&self, signal: &str) {
+    /// Signal the whole process group with a direct `killpg` syscall — no
+    /// subprocess, non-blocking. No-op off unix or when the pid is gone.
+    fn signal_group(&self, signal: i32) {
         #[cfg(unix)]
         if let Some(pgid) = self.pgid {
-            // A negative pid targets the entire process group.
-            let _ = tokio::process::Command::new("kill")
-                .arg(format!("-{signal}"))
-                .arg(format!("-{pgid}"))
-                .stdin(std::process::Stdio::null())
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .status()
-                .await;
+            // SAFETY: `killpg` is async-signal-safe; `pgid` is the child's own
+            // process group (the child was made a group leader at spawn).
+            unsafe {
+                let _ = libc::killpg(pgid, signal);
+            }
         }
         #[cfg(not(unix))]
         let _ = signal;
@@ -100,16 +103,8 @@ impl Drop for LocalProcess {
     fn drop(&mut self) {
         // `kill_on_drop(true)` only SIGKILLs the direct child; on the drop path
         // (ACP init failure, task abort) sweep the whole group so grandchildren
-        // are not orphaned. Best-effort and synchronous (Drop can't be async).
-        #[cfg(unix)]
-        if let Some(pgid) = self.pgid {
-            let _ = std::process::Command::new("kill")
-                .arg("-KILL")
-                .arg(format!("-{}", pgid))
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .status();
-        }
+        // are not orphaned. A direct killpg syscall does not block the thread.
+        self.signal_group(SIGKILL);
     }
 }
 
@@ -135,7 +130,7 @@ impl AgentProcess for LocalProcess {
     }
 
     async fn kill(&mut self) -> Result<(), String> {
-        self.signal_group("KILL").await;
+        self.signal_group(SIGKILL);
         self.child
             .kill()
             .await
