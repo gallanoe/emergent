@@ -61,15 +61,18 @@ impl LocalProcess {
     /// Graceful shutdown: SIGTERM the process group, wait up to `timeout`,
     /// then SIGKILL the group (and the child) if it has not exited.
     pub async fn shutdown(&mut self, timeout: std::time::Duration) -> Result<(), String> {
+        // Graceful: SIGTERM the group, give the leader time to exit.
         self.signal_group("TERM").await;
-
         if tokio::time::timeout(timeout, self.child.wait())
             .await
             .is_err()
         {
-            self.signal_group("KILL").await;
             let _ = self.child.kill().await;
         }
+        // Always sweep the group with SIGKILL: even when the leader exits
+        // promptly on SIGTERM, grandchildren (bunx -> node, MCP helpers) that
+        // ignore or are slow on SIGTERM must not be left orphaned.
+        self.signal_group("KILL").await;
         Ok(())
     }
 
@@ -90,6 +93,23 @@ impl LocalProcess {
         }
         #[cfg(not(unix))]
         let _ = signal;
+    }
+}
+
+impl Drop for LocalProcess {
+    fn drop(&mut self) {
+        // `kill_on_drop(true)` only SIGKILLs the direct child; on the drop path
+        // (ACP init failure, task abort) sweep the whole group so grandchildren
+        // are not orphaned. Best-effort and synchronous (Drop can't be async).
+        #[cfg(unix)]
+        if let Some(pgid) = self.pgid {
+            let _ = std::process::Command::new("kill")
+                .arg("-KILL")
+                .arg(format!("-{}", pgid))
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status();
+        }
     }
 }
 
