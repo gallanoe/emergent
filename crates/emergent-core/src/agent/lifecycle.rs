@@ -152,6 +152,38 @@ pub(crate) async fn initialize_agent(
         }
     }
 
+    // Codex stores its OAuth credentials in `$CODEX_HOME/auth.json` (default
+    // `$HOME/.codex/auth.json`), so the isolated $HOME points it at an empty dir
+    // and Codex reports "Not logged in". Unlike Claude this is not keychain-backed,
+    // so symlinking the keychain doesn't help. OpenAI rotates refresh tokens (each
+    // is single-use) and Codex rewrites auth.json *in place* on refresh, so we must
+    // share one physical file, not copy it: a copy would let the first agent to
+    // refresh consume the shared refresh token and silently log out the user and
+    // every sibling agent. Symlink the real user's auth.json into the agent's
+    // otherwise-isolated `.codex` so a refresh writes back to the single source of
+    // truth. Best-effort: a failure here only costs Codex auth, so we log and
+    // continue.
+    #[cfg(unix)]
+    if let Some(real_home) = std::env::var_os("HOME") {
+        let real_auth = std::path::Path::new(&real_home)
+            .join(".codex")
+            .join("auth.json");
+        let codex_home = agent_home.join(".codex");
+        let link = codex_home.join("auth.json");
+        let real_exists = tokio::fs::metadata(&real_auth).await.is_ok();
+        let already_present = tokio::fs::symlink_metadata(&link).await.is_ok();
+        if real_exists && !already_present {
+            let _ = tokio::fs::create_dir_all(&codex_home).await;
+            if let Err(e) = tokio::fs::symlink(&real_auth, &link).await {
+                log::warn!(
+                    "Failed to symlink Codex auth into agent home '{}': {}",
+                    agent_workdir,
+                    e
+                );
+            }
+        }
+    }
+
     let mut process = super::spawner::ProcessSpawner::spawn(&spawner, &parts, &agent_home, &env)
         .await
         .map_err(|e| format!("Failed to spawn agent '{}': {}", agent_binary, e))?;
