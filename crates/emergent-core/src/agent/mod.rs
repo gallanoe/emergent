@@ -92,8 +92,6 @@ impl AgentManager {
         event_tx: broadcast::Sender<Notification>,
         token_registry: Arc<crate::mcp::TokenRegistry>,
     ) -> Self {
-        enrich_path();
-
         let threads =
             ThreadManager::new(event_tx.clone(), token_registry, workspace_state.clone());
 
@@ -546,33 +544,3 @@ impl AgentManager {
     }
 }
 
-/// Enrich PATH with common CLI install locations.
-fn enrich_path() {
-    let home = match std::env::var("HOME") {
-        Ok(h) => std::path::PathBuf::from(h),
-        Err(_) => return,
-    };
-
-    let extra_dirs: Vec<std::path::PathBuf> = vec![
-        home.join(".local/bin"),
-        home.join(".cargo/bin"),
-        home.join(".bun/bin"),
-        home.join(".nvm/current/bin"),
-        home.join(".local/share/fnm/aliases/default/bin"),
-        std::path::PathBuf::from("/usr/local/bin"),
-        std::path::PathBuf::from("/opt/homebrew/bin"),
-    ];
-
-    let current_path = std::env::var("PATH").unwrap_or_default();
-    let mut dirs: Vec<std::path::PathBuf> = std::env::split_paths(&current_path).collect();
-
-    for dir in extra_dirs {
-        if dir.is_dir() && !dirs.contains(&dir) {
-            dirs.push(dir);
-        }
-    }
-
-    if let Ok(new_path) = std::env::join_paths(&dirs) {
-        unsafe { std::env::set_var("PATH", &new_path) };
-    }
-}

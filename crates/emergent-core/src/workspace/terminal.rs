@@ -156,6 +156,10 @@ pub async fn create_session(
 
         let mut cmd = CommandBuilder::new(&shell);
         cmd.cwd(&cwd);
+        // Inherit the same enriched PATH the agents get. The shell otherwise
+        // snapshots the (often minimal) GUI-launch PATH, so login-shell-only
+        // install dirs (~/.local/bin, /opt/homebrew/bin, …) would be missing.
+        cmd.env("PATH", crate::detect::enriched_path());
 
         let child = pair
             .slave

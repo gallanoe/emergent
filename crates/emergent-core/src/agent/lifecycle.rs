@@ -55,6 +55,18 @@ pub(crate) struct PendingHandshake {
     event_tx: broadcast::Sender<Notification>,
 }
 
+/// Split an agent command string into argv with shell-style quoting, so a binary
+/// or argument containing spaces (e.g. a CLI under a path with spaces) survives
+/// intact instead of being shattered by naive whitespace splitting.
+fn parse_agent_command(agent_binary: &str) -> Result<Vec<String>, String> {
+    let parts = shell_words::split(agent_binary)
+        .map_err(|e| format!("Failed to parse agent command '{}': {}", agent_binary, e))?;
+    if parts.is_empty() {
+        return Err(format!("Agent command '{}' is empty", agent_binary));
+    }
+    Ok(parts)
+}
+
 fn initial_config_from_load_response(
     load_resp: LoadSessionResponse,
     config_state: &[ConfigOption],
@@ -88,7 +100,8 @@ pub(crate) async fn initialize_agent(
     agent_home: std::path::PathBuf,
 ) -> Result<PendingHandshake, String> {
     let spawner = super::spawner::LocalProcessSpawner::new();
-    let parts: Vec<&str> = agent_binary.split_whitespace().collect();
+    let parts = parse_agent_command(&agent_binary)?;
+    let parts: Vec<&str> = parts.iter().map(String::as_str).collect();
 
     // The agent runs with both its cwd and $HOME set to its own directory so
     // that per-agent config (.claude/.codex/…) stays isolated from other
@@ -100,6 +113,10 @@ pub(crate) async fn initialize_agent(
     let _ = tokio::fs::create_dir_all(&bun_cache).await;
     let env: Vec<(String, String)> = vec![
         ("HOME".to_string(), agent_workdir.clone()),
+        // Pass the enriched PATH explicitly rather than mutating the global env:
+        // the child no longer inherits an in-place-modified parent PATH, so it
+        // still finds CLIs in login-shell dirs the GUI launch context misses.
+        ("PATH".to_string(), crate::detect::enriched_path().to_string()),
         (
             "BUN_INSTALL_CACHE_DIR".to_string(),
             bun_cache.to_string_lossy().into_owned(),
@@ -520,6 +537,35 @@ mod tests {
             ],
         )
         .category(SessionConfigOptionCategory::Model)
+    }
+
+    #[test]
+    fn parse_agent_command_splits_plain_args() {
+        assert_eq!(
+            parse_agent_command("bunx @zed-industries/claude-agent-acp").unwrap(),
+            vec!["bunx", "@zed-industries/claude-agent-acp"]
+        );
+    }
+
+    #[test]
+    fn parse_agent_command_preserves_quoted_paths_with_spaces() {
+        // A binary path containing a space must stay a single argv entry.
+        assert_eq!(
+            parse_agent_command("\"/opt/my tools/agent\" acp --flag").unwrap(),
+            vec!["/opt/my tools/agent", "acp", "--flag"]
+        );
+        assert_eq!(
+            parse_agent_command("agent --msg 'hello world'").unwrap(),
+            vec!["agent", "--msg", "hello world"]
+        );
+    }
+
+    #[test]
+    fn parse_agent_command_rejects_empty_and_unbalanced() {
+        assert!(parse_agent_command("   ").is_err());
+        assert!(parse_agent_command("").is_err());
+        // Unterminated quote is a parse error, not a silent mis-split.
+        assert!(parse_agent_command("agent \"unterminated").is_err());
     }
 
     #[test]
