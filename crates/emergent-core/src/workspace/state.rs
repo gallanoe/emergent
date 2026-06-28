@@ -4,13 +4,12 @@ use std::sync::Arc;
 
 use tokio::sync::RwLock;
 
-pub use emergent_protocol::{ContainerStatus, WorkspaceId};
+pub use emergent_protocol::{WorkspaceId, WorkspaceStatus};
 
 pub struct Workspace {
     pub name: String,
     pub path: PathBuf,
-    pub container_id: Option<String>,
-    pub container_status: ContainerStatus,
+    pub status: WorkspaceStatus,
 }
 
 pub struct WorkspaceState {

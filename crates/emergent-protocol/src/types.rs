@@ -152,20 +152,16 @@ impl From<&str> for WorkspaceId {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "state", rename_all = "snake_case")]
-pub enum ContainerStatus {
-    Stopped,
-    Building,
-    Running,
+pub enum WorkspaceStatus {
+    Ready,
     Error { message: String },
 }
 
-impl std::fmt::Display for ContainerStatus {
+impl std::fmt::Display for WorkspaceStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ContainerStatus::Stopped => write!(f, "stopped"),
-            ContainerStatus::Building => write!(f, "building"),
-            ContainerStatus::Running => write!(f, "running"),
-            ContainerStatus::Error { message } => write!(f, "error: {}", message),
+            WorkspaceStatus::Ready => write!(f, "ready"),
+            WorkspaceStatus::Error { message } => write!(f, "error: {}", message),
         }
     }
 }
@@ -174,14 +170,14 @@ impl std::fmt::Display for ContainerStatus {
 pub struct WorkspaceEntry {
     pub id: WorkspaceId,
     pub name: String,
-    pub container_status: ContainerStatus,
+    pub status: WorkspaceStatus,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WorkspaceSummary {
     pub id: WorkspaceId,
     pub name: String,
-    pub container_status: ContainerStatus,
+    pub status: WorkspaceStatus,
     pub agent_count: usize,
 }
 
@@ -190,63 +186,13 @@ pub struct WorkspaceInfo {
     pub id: WorkspaceId,
     pub name: String,
     pub path: String,
-    pub container_id: Option<String>,
-    pub container_status: ContainerStatus,
-}
-
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ContainerRuntimeKind {
-    #[default]
-    Docker,
-    Podman,
-}
-
-impl std::fmt::Display for ContainerRuntimeKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ContainerRuntimeKind::Docker => write!(f, "docker"),
-            ContainerRuntimeKind::Podman => write!(f, "podman"),
-        }
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ContainerRuntimePreference {
-    pub selected_runtime: ContainerRuntimeKind,
-}
-
-impl Default for ContainerRuntimePreference {
-    fn default() -> Self {
-        Self {
-            selected_runtime: ContainerRuntimeKind::Docker,
-        }
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ContainerRuntimeStatus {
-    pub selected_runtime: ContainerRuntimeKind,
-    pub available: bool,
-    pub version: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub message: Option<String>,
+    pub status: WorkspaceStatus,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WorkspaceStatusChangePayload {
     pub workspace_id: WorkspaceId,
-    pub status: ContainerStatus,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ContainerStatsPayload {
-    pub workspace_id: WorkspaceId,
-    pub cpu_percent: f32,
-    pub memory_bytes: u64,
-    pub memory_limit_bytes: u64,
-    pub net_bps: u64,
+    pub status: WorkspaceStatus,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -490,8 +436,6 @@ pub enum Notification {
     TokenUsage(ThreadTokenUsagePayload),
     #[serde(rename = "thread:turn-usage")]
     TurnUsage(TurnUsagePayload),
-    #[serde(rename = "workspace:container-stats")]
-    ContainerStats(ContainerStatsPayload),
 }
 
 impl Notification {
@@ -518,7 +462,6 @@ impl Notification {
             Notification::SessionReady(_) => "thread:session-ready",
             Notification::TokenUsage(_) => "thread:token-usage",
             Notification::TurnUsage(_) => "thread:turn-usage",
-            Notification::ContainerStats(_) => "workspace:container-stats",
         }
     }
 
@@ -545,7 +488,6 @@ impl Notification {
             Notification::SessionReady(p) => Some(&p.thread_id),
             Notification::TokenUsage(p) => Some(&p.thread_id),
             Notification::TurnUsage(p) => Some(&p.thread_id),
-            Notification::ContainerStats(_) => None,
         }
     }
 }
@@ -660,7 +602,7 @@ mod tests {
     fn workspace_status_change_notification_roundtrips() {
         let n = Notification::WorkspaceStatusChange(WorkspaceStatusChangePayload {
             workspace_id: WorkspaceId::from("ws-abc"),
-            status: ContainerStatus::Building,
+            status: WorkspaceStatus::Ready,
         });
         let json = serde_json::to_string(&n).unwrap();
         assert!(json.contains("workspace:status-change"));

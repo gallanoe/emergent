@@ -3,16 +3,13 @@
   import {
     AgentAvatar,
     StatusDot,
-    RuntimeGlyph,
     Button,
     Mono,
     SLabel,
   } from "../../lib/primitives";
   import StatTile from "./StatTile.svelte";
-  import MiniMetric from "./MiniMetric.svelte";
   import PipelineRow from "./PipelineRow.svelte";
   import { usageStore } from "../../stores/usage.svelte";
-  import { containerStats } from "../../stores/container-stats.svelte";
   import type {
     DisplayWorkspace,
     DisplayTask,
@@ -88,67 +85,14 @@
     ),
   );
 
-  const rt = $derived(containerStats.runtimeFor(workspace.id));
-
-  const runtimeState = $derived(workspace.containerStatus.state);
-  const runtimeStateLabel = $derived(
-    runtimeState === "running"
-      ? "Running"
-      : runtimeState === "building"
-        ? "Building"
-        : runtimeState === "error"
-          ? "Error"
-          : "Stopped",
-  );
-
-  const runtimeGlyphState = $derived(
-    runtimeState === "running"
-      ? "running"
-      : runtimeState === "building"
-        ? "building"
-        : runtimeState === "error"
-          ? "error"
-          : "stopped",
-  );
-
-  const runtimeSubtitle = $derived(
-    runtimeState === "running"
-      ? `container running · ${fmtMem(rt.memMb)}`
-      : `container ${runtimeState}`,
-  );
-
   const heroMeta = $derived(
-    runtimeState === "running"
-      ? `container running · ${fmtMem(rt.memMb)} · uptime —`
-      : `container ${runtimeState}`,
+    workspace.status.state === "error" ? workspace.status.message : "ready",
   );
 
   function fmtK(n: number): string {
     if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
     if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
     return String(n);
-  }
-
-  function fmtNet(kbps: number): string {
-    if (kbps === 0) return "0 KB/s";
-    if (kbps < 0.1) return "<0.1 KB/s";
-    if (kbps >= 1024) return `${(kbps / 1024).toFixed(1)} MB/s`;
-    if (kbps < 10) return `${kbps.toFixed(1)} KB/s`;
-    return `${Math.round(kbps)} KB/s`;
-  }
-
-  /** Format a memory value in MB to a short human-readable string. */
-  function fmtMem(mb: number): string {
-    if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`;
-    return `${Math.round(mb)} MB`;
-  }
-
-  /** Format a CPU percent value to a short human-readable string. */
-  function fmtCpu(pct: number): string {
-    if (pct < 0.01) return "<0.01%";
-    if (pct < 1) return `${pct.toFixed(2)}%`;
-    if (pct < 10) return `${pct.toFixed(1)}%`;
-    return `${Math.round(pct)}%`;
   }
 
   function agentPct(def: DisplayAgentDefinition): {
@@ -228,8 +172,8 @@
         />
       </div>
 
-      <!-- Tokens + runtime -->
-      <div class="grid grid-cols-[1.7fr_1fr] gap-3">
+      <!-- Tokens -->
+      <div>
         <section
           class="overflow-hidden rounded-[10px] border border-border-default bg-bg-elevated"
         >
@@ -286,42 +230,6 @@
                 >
               </div>
             {/each}
-          </div>
-        </section>
-
-        <section
-          class="overflow-hidden rounded-[10px] border border-border-default bg-bg-elevated"
-        >
-          <div class="border-b border-border-default px-3.5 py-3">
-            <SLabel>Runtime</SLabel>
-          </div>
-          <div class="flex flex-col gap-3 px-3.5 py-3.5">
-            <div class="flex items-center gap-2.5">
-              <RuntimeGlyph state={runtimeGlyphState} size={24} />
-              <div class="min-w-0 flex-1">
-                <div class="text-[13px] font-medium text-fg-heading">
-                  {runtimeStateLabel}
-                </div>
-                <Mono size={10.5} color="var(--color-fg-muted)"
-                  >{runtimeSubtitle}</Mono
-                >
-              </div>
-            </div>
-            <MiniMetric
-              label="CPU"
-              value={fmtCpu(rt.cpuPct)}
-              series={rt.cpuSeries}
-            />
-            <MiniMetric
-              label="Memory"
-              value={`${fmtMem(rt.memMb)} / ${fmtMem(rt.memLimitMb)}`}
-              series={rt.memSeries}
-            />
-            <MiniMetric
-              label="Network"
-              value={fmtNet(rt.netKbps)}
-              series={rt.netSeries}
-            />
           </div>
         </section>
       </div>

@@ -7,7 +7,6 @@
     tasks: DisplayTask[];
     selectedTaskId: string | null;
     agentNames: Record<string, string>;
-    containerRunning: boolean;
     onSelectTask: (id: string) => void;
     onNavigateToSession?: (threadId: string) => void;
     onCreateTask: () => void;
@@ -17,7 +16,6 @@
     tasks,
     selectedTaskId,
     agentNames,
-    containerRunning,
     onSelectTask,
     onNavigateToSession,
     onCreateTask,
@@ -107,10 +105,7 @@
       <Button
         variant="secondary"
         size="xs"
-        disabled={!containerRunning}
-        title={containerRunning
-          ? "Create a new task"
-          : "Start the workspace container to create tasks"}
+        title="Create a new task"
         onclick={onCreateTask}
       >
         {#snippet icon()}<Plus size={11} />{/snippet}

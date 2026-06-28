@@ -25,15 +25,9 @@ pub fn run() {
             // Create shared workspace state
             let workspace_state = emergent_core::workspace::new_shared_state();
 
-            let runtime = tauri::async_runtime::block_on(async {
-                emergent_core::runtime::load_shared_runtime().await
-            });
-
             // Create workspace manager (async — use block_on)
             let workspace_manager = tauri::async_runtime::block_on(async {
-                let wm =
-                    WorkspaceManager::new(workspace_state.clone(), event_tx.clone(), runtime.clone())
-                        .await;
+                let wm = WorkspaceManager::new(workspace_state.clone(), event_tx.clone()).await;
                 if let Err(e) = wm.load_workspaces().await {
                     log::error!("Failed to load workspaces: {}", e);
                 }
@@ -48,7 +42,6 @@ pub fn run() {
                 workspace_state.clone(),
                 event_tx.clone(),
                 token_registry.clone(),
-                runtime.clone(),
             ));
 
             // Create task manager
@@ -89,9 +82,9 @@ pub fn run() {
                 let mut recoverable_thread_ids: std::collections::HashSet<String> =
                     manager.live_thread_ids().await;
 
-                // Workspaces whose containers are running — candidates for
-                // eager task resume + start-unblocked after recovery.
-                let mut running_workspaces: Vec<emergent_protocol::WorkspaceId> = Vec::new();
+                // Every workspace is ready under the local-process model — all
+                // are candidates for eager task resume after recovery.
+                let mut all_workspaces: Vec<emergent_protocol::WorkspaceId> = Vec::new();
 
                 let state = workspace_state.read().await;
                 for (ws_id, ws) in state.workspaces.iter() {
@@ -132,12 +125,7 @@ pub fn run() {
                         .seed_usage_from_dir(ws_id, workspace_path)
                         .await;
 
-                    if matches!(
-                        ws.container_status,
-                        emergent_protocol::ContainerStatus::Running
-                    ) {
-                        running_workspaces.push(ws_id.clone());
-                    }
+                    all_workspaces.push(ws_id.clone());
                 }
                 drop(state);
 
@@ -145,12 +133,9 @@ pub fn run() {
                     .recover_stale_tasks(&recoverable_thread_ids)
                     .await;
 
-                // For each workspace whose container is already running, resume
-                // any Working task threads and start any Pending tasks with all
-                // blockers Completed. Workspaces whose containers are stopped
-                // are deferred until the user brings the container up via
-                // start_container, which triggers the same logic.
-                for ws_id in running_workspaces {
+                // Resume every workspace's tasks: working threads, and any
+                // pending tasks whose blockers are all completed.
+                for ws_id in all_workspaces {
                     task_manager.resume_workspace_tasks(&ws_id).await;
                 }
             });
@@ -235,9 +220,6 @@ pub fn run() {
                                 Notification::TaskStatusNotification(ref p) => {
                                     let _ = bridge_handle.emit(event_name, p);
                                 }
-                                Notification::ContainerStats(p) => {
-                                    let _ = bridge_handle.emit(event_name, p);
-                                }
                             }
                         }
                         Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
@@ -285,14 +267,6 @@ pub fn run() {
             commands::list_workspaces,
             commands::get_workspace,
             commands::update_workspace,
-            commands::get_dockerfile,
-            commands::open_dockerfile_editor,
-            commands::start_container,
-            commands::stop_container,
-            commands::rebuild_container,
-            commands::get_container_runtime_status,
-            commands::get_container_runtime_preference,
-            commands::set_container_runtime_preference,
             commands::create_terminal_session,
             commands::write_terminal,
             commands::resize_terminal,

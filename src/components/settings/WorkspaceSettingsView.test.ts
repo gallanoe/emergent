@@ -8,8 +8,7 @@ const sampleWorkspace: WorkspaceInfo = {
   id: "ws-1",
   name: "Alpha Lab",
   path: "/tmp/alpha",
-  container_id: null,
-  container_status: { state: "stopped" },
+  status: { state: "ready" },
 };
 
 const { invokeMock } = vi.hoisted(() => ({
@@ -24,14 +23,7 @@ const noop = () => {};
 
 const baseProps = {
   workspaceId: "ws-1",
-  containerStatus: { state: "stopped" as const },
-  runtimePreference: { selected_runtime: "docker" as const },
-  runtimeStatus: null,
   onUpdateName: noop,
-  onRuntimeChange: noop,
-  onStart: noop,
-  onStop: noop,
-  onRebuild: noop,
   onDelete: noop,
 };
 
@@ -44,12 +36,11 @@ describe("WorkspaceSettingsView", () => {
     });
   });
 
-  it("renders workspace, runtime, and danger sections", async () => {
+  it("renders workspace and danger sections", async () => {
     render(WorkspaceSettingsView, { props: baseProps });
     await tick();
     await tick();
     expect(screen.getByText("Workspace")).toBeTruthy();
-    expect(screen.getByText("Container runtime")).toBeTruthy();
     expect(screen.getByText("Danger zone")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Alpha Lab" })).toBeTruthy();
     expect(screen.getAllByText("/tmp/alpha").length).toBeGreaterThanOrEqual(1);

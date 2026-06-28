@@ -1,6 +1,6 @@
 <script lang="ts">
   import { ChevronDown, Cog, Plus } from "@lucide/svelte";
-  import type { ContainerStatus, DisplayWorkspace } from "../../stores/types";
+  import type { WorkspaceStatus, DisplayWorkspace } from "../../stores/types";
   import { Mono } from "../../lib/primitives";
 
   interface Props {
@@ -32,15 +32,12 @@
       | undefined,
   );
 
-  function statusDotClass(s: ContainerStatus) {
-    if (s.state === "running") return "bg-success";
-    if (s.state === "building") return "bg-warning";
-    return "bg-fg-disabled";
+  function statusDotClass(s: WorkspaceStatus) {
+    return s.state === "error" ? "bg-error" : "bg-success";
   }
 
-  function statusLabel(s: ContainerStatus) {
-    if (s.state === "error") return "Error";
-    return s.state.charAt(0).toUpperCase() + s.state.slice(1);
+  function statusLabel(s: WorkspaceStatus) {
+    return s.state === "error" ? "Error" : "Ready";
   }
 
   $effect(() => {
@@ -89,9 +86,9 @@
         >
         <span
           class="size-1.5 shrink-0 rounded-full {statusDotClass(
-            current.containerStatus,
+            current.status,
           )}"
-          title={statusLabel(current.containerStatus)}
+          title={statusLabel(current.status)}
         ></span>
       </span>
     </button>
@@ -131,7 +128,7 @@
             >
             <span class="min-w-0 flex-1 truncate">{w.name}</span>
             <Mono class="!font-normal !capitalize text-fg-disabled" size={10}
-              >{statusLabel(w.containerStatus)}</Mono
+              >{statusLabel(w.status)}</Mono
             >
           </button>
         {/each}

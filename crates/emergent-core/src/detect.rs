@@ -1,14 +1,9 @@
 pub use emergent_protocol::KnownAgent;
 
-use bollard::exec::{CreateExecOptions, StartExecResults};
-use bollard::Docker;
-use futures_util::StreamExt;
-
-/// Known agent CLIs: (display name, command binary, extra args, required binaries).
+/// Known agent CLIs: (display name, binary, args, required-on-PATH bins, provider id).
 ///
-/// `requires` lists binaries that must be findable via `which` inside the container.
-/// If empty, the command binary itself is checked.
-/// (display name, binary, args, required which bins, `provider` id for UI / persistence).
+/// `requires` lists binaries that must be resolvable on the host `PATH`. If
+/// empty, the command binary itself is checked.
 type KnownAgentRow = (
     &'static str,
     &'static str,
@@ -31,13 +26,7 @@ const KNOWN_AGENTS: &[KnownAgentRow] = &[
         &["codex", "bunx"],
         "codex",
     ),
-    (
-        "Gemini",
-        "gemini",
-        &["--experimental-acp"],
-        &[],
-        "gemini",
-    ),
+    ("Gemini", "gemini", &["--experimental-acp"], &[], "gemini"),
     ("Kiro", "kiro-cli", &["acp"], &[], "kiro"),
     ("OpenCode", "opencode", &["acp"], &[], "opencode"),
 ];
@@ -50,77 +39,27 @@ fn build_command(binary: &str, args: &[&str]) -> String {
     }
 }
 
-/// Check if a binary exists inside a running container via `which`.
-async fn is_available_in_container(docker: &Docker, container_id: &str, binary: &str) -> bool {
-    let exec = docker
-        .create_exec(
-            container_id,
-            CreateExecOptions {
-                cmd: Some(vec!["which", binary]),
-                attach_stdout: Some(true),
-                attach_stderr: Some(true),
-                ..Default::default()
-            },
-        )
-        .await;
-
-    let exec_id = match exec {
-        Ok(resp) => resp.id,
-        Err(_) => return false,
-    };
-
-    // Start exec and drain the output stream to wait for completion
-    match docker.start_exec(&exec_id, None).await {
-        Ok(StartExecResults::Attached { mut output, .. }) => while output.next().await.is_some() {},
-        Ok(StartExecResults::Detached) => {}
-        Err(_) => return false,
-    }
-
-    // Now inspect — exec is finished, exit_code will be set
-    match docker.inspect_exec(&exec_id).await {
-        Ok(info) => info.exit_code == Some(0),
-        Err(_) => false,
-    }
+/// Whether a binary is resolvable on the host `PATH`.
+fn is_available_on_host(binary: &str) -> bool {
+    which::which(binary).is_ok()
 }
 
-/// Return all known agent types, checking availability inside a container.
-pub async fn known_agents_in_container(docker: &Docker, container_id: &str) -> Vec<KnownAgent> {
-    let mut agents = Vec::new();
-
-    for &(name, binary, args, requires, provider) in KNOWN_AGENTS {
-        let available = if requires.is_empty() {
-            is_available_in_container(docker, container_id, binary).await
-        } else {
-            let mut all_ok = true;
-            for bin in requires {
-                if !is_available_in_container(docker, container_id, bin).await {
-                    all_ok = false;
-                    break;
-                }
-            }
-            all_ok
-        };
-
-        agents.push(KnownAgent {
-            name: name.to_string(),
-            command: build_command(binary, args),
-            available,
-            provider: provider.to_string(),
-        });
-    }
-
-    agents
-}
-
-/// Return all known agent types with `available: false` (no container running).
-pub fn known_agents_unavailable() -> Vec<KnownAgent> {
+/// Return all known agent types, checking availability on the host `PATH`.
+pub fn known_agents_on_host() -> Vec<KnownAgent> {
     KNOWN_AGENTS
         .iter()
-        .map(|&(name, binary, args, _, provider)| KnownAgent {
-            name: name.to_string(),
-            command: build_command(binary, args),
-            available: false,
-            provider: provider.to_string(),
+        .map(|&(name, binary, args, requires, provider)| {
+            let available = if requires.is_empty() {
+                is_available_on_host(binary)
+            } else {
+                requires.iter().all(|bin| is_available_on_host(bin))
+            };
+            KnownAgent {
+                name: name.to_string(),
+                command: build_command(binary, args),
+                available,
+                provider: provider.to_string(),
+            }
         })
         .collect()
 }
@@ -130,12 +69,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn known_agents_unavailable_returns_all() {
-        let agents = known_agents_unavailable();
+    fn known_agents_on_host_returns_all() {
+        let agents = known_agents_on_host();
         assert_eq!(agents.len(), KNOWN_AGENTS.len());
         assert_eq!(agents[0].name, "Claude Code");
         assert_eq!(agents[0].command, "bunx @zed-industries/claude-agent-acp");
-        assert!(agents.iter().all(|a| !a.available));
     }
 
     #[test]

@@ -1,6 +1,4 @@
 // Token-usage fixtures for demo/test seeding.
-// This is the subset of the original mock-metrics store that is still needed
-// after container stats were moved to container-stats.svelte.ts.
 
 export interface TokenUsage {
   input: number; // thousands

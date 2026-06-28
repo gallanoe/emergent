@@ -66,7 +66,7 @@
       </section>
 
       <!-- Placeholder sections -->
-      {#each [{ label: "Defaults for new workspaces", text: "Default container runtime, image base, and mount conventions applied when creating a new workspace." }, { label: "Provider credentials", text: "API keys for Claude, Codex, Gemini, OpenCode, Kiro. Shared across workspaces; redacted at rest." }, { label: "Keyboard shortcuts", text: "Rebindable shortcuts for New thread, Open workspace, Command palette, and pane navigation." }] as p (p.label)}
+      {#each [{ label: "Defaults for new workspaces", text: "Default conventions applied when creating a new workspace." }, { label: "Provider credentials", text: "API keys for Claude, Codex, Gemini, OpenCode, Kiro. Shared across workspaces; redacted at rest." }, { label: "Keyboard shortcuts", text: "Rebindable shortcuts for New thread, Open workspace, Command palette, and pane navigation." }] as p (p.label)}
         <section class="flex flex-col gap-[10px]">
           <SLabel>{p.label}</SLabel>
           <div
@@ -85,10 +85,8 @@
 
       <!-- Cross-link (descriptive text, not a clickable link) -->
       <div class="text-[11.5px] leading-[1.5] text-fg-disabled">
-        Looking for workspace-scoped settings (name, path, container runtime)?
-        Open the workspace switcher and choose <em class="text-fg-muted"
-          >Workspace settings</em
-        >.
+        Looking for workspace-scoped settings (name, path)? Open the workspace
+        switcher and choose <em class="text-fg-muted">Workspace settings</em>.
       </div>
     </div>
   </div>

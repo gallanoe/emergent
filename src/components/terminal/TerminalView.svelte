@@ -2,30 +2,21 @@
   import { onMount, onDestroy } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-  import type { ContainerStatus } from "../../stores/types";
   import { getOrCreate, dispose } from "./terminal-instances";
   import "@xterm/xterm/css/xterm.css";
 
   interface Props {
     workspaceId: string;
-    containerStatus: ContainerStatus;
     sessionId: string | null;
     onSessionCreated: (sessionId: string) => void;
     onSessionEnded: () => void;
   }
 
-  let {
-    workspaceId,
-    containerStatus,
-    sessionId,
-    onSessionCreated,
-    onSessionEnded,
-  }: Props = $props();
+  let { workspaceId, sessionId, onSessionCreated, onSessionEnded }: Props =
+    $props();
 
   let terminalEl: HTMLDivElement | undefined = $state();
-  let connected = $derived(
-    containerStatus.state === "running" && sessionId !== null,
-  );
+  let connected = $derived(sessionId !== null);
   let exited = $state(false);
   let resizeTimeout: ReturnType<typeof setTimeout> | null = null;
 
@@ -137,9 +128,9 @@
     resizeObserver = new ResizeObserver(() => handleResize());
     resizeObserver.observe(terminalEl);
 
-    if (sessionId && containerStatus.state === "running") {
+    if (sessionId) {
       setupListeners(sessionId);
-    } else if (containerStatus.state === "running" && !sessionId) {
+    } else {
       createSession();
     }
   });
@@ -174,30 +165,9 @@
   </div>
 
   <div class="relative flex-1 min-h-0">
-    <div
-      bind:this={terminalEl}
-      class="absolute inset-0 p-1 {containerStatus.state !== 'running'
-        ? 'opacity-50'
-        : ''}"
-    ></div>
+    <div bind:this={terminalEl} class="absolute inset-0 p-1"></div>
 
-    {#if containerStatus.state !== "running"}
-      <div
-        class="absolute bottom-0 left-0 right-0 flex justify-center pb-4 pt-8"
-        style="background: linear-gradient(transparent, rgba(9,9,11,0.95) 40%)"
-      >
-        <div
-          class="inline-flex items-center gap-2 bg-bg-elevated border border-border-default rounded-md px-4 py-2"
-        >
-          <span class="w-1.5 h-1.5 rounded-full bg-error"></span>
-          <span class="text-[12px] text-fg-muted"
-            >Container stopped — start it from Settings to reconnect</span
-          >
-        </div>
-      </div>
-    {/if}
-
-    {#if containerStatus.state === "running" && (exited || !sessionId)}
+    {#if exited || !sessionId}
       <div
         class="absolute bottom-0 left-0 right-0 flex justify-center pb-4 pt-8"
         style="background: linear-gradient(transparent, rgba(9,9,11,0.95) 40%)"

@@ -47,7 +47,6 @@ pub(crate) async fn initialize_agent(
     agent_id: String,
     agent_definition_id: String,
     workspace_id: WorkspaceId,
-    container_id: String,
     agent_binary: String,
     task_id: Option<String>,
     session_init: SessionInit,
@@ -56,22 +55,30 @@ pub(crate) async fn initialize_agent(
     history: Arc<RwLock<HashMap<String, Vec<Notification>>>>,
     mcp_port: u16,
     bearer_token: String,
-    cli_program: String,
-    mcp_host_alias: String,
+    agent_home: std::path::PathBuf,
 ) -> Result<(), String> {
-    let spawner = super::spawner::RuntimeCliSpawner::new(cli_program);
+    let spawner = super::spawner::LocalProcessSpawner::new();
     let parts: Vec<&str> = agent_binary.split_whitespace().collect();
-    let agent_workdir = format!("/home/.agents/{}/", agent_definition_id);
-    let pid_file = format!("/tmp/emergent.{}.pid", agent_id);
-    let mut process = super::spawner::ProcessSpawner::spawn(
-        &spawner,
-        &container_id,
-        &parts,
-        Some(&agent_workdir),
-        Some(&pid_file),
-    )
-    .await
-    .map_err(|e| format!("Failed to spawn agent '{}': {}", agent_binary, e))?;
+
+    // The agent runs with both its cwd and $HOME set to its own directory so
+    // that per-agent config (.claude/.codex/…) stays isolated from other
+    // agents and from the user's real home. The ACP session cwd is the same dir.
+    let agent_workdir = agent_home.to_string_lossy().into_owned();
+    let bun_cache = crate::workspace::paths::emergent_root()
+        .join("cache")
+        .join("bun");
+    let _ = tokio::fs::create_dir_all(&bun_cache).await;
+    let env: Vec<(String, String)> = vec![
+        ("HOME".to_string(), agent_workdir.clone()),
+        (
+            "BUN_INSTALL_CACHE_DIR".to_string(),
+            bun_cache.to_string_lossy().into_owned(),
+        ),
+    ];
+
+    let mut process = super::spawner::ProcessSpawner::spawn(&spawner, &parts, &agent_home, &env)
+        .await
+        .map_err(|e| format!("Failed to spawn agent '{}': {}", agent_binary, e))?;
 
     let child_stdin = process
         .take_stdin()
@@ -184,7 +191,7 @@ pub(crate) async fn initialize_agent(
                             let mcp_config = McpServer::Http(
                                 McpServerHttp::new(
                                     "emergent-swarm",
-                                    format!("http://{}:{}/mcp", mcp_host_alias, mcp_port),
+                                    format!("http://127.0.0.1:{}/mcp", mcp_port),
                                 )
                                 .headers(vec![HttpHeader::new(
                                     "Authorization",

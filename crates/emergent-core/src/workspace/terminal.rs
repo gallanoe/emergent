@@ -1,14 +1,10 @@
 use std::collections::HashMap;
-use std::pin::Pin;
-use std::sync::Arc;
+use std::io::{Read, Write};
+use std::sync::{Arc, Mutex as StdMutex};
 
-use bollard::exec::{CreateExecOptions, ResizeExecOptions, StartExecOptions, StartExecResults};
-use bollard::Docker;
 use emergent_protocol::{Notification, TerminalExitedPayload, TerminalOutputPayload, WorkspaceId};
-use futures_util::StreamExt;
-use tokio::io::AsyncWriteExt;
+use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
 use tokio::sync::{broadcast, Mutex};
-use tokio::task::JoinHandle;
 
 pub type TerminalSessions = Arc<Mutex<HashMap<String, TerminalSession>>>;
 
@@ -22,162 +18,138 @@ fn generate_session_id() -> String {
     hex::encode(buf)
 }
 
+/// The user's login shell, with a sensible per-platform fallback.
+fn default_shell() -> String {
+    #[cfg(unix)]
+    {
+        std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string())
+    }
+    #[cfg(not(unix))]
+    {
+        std::env::var("ComSpec").unwrap_or_else(|_| "cmd.exe".to_string())
+    }
+}
+
+/// An interactive terminal backed by a host PTY running the user's shell.
 pub struct TerminalSession {
     pub session_id: String,
     pub workspace_id: WorkspaceId,
-    pub exec_id: String,
-    stdin: Pin<Box<dyn tokio::io::AsyncWrite + Send>>,
-    output_task: JoinHandle<()>,
+    master: Box<dyn MasterPty + Send>,
+    writer: Arc<StdMutex<Box<dyn Write + Send>>>,
+    child: Box<dyn portable_pty::Child + Send + Sync>,
 }
 
 impl TerminalSession {
     pub async fn write(&mut self, data: &[u8]) -> Result<(), String> {
-        self.stdin
-            .as_mut()
-            .write_all(data)
-            .await
-            .map_err(|e| format!("Failed to write to terminal: {}", e))
+        let writer = self.writer.clone();
+        let data = data.to_vec();
+        tokio::task::spawn_blocking(move || {
+            let mut w = writer
+                .lock()
+                .map_err(|_| "terminal writer poisoned".to_string())?;
+            w.write_all(&data)
+                .map_err(|e| format!("Failed to write to terminal: {}", e))?;
+            w.flush()
+                .map_err(|e| format!("Failed to flush terminal: {}", e))
+        })
+        .await
+        .map_err(|e| format!("terminal write task failed: {}", e))?
     }
 
-    pub async fn resize(
-        docker: &Docker,
-        exec_id: &str,
-        cols: u16,
-        rows: u16,
-    ) -> Result<(), String> {
-        docker
-            .resize_exec(
-                exec_id,
-                ResizeExecOptions {
-                    width: cols,
-                    height: rows,
-                },
-            )
-            .await
+    pub fn resize(&self, cols: u16, rows: u16) -> Result<(), String> {
+        self.master
+            .resize(PtySize {
+                rows,
+                cols,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
             .map_err(|e| format!("Failed to resize terminal: {}", e))
     }
 
-    pub fn close(self) {
-        self.output_task.abort();
-        // stdin is dropped, which closes the exec's stdin
+    pub fn close(mut self) {
+        // Killing the shell makes the PTY master read return EOF, which ends
+        // the reader thread; the writer/master are dropped with `self`.
+        let _ = self.child.kill();
     }
-}
-
-/// Detect which shell is available in the container.
-async fn detect_shell(docker: &Docker, container_id: &str) -> String {
-    let check = docker
-        .create_exec(
-            container_id,
-            CreateExecOptions::<&str> {
-                cmd: Some(vec!["test", "-x", "/bin/bash"]),
-                attach_stdout: Some(false),
-                attach_stderr: Some(false),
-                ..Default::default()
-            },
-        )
-        .await;
-
-    if let Ok(exec) = check {
-        if let Ok(StartExecResults::Detached) = docker
-            .start_exec(
-                &exec.id,
-                Some(StartExecOptions {
-                    detach: true,
-                    ..Default::default()
-                }),
-            )
-            .await
-        {
-            if let Ok(inspect) = docker.inspect_exec(&exec.id).await {
-                if inspect.exit_code == Some(0) {
-                    return "/bin/bash".to_string();
-                }
-            }
-        }
-    }
-
-    "/bin/sh".to_string()
 }
 
 pub async fn create_session(
-    docker: &Docker,
-    container_id: &str,
+    cwd: std::path::PathBuf,
     workspace_id: WorkspaceId,
     event_tx: &broadcast::Sender<Notification>,
 ) -> Result<TerminalSession, String> {
-    let shell = detect_shell(docker, container_id).await;
+    let shell = default_shell();
 
-    let exec = docker
-        .create_exec(
-            container_id,
-            CreateExecOptions::<&str> {
-                cmd: Some(vec![&shell]),
-                attach_stdin: Some(true),
-                attach_stdout: Some(true),
-                attach_stderr: Some(true),
-                tty: Some(true),
-                ..Default::default()
-            },
-        )
-        .await
-        .map_err(|e| format!("Failed to create exec: {}", e))?;
+    // Opening the PTY and spawning the shell are blocking operations.
+    let (master, writer, mut reader, child) = tokio::task::spawn_blocking(move || {
+        let pty_system = native_pty_system();
+        let pair = pty_system
+            .openpty(PtySize {
+                rows: 24,
+                cols: 80,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .map_err(|e| format!("Failed to open pty: {}", e))?;
 
-    let exec_id = exec.id.clone();
+        let mut cmd = CommandBuilder::new(&shell);
+        cmd.cwd(&cwd);
 
-    let result = docker
-        .start_exec(
-            &exec.id,
-            Some(StartExecOptions {
-                detach: false,
-                ..Default::default()
-            }),
-        )
-        .await
-        .map_err(|e| format!("Failed to start exec: {}", e))?;
+        let child = pair
+            .slave
+            .spawn_command(cmd)
+            .map_err(|e| format!("Failed to spawn shell: {}", e))?;
+        // Drop the slave so the master sees EOF once the shell exits.
+        drop(pair.slave);
 
-    let (stdin, mut output) = match result {
-        StartExecResults::Attached { input, output } => (input, output),
-        StartExecResults::Detached => {
-            return Err("Exec started in detached mode unexpectedly".to_string());
-        }
-    };
+        let writer = pair
+            .master
+            .take_writer()
+            .map_err(|e| format!("Failed to take terminal writer: {}", e))?;
+        let reader = pair
+            .master
+            .try_clone_reader()
+            .map_err(|e| format!("Failed to clone terminal reader: {}", e))?;
+
+        Ok::<_, String>((pair.master, writer, reader, child))
+    })
+    .await
+    .map_err(|e| format!("terminal setup task failed: {}", e))??;
 
     let session_id = generate_session_id();
 
-    // Spawn output reader task
+    // Reader thread: pump PTY output into notifications until EOF.
     let tx = event_tx.clone();
     let sid = session_id.clone();
-    let output_task = tokio::spawn(async move {
-        while let Some(chunk) = output.next().await {
-            match chunk {
-                Ok(log_output) => {
-                    let bytes = log_output.into_bytes();
-                    if bytes.is_empty() {
-                        continue;
+    std::thread::Builder::new()
+        .name(format!("term-{}", session_id))
+        .spawn(move || {
+            let mut buf = [0u8; 4096];
+            loop {
+                match reader.read(&mut buf) {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        let _ = tx.send(Notification::TerminalOutput(TerminalOutputPayload {
+                            session_id: sid.clone(),
+                            data: buf[..n].to_vec(),
+                        }));
                     }
-                    let _ = tx.send(Notification::TerminalOutput(TerminalOutputPayload {
-                        session_id: sid.clone(),
-                        data: bytes.to_vec(),
-                    }));
-                }
-                Err(e) => {
-                    log::warn!("Terminal output stream error: {}", e);
-                    break;
+                    Err(_) => break,
                 }
             }
-        }
-        // Stream ended — shell exited
-        let _ = tx.send(Notification::TerminalExited(TerminalExitedPayload {
-            session_id: sid,
-        }));
-    });
+            let _ = tx.send(Notification::TerminalExited(TerminalExitedPayload {
+                session_id: sid,
+            }));
+        })
+        .map_err(|e| format!("Failed to spawn terminal reader thread: {}", e))?;
 
     Ok(TerminalSession {
         session_id,
         workspace_id,
-        exec_id,
-        stdin,
-        output_task,
+        master,
+        writer: Arc::new(StdMutex::new(writer)),
+        child,
     })
 }
 

@@ -76,19 +76,11 @@ const mockScript = `
       const responses = {
         get_daemon_status: "connected",
         detect_agents: [],
-        detect_docker: { docker_available: true, docker_version: "27.0.0" },
-        get_container_runtime_preference: { selected_runtime: "docker" },
-        get_container_runtime_status: {
-          selected_runtime: "docker",
-          available: true,
-          version: "27.0.0",
-          message: null,
-        },
         list_workspaces: [
           {
             id: "ws-e2e-1",
             name: "e2e-workspace",
-            container_status: { state: "running" },
+            status: { state: "ready" },
             agent_count: 1,
           },
         ],

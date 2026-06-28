@@ -372,14 +372,14 @@ const swarms: DisplayWorkspace[] = [
     id: "ws1",
     name: "emergent-core",
     collapsed: false,
-    containerStatus: { state: "running" },
+    status: { state: "ready" },
     agentDefinitions,
   },
   {
     id: "ws2",
     name: "api-migration",
     collapsed: true,
-    containerStatus: { state: "stopped" },
+    status: { state: "ready" },
     agentDefinitions: [],
   },
 ];

@@ -18,7 +18,6 @@
 
   interface Props {
     agentDefinition: DisplayAgentDefinition;
-    containerRunning: boolean;
     activeThreadId?: string | null;
     onSelectThread: (id: string) => void;
     onNewThread: () => void;
@@ -32,7 +31,6 @@
 
   let {
     agentDefinition: agentDef,
-    containerRunning,
     activeThreadId = null,
     onSelectThread,
     onNewThread,
@@ -78,7 +76,7 @@
       ];
     }
     return [
-      { id: "start", label: "Start", icon: Play, disabled: !containerRunning },
+      { id: "start", label: "Start", icon: Play },
       { id: "sep", label: "", separator: true },
       { id: "delete", label: "Delete", icon: Trash2, danger: true },
     ];
@@ -198,7 +196,7 @@
         {activeThreadId}
         {onSelectThread}
         onMenu={(t, x, y) => (threadMenu = { thread: t, x, y })}
-        {...containerRunning ? { onNewThread } : {}}
+        {onNewThread}
       />
 
       {#if taskSessionThreads.length > 0}

@@ -212,16 +212,12 @@ export type ActiveView =
   | "terminal"
   | "tasks";
 
-export type ContainerStatus =
-  | { state: "stopped" }
-  | { state: "building" }
-  | { state: "running" }
-  | { state: "error"; message: string };
+export type WorkspaceStatus = { state: "ready" } | { state: "error"; message: string };
 
 export interface WorkspaceSummary {
   id: string;
   name: string;
-  container_status: ContainerStatus;
+  status: WorkspaceStatus;
   agent_count: number;
 }
 
@@ -229,33 +225,19 @@ export interface WorkspaceInfo {
   id: string;
   name: string;
   path: string;
-  container_id: string | null;
-  container_status: ContainerStatus;
-}
-
-export type ContainerRuntimeKind = "docker" | "podman";
-
-export interface ContainerRuntimePreference {
-  selected_runtime: ContainerRuntimeKind;
-}
-
-export interface ContainerRuntimeStatus {
-  selected_runtime: ContainerRuntimeKind;
-  available: boolean;
-  version: string | null;
-  message?: string | null;
+  status: WorkspaceStatus;
 }
 
 export interface WorkspaceStatusChangePayload {
   workspace_id: string;
-  status: ContainerStatus;
+  status: WorkspaceStatus;
 }
 
 export interface DisplayWorkspace {
   id: string;
   name: string;
   collapsed: boolean;
-  containerStatus: ContainerStatus;
+  status: WorkspaceStatus;
   agentDefinitions: DisplayAgentDefinition[];
 }
 

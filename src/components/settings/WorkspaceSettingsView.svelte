@@ -1,47 +1,16 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
-  import type {
-    ContainerStatus,
-    ContainerRuntimePreference,
-    ContainerRuntimeStatus,
-    ContainerRuntimeKind,
-    WorkspaceInfo,
-  } from "../../stores/types";
-  import {
-    ConfirmDialog,
-    Button,
-    Mono,
-    SLabel,
-    RuntimeGlyph,
-  } from "../../lib/primitives";
+  import type { WorkspaceInfo } from "../../stores/types";
+  import { ConfirmDialog, Button, Mono, SLabel } from "../../lib/primitives";
   import ConfigRow from "./ConfigRow.svelte";
-  import RuntimeSelector from "./RuntimeSelector.svelte";
 
   interface Props {
     workspaceId: string;
-    containerStatus: ContainerStatus;
-    runtimePreference: ContainerRuntimePreference;
-    runtimeStatus: ContainerRuntimeStatus | null;
     onUpdateName: (name: string) => void;
-    onRuntimeChange: (runtime: ContainerRuntimeKind) => void;
-    onStart: () => void;
-    onStop: () => void;
-    onRebuild: () => void;
     onDelete: () => void;
   }
 
-  let {
-    workspaceId,
-    containerStatus,
-    runtimePreference,
-    runtimeStatus,
-    onUpdateName,
-    onRuntimeChange,
-    onStart,
-    onStop,
-    onRebuild,
-    onDelete,
-  }: Props = $props();
+  let { workspaceId, onUpdateName, onDelete }: Props = $props();
 
   let workspace = $state<WorkspaceInfo | null>(null);
   let editingName = $state(false);
@@ -60,25 +29,6 @@
     void workspaceId;
     void loadWorkspace();
   });
-
-  const runtimeState = $derived(containerStatus.state);
-  const runtimeLabel = $derived(
-    runtimeState === "running"
-      ? "Running"
-      : runtimeState === "building"
-        ? "Building"
-        : runtimeState === "error"
-          ? "Error"
-          : "Stopped",
-  );
-  const runtimeMeta = $derived(
-    String(
-      runtimeStatus?.selected_runtime ?? runtimePreference.selected_runtime,
-    ) +
-      (containerStatus.state === "error"
-        ? ` · ${containerStatus.message}`
-        : ""),
-  );
 </script>
 
 <div class="flex min-w-0 flex-1 flex-col">
@@ -145,64 +95,12 @@
               {/if}
             {/snippet}
           </ConfigRow>
-          <ConfigRow label="Path" value={workspace?.path ?? "—"} readOnly />
-          <ConfigRow label="Mounted as" value="/workspace" readOnly last />
-        </div>
-      </section>
-
-      <!-- Container runtime -->
-      <section class="flex flex-col gap-[10px]">
-        <SLabel>Container runtime</SLabel>
-        <div
-          class="overflow-hidden rounded-[10px] border border-border-default bg-bg-elevated"
-        >
-          <div
-            class="flex items-center gap-3 border-b border-border-default px-[14px] py-3"
-          >
-            <RuntimeGlyph state={runtimeState} size={22} />
-            <div class="min-w-0 flex-1">
-              <div class="text-[12.5px] font-medium text-fg-heading">
-                {runtimeLabel}
-              </div>
-              <Mono size={10.5} color="var(--color-fg-muted)"
-                >{runtimeMeta}</Mono
-              >
-            </div>
-            {#if runtimeState === "running"}
-              <Button variant="secondary" size="xs" onclick={onStop}
-                >Stop</Button
-              >
-              <Button variant="ghost" size="xs" onclick={onRebuild}
-                >Rebuild</Button
-              >
-            {:else if runtimeState === "stopped"}
-              <Button variant="secondary" size="xs" onclick={onStart}
-                >Start</Button
-              >
-            {:else if runtimeState === "error"}
-              <Button variant="secondary" size="xs" onclick={onRebuild}
-                >Rebuild</Button
-              >
-            {/if}
-          </div>
-          <ConfigRow label="Engine">
-            {#snippet edit()}
-              <RuntimeSelector
-                preference={runtimePreference}
-                status={runtimeStatus}
-                onChange={onRuntimeChange}
-                align="start"
-              />
-              <span></span>
-            {/snippet}
-          </ConfigRow>
           <ConfigRow
-            label="Image"
-            value={workspace?.name ? `${workspace.name}:latest` : "—"}
+            label="Path"
+            value={workspace?.path ?? "—"}
             readOnly
+            last
           />
-          <!-- Deferred: surface last image build time once the workspace API exposes `last_built_at`. -->
-          <ConfigRow label="Last build" value="—" readOnly last />
         </div>
       </section>
 
@@ -217,8 +115,7 @@
           >
             <Mono size={11} color="var(--color-fg-muted)">Delete</Mono>
             <span class="text-[12.5px] leading-[1.5] text-fg-default">
-              Terminates all threads, removes the container, image, and
-              workspace files. Permanent.
+              Terminates all threads and removes the workspace files. Permanent.
             </span>
             <Button
               variant="danger"
@@ -235,7 +132,7 @@
 {#if deleteConfirm}
   <ConfirmDialog
     title="Delete {workspace?.name}?"
-    description="All agents will be terminated. The container, image, and workspace files will be permanently deleted."
+    description="All agents will be terminated. The workspace and its files will be permanently deleted."
     confirmLabel="Delete"
     confirmVariant="danger"
     onConfirm={() => {

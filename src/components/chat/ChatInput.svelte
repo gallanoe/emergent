@@ -15,7 +15,6 @@
   interface Props {
     thread: DisplayThread | undefined;
     demoMode: boolean;
-    containerRunning?: boolean;
     pendingQueue?: QueueItem[];
     /**
      * Push-to-composer channel. The parent increments `seq` each time it
@@ -39,7 +38,6 @@
   let {
     thread,
     demoMode,
-    containerRunning = true,
     pendingQueue = [],
     pushToComposer,
     onSend,
@@ -63,7 +61,6 @@
   const isDisabled = $derived(
     demoMode ||
       !thread ||
-      !containerRunning ||
       thread.processStatus === "initializing" ||
       thread.processStatus === "error" ||
       thread.processStatus === "dead",
@@ -72,7 +69,6 @@
   const placeholderText = $derived.by(() => {
     if (demoMode) return "Demo mode — input disabled";
     if (!thread) return "Select a thread";
-    if (!containerRunning) return "Start the container to send messages";
     if (thread.processStatus === "initializing") return "Connecting to agent…";
     if (thread.processStatus === "error") return "Agent unavailable";
     if (thread.processStatus === "dead") return "Thread stopped";

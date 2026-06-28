@@ -4,7 +4,7 @@ use std::sync::Arc;
 use emergent_core::agent::thread_manager::{ThreadManager, ThreadMapping};
 use emergent_core::mcp::TokenRegistry;
 use emergent_core::workspace;
-use emergent_protocol::{ContainerStatus, WorkspaceId};
+use emergent_protocol::{WorkspaceStatus, WorkspaceId};
 use tempfile::TempDir;
 
 /// Build a ThreadManager suitable for tests that don't need to spawn real
@@ -13,8 +13,7 @@ pub(crate) async fn test_manager() -> ThreadManager {
     let (event_tx, _rx) = tokio::sync::broadcast::channel(16);
     let token_registry = Arc::new(TokenRegistry::new());
     let workspace_state = workspace::new_shared_state();
-    let runtime = emergent_core::runtime::load_shared_runtime().await;
-    ThreadManager::new(event_tx, token_registry, workspace_state, runtime)
+    ThreadManager::new(event_tx, token_registry, workspace_state)
 }
 
 /// Register a workspace in the manager's shared state so persist paths can
@@ -25,7 +24,7 @@ pub(crate) async fn register_workspace(
     path: PathBuf,
 ) {
     manager
-        .register_workspace_for_test(workspace_id.clone(), path, ContainerStatus::Stopped)
+        .register_workspace_for_test(workspace_id.clone(), path, WorkspaceStatus::Ready)
         .await;
 }
 

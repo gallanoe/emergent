@@ -57,7 +57,6 @@ describe("ThreadListView", () => {
         agentDefinition: makeAgentDef({
           threads: [makeThread(), makeThread({ id: "t2", name: "B" })],
         }),
-        containerRunning: true,
         ...baseCallbacks,
       },
     });
@@ -71,7 +70,6 @@ describe("ThreadListView", () => {
     render(ThreadListView, {
       props: {
         agentDefinition: makeAgentDef(),
-        containerRunning: true,
         ...baseCallbacks,
         onUpdateName,
       },
@@ -88,7 +86,6 @@ describe("ThreadListView", () => {
     render(ThreadListView, {
       props: {
         agentDefinition: makeAgentDef(),
-        containerRunning: true,
         ...baseCallbacks,
         onUpdateName,
       },
@@ -104,7 +101,6 @@ describe("ThreadListView", () => {
     render(ThreadListView, {
       props: {
         agentDefinition: makeAgentDef(),
-        containerRunning: true,
         ...baseCallbacks,
       },
     });
@@ -118,7 +114,6 @@ describe("ThreadListView", () => {
     render(ThreadListView, {
       props: {
         agentDefinition: makeAgentDef(),
-        containerRunning: true,
         ...baseCallbacks,
       },
     });
@@ -130,7 +125,6 @@ describe("ThreadListView", () => {
     const { rerender } = render(ThreadListView, {
       props: {
         agentDefinition: makeAgentDef({ threads: [makeThread()] }),
-        containerRunning: true,
         ...baseCallbacks,
       },
     });
@@ -140,7 +134,6 @@ describe("ThreadListView", () => {
       agentDefinition: makeAgentDef({
         threads: [makeThread(), makeThread({ id: "ts1", name: "Task thread", taskId: "task-9" })],
       }),
-      containerRunning: true,
       ...baseCallbacks,
     });
     expect(screen.getByText("Task sessions")).toBeTruthy();
@@ -150,7 +143,6 @@ describe("ThreadListView", () => {
     render(ThreadListView, {
       props: {
         agentDefinition: makeAgentDef({ threads: [makeThread({ processStatus: "working" })] }),
-        containerRunning: true,
         ...baseCallbacks,
       },
     });
@@ -165,7 +157,6 @@ describe("ThreadListView", () => {
     render(ThreadListView, {
       props: {
         agentDefinition: makeAgentDef({ threads: [makeThread({ processStatus: "dead" })] }),
-        containerRunning: true,
         ...baseCallbacks,
       },
     });
@@ -181,7 +172,6 @@ describe("ThreadListView", () => {
     render(ThreadListView, {
       props: {
         agentDefinition: makeAgentDef(),
-        containerRunning: true,
         ...baseCallbacks,
         onDeleteThread,
       },

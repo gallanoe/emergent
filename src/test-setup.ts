@@ -30,6 +30,27 @@ if (typeof Element.prototype.animate !== "function") {
   };
 }
 
+// jsdom under vitest can expose a non-functional `localStorage` (no getItem);
+// the theme store reads/writes it. Provide an in-memory Storage when missing.
+if (typeof localStorage === "undefined" || typeof localStorage.getItem !== "function") {
+  const store = new Map<string, string>();
+  const memoryStorage: Storage = {
+    get length() {
+      return store.size;
+    },
+    clear: () => store.clear(),
+    getItem: (key: string) => (store.has(key) ? store.get(key)! : null),
+    key: (index: number) => Array.from(store.keys())[index] ?? null,
+    removeItem: (key: string) => void store.delete(key),
+    setItem: (key: string, value: string) => void store.set(key, String(value)),
+  };
+  Object.defineProperty(globalThis, "localStorage", {
+    value: memoryStorage,
+    configurable: true,
+    writable: true,
+  });
+}
+
 // jsdom often omits matchMedia; theme store listens for prefers-color-scheme.
 if (typeof window !== "undefined" && typeof window.matchMedia !== "function") {
   const registry = new Map<

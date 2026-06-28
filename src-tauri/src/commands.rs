@@ -7,26 +7,13 @@ use emergent_core::detect;
 use emergent_core::task::TaskManager;
 use emergent_core::workspace::WorkspaceManager;
 use emergent_protocol::{
-    AgentDefinition, ConfigOption, ContainerRuntimeKind, ContainerRuntimePreference,
-    ContainerRuntimeStatus, KnownAgent, Notification, ThreadSummary, WorkspaceInfo,
+    AgentDefinition, ConfigOption, KnownAgent, Notification, ThreadSummary, WorkspaceInfo,
     WorkspaceSummary,
 };
 
 #[tauri::command]
-pub async fn known_agents(
-    workspace_manager: State<'_, Arc<WorkspaceManager>>,
-    workspace_id: String,
-) -> Result<Vec<KnownAgent>, String> {
-    let ws_id = emergent_protocol::WorkspaceId::from(workspace_id.as_str());
-    let info = workspace_manager.get_workspace(&ws_id).await?;
-
-    match workspace_manager.runtime_client().await {
-        Some(client) if info.container_status == emergent_protocol::ContainerStatus::Running => {
-            let name = emergent_core::workspace::container::container_name(&ws_id);
-            Ok(detect::known_agents_in_container(&client, &name).await)
-        }
-        _ => Ok(detect::known_agents_unavailable()),
-    }
+pub async fn known_agents(_workspace_id: String) -> Result<Vec<KnownAgent>, String> {
+    Ok(detect::known_agents_on_host())
 }
 
 // ── Agent definition CRUD ─────────────────────────────────
@@ -280,7 +267,7 @@ pub async fn list_workspaces(
             WorkspaceSummary {
                 id: entry.id,
                 name: entry.name,
-                container_status: entry.container_status,
+                status: entry.status,
                 agent_count,
             }
         })
@@ -305,106 +292,6 @@ pub async fn update_workspace(
 ) -> Result<(), String> {
     let id = emergent_protocol::WorkspaceId::from(workspace_id.as_str());
     workspace_manager.update_workspace(&id, name).await
-}
-
-#[tauri::command]
-pub async fn get_dockerfile(
-    workspace_manager: State<'_, Arc<WorkspaceManager>>,
-    workspace_id: String,
-) -> Result<String, String> {
-    let id = emergent_protocol::WorkspaceId::from(workspace_id.as_str());
-    workspace_manager.get_dockerfile(&id).await
-}
-
-#[tauri::command]
-pub async fn open_dockerfile_editor(
-    workspace_manager: State<'_, Arc<WorkspaceManager>>,
-    workspace_id: String,
-) -> Result<(), String> {
-    let id = emergent_protocol::WorkspaceId::from(workspace_id.as_str());
-    let info = workspace_manager.get_workspace(&id).await?;
-    let dockerfile_path = format!("{}/Dockerfile", info.path);
-
-    #[cfg(target_os = "macos")]
-    {
-        std::process::Command::new("open")
-            .arg(&dockerfile_path)
-            .spawn()
-            .map_err(|e| format!("Failed to open editor: {}", e))?;
-    }
-    #[cfg(target_os = "linux")]
-    {
-        std::process::Command::new("xdg-open")
-            .arg(&dockerfile_path)
-            .spawn()
-            .map_err(|e| format!("Failed to open editor: {}", e))?;
-    }
-
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn start_container(
-    workspace_manager: State<'_, Arc<WorkspaceManager>>,
-    task_manager: State<'_, Arc<emergent_core::task::TaskManager>>,
-    workspace_id: String,
-) -> Result<(), String> {
-    let id = emergent_protocol::WorkspaceId::from(workspace_id.as_str());
-    workspace_manager.start_container(&id).await?;
-    // Container is now running — resume any Working task threads and kick
-    // off any Pending tasks whose blockers are all Completed.
-    task_manager.resume_workspace_tasks(&id).await;
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn stop_container(
-    workspace_manager: State<'_, Arc<WorkspaceManager>>,
-    agent_manager: State<'_, Arc<AgentManager>>,
-    task_manager: State<'_, Arc<emergent_core::task::TaskManager>>,
-    workspace_id: String,
-) -> Result<(), String> {
-    let id = emergent_protocol::WorkspaceId::from(workspace_id.as_str());
-    agent_manager.kill_threads_in_workspace(&id).await?;
-    task_manager.fail_working_tasks_in_workspace(&id).await;
-    workspace_manager.stop_container(&id).await
-}
-
-#[tauri::command]
-pub async fn rebuild_container(
-    workspace_manager: State<'_, Arc<WorkspaceManager>>,
-    agent_manager: State<'_, Arc<AgentManager>>,
-    task_manager: State<'_, Arc<emergent_core::task::TaskManager>>,
-    workspace_id: String,
-) -> Result<(), String> {
-    let id = emergent_protocol::WorkspaceId::from(workspace_id.as_str());
-    agent_manager.kill_threads_in_workspace(&id).await?;
-    task_manager.fail_working_tasks_in_workspace(&id).await;
-    workspace_manager.rebuild_container(&id).await
-}
-
-#[tauri::command]
-pub async fn get_container_runtime_status(
-    workspace_manager: State<'_, Arc<WorkspaceManager>>,
-) -> Result<ContainerRuntimeStatus, String> {
-    Ok(workspace_manager.get_container_runtime_status().await)
-}
-
-#[tauri::command]
-pub async fn get_container_runtime_preference(
-    workspace_manager: State<'_, Arc<WorkspaceManager>>,
-) -> Result<ContainerRuntimePreference, String> {
-    Ok(workspace_manager.get_container_runtime_preference().await)
-}
-
-#[tauri::command]
-pub async fn set_container_runtime_preference(
-    workspace_manager: State<'_, Arc<WorkspaceManager>>,
-    selected_runtime: ContainerRuntimeKind,
-) -> Result<ContainerRuntimeStatus, String> {
-    workspace_manager
-        .set_container_runtime_preference(ContainerRuntimePreference { selected_runtime })
-        .await
 }
 
 #[tauri::command]

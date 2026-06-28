@@ -7,7 +7,7 @@ pub mod thread_manager;
 pub mod usage_store;
 
 pub use registry::AgentRegistry;
-pub use spawner::{AgentProcess, ProcessSpawner, RuntimeCliProcess, RuntimeCliSpawner};
+pub use spawner::{AgentProcess, LocalProcess, LocalProcessSpawner, ProcessSpawner};
 pub use thread_manager::{ThreadManager, ThreadMapping};
 
 use std::sync::Arc;
@@ -52,7 +52,7 @@ pub(crate) struct ThreadHandle {
     pub(crate) workspace_id: WorkspaceId,
     pub(crate) command_tx: mpsc::UnboundedSender<AgentCommand>,
     /// Handle to the agent process (for kill).
-    pub(crate) process: crate::agent::spawner::RuntimeCliProcess,
+    pub(crate) process: crate::agent::spawner::LocalProcess,
     /// Handle to the dedicated ACP thread (kept for ownership; not joined).
     pub(crate) thread_handle: Option<std::thread::JoinHandle<()>>,
     pub(crate) config_options: Vec<ConfigOption>,
@@ -83,7 +83,6 @@ pub struct AgentManager {
     pub(crate) threads: ThreadManager,
     topology: Arc<RwLock<crate::swarm::Topology>>,
     workspace_state: crate::workspace::SharedWorkspaceState,
-    runtime: crate::runtime::SharedRuntime,
     event_tx: broadcast::Sender<Notification>,
 }
 
@@ -92,23 +91,17 @@ impl AgentManager {
         workspace_state: crate::workspace::SharedWorkspaceState,
         event_tx: broadcast::Sender<Notification>,
         token_registry: Arc<crate::mcp::TokenRegistry>,
-        runtime: crate::runtime::SharedRuntime,
     ) -> Self {
         enrich_path();
 
-        let threads = ThreadManager::new(
-            event_tx.clone(),
-            token_registry,
-            workspace_state.clone(),
-            runtime.clone(),
-        );
+        let threads =
+            ThreadManager::new(event_tx.clone(), token_registry, workspace_state.clone());
 
         Self {
             registry: Arc::new(RwLock::new(AgentRegistry::new())),
             threads,
             topology: Arc::new(RwLock::new(crate::swarm::Topology::new())),
             workspace_state,
-            runtime,
             event_tx: event_tx.clone(),
         }
     }
@@ -171,29 +164,14 @@ impl AgentManager {
         };
         self.persist_agents(&workspace_id).await;
 
-        // Create the agent's host-side directory
+        // Create the agent's host-side directory. This doubles as the agent's
+        // $HOME and working directory when it runs as a local host process, so
+        // its per-agent config (.claude, .codex, …) stays isolated.
         if let Some(ws_path) = self.workspace_path(&workspace_id).await {
-            let agent_dir = ws_path.join("home/.agents").join(&id);
+            let agent_dir =
+                crate::workspace::paths::WorkspacePaths::from_dir(ws_path).agent_dir(&id);
             if let Err(e) = tokio::fs::create_dir_all(&agent_dir).await {
                 log::error!("Failed to create agent directory: {}", e);
-            }
-
-            // If the container is running, create the symlink inside it
-            let container_id = {
-                let state = self.workspace_state.read().await;
-                state
-                    .workspaces
-                    .get(&workspace_id)
-                    .and_then(|ws| ws.container_id.clone())
-            };
-            if let Some(cid) = container_id {
-                if let Some(client) = self.runtime.read().await.client() {
-                    if let Err(e) =
-                        crate::workspace::container::setup_agent_symlink(&client, &cid, &id).await
-                    {
-                        log::warn!("Failed to create agent symlink in container: {}", e);
-                    }
-                }
             }
         }
 
@@ -236,7 +214,8 @@ impl AgentManager {
 
         // Remove the agent's host-side directory
         if let Some(ws_path) = self.workspace_path(&workspace_id).await {
-            let agent_dir = ws_path.join("home/.agents").join(agent_id);
+            let agent_dir =
+                crate::workspace::paths::WorkspacePaths::from_dir(ws_path).agent_dir(agent_id);
             if agent_dir.exists() {
                 if let Err(e) = tokio::fs::remove_dir_all(&agent_dir).await {
                     log::error!("Failed to remove agent directory: {}", e);
@@ -285,35 +264,19 @@ impl AgentManager {
                 .ok_or_else(|| format!("Agent definition '{}' not found", agent_id))?
         };
 
-        // Validate workspace container is running and get container_id
-        let container_id = {
+        // Validate the workspace exists. Agents run as local processes, so
+        // there is no container to gate on.
+        {
             let state = self.workspace_state.read().await;
-            let ws = state
-                .workspaces
-                .get(&definition.workspace_id)
-                .ok_or_else(|| format!("Workspace '{}' not found", definition.workspace_id))?;
-            match &ws.container_status {
-                emergent_protocol::ContainerStatus::Running => {}
-                other => {
-                    return Err(format!(
-                        "Workspace '{}' container is not running (status: {})",
-                        definition.workspace_id, other
-                    ));
-                }
+            if !state.workspaces.contains_key(&definition.workspace_id) {
+                return Err(format!("Workspace '{}' not found", definition.workspace_id));
             }
-            ws.container_id.clone().ok_or_else(|| {
-                format!(
-                    "Workspace '{}' has no container_id",
-                    definition.workspace_id
-                )
-            })?
-        };
+        }
 
         self.threads
             .spawn_thread(
                 agent_id.to_string(),
                 definition.workspace_id,
-                container_id,
                 definition.cli,
                 task_id,
             )
@@ -335,29 +298,14 @@ impl AgentManager {
                 .ok_or_else(|| format!("Agent definition '{}' not found", agent_id))?
         };
 
-        // Validate workspace container is running and get container_id
-        let container_id = {
+        // Validate the workspace exists. Agents run as local processes, so
+        // there is no container to gate on.
+        {
             let state = self.workspace_state.read().await;
-            let ws = state
-                .workspaces
-                .get(&definition.workspace_id)
-                .ok_or_else(|| format!("Workspace '{}' not found", definition.workspace_id))?;
-            match &ws.container_status {
-                emergent_protocol::ContainerStatus::Running => {}
-                other => {
-                    return Err(format!(
-                        "Workspace '{}' container is not running (status: {})",
-                        definition.workspace_id, other
-                    ));
-                }
+            if !state.workspaces.contains_key(&definition.workspace_id) {
+                return Err(format!("Workspace '{}' not found", definition.workspace_id));
             }
-            ws.container_id.clone().ok_or_else(|| {
-                format!(
-                    "Workspace '{}' has no container_id",
-                    definition.workspace_id
-                )
-            })?
-        };
+        }
 
         // Recover persisted task_id so that task sessions remain callable
         // via complete_task after resume.
@@ -388,7 +336,6 @@ impl AgentManager {
                 thread_id.to_string(),
                 agent_id.to_string(),
                 definition.workspace_id,
-                container_id,
                 definition.cli,
                 acp_session_id.to_string(),
                 task_id,

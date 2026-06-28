@@ -1,16 +1,15 @@
 # Emergent
 
-A desktop app for running ACP-compatible LLM agents inside Docker-backed workspaces. Create isolated environments, define agents with optional roles, open multiple conversation threads per agent, and watch several agents work side-by-side from a native desktop UI.
+A desktop app for running ACP-compatible LLM agents as local processes in per-agent workspaces. Define agents with optional roles, open multiple conversation threads per agent, and watch several agents work side-by-side from a native desktop UI.
 
 ![Preview](assets/preview.png)
 
 ## Features
 
-- **Docker-backed Workspaces** — Each workspace runs in its own container with an isolated filesystem, toolchain, and terminal
+- **Local Workspaces** — Workspaces live under `~/.emergent/`; every agent runs as a local host process in its own directory (used as the agent's `$HOME`), so per-agent config stays isolated
 - **Configured Agents + Threads** — Define agents once, give them optional roles, and create multiple conversation threads per agent
 - **Swarm Coordination** — Connect running threads inside a workspace and expose peer-aware MCP tools such as `list_peers` and `send_message`
-- **Workspace Tools** — Start, stop, rebuild, and manage workspace containers from the desktop UI
-- **Integrated Terminal** — Open terminal sessions directly into running workspace containers
+- **Integrated Terminal** — Open a host terminal session rooted in any workspace
 - **Multi-Provider Support** — Works with Claude Code, Gemini CLI, Codex, Kiro, OpenCode, and other ACP-compatible agents
 - **Real-Time Streaming Chat** — Watch responses stream live with markdown rendering, thinking blocks, and tool call output
 - **Native Desktop App** — Built with Tauri 2 for a fast, lightweight experience on macOS, Windows, and Linux
@@ -28,21 +27,21 @@ graph TD
         MCP -.->|tool calls| AM
     end
 
-    subgraph WC["Workspace Container"]
-        AG[Agent Thread]
+    subgraph WS["Workspace (local directory)"]
+        AG[Agent Process]
     end
 
-    WM -->|Docker API| WC
-    AM -->|ACP via docker exec| AG
-    AG -->|Streamable HTTP| MCP
+    WM -->|creates dirs| WS
+    AM -->|spawn + ACP stdio| AG
+    AG -->|Streamable HTTP 127.0.0.1| MCP
 ```
 
 **How it works:**
 
-1. The user creates a **workspace**, which builds a Docker image from a Dockerfile and starts a container.
+1. The user creates a **workspace** — a directory under `~/.emergent/` — and adds agents to it, each getting its own subdirectory.
 2. The **Svelte frontend** communicates with the **Tauri backend** through IPC commands.
-3. The Tauri backend owns the **agent manager** and **workspace manager**. Agents are started inside workspace containers via `docker exec` and communicate over **ACP** (stdio).
-4. Each running thread is registered with the app's embedded **MCP HTTP server**, exposed to containers through `host.docker.internal:{port}/mcp` and authenticated with a per-thread bearer token.
+3. The Tauri backend owns the **agent manager** and **workspace manager**. Agents are spawned as **local host processes** — each rooted in `~/.emergent/<workspace>/agents/<agent>/`, used as both its working directory and `$HOME` for config isolation — and communicate over **ACP** (stdio).
+4. Each running thread is registered with the app's embedded **MCP HTTP server** on `127.0.0.1:{port}/mcp` and authenticated with a per-thread bearer token.
 5. On the first prompt, the app can prepend an invisible **system block** with Emergent-specific instructions such as swarm guidance and the agent's configured role.
 6. Agent and workspace notifications flow through the Tauri backend and are emitted to the frontend as live UI updates.
 7. Agent definitions, thread mappings, and workspace state are persisted locally so sessions can be restored.
@@ -51,7 +50,7 @@ graph TD
 
 - **Frontend:** Svelte 5, TypeScript, Tailwind CSS 4, Vite 7
 - **Backend:** Rust, Tauri 2, Tokio, Axum
-- **Containers:** Docker (via bollard), per-workspace isolation
+- **Execution:** Local host processes, isolated by per-agent working directory + `$HOME`
 - **Protocol:** [Agent Client Protocol (ACP)](https://github.com/anthropics/agent-client-protocol) for agent communication
 - **MCP transport:** Streamable HTTP served by the embedded app
 - **Tooling:** Bun, Vitest, Playwright, oxlint, svelte-check, Clippy
@@ -62,10 +61,9 @@ graph TD
 
 - [Rust](https://rustup.rs/) (1.77.2+)
 - [Bun](https://bun.sh/)
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) for workspace containers
-- A workspace image that includes at least one supported agent CLI
+- At least one supported agent CLI installed on your `PATH` (see [Supported agents](#supported-agents))
 
-The app can launch without Docker, but workspace creation and container-backed features will be unavailable until Docker is running.
+Each agent runs with its own `$HOME` (its workspace directory), so an agent CLI authenticates on first use rather than sharing your global config.
 
 ### Development
 
@@ -103,7 +101,7 @@ bun run build             # Tauri desktop app (includes agent manager)
 
 ### Supported agents
 
-Availability is detected inside each running workspace container.
+Availability is detected on your host `PATH`.
 
 | Agent       | Command                                 |
 | ----------- | --------------------------------------- |

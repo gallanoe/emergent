@@ -829,13 +829,7 @@ mod tests {
         let registry = Arc::new(TokenRegistry::new());
         let workspace_state = crate::workspace::new_shared_state();
         let (event_tx, event_rx) = tokio::sync::broadcast::channel(1024);
-        let runtime = crate::runtime::load_shared_runtime().await;
-        let agent_manager = Arc::new(AgentManager::new(
-            workspace_state,
-            event_tx.clone(),
-            registry,
-            runtime,
-        ));
+        let agent_manager = Arc::new(AgentManager::new(workspace_state, event_tx.clone(), registry));
         let tm = TaskManager::new(agent_manager, event_tx);
         (tm, event_rx)
     }

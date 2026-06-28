@@ -33,7 +33,6 @@ pub struct ThreadManager {
     pub(crate) token_registry: Arc<crate::mcp::TokenRegistry>,
     pub(crate) mcp_port: std::sync::atomic::AtomicU16,
     pub(crate) workspace_state: crate::workspace::SharedWorkspaceState,
-    pub(crate) runtime: crate::runtime::SharedRuntime,
     /// Per-workspace aggregated usage totals + recent turn ring buffer.
     pub(crate) usage_stores: Arc<RwLock<HashMap<WorkspaceId, WorkspaceUsageStore>>>,
     /// Last cumulative token snapshot per ACP session ID (for delta calculation).
@@ -48,7 +47,6 @@ impl ThreadManager {
         event_tx: broadcast::Sender<Notification>,
         token_registry: Arc<crate::mcp::TokenRegistry>,
         workspace_state: crate::workspace::SharedWorkspaceState,
-        runtime: crate::runtime::SharedRuntime,
     ) -> Self {
         let history: Arc<RwLock<HashMap<String, Vec<Notification>>>> =
             Arc::new(RwLock::new(HashMap::new()));
@@ -230,7 +228,6 @@ impl ThreadManager {
             token_registry,
             mcp_port: std::sync::atomic::AtomicU16::new(0),
             workspace_state,
-            runtime,
             usage_stores,
             last_session_snapshots,
             last_cost_snapshots,
@@ -270,20 +267,32 @@ impl ThreadManager {
         &self,
         agent_definition_id: String,
         workspace_id: WorkspaceId,
-        container_id: String,
         agent_binary: String,
         task_id: Option<String>,
     ) -> Result<String, String> {
         let thread_id = Self::generate_short_id();
 
         log::info!(
-            "Spawning thread {} (agent: {}, cli: {}, workspace: {}, container: {})",
+            "Spawning thread {} (agent: {}, cli: {}, workspace: {})",
             &thread_id,
             &agent_definition_id,
             agent_binary,
             workspace_id,
-            container_id
         );
+
+        // Resolve and ensure the agent's home/working directory.
+        let agent_home = {
+            let state = self.workspace_state.read().await;
+            let ws = state
+                .workspaces
+                .get(&workspace_id)
+                .ok_or_else(|| format!("Workspace '{}' not found", workspace_id))?;
+            crate::workspace::paths::WorkspacePaths::from_dir(ws.path.clone())
+                .agent_dir(&agent_definition_id)
+        };
+        if let Err(e) = tokio::fs::create_dir_all(&agent_home).await {
+            return Err(format!("Failed to create agent directory: {}", e));
+        }
 
         let threads = self.threads.clone();
         let event_tx = self.event_tx.clone();
@@ -299,17 +308,12 @@ impl ThreadManager {
         let dormant_for_persist = self.dormant_threads.clone();
         let usage_stores_for_persist = self.usage_stores.clone();
         let token_registry_for_cleanup = self.token_registry.clone();
-        let runtime = self.runtime.read().await;
-        let cli_program = runtime.cli_program().to_string();
-        let mcp_host_alias = runtime.mcp_host_alias().to_string();
-        drop(runtime);
 
         tokio::spawn(async move {
             match lifecycle::initialize_agent(
                 id.clone(),
                 agent_definition_id,
                 workspace_id,
-                container_id,
                 agent_binary,
                 task_id,
                 SessionInit::New,
@@ -318,8 +322,7 @@ impl ThreadManager {
                 history,
                 mcp_port,
                 bearer_token,
-                cli_program,
-                mcp_host_alias,
+                agent_home,
             )
             .await
             {
@@ -381,7 +384,6 @@ impl ThreadManager {
         thread_id: String,
         agent_definition_id: String,
         workspace_id: WorkspaceId,
-        container_id: String,
         agent_binary: String,
         acp_session_id: String,
         task_id: Option<String>,
@@ -402,6 +404,20 @@ impl ThreadManager {
             &workspace_id,
         );
 
+        // Resolve and ensure the agent's home/working directory.
+        let agent_home = {
+            let state = self.workspace_state.read().await;
+            let ws = state
+                .workspaces
+                .get(&workspace_id)
+                .ok_or_else(|| format!("Workspace '{}' not found", workspace_id))?;
+            crate::workspace::paths::WorkspacePaths::from_dir(ws.path.clone())
+                .agent_dir(&agent_definition_id)
+        };
+        if let Err(e) = tokio::fs::create_dir_all(&agent_home).await {
+            return Err(format!("Failed to create agent directory: {}", e));
+        }
+
         let threads = self.threads.clone();
         let dormant = self.dormant_threads.clone();
         let event_tx = self.event_tx.clone();
@@ -412,17 +428,12 @@ impl ThreadManager {
         let bearer_token = self.token_registry.register(&id, task_id.clone());
         let mcp_port = self.mcp_port.load(std::sync::atomic::Ordering::Relaxed);
         let token_registry_for_cleanup = self.token_registry.clone();
-        let runtime = self.runtime.read().await;
-        let cli_program = runtime.cli_program().to_string();
-        let mcp_host_alias = runtime.mcp_host_alias().to_string();
-        drop(runtime);
 
         tokio::spawn(async move {
             match lifecycle::initialize_agent(
                 id.clone(),
                 agent_definition_id,
                 workspace_id,
-                container_id,
                 agent_binary,
                 task_id,
                 SessionInit::Load { acp_session_id },
@@ -431,8 +442,7 @@ impl ThreadManager {
                 history,
                 mcp_port,
                 bearer_token,
-                cli_program,
-                mcp_host_alias,
+                agent_home,
             )
             .await
             {
@@ -985,7 +995,7 @@ impl ThreadManager {
         &self,
         workspace_id: WorkspaceId,
         path: std::path::PathBuf,
-        container_status: emergent_protocol::ContainerStatus,
+        status: emergent_protocol::WorkspaceStatus,
     ) {
         use crate::workspace::Workspace;
         let mut state = self.workspace_state.write().await;
@@ -994,8 +1004,7 @@ impl ThreadManager {
             Workspace {
                 name: "test-ws".into(),
                 path,
-                container_id: None,
-                container_status,
+                status,
             },
         );
     }
@@ -1011,17 +1020,17 @@ impl ThreadManager {
         workspace_id: WorkspaceId,
         acp_session_id: Option<String>,
     ) {
-        use crate::agent::spawner::RuntimeCliProcess;
+        use crate::agent::spawner::LocalProcess;
         use tokio::sync::mpsc;
 
         let (command_tx, _command_rx) = mpsc::unbounded_channel();
 
         // Spawn a no-op child process that exits immediately. This is the
-        // minimal `Child` required by `RuntimeCliProcess`.
+        // minimal `Child` required by `LocalProcess`.
         let child = tokio::process::Command::new("true")
             .spawn()
             .expect("failed to spawn 'true' for test stub");
-        let process = RuntimeCliProcess::new_for_test(child);
+        let process = LocalProcess::new_for_test(child);
 
         let handle = super::ThreadHandle {
             agent_id: agent_definition_id,

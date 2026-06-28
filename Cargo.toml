@@ -13,4 +13,3 @@ agent-client-protocol = { version = "=0.11.1", features = ["unstable"] }
 tokio-util = { version = "0.7", features = ["compat"] }
 async-trait = "0.1"
 which = "7"
-bollard = "0.18"

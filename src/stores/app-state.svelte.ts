@@ -7,10 +7,7 @@ import { normalizeThreadSummaryStatus } from "./types";
 import type {
   ActiveView,
   AgentDefinition,
-  ContainerStatus,
-  ContainerRuntimeKind,
-  ContainerRuntimePreference,
-  ContainerRuntimeStatus,
+  WorkspaceStatus,
   ConfigOption,
   DisplayAgentDefinition,
   DisplayTask,
@@ -44,7 +41,7 @@ interface Workspace {
   id: string;
   name: string;
   collapsed: boolean;
-  containerStatus: ContainerStatus;
+  status: WorkspaceStatus;
   agentDefinitionIds: string[];
 }
 
@@ -61,10 +58,6 @@ function createAppState() {
   let agentConnections = $state<Record<string, string[]>>({});
   let selectedWorkspaceId = $state<string | null>(null);
   let activeView = $state<ActiveView>("overview");
-  let runtimePreference = $state<ContainerRuntimePreference>({
-    selected_runtime: "docker",
-  });
-  let runtimeStatus = $state<ContainerRuntimeStatus | null>(null);
   let terminalSessionIds = $state<Record<string, string>>({});
   let tasks = $state<Record<string, DisplayTask>>({});
   let selectedTaskId = $state<string | null>(null);
@@ -78,25 +71,6 @@ function createAppState() {
   // ── Initialization ────────────────────────────────────────────
 
   async function setupAfterConnect() {
-    // Load runtime preference and availability first so the app can show the
-    // correct unavailable state before workspace-specific views mount.
-    try {
-      const [preference, status] = await Promise.all([
-        invoke<ContainerRuntimePreference>("get_container_runtime_preference"),
-        invoke<ContainerRuntimeStatus>("get_container_runtime_status"),
-      ]);
-      runtimePreference = preference;
-      runtimeStatus = status;
-    } catch {
-      runtimePreference = { selected_runtime: "docker" };
-      runtimeStatus = {
-        selected_runtime: "docker",
-        available: false,
-        version: null,
-        message: "Failed to detect the selected container runtime.",
-      };
-    }
-
     // Load existing workspaces
     try {
       const wsList = await invoke<WorkspaceSummary[]>("list_workspaces");
@@ -105,7 +79,7 @@ function createAppState() {
           id: ws.id,
           name: ws.name,
           collapsed: false,
-          containerStatus: ws.container_status,
+          status: ws.status,
           agentDefinitionIds: [],
         });
       }
@@ -164,10 +138,10 @@ function createAppState() {
         }
       }
 
-      // Refresh known agents for the first running workspace
-      const runningWs = workspaces.find((w) => w.containerStatus.state === "running");
-      if (runningWs) {
-        await refreshKnownAgents(runningWs.id);
+      // Refresh known agents for the first workspace
+      const firstWs = workspaces[0];
+      if (firstWs) {
+        await refreshKnownAgents(firstWs.id);
       }
     } catch {
       // No workspaces yet
@@ -247,15 +221,7 @@ function createAppState() {
     listenerCleanup.push(
       await listen<WorkspaceStatusChangePayload>("workspace:status-change", (e) => {
         const ws = workspaces.find((w) => w.id === e.payload.workspace_id);
-        if (ws) ws.containerStatus = e.payload.status;
-
-        if (e.payload.status.state === "running") {
-          refreshKnownAgents(e.payload.workspace_id);
-        }
-
-        if (e.payload.status.state !== "running") {
-          delete terminalSessionIds[e.payload.workspace_id];
-        }
+        if (ws) ws.status = e.payload.status;
       }),
     );
 
@@ -305,25 +271,13 @@ function createAppState() {
       id,
       name,
       collapsed: false,
-      containerStatus: { state: "building" },
+      status: { state: "ready" },
       agentDefinitionIds: [],
     });
     selectedWorkspaceId = id;
     activeView = "settings";
 
     return id;
-  }
-
-  async function startContainer(workspaceId: string) {
-    await invoke("start_container", { workspaceId });
-  }
-
-  async function stopContainer(workspaceId: string) {
-    await invoke("stop_container", { workspaceId });
-  }
-
-  async function rebuildContainer(workspaceId: string) {
-    await invoke("rebuild_container", { workspaceId });
   }
 
   async function updateWorkspace(workspaceId: string, name: string) {
@@ -340,22 +294,6 @@ function createAppState() {
     if (idx !== -1) workspaces.splice(idx, 1);
     if (selectedWorkspaceId === workspaceId) {
       selectedWorkspaceId = workspaces[0]?.id ?? null;
-    }
-  }
-
-  async function setContainerRuntimePreference(selectedRuntime: ContainerRuntimeKind) {
-    runtimePreference = { selected_runtime: selectedRuntime };
-    runtimeStatus = await invoke<ContainerRuntimeStatus>("set_container_runtime_preference", {
-      selectedRuntime,
-    });
-
-    if (
-      selectedWorkspaceId &&
-      workspaces.find((w) => w.id === selectedWorkspaceId)?.containerStatus.state === "running"
-    ) {
-      await refreshKnownAgents(selectedWorkspaceId);
-    } else {
-      knownAgents = [];
     }
   }
 
@@ -377,7 +315,7 @@ function createAppState() {
         id: w.id,
         name: w.name,
         collapsed: w.collapsed,
-        containerStatus: w.containerStatus,
+        status: w.status,
         agentDefinitions: w.agentDefinitions.map((ad) => ({
           id: ad.id,
           name: ad.name,
@@ -392,7 +330,7 @@ function createAppState() {
       id: w.id,
       name: w.name,
       collapsed: w.collapsed,
-      containerStatus: w.containerStatus,
+      status: w.status,
       agentDefinitions: (w.agentDefinitionIds ?? [])
         .map((defId): DisplayAgentDefinition | null => {
           const def = agentDefinitions[defId];
@@ -544,24 +482,18 @@ function createAppState() {
       selectedAgentId = conn.agentDefinitionId;
     }
 
-    // Auto-resume dead threads that have a persisted ACP session, but only
-    // when the owning workspace's container is actually running — otherwise
-    // the backend returns Err synchronously and we'd get stuck in
-    // "initializing".
+    // Auto-resume dead threads that have a persisted ACP session.
     if (conn && conn.status === "dead" && conn.acpSessionId) {
-      const ws = workspaces.find((w) => w.id === conn.workspaceId);
-      if (ws?.containerStatus.state === "running") {
-        agentStore.resetThreadState(threadId);
-        conn.status = "initializing";
-        invoke("resume_thread", {
-          threadId,
-          agentId: conn.agentDefinitionId,
-          acpSessionId: conn.acpSessionId,
-        }).catch((e: unknown) => {
-          console.error("Failed to resume thread:", e);
-          conn.status = "dead";
-        });
-      }
+      agentStore.resetThreadState(threadId);
+      conn.status = "initializing";
+      invoke("resume_thread", {
+        threadId,
+        agentId: conn.agentDefinitionId,
+        acpSessionId: conn.acpSessionId,
+      }).catch((e: unknown) => {
+        console.error("Failed to resume thread:", e);
+        conn.status = "dead";
+      });
     }
   }
 
@@ -625,33 +557,14 @@ function createAppState() {
     get selectedSwarm() {
       return getSelectedSwarm();
     },
-    get selectedWorkspaceContainerRunning(): boolean {
-      if (demoMode) {
-        const list = mockState.swarms as unknown as DisplayWorkspace[];
-        const ws = list.find((w) => w.id === selectedWorkspaceId) ?? list[0];
-        return ws?.containerStatus.state === "running";
-      }
-      const ws = workspaces.find((w) => w.id === selectedWorkspaceId);
-      return ws?.containerStatus.state === "running";
-    },
     get agentConnections() {
       return agentConnections;
-    },
-    get runtimePreference() {
-      return runtimePreference;
-    },
-    get runtimeStatus() {
-      return runtimeStatus;
     },
     initialize,
     createWorkspace,
     toggleSwarmCollapsed,
     updateWorkspace,
     deleteWorkspace,
-    setContainerRuntimePreference,
-    startContainer,
-    stopContainer,
-    rebuildContainer,
     sendPrompt: agentStore.sendPrompt,
     cancelPrompt: agentStore.cancelPrompt,
     setConfig: agentStore.setConfig,
@@ -788,8 +701,6 @@ function createAppState() {
     async resumeThread(threadId: string): Promise<void> {
       const conn = agentStore.getThread(threadId);
       if (!conn || !conn.acpSessionId) return;
-      const ws = workspaces.find((w) => w.id === conn.workspaceId);
-      if (ws?.containerStatus.state !== "running") return;
       agentStore.resetThreadState(threadId);
       conn.status = "initializing";
       try {

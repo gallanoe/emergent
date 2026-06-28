@@ -6,7 +6,6 @@
   import ChatTaskBanner from "./components/chat/ChatTaskBanner.svelte";
   import WorkspaceSettingsView from "./components/settings/WorkspaceSettingsView.svelte";
   import AppSettingsView from "./components/settings/AppSettingsView.svelte";
-  import RuntimeSelector from "./components/settings/RuntimeSelector.svelte";
   import TerminalView from "./components/terminal/TerminalView.svelte";
   import ThreadListView from "./components/agent/ThreadListView.svelte";
   import AgentCreatorView from "./components/agent/AgentCreatorView.svelte";
@@ -18,22 +17,11 @@
   import ContextMenu from "./components/sidebar/ContextMenu.svelte";
   import CreateWorkspaceDialog from "./components/CreateWorkspaceDialog.svelte";
   import SearchCommand from "./components/SearchCommand.svelte";
-  import {
-    Plus,
-    Square,
-    Play,
-    RefreshCw,
-    Trash2,
-    Loader,
-  } from "@lucide/svelte";
+  import { Plus, Trash2 } from "@lucide/svelte";
   import { isEditableTarget } from "./lib/editable-guard";
   import { onMount } from "svelte";
   import { listen } from "@tauri-apps/api/event";
-  import type {
-    MenuItem,
-    ContainerStatus,
-    WorkspaceStatusChangePayload,
-  } from "./stores/types";
+  import type { MenuItem, WorkspaceStatusChangePayload } from "./stores/types";
 
   let showCreateWorkspace = $state(false);
   let workspaceMenu = $state<{
@@ -98,40 +86,9 @@
     );
   });
 
-  function workspaceMenuItems(status: ContainerStatus): MenuItem[] {
-    switch (status.state) {
-      case "running":
-        return [
-          { id: "stop", label: "Stop", icon: Square },
-          { id: "sep", label: "", separator: true },
-          { id: "delete", label: "Delete", icon: Trash2, danger: true },
-        ];
-      case "stopped":
-        return [
-          { id: "start", label: "Start", icon: Play },
-          { id: "sep", label: "", separator: true },
-          { id: "delete", label: "Delete", icon: Trash2, danger: true },
-        ];
-      case "building":
-        return [
-          { id: "building", label: "Building…", icon: Loader, disabled: true },
-          { id: "sep", label: "", separator: true },
-          {
-            id: "delete",
-            label: "Delete",
-            icon: Trash2,
-            danger: true,
-            disabled: true,
-          },
-        ];
-      case "error":
-        return [
-          { id: "rebuild", label: "Rebuild", icon: RefreshCw },
-          { id: "sep", label: "", separator: true },
-          { id: "delete", label: "Delete", icon: Trash2, danger: true },
-        ];
-    }
-  }
+  const workspaceMenuItems: MenuItem[] = [
+    { id: "delete", label: "Delete", icon: Trash2, danger: true },
+  ];
 
   function handleWorkspaceMenuAction(actionId: string) {
     if (!workspaceMenu) return;
@@ -139,19 +96,8 @@
     const ws = appState.swarms.find((s) => s.id === wsId);
     workspaceMenu = null;
 
-    switch (actionId) {
-      case "stop":
-        appState.stopContainer(wsId);
-        break;
-      case "start":
-        appState.startContainer(wsId);
-        break;
-      case "rebuild":
-        appState.rebuildContainer(wsId);
-        break;
-      case "delete":
-        if (ws) deleteTarget = { id: wsId, name: ws.name };
-        break;
+    if (actionId === "delete" && ws) {
+      deleteTarget = { id: wsId, name: ws.name };
     }
   }
 
@@ -164,11 +110,6 @@
     }
     await appState.deleteWorkspace(id);
   }
-
-  const isEmptyOrRuntimeMissing = $derived(
-    (appState.runtimeStatus && !appState.runtimeStatus.available) ||
-      (!appState.demoMode && appState.swarms.length === 0),
-  );
 
   function onGlobalKeydown(e: KeyboardEvent) {
     const meta = e.metaKey || e.ctrlKey;
@@ -267,45 +208,7 @@
       data-tauri-drag-region
       aria-hidden="true"
     ></div>
-    {#if appState.runtimeStatus && !appState.runtimeStatus.available}
-      <div
-        class="flex flex-col items-center justify-center flex-1 gap-4 text-center px-6"
-      >
-        <div
-          class="w-10 h-10 rounded-full bg-bg-hover flex items-center justify-center text-warning"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            ><path
-              d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"
-            /><path d="M12 9v4" /><path d="M12 17h.01" /></svg
-          >
-        </div>
-        <div class="text-[13px] font-semibold text-fg-heading">
-          Selected runtime unavailable
-        </div>
-        <div class="text-[12px] text-fg-muted max-w-xs leading-relaxed">
-          Emergent could not reach the selected container runtime. Switch
-          runtimes here or fix the selected runtime, then try again.
-        </div>
-        <div class="w-full max-w-sm">
-          <RuntimeSelector
-            preference={appState.runtimePreference}
-            status={appState.runtimeStatus}
-            onChange={appState.setContainerRuntimePreference}
-            align="center"
-          />
-        </div>
-      </div>
-    {:else if !appState.demoMode && appState.swarms.length === 0}
+    {#if !appState.demoMode && appState.swarms.length === 0}
       <div
         class="flex flex-col items-center justify-center flex-1 gap-4 text-center px-6"
       >
@@ -319,14 +222,6 @@
         </div>
         <div class="text-[12px] text-fg-muted">
           Create a workspace to get started
-        </div>
-        <div class="w-full max-w-sm">
-          <RuntimeSelector
-            preference={appState.runtimePreference}
-            status={appState.runtimeStatus}
-            onChange={appState.setContainerRuntimePreference}
-            align="center"
-          />
         </div>
         <button
           type="button"
@@ -349,17 +244,8 @@
     {:else if appState.activeView === "settings" && appState.selectedSwarmId}
       <WorkspaceSettingsView
         workspaceId={appState.selectedSwarmId}
-        containerStatus={appState.selectedSwarm?.containerStatus ?? {
-          state: "stopped",
-        }}
-        runtimePreference={appState.runtimePreference}
-        runtimeStatus={appState.runtimeStatus}
         onUpdateName={(name) =>
           appState.updateWorkspace(appState.selectedSwarmId!, name)}
-        onRuntimeChange={appState.setContainerRuntimePreference}
-        onStart={() => appState.startContainer(appState.selectedSwarmId!)}
-        onStop={() => appState.stopContainer(appState.selectedSwarmId!)}
-        onRebuild={() => appState.rebuildContainer(appState.selectedSwarmId!)}
         onDelete={() => {
           const id = appState.selectedSwarmId!;
           appState.activeView = "overview";
@@ -369,9 +255,6 @@
     {:else if appState.activeView === "terminal" && appState.selectedSwarmId}
       <TerminalView
         workspaceId={appState.selectedSwarmId}
-        containerStatus={appState.selectedSwarm?.containerStatus ?? {
-          state: "stopped",
-        }}
         sessionId={appState.terminalSessionIds[appState.selectedSwarmId] ??
           null}
         onSessionCreated={(sid) =>
@@ -413,7 +296,6 @@
               d.name,
             ]),
           )}
-          containerRunning={appState.selectedWorkspaceContainerRunning}
           onSelectTask={(id) => appState.selectTask(id)}
           onNavigateToSession={(threadId) => appState.selectThread(threadId)}
           onCreateTask={() => appState.openCreateTask()}
@@ -464,7 +346,6 @@
       >
         <ThreadListView
           agentDefinition={def}
-          containerRunning={appState.selectedWorkspaceContainerRunning}
           activeThreadId={appState.selectedThreadId}
           onSelectThread={(id) => appState.selectThread(id)}
           onNewThread={async () => {
@@ -518,7 +399,6 @@
           <ChatInput
             {thread}
             demoMode={appState.demoMode}
-            containerRunning={appState.selectedWorkspaceContainerRunning}
             pendingQueue={appState.selectedThreadPendingQueue}
             pushToComposer={composerPush}
             onSend={(text) => {
@@ -571,7 +451,6 @@
         <ChatInput
           thread={appState.selectedAgent}
           demoMode={appState.demoMode}
-          containerRunning={appState.selectedWorkspaceContainerRunning}
           pendingQueue={appState.selectedThreadPendingQueue}
           pushToComposer={composerPush}
           onSend={(text) => {
@@ -619,7 +498,7 @@
     <ContextMenu
       x={menu.x}
       y={menu.y}
-      items={workspaceMenuItems(ws.containerStatus)}
+      items={workspaceMenuItems}
       onSelect={handleWorkspaceMenuAction}
       onClose={() => (workspaceMenu = null)}
     />
@@ -629,7 +508,7 @@
 {#if deleteTarget}
   <ConfirmDialog
     title="Delete {deleteTarget.name}?"
-    description="All agents will be terminated. The container, image, and workspace files will be permanently deleted."
+    description="All agents will be terminated. The workspace and its files will be permanently deleted."
     confirmLabel="Delete"
     confirmVariant="danger"
     onConfirm={confirmDeleteWorkspace}

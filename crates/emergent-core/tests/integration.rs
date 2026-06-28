@@ -10,12 +10,10 @@ async fn spawn_test_server() -> (String, Arc<TokenRegistry>, Arc<AgentManager>) 
     let registry = Arc::new(TokenRegistry::new());
     let workspace_state = workspace::new_shared_state();
     let (event_tx, _) = tokio::sync::broadcast::channel(1024);
-    let runtime = emergent_core::runtime::load_shared_runtime().await;
     let manager = Arc::new(AgentManager::new(
         workspace_state,
         event_tx.clone(),
         registry.clone(),
-        runtime,
     ));
     let task_manager = Arc::new(TaskManager::new(manager.clone(), event_tx));
     let server = http_server::start(manager.clone(), registry.clone(), task_manager)
@@ -318,7 +316,7 @@ async fn test_no_auth_header_tool_call_returns_error() {
 #[tokio::test]
 async fn task_session_survives_restart_and_respawn() {
     use emergent_core::agent::thread_manager::{ThreadManager, ThreadMapping};
-    use emergent_protocol::{ContainerStatus, WorkspaceId};
+    use emergent_protocol::{WorkspaceStatus, WorkspaceId};
     use tempfile::TempDir;
 
     let tmp = TempDir::new().unwrap();
@@ -333,7 +331,7 @@ async fn task_session_survives_restart_and_respawn() {
             .register_workspace_for_test(
                 ws_id.clone(),
                 tmp.path().to_path_buf(),
-                ContainerStatus::Stopped,
+                WorkspaceStatus::Ready,
             )
             .await;
 
@@ -366,7 +364,7 @@ async fn task_session_survives_restart_and_respawn() {
         .register_workspace_for_test(
             ws_id.clone(),
             tmp.path().to_path_buf(),
-            ContainerStatus::Stopped,
+            WorkspaceStatus::Ready,
         )
         .await;
 
@@ -393,7 +391,7 @@ async fn task_session_survives_restart_and_respawn() {
 #[tokio::test]
 async fn delete_workspace_clears_dormant_in_memory() {
     use emergent_core::agent::thread_manager::ThreadMapping;
-    use emergent_protocol::{ContainerStatus, WorkspaceId};
+    use emergent_protocol::{WorkspaceStatus, WorkspaceId};
     use tempfile::TempDir;
 
     let tmp = TempDir::new().unwrap();
@@ -405,7 +403,7 @@ async fn delete_workspace_clears_dormant_in_memory() {
         .register_workspace_for_test(
             ws_id.clone(),
             tmp.path().to_path_buf(),
-            ContainerStatus::Stopped,
+            WorkspaceStatus::Ready,
         )
         .await;
 
@@ -454,7 +452,7 @@ async fn delete_workspace_clears_dormant_in_memory() {
 async fn turn_usage_recorder_updates_store_and_persists() {
     use emergent_core::agent::thread_manager::ThreadMapping;
     use emergent_core::agent::usage_store::PersistedWorkspaceState;
-    use emergent_protocol::{ContainerStatus, Notification, TurnUsagePayload, WorkspaceId};
+    use emergent_protocol::{WorkspaceStatus, Notification, TurnUsagePayload, WorkspaceId};
     use tempfile::TempDir;
 
     let tmp = TempDir::new().unwrap();
@@ -466,7 +464,7 @@ async fn turn_usage_recorder_updates_store_and_persists() {
         .register_workspace_for_test(
             ws_id.clone(),
             tmp.path().to_path_buf(),
-            ContainerStatus::Stopped,
+            WorkspaceStatus::Ready,
         )
         .await;
 
@@ -556,7 +554,7 @@ async fn turn_usage_recorder_updates_store_and_persists() {
         .register_workspace_for_test(
             ws_id.clone(),
             tmp.path().to_path_buf(),
-            ContainerStatus::Stopped,
+            WorkspaceStatus::Ready,
         )
         .await;
     manager2
@@ -596,7 +594,7 @@ async fn v0_threads_json_loads_with_empty_usage() {
 #[tokio::test]
 async fn recorder_broadcast_channel_turn_and_cost_coverage() {
     use emergent_protocol::{
-        ContainerStatus, Notification, ThreadTokenUsagePayload, TurnUsagePayload, WorkspaceId,
+        WorkspaceStatus, Notification, ThreadTokenUsagePayload, TurnUsagePayload, WorkspaceId,
     };
     use tempfile::TempDir;
 
@@ -609,7 +607,7 @@ async fn recorder_broadcast_channel_turn_and_cost_coverage() {
         .register_workspace_for_test(
             ws_id.clone(),
             tmp.path().to_path_buf(),
-            ContainerStatus::Stopped,
+            WorkspaceStatus::Ready,
         )
         .await;
 

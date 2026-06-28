@@ -31,7 +31,6 @@ describe("TaskTableView", () => {
         tasks,
         selectedTaskId: null,
         agentNames: { "agent-1": "Agent One" },
-        containerRunning: true,
         onSelectTask: vi.fn(),
         onCreateTask: vi.fn(),
       },
@@ -55,7 +54,6 @@ describe("TaskTableView", () => {
         tasks,
         selectedTaskId: null,
         agentNames: {},
-        containerRunning: true,
         onSelectTask: vi.fn(),
         onCreateTask: vi.fn(),
       },
@@ -67,28 +65,12 @@ describe("TaskTableView", () => {
     expect(rows[0]?.getAttribute("aria-label")).toContain("w1");
   });
 
-  it("disables New task when container is not running", () => {
-    const { getByRole } = render(TaskTableView, {
-      props: {
-        tasks: [task({ id: "t1" })],
-        selectedTaskId: null,
-        agentNames: {},
-        containerRunning: false,
-        onSelectTask: vi.fn(),
-        onCreateTask: vi.fn(),
-      },
-    });
-    const newTask = getByRole("button", { name: /new task/i });
-    expect((newTask as HTMLButtonElement).disabled).toBe(true);
-  });
-
   it("row button aria-label includes task id and title", () => {
     const { getByRole } = render(TaskTableView, {
       props: {
         tasks: [task({ id: "TSK-7", title: "Fix lint" })],
         selectedTaskId: null,
         agentNames: {},
-        containerRunning: true,
         onSelectTask: vi.fn(),
         onCreateTask: vi.fn(),
       },

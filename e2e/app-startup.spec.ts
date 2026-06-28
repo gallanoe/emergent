@@ -29,17 +29,10 @@ const emptyStateMock = `
           { name: "OpenCode", command: "opencode acp", available: false, provider: "opencode" },
         ],
         list_workspaces: [],
-        get_container_runtime_preference: { selected_runtime: "docker" },
-        get_container_runtime_status: {
-          selected_runtime: "docker",
-          available: true,
-          version: "27.0.0",
-          message: null,
-        },
       };
       if (cmd in responses) return Promise.resolve(responses[cmd]);
       // Never reject: unknown invocations would fail init and can surface
-      // the runtime-unavailable view instead of the empty-workspace CTA.
+      // an error view instead of the empty-workspace CTA.
       return Promise.resolve(null);
     },
     transformCallback: function(cb) {

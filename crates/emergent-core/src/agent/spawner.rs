@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use tokio::io::{AsyncRead, AsyncWrite};
 
-/// A process running inside a container, providing stdin/stdout for ACP.
+/// A spawned agent process, providing stdin/stdout for the ACP byte stream.
 #[async_trait]
 pub trait AgentProcess: Send {
     type Stdin: AsyncWrite + Unpin + Send;
@@ -15,102 +15,86 @@ pub trait AgentProcess: Send {
     async fn wait(&mut self) -> Result<std::process::ExitStatus, String>;
 }
 
-/// Strategy for spawning agent processes inside containers.
+/// Strategy for spawning agent processes.
 ///
-/// When `pid_file` is `Some`, the spawner wraps the command with a shell
-/// that records the in-container PID before exec'ing the binary, so the
-/// process can be killed directly via `<runtime> exec <container> kill <pid>`.
-/// `<runtime> exec -i` does not forward signals from the host-side client
-/// to the in-container process, so killing the host client alone leaks.
+/// Agents run as local host processes: the CLI is launched directly with its
+/// working directory set to the agent's home dir, and `HOME` (plus any other
+/// overrides) supplied via `env` so per-agent config stays isolated.
 #[async_trait]
 pub trait ProcessSpawner: Send + Sync {
     type Process: AgentProcess;
     async fn spawn(
         &self,
-        container_id: &str,
         command: &[&str],
-        workdir: Option<&str>,
-        pid_file: Option<&str>,
+        cwd: &std::path::Path,
+        env: &[(String, String)],
     ) -> Result<Self::Process, String>;
 }
 
-fn sh_single_quote(s: &str) -> String {
-    format!("'{}'", s.replace('\'', "'\\''"))
-}
-
 // ---------------------------------------------------------------------------
-// RuntimeCliSpawner — uses `<runtime> exec -i` via tokio::process::Command
+// LocalProcessSpawner — runs the agent CLI directly via tokio::process::Command
 // ---------------------------------------------------------------------------
 
-pub struct RuntimeCliProcess {
+pub struct LocalProcess {
     child: tokio::process::Child,
     stdin: Option<tokio::process::ChildStdin>,
     stdout: Option<tokio::process::ChildStdout>,
-    cli_program: String,
-    container_id: String,
-    pid_file: Option<String>,
+    /// Process-group id (== child pid; the child leads its own group) so the
+    /// whole tree — the CLI plus any `bunx`/`node` grandchildren — can be
+    /// signalled together. `None` for test stubs / non-Unix.
+    #[cfg_attr(not(unix), allow(dead_code))]
+    pgid: Option<i32>,
 }
 
-impl RuntimeCliProcess {
-    /// Construct a minimal stub `RuntimeCliProcess` for integration tests.
-    /// The child is a real process (`true`) so `Child` is valid, but stdin/stdout
-    /// are not piped and the cli_program/container_id are empty sentinels.
+impl LocalProcess {
+    /// Construct a minimal stub for integration tests. The child is a real
+    /// process (e.g. `true`) so `Child` is valid; stdin/stdout are not piped.
     pub fn new_for_test(child: tokio::process::Child) -> Self {
         Self {
             child,
             stdin: None,
             stdout: None,
-            cli_program: String::new(),
-            container_id: String::new(),
-            pid_file: None,
+            pgid: None,
         }
     }
 
-    /// Graceful shutdown: kill the in-container process via its recorded PID,
-    /// then wait for the host-side exec client to exit (force-killing it on
-    /// timeout). Necessary because `<runtime> exec -i` does not forward
-    /// signals — killing only the host client leaks the container process.
+    /// Graceful shutdown: SIGTERM the process group, wait up to `timeout`,
+    /// then SIGKILL the group (and the child) if it has not exited.
     pub async fn shutdown(&mut self, timeout: std::time::Duration) -> Result<(), String> {
-        if let Some(pf) = &self.pid_file {
-            let script = format!(
-                "PID=$(cat {pf} 2>/dev/null); \
-                 if [ -n \"$PID\" ]; then \
-                   kill -TERM \"$PID\" 2>/dev/null; \
-                   sleep 0.3; \
-                   kill -KILL \"$PID\" 2>/dev/null; \
-                 fi; \
-                 rm -f {pf}",
-                pf = pf,
-            );
-            // Fire-and-forget. `kill_on_drop` would SIGKILL this exec client
-            // the moment `_child` goes out of scope below — before the kill
-            // script runs — so leave it off. If our app exits before the
-            // script finishes, the client is reparented to init and runs to
-            // completion.
-            match tokio::process::Command::new(&self.cli_program)
-                .arg("exec")
-                .arg(&self.container_id)
-                .arg("sh")
-                .arg("-c")
-                .arg(&script)
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .spawn()
-            {
-                Ok(_child) => {}
-                Err(e) => log::warn!("in-container kill failed to spawn: {}", e),
-            }
-        }
+        self.signal_group("TERM").await;
 
-        if tokio::time::timeout(timeout, self.child.wait()).await.is_err() {
+        if tokio::time::timeout(timeout, self.child.wait())
+            .await
+            .is_err()
+        {
+            self.signal_group("KILL").await;
             let _ = self.child.kill().await;
         }
         Ok(())
     }
+
+    /// Send a signal to the whole process group. No-op on non-Unix or when the
+    /// pid is unavailable (already reaped).
+    async fn signal_group(&self, signal: &str) {
+        #[cfg(unix)]
+        if let Some(pgid) = self.pgid {
+            // A negative pid targets the entire process group.
+            let _ = tokio::process::Command::new("kill")
+                .arg(format!("-{signal}"))
+                .arg(format!("-{pgid}"))
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status()
+                .await;
+        }
+        #[cfg(not(unix))]
+        let _ = signal;
+    }
 }
 
 #[async_trait]
-impl AgentProcess for RuntimeCliProcess {
+impl AgentProcess for LocalProcess {
     type Stdin = tokio::process::ChildStdin;
     type Stdout = tokio::process::ChildStdout;
 
@@ -131,86 +115,73 @@ impl AgentProcess for RuntimeCliProcess {
     }
 
     async fn kill(&mut self) -> Result<(), String> {
+        self.signal_group("KILL").await;
         self.child
             .kill()
             .await
-            .map_err(|e| format!("Failed to kill runtime exec process: {}", e))
+            .map_err(|e| format!("Failed to kill agent process: {}", e))
     }
 
     async fn wait(&mut self) -> Result<std::process::ExitStatus, String> {
         self.child
             .wait()
             .await
-            .map_err(|e| format!("Failed to wait on runtime exec process: {}", e))
+            .map_err(|e| format!("Failed to wait on agent process: {}", e))
     }
 }
 
-pub struct RuntimeCliSpawner {
-    cli_program: String,
-}
+#[derive(Default)]
+pub struct LocalProcessSpawner;
 
-impl RuntimeCliSpawner {
-    pub fn new(cli_program: impl Into<String>) -> Self {
-        Self {
-            cli_program: cli_program.into(),
-        }
+impl LocalProcessSpawner {
+    pub fn new() -> Self {
+        Self
     }
 }
 
 #[async_trait]
-impl ProcessSpawner for RuntimeCliSpawner {
-    type Process = RuntimeCliProcess;
+impl ProcessSpawner for LocalProcessSpawner {
+    type Process = LocalProcess;
 
     async fn spawn(
         &self,
-        container_id: &str,
         command: &[&str],
-        workdir: Option<&str>,
-        pid_file: Option<&str>,
+        cwd: &std::path::Path,
+        env: &[(String, String)],
     ) -> Result<Self::Process, String> {
-        let mut cmd = tokio::process::Command::new(&self.cli_program);
-        cmd.arg("exec").arg("-i");
-        if let Some(dir) = workdir {
-            cmd.arg("-w").arg(dir);
-        }
-        cmd.arg(container_id);
+        let program = command
+            .first()
+            .ok_or_else(|| "Cannot spawn agent: empty command".to_string())?;
 
-        match pid_file {
-            Some(pf) => {
-                let inner = command
-                    .iter()
-                    .map(|a| sh_single_quote(a))
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                let wrapped = format!("echo $$ > {} && exec {}", sh_single_quote(pf), inner);
-                cmd.arg("sh").arg("-c").arg(&wrapped);
-            }
-            None => {
-                for arg in command {
-                    cmd.arg(arg);
-                }
-            }
+        let mut cmd = tokio::process::Command::new(program);
+        cmd.args(&command[1..]);
+        cmd.current_dir(cwd);
+        for (key, value) in env {
+            cmd.env(key, value);
         }
-
         cmd.stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::null())
             .kill_on_drop(true);
 
+        // Put the agent in its own process group so we can later signal the
+        // whole tree (the CLI plus any `bunx`/`node` grandchildren).
+        #[cfg(unix)]
+        cmd.process_group(0);
+
         let mut child = cmd
             .spawn()
-            .map_err(|e| format!("Failed to spawn {} exec: {}", self.cli_program, e))?;
+            .map_err(|e| format!("Failed to spawn agent '{}': {}", program, e))?;
 
         let stdin = child.stdin.take();
         let stdout = child.stdout.take();
+        let pgid = child.id().map(|id| id as i32);
 
-        Ok(RuntimeCliProcess {
+        Ok(LocalProcess {
             child,
             stdin,
             stdout,
-            cli_program: self.cli_program.clone(),
-            container_id: container_id.to_string(),
-            pid_file: pid_file.map(|s| s.to_string()),
+            pgid,
         })
     }
 }
@@ -220,9 +191,26 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn runtime_cli_spawner_implements_trait() {
-        let spawner = RuntimeCliSpawner::new("docker");
+    async fn local_process_spawner_implements_trait() {
+        let spawner = LocalProcessSpawner::new();
         fn assert_spawner<S: ProcessSpawner>(_s: &S) {}
         assert_spawner(&spawner);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn spawns_local_process_with_cwd_and_env() {
+        let dir = std::env::temp_dir();
+        let spawner = LocalProcessSpawner::new();
+        let mut proc = spawner
+            .spawn(
+                &["true"],
+                &dir,
+                &[("HOME".to_string(), dir.to_string_lossy().into_owned())],
+            )
+            .await
+            .expect("spawn true");
+        let status = proc.wait().await.expect("wait");
+        assert!(status.success());
     }
 }
