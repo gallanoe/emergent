@@ -71,11 +71,18 @@ impl WorkspaceManager {
             .await
             .map_err(|e| format!("Failed to read workspaces dir: {}", e))?;
 
-        while let Some(entry) = read_dir
-            .next_entry()
-            .await
-            .map_err(|e| format!("Failed to read dir entry: {}", e))?
-        {
+        // Per-entry failures must not abort loading the rest — one corrupt
+        // metadata.json should hide only that workspace, not all of them.
+        loop {
+            let entry = match read_dir.next_entry().await {
+                Ok(Some(entry)) => entry,
+                Ok(None) => break,
+                Err(e) => {
+                    log::warn!("Stopping workspace scan: failed to read dir entry: {}", e);
+                    break;
+                }
+            };
+
             let entry_path = entry.path();
             if !entry_path.is_dir() {
                 continue;
@@ -86,12 +93,29 @@ impl WorkspaceManager {
                 continue;
             }
 
-            let raw = tokio::fs::read_to_string(&metadata_path)
-                .await
-                .map_err(|e| format!("Failed to read metadata: {}", e))?;
+            let raw = match tokio::fs::read_to_string(&metadata_path).await {
+                Ok(raw) => raw,
+                Err(e) => {
+                    log::warn!(
+                        "Skipping workspace '{}': cannot read metadata.json: {}",
+                        entry_path.display(),
+                        e
+                    );
+                    continue;
+                }
+            };
 
-            let metadata: WorkspaceMetadata = serde_json::from_str(&raw)
-                .map_err(|e| format!("Failed to parse metadata: {}", e))?;
+            let metadata: WorkspaceMetadata = match serde_json::from_str(&raw) {
+                Ok(m) => m,
+                Err(e) => {
+                    log::warn!(
+                        "Skipping workspace '{}': malformed metadata.json: {}",
+                        entry_path.display(),
+                        e
+                    );
+                    continue;
+                }
+            };
 
             let workspace_id = WorkspaceId(metadata.id.clone());
 

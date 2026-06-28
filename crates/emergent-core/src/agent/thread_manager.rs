@@ -33,6 +33,9 @@ pub struct ThreadManager {
     pub(crate) token_registry: Arc<crate::mcp::TokenRegistry>,
     pub(crate) mcp_port: std::sync::atomic::AtomicU16,
     pub(crate) workspace_state: crate::workspace::SharedWorkspaceState,
+    /// Serializes all threads.json writes so concurrent persisters can't
+    /// interleave files or resurrect a just-removed thread mapping.
+    pub(crate) persist_lock: Arc<Mutex<()>>,
     /// Per-workspace aggregated usage totals + recent turn ring buffer.
     pub(crate) usage_stores: Arc<RwLock<HashMap<WorkspaceId, WorkspaceUsageStore>>>,
     /// Last cumulative token snapshot per ACP session ID (for delta calculation).
@@ -64,6 +67,13 @@ impl ThreadManager {
         let threads: Arc<RwLock<HashMap<String, Arc<Mutex<ThreadHandle>>>>> =
             Arc::new(RwLock::new(HashMap::new()));
 
+        // Create the dormant map + persist lock up-front so the recorder task can
+        // build threads.json from the authoritative in-memory maps (instead of
+        // re-reading disk, which races kill/spawn) under the shared lock.
+        let dormant_threads: Arc<RwLock<HashMap<WorkspaceId, HashMap<String, ThreadMapping>>>> =
+            Arc::new(RwLock::new(HashMap::new()));
+        let persist_lock: Arc<Mutex<()>> = Arc::new(Mutex::new(()));
+
         // Spawn background task to record all notifications into per-thread history
         // and to aggregate TurnUsage / TokenUsage into the usage stores.
         let history_clone = history.clone();
@@ -72,6 +82,8 @@ impl ThreadManager {
         let cost_snapshots_clone = last_cost_snapshots.clone();
         let ws_state_clone = workspace_state.clone();
         let threads_recorder_ref = threads.clone();
+        let dormant_recorder_ref = dormant_threads.clone();
+        let persist_lock_recorder = persist_lock.clone();
         let mut recorder_rx: broadcast::Receiver<Notification> = event_tx.subscribe();
         tokio::spawn(async move {
             loop {
@@ -137,8 +149,11 @@ impl ThreadManager {
                                     apply_turn_delta(store, &p.agent_definition_id, &delta, &p.at);
                                 }
 
-                                // Persist after every turn.
+                                // Persist after every turn (from in-memory maps).
                                 Self::persist_workspace_state_static(
+                                    &persist_lock_recorder,
+                                    &threads_recorder_ref,
+                                    &dormant_recorder_ref,
                                     &usage_stores_clone,
                                     &ws_id,
                                     &ws_state_clone,
@@ -200,6 +215,9 @@ impl ThreadManager {
                                                 );
                                             }
                                             Self::persist_workspace_state_static(
+                                                &persist_lock_recorder,
+                                                &threads_recorder_ref,
+                                                &dormant_recorder_ref,
                                                 &usage_stores_clone,
                                                 &ws_id,
                                                 &ws_state_clone,
@@ -222,12 +240,13 @@ impl ThreadManager {
 
         Self {
             threads,
-            dormant_threads: Arc::new(RwLock::new(HashMap::new())),
+            dormant_threads,
             event_tx,
             history,
             token_registry,
             mcp_port: std::sync::atomic::AtomicU16::new(0),
             workspace_state,
+            persist_lock,
             usage_stores,
             last_session_snapshots,
             last_cost_snapshots,
@@ -307,6 +326,7 @@ impl ThreadManager {
         let threads_for_persist = self.threads.clone();
         let dormant_for_persist = self.dormant_threads.clone();
         let usage_stores_for_persist = self.usage_stores.clone();
+        let persist_lock_for_persist = self.persist_lock.clone();
         let token_registry_for_cleanup = self.token_registry.clone();
 
         tokio::spawn(async move {
@@ -337,24 +357,15 @@ impl ThreadManager {
                             .map(|ws| ws.path.clone())
                     };
                     if let Some(dir) = workspace_dir {
-                        let mappings = Self::collect_mappings_static(
+                        Self::persist_state_static(
+                            &persist_lock_for_persist,
                             &threads_for_persist,
                             &dormant_for_persist,
+                            &usage_stores_for_persist,
                             &ws_id_for_persist,
+                            &dir,
                         )
                         .await;
-                        let usage = {
-                            let stores = usage_stores_for_persist.read().await;
-                            stores.get(&ws_id_for_persist).cloned().unwrap_or_default()
-                        };
-                        let state = PersistedWorkspaceState {
-                            schema_version: 1,
-                            threads: mappings,
-                            usage,
-                        };
-                        if let Err(e) = Self::save_state_to_dir(&state, &dir).await {
-                            log::error!("Failed to persist workspace state: {}", e);
-                        }
                     }
                 }
                 Err(e) => {
@@ -1095,31 +1106,54 @@ impl ThreadManager {
             }
         };
 
-        let mappings = Self::collect_mappings_static(
+        Self::persist_state_static(
+            &self.persist_lock,
             &self.threads,
             &self.dormant_threads,
+            &self.usage_stores,
             workspace_id,
+            &workspace_dir,
         )
         .await;
+    }
 
-        let usage = {
-            let stores = self.usage_stores.read().await;
-            stores.get(workspace_id).cloned().unwrap_or_default()
-        };
-
+    /// Persist a workspace's threads.json from the authoritative in-memory maps,
+    /// serialized by `persist_lock` so concurrent writers can't interleave or
+    /// resurrect a just-removed mapping. The threads section is rebuilt under the
+    /// lock — never re-read from disk.
+    async fn persist_state_static(
+        persist_lock: &Mutex<()>,
+        threads: &RwLock<HashMap<String, Arc<Mutex<ThreadHandle>>>>,
+        dormant: &RwLock<HashMap<WorkspaceId, HashMap<String, ThreadMapping>>>,
+        usage_stores: &RwLock<HashMap<WorkspaceId, WorkspaceUsageStore>>,
+        workspace_id: &WorkspaceId,
+        workspace_dir: &Path,
+    ) {
+        let _guard = persist_lock.lock().await;
+        let mappings = Self::collect_mappings_static(threads, dormant, workspace_id).await;
+        let usage = usage_stores
+            .read()
+            .await
+            .get(workspace_id)
+            .cloned()
+            .unwrap_or_default();
         let state = PersistedWorkspaceState {
             schema_version: 1,
             threads: mappings,
             usage,
         };
-
-        if let Err(e) = Self::save_state_to_dir(&state, &workspace_dir).await {
+        if let Err(e) = Self::save_state_to_dir(&state, workspace_dir).await {
             log::error!("Failed to persist workspace state: {}", e);
         }
     }
 
-    /// Static helper used from recorder task to persist usage without a &self ref.
+    /// Recorder-side wrapper: resolve the workspace dir, then persist from the
+    /// in-memory maps.
+    #[allow(clippy::too_many_arguments)]
     async fn persist_workspace_state_static(
+        persist_lock: &Mutex<()>,
+        threads: &RwLock<HashMap<String, Arc<Mutex<ThreadHandle>>>>,
+        dormant: &RwLock<HashMap<WorkspaceId, HashMap<String, ThreadMapping>>>,
         usage_stores: &Arc<RwLock<HashMap<WorkspaceId, WorkspaceUsageStore>>>,
         workspace_id: &WorkspaceId,
         ws_state: &crate::workspace::SharedWorkspaceState,
@@ -1131,28 +1165,15 @@ impl ThreadManager {
                 None => return,
             }
         };
-
-        // We only have the usage half here; threads are not available.
-        // Write a partial file update: read current threads from disk, merge usage.
-        let current_threads = match Self::load_full_state_from_dir(&workspace_dir).await {
-            Ok(s) => s.threads,
-            Err(_) => Vec::new(),
-        };
-
-        let usage = {
-            let stores = usage_stores.read().await;
-            stores.get(workspace_id).cloned().unwrap_or_default()
-        };
-
-        let state = PersistedWorkspaceState {
-            schema_version: 1,
-            threads: current_threads,
-            usage,
-        };
-
-        if let Err(e) = Self::save_state_to_dir(&state, &workspace_dir).await {
-            log::error!("Failed to persist usage to workspace state: {}", e);
-        }
+        Self::persist_state_static(
+            persist_lock,
+            threads,
+            dormant,
+            usage_stores,
+            workspace_id,
+            &workspace_dir,
+        )
+        .await;
     }
 
     /// Collect thread mappings for a workspace. Unions live and dormant maps,
@@ -1199,13 +1220,16 @@ impl ThreadManager {
         let json = serde_json::to_string_pretty(state)
             .map_err(|e| format!("Failed to serialize workspace state: {}", e))?;
         let path = workspace_dir.join("threads.json");
-        let tmp_path = workspace_dir.join("threads.json.tmp");
+        // Unique temp name so concurrent writers never stomp the same staging
+        // file (which could otherwise leave a torn/truncated threads.json).
+        let tmp_path =
+            workspace_dir.join(format!("threads.json.{}.tmp", Self::generate_short_id()));
         tokio::fs::write(&tmp_path, &json)
             .await
-            .map_err(|e| format!("Failed to write threads.json.tmp: {}", e))?;
+            .map_err(|e| format!("Failed to write {}: {}", tmp_path.display(), e))?;
         tokio::fs::rename(&tmp_path, &path)
             .await
-            .map_err(|e| format!("Failed to rename threads.json.tmp: {}", e))?;
+            .map_err(|e| format!("Failed to rename {}: {}", tmp_path.display(), e))?;
         Ok(())
     }
 
