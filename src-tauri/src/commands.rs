@@ -12,7 +12,10 @@ use emergent_protocol::{
 };
 
 #[tauri::command]
-pub async fn known_agents(_workspace_id: String) -> Result<Vec<KnownAgent>, String> {
+pub async fn known_agents(workspace_id: String) -> Result<Vec<KnownAgent>, String> {
+    // Agent availability is host-wide now; workspace_id is kept for the existing
+    // IPC contract (the frontend invokes with `workspaceId`) but is unused.
+    let _ = workspace_id;
     Ok(detect::known_agents_on_host())
 }
 

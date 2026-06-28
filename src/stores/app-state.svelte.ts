@@ -138,11 +138,9 @@ function createAppState() {
         }
       }
 
-      // Refresh known agents for the first workspace
-      const firstWs = workspaces[0];
-      if (firstWs) {
-        await refreshKnownAgents(firstWs.id);
-      }
+      // Agent availability is detected on the host PATH (workspace-independent),
+      // so refresh once at startup regardless of whether any workspace exists.
+      await refreshKnownAgents(workspaces[0]?.id ?? "");
     } catch {
       // No workspaces yet
     }
@@ -276,6 +274,10 @@ function createAppState() {
     });
     selectedWorkspaceId = id;
     activeView = "settings";
+
+    // Re-detect available agent CLIs (host-wide) so the agent creator is
+    // populated even on a fresh launch where no workspace existed at startup.
+    await refreshKnownAgents(id);
 
     return id;
   }
