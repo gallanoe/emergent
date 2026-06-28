@@ -2,9 +2,8 @@ use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::sync::{Arc, Mutex};
 
-use emergent_protocol::{Notification, TerminalExitedPayload, TerminalOutputPayload, WorkspaceId};
+use emergent_protocol::WorkspaceId;
 use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
-use tokio::sync::broadcast;
 
 #[cfg(unix)]
 use libc::{SIGKILL, SIGTERM};
@@ -12,6 +11,26 @@ use libc::{SIGKILL, SIGTERM};
 const SIGTERM: i32 = 15;
 #[cfg(not(unix))]
 const SIGKILL: i32 = 9;
+
+/// Sink for terminal output/exit events, implemented by the Tauri layer.
+///
+/// The PTY reader thread delivers output straight through this sink to the
+/// frontend instead of fanning it out over the shared notification broadcast
+/// channel. That keeps a high-output command (`yes`, `find /`) from flooding the
+/// broadcast and evicting unrelated agent notifications for slow subscribers, and
+/// (unlike a broadcast, which evicts oldest messages for lagging receivers)
+/// terminal output is never dropped to keep up.
+///
+/// Implementations MUST NOT panic and MUST NOT block indefinitely: they are
+/// called synchronously from the reader thread, so a panic would abandon child
+/// reaping and session cleanup, and an indefinite block would wedge the reader.
+/// Deliver best-effort and swallow transport errors.
+pub trait TerminalEventSink: Send + Sync {
+    /// A chunk of raw output bytes read from the PTY.
+    fn output(&self, session_id: &str, data: &[u8]);
+    /// The shell exited and the session was removed.
+    fn exited(&self, session_id: &str);
+}
 
 /// Sessions are held behind a std Mutex (not a tokio one) so the blocking PTY
 /// reader thread can remove its own entry on exit, and so no map lock is ever
@@ -93,18 +112,38 @@ impl TerminalSession {
     }
 }
 
+/// Guarantees the shell is reaped and its session entry removed when the reader
+/// thread ends — including on an unwind, so a panic (e.g. a misbehaving sink)
+/// can't leak a zombie child or a stale map entry. It deliberately does NOT
+/// touch the sink: a sink that violated its no-panic contract must not be able
+/// to trigger a second panic from a Drop run during the first one's unwind.
+struct ReaderCleanup {
+    child: Box<dyn portable_pty::Child + Send + Sync>,
+    sessions: TerminalSessions,
+    session_id: String,
+}
+
+impl Drop for ReaderCleanup {
+    fn drop(&mut self) {
+        let _ = self.child.wait();
+        if let Ok(mut map) = self.sessions.lock() {
+            map.remove(&self.session_id);
+        }
+    }
+}
+
 /// Open a host PTY, spawn the shell, register the session in `sessions`, and
 /// start the reader thread. Returns the new session id.
 pub async fn create_session(
     sessions: &TerminalSessions,
     cwd: std::path::PathBuf,
     workspace_id: WorkspaceId,
-    event_tx: &broadcast::Sender<Notification>,
+    sink: Arc<dyn TerminalEventSink>,
 ) -> Result<String, String> {
     let shell = default_shell();
 
     // Opening the PTY and spawning the shell are blocking operations.
-    let (master, writer, mut reader, mut child) = tokio::task::spawn_blocking(move || {
+    let (master, writer, mut reader, child) = tokio::task::spawn_blocking(move || {
         let pty_system = native_pty_system();
         let pair = pty_system
             .openpty(PtySize {
@@ -157,33 +196,34 @@ pub async fn create_session(
 
     // Reader thread owns the child + a master reader clone. It pumps output
     // until EOF, then reaps the shell and removes the session from the map.
-    let tx = event_tx.clone();
+    // Output is delivered synchronously through `sink` (not the shared broadcast)
+    // so a flooding command can neither evict agent notifications nor drop bytes.
     let sid = session_id.clone();
     let sessions_for_reader = sessions.clone();
     let reader_spawn = std::thread::Builder::new()
         .name(format!("term-{}", session_id))
         .spawn(move || {
+            // Declared first so it drops LAST: on normal exit it runs after
+            // `sink.exited` below; on an unwind it still reaps the child and
+            // removes the session. Underscore-prefixed (not bare `_`) so it
+            // lives until scope end rather than dropping immediately.
+            let _cleanup = ReaderCleanup {
+                child,
+                sessions: sessions_for_reader,
+                session_id: sid.clone(),
+            };
+
             let mut buf = [0u8; 4096];
             loop {
                 match reader.read(&mut buf) {
                     Ok(0) => break,
-                    Ok(n) => {
-                        let _ = tx.send(Notification::TerminalOutput(TerminalOutputPayload {
-                            session_id: sid.clone(),
-                            data: buf[..n].to_vec(),
-                        }));
-                    }
+                    Ok(n) => sink.output(&sid, &buf[..n]),
                     Err(_) => break,
                 }
             }
-            // Reap the shell to avoid a zombie, drop the session, notify.
-            let _ = child.wait();
-            if let Ok(mut map) = sessions_for_reader.lock() {
-                map.remove(&sid);
-            }
-            let _ = tx.send(Notification::TerminalExited(TerminalExitedPayload {
-                session_id: sid,
-            }));
+            // Notify the frontend the shell exited; `cleanup` then reaps the
+            // shell and removes the session as it drops at scope end.
+            sink.exited(&sid);
         });
 
     if let Err(e) = reader_spawn {
@@ -222,5 +262,77 @@ pub fn close_all_sessions(sessions: &TerminalSessions) {
     };
     for session in all {
         session.close();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Records everything the reader thread delivers, so a test can assert that
+    /// output and the exit signal flow through the sink (not the broadcast).
+    #[derive(Default)]
+    struct RecordingSink {
+        output: Mutex<Vec<u8>>,
+        exited: Mutex<Vec<String>>,
+    }
+
+    impl TerminalEventSink for RecordingSink {
+        fn output(&self, _session_id: &str, data: &[u8]) {
+            self.output.lock().unwrap().extend_from_slice(data);
+        }
+        fn exited(&self, session_id: &str) {
+            self.exited.lock().unwrap().push(session_id.to_string());
+        }
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn output_and_exit_flow_through_the_sink() {
+        let sink = Arc::new(RecordingSink::default());
+        let sessions = new_terminal_sessions();
+
+        let session_id = create_session(
+            &sessions,
+            std::env::temp_dir(),
+            WorkspaceId::from("test-ws"),
+            sink.clone(),
+        )
+        .await
+        .expect("create terminal session");
+
+        // Drive the shell to print a marker and exit.
+        {
+            let writer = sessions
+                .lock()
+                .unwrap()
+                .get(&session_id)
+                .expect("session present")
+                .writer_handle();
+            let mut w = writer.lock().unwrap();
+            w.write_all(b"printf 'EMERGENT_OK\\n'; exit\n").unwrap();
+            w.flush().unwrap();
+        }
+
+        // Wait (bounded) for the reader thread to report the shell's exit.
+        let mut waited_ms = 0u64;
+        while sink.exited.lock().unwrap().is_empty() {
+            assert!(waited_ms <= 5000, "terminal did not exit within 5s");
+            tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+            waited_ms += 25;
+        }
+
+        let out = String::from_utf8_lossy(&sink.output.lock().unwrap()).into_owned();
+        assert!(
+            out.contains("EMERGENT_OK"),
+            "expected marker in terminal output, got: {:?}",
+            out
+        );
+        assert_eq!(
+            sink.exited.lock().unwrap().as_slice(),
+            std::slice::from_ref(&session_id)
+        );
+        // The reader removes the session from the map once the shell exits.
+        assert!(!sessions.lock().unwrap().contains_key(&session_id));
     }
 }

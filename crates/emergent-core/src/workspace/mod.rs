@@ -9,6 +9,7 @@ pub use state::{
 
 use std::io::Write;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use emergent_protocol::{Notification, WorkspaceEntry, WorkspaceInfo, WorkspaceStatusChangePayload};
 use tokio::sync::broadcast;
@@ -18,18 +19,24 @@ pub struct WorkspaceManager {
     event_tx: broadcast::Sender<Notification>,
     workspaces_dir: PathBuf,
     terminal_sessions: terminal::TerminalSessions,
+    /// Terminal output is delivered through this sink (straight to the Tauri
+    /// layer) instead of the shared `event_tx` broadcast, so a flooding terminal
+    /// cannot evict unrelated agent notifications.
+    terminal_sink: Arc<dyn terminal::TerminalEventSink>,
 }
 
 impl WorkspaceManager {
     pub async fn new(
         state: SharedWorkspaceState,
         event_tx: broadcast::Sender<Notification>,
+        terminal_sink: Arc<dyn terminal::TerminalEventSink>,
     ) -> Self {
         Self {
             state,
             event_tx,
             workspaces_dir: crate::workspace::paths::emergent_root(),
             terminal_sessions: terminal::new_terminal_sessions(),
+            terminal_sink,
         }
     }
 
@@ -282,8 +289,13 @@ impl WorkspaceManager {
                 .ok_or_else(|| format!("Workspace '{}' not found", workspace_id))?
         };
 
-        terminal::create_session(&self.terminal_sessions, cwd, workspace_id.clone(), &self.event_tx)
-            .await
+        terminal::create_session(
+            &self.terminal_sessions,
+            cwd,
+            workspace_id.clone(),
+            self.terminal_sink.clone(),
+        )
+        .await
     }
 
     pub async fn write_terminal(&self, session_id: &str, data: &[u8]) -> Result<(), String> {

@@ -11,6 +11,46 @@ use std::sync::Arc;
 use tauri::Manager;
 use tokio::sync::broadcast;
 
+/// Delivers terminal PTY output straight to the frontend, bypassing the shared
+/// notification broadcast channel so a flooding terminal can never evict
+/// unrelated agent notifications. `emit` is non-blocking and lossless (it does
+/// not drop events the way the broadcast does for lagging receivers), and never
+/// panics, satisfying the `TerminalEventSink` reader-thread contract.
+///
+/// Trade-off: `emit` is fire-and-forget with no webview-drain signal, so a
+/// sustained command whose output outpaces the webview's render rate grows the
+/// webview event queue without bound (the old shared broadcast was bounded but
+/// evicted unrelated notifications instead). True end-to-end backpressure isn't
+/// achievable here; bounding terminal output via a consumer-paced/coalescing
+/// channel is a tracked hardening follow-up. In practice the user interrupts
+/// such a command long before it matters.
+struct TauriTerminalSink {
+    handle: tauri::AppHandle,
+}
+
+impl emergent_core::workspace::terminal::TerminalEventSink for TauriTerminalSink {
+    fn output(&self, session_id: &str, data: &[u8]) {
+        use tauri::Emitter;
+        let _ = self.handle.emit(
+            "terminal:output",
+            emergent_protocol::TerminalOutputPayload {
+                session_id: session_id.to_string(),
+                data: data.to_vec(),
+            },
+        );
+    }
+
+    fn exited(&self, session_id: &str) {
+        use tauri::Emitter;
+        let _ = self.handle.emit(
+            "terminal:exited",
+            emergent_protocol::TerminalExitedPayload {
+                session_id: session_id.to_string(),
+            },
+        );
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app = tauri::Builder::default()
@@ -25,9 +65,22 @@ pub fn run() {
             // Create shared workspace state
             let workspace_state = emergent_core::workspace::new_shared_state();
 
+            // Terminal output is delivered through this sink (straight to the
+            // webview) rather than the shared broadcast, so a high-output shell
+            // command can't flood the channel and evict agent notifications.
+            let terminal_sink: Arc<dyn emergent_core::workspace::terminal::TerminalEventSink> =
+                Arc::new(TauriTerminalSink {
+                    handle: app.handle().clone(),
+                });
+
             // Create workspace manager (async — use block_on)
             let workspace_manager = tauri::async_runtime::block_on(async {
-                let wm = WorkspaceManager::new(workspace_state.clone(), event_tx.clone()).await;
+                let wm = WorkspaceManager::new(
+                    workspace_state.clone(),
+                    event_tx.clone(),
+                    terminal_sink,
+                )
+                .await;
                 if let Err(e) = wm.load_workspaces().await {
                     log::error!("Failed to load workspaces: {}", e);
                 }
@@ -190,12 +243,13 @@ pub fn run() {
                                 Notification::WorkspaceStatusChange(p) => {
                                     let _ = bridge_handle.emit(event_name, p);
                                 }
-                                Notification::TerminalOutput(p) => {
-                                    let _ = bridge_handle.emit(event_name, p);
-                                }
-                                Notification::TerminalExited(p) => {
-                                    let _ = bridge_handle.emit(event_name, p);
-                                }
+                                // Terminal output/exit are delivered directly to
+                                // the webview via TerminalEventSink and never flow
+                                // through this broadcast. These arms are no-ops to
+                                // keep the match exhaustive without re-introducing
+                                // a second (double-)emit path for terminal events.
+                                Notification::TerminalOutput(_)
+                                | Notification::TerminalExited(_) => {}
                                 Notification::AgentCreated(p) => {
                                     let _ = bridge_handle.emit(event_name, p);
                                 }
