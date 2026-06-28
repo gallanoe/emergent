@@ -1,8 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
-  import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-  import { getOrCreate, dispose } from "./terminal-instances";
+  import { getOrCreate, dispose, attachSession } from "./terminal-instances";
   import "@xterm/xterm/css/xterm.css";
 
   interface Props {
@@ -20,10 +19,27 @@
   let exited = $state(false);
   let resizeTimeout: ReturnType<typeof setTimeout> | null = null;
 
-  let unlistenOutput: UnlistenFn | undefined;
-  let unlistenExited: UnlistenFn | undefined;
-  let dataDisposable: { dispose: () => void } | undefined;
   let resizeObserver: ResizeObserver | undefined;
+
+  // The instance + closure we registered `onExited` on, captured so `onDestroy`
+  // clears the RIGHT one: `workspaceId` (a prop) may already point at a newly
+  // selected workspace by the time destroy runs.
+  let boundInstance: ReturnType<typeof getOrCreate> | undefined;
+  let exitHandler: (() => void) | undefined;
+
+  // The session's output/exit listeners live on the cached instance (see
+  // terminal-instances.ts) so they persist while this view is unmounted. The
+  // view only observes the exit signal to refresh its own chrome.
+  function bindExitObserver() {
+    const instance = getOrCreate(workspaceId);
+    exited = instance.exited;
+    exitHandler = () => {
+      exited = true;
+      onSessionEnded();
+    };
+    instance.onExited = exitHandler;
+    boundInstance = instance;
+  }
 
   async function createSession() {
     try {
@@ -32,7 +48,7 @@
       });
       onSessionCreated(sid);
       exited = false;
-      await setupListeners(sid);
+      await attachSession(workspaceId, sid);
       // Send initial resize after session creation
       const { terminal } = getOrCreate(workspaceId);
       await invoke("resize_terminal", {
@@ -45,53 +61,12 @@
     }
   }
 
-  async function setupListeners(sid: string) {
-    await cleanupListeners();
-
-    const { terminal } = getOrCreate(workspaceId);
-
-    unlistenOutput = await listen<{ session_id: string; data: string }>(
-      "terminal:output",
-      (e) => {
-        if (e.payload.session_id !== sid) return;
-        const bytes = Uint8Array.from(atob(e.payload.data), (c) =>
-          c.charCodeAt(0),
-        );
-        terminal.write(bytes);
-      },
-    );
-
-    unlistenExited = await listen<{ session_id: string }>(
-      "terminal:exited",
-      (e) => {
-        if (e.payload.session_id !== sid) return;
-        exited = true;
-        onSessionEnded();
-      },
-    );
-
-    dataDisposable = terminal.onData((data: string) => {
-      if (!connected || exited) return;
-      const bytes = Array.from(new TextEncoder().encode(data));
-      invoke("write_terminal", { sessionId: sid, data: bytes });
-    });
-  }
-
-  async function cleanupListeners() {
-    unlistenOutput?.();
-    unlistenOutput = undefined;
-    unlistenExited?.();
-    unlistenExited = undefined;
-    dataDisposable?.dispose();
-    dataDisposable = undefined;
-  }
-
   function handleResize() {
     if (resizeTimeout) clearTimeout(resizeTimeout);
     resizeTimeout = setTimeout(() => {
       const { terminal, fitAddon } = getOrCreate(workspaceId);
       fitAddon.fit();
-      if (sessionId && connected) {
+      if (sessionId && connected && !exited) {
         invoke("resize_terminal", {
           sessionId,
           cols: terminal.cols,
@@ -110,13 +85,14 @@
         // already exited / removed by the backend — ignore
       }
     }
-    dispose(workspaceId);
+    dispose(workspaceId); // tears down the old session's listeners + terminal
     exited = false;
     if (terminalEl) {
       const { terminal, fitAddon } = getOrCreate(workspaceId);
       terminal.open(terminalEl); // fresh instance after dispose, so open() is safe
       fitAddon.fit();
     }
+    bindExitObserver();
     await createSession();
   }
 
@@ -136,15 +112,24 @@
     resizeObserver = new ResizeObserver(() => handleResize());
     resizeObserver.observe(terminalEl);
 
+    bindExitObserver();
+
     if (sessionId) {
-      setupListeners(sessionId);
+      // Re-attach is idempotent if the persistent listeners are already live.
+      attachSession(workspaceId, sessionId);
     } else {
       createSession();
     }
   });
 
   onDestroy(() => {
-    cleanupListeners();
+    // Leave the session listeners attached (they persist output while unmounted);
+    // only stop observing the exit signal and DOM resize for this view instance.
+    // Clear the exact instance we bound to (workspaceId may have advanced), and
+    // only if it's still our closure, so we never clobber a newer view's binding.
+    if (boundInstance && boundInstance.onExited === exitHandler) {
+      boundInstance.onExited = undefined;
+    }
     resizeObserver?.disconnect();
     if (resizeTimeout) clearTimeout(resizeTimeout);
   });
