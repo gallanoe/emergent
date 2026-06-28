@@ -378,19 +378,23 @@ pub(crate) async fn initialize_agent(
 
     let handle_arc = Arc::new(Mutex::new(handle));
 
+    // Initialize history for this thread.
+    history.write().await.entry(agent_id.clone()).or_default();
+
+    // Spawn the prompt loop and store its handle BEFORE publishing the thread
+    // into the map, so a concurrent kill can never observe a live thread whose
+    // prompt_loop_handle is still None (which would leak an un-abortable task).
+    let loop_handle = tokio::spawn(prompt_loop(
+        agent_id.clone(),
+        handle_arc.clone(),
+        event_tx.clone(),
+    ));
+    handle_arc.lock().await.prompt_loop_handle = Some(loop_handle);
+
     agents
         .write()
         .await
         .insert(agent_id.clone(), handle_arc.clone());
-
-    // Initialize history for this thread
-    history.write().await.entry(agent_id.clone()).or_default();
-
-    // Spawn the prompt loop for this thread.
-    let loop_handle = tokio::spawn(prompt_loop(agent_id, handle_arc.clone(), event_tx.clone()));
-
-    // Store the loop handle so kill_thread can abort it.
-    handle_arc.lock().await.prompt_loop_handle = Some(loop_handle);
 
     Ok(())
 }

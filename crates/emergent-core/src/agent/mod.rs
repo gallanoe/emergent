@@ -157,7 +157,14 @@ impl AgentManager {
         name: String,
         cli: String,
         provider: Option<String>,
-    ) -> String {
+    ) -> Result<String, String> {
+        // Validate the workspace exists before registering the agent, so a bad
+        // workspace_id can't create a half-orphaned agent definition.
+        let ws_path = self
+            .workspace_path(&workspace_id)
+            .await
+            .ok_or_else(|| format!("Workspace '{}' not found", workspace_id))?;
+
         let id = {
             let mut reg = self.registry.write().await;
             reg.create_agent(workspace_id.clone(), name, cli, provider)
@@ -167,12 +174,9 @@ impl AgentManager {
         // Create the agent's host-side directory. This doubles as the agent's
         // $HOME and working directory when it runs as a local host process, so
         // its per-agent config (.claude, .codex, …) stays isolated.
-        if let Some(ws_path) = self.workspace_path(&workspace_id).await {
-            let agent_dir =
-                crate::workspace::paths::WorkspacePaths::from_dir(ws_path).agent_dir(&id);
-            if let Err(e) = tokio::fs::create_dir_all(&agent_dir).await {
-                log::error!("Failed to create agent directory: {}", e);
-            }
+        let agent_dir = crate::workspace::paths::WorkspacePaths::from_dir(ws_path).agent_dir(&id);
+        if let Err(e) = tokio::fs::create_dir_all(&agent_dir).await {
+            log::error!("Failed to create agent directory: {}", e);
         }
 
         let _ = self
@@ -180,7 +184,7 @@ impl AgentManager {
             .send(Notification::AgentCreated(AgentCreatedPayload {
                 definition_id: id.clone(),
             }));
-        id
+        Ok(id)
     }
 
     pub async fn update_agent(

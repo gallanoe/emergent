@@ -30,7 +30,7 @@ pub async fn create_agent(
     provider: Option<String>,
 ) -> Result<String, String> {
     let ws_id = emergent_protocol::WorkspaceId::from(workspace_id.as_str());
-    Ok(manager.create_agent(ws_id, name, cli, provider).await)
+    manager.create_agent(ws_id, name, cli, provider).await
 }
 
 #[tauri::command]

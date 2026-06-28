@@ -231,15 +231,16 @@ impl WorkspaceManager {
 
     pub async fn update_workspace(&self, id: &WorkspaceId, name: String) -> Result<(), String> {
         let workspace_path = {
-            let mut state = self.state.write().await;
-            let ws = state
+            let state = self.state.read().await;
+            state
                 .workspaces
-                .get_mut(id)
-                .ok_or_else(|| format!("Workspace '{}' not found", id))?;
-            ws.name = name.clone();
-            ws.path.clone()
+                .get(id)
+                .map(|ws| ws.path.clone())
+                .ok_or_else(|| format!("Workspace '{}' not found", id))?
         };
 
+        // Persist metadata.json first; only reflect the rename in memory once
+        // the durable write succeeds, so a failed write can't diverge state.
         let metadata_path = workspace_path.join("metadata.json");
         let raw = tokio::fs::read_to_string(&metadata_path)
             .await
@@ -248,7 +249,7 @@ impl WorkspaceManager {
         let mut metadata: WorkspaceMetadata =
             serde_json::from_str(&raw).map_err(|e| format!("Failed to parse metadata: {}", e))?;
 
-        metadata.name = name;
+        metadata.name = name.clone();
 
         let updated = serde_json::to_string_pretty(&metadata)
             .map_err(|e| format!("Failed to serialize metadata: {}", e))?;
@@ -256,6 +257,10 @@ impl WorkspaceManager {
         tokio::fs::write(metadata_path, updated)
             .await
             .map_err(|e| format!("Failed to write metadata: {}", e))?;
+
+        if let Some(ws) = self.state.write().await.workspaces.get_mut(id) {
+            ws.name = name;
+        }
 
         Ok(())
     }
