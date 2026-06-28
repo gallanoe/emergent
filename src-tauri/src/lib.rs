@@ -309,6 +309,11 @@ pub fn run() {
                 std::process::exit(1);
             });
 
+            app_handle
+                .state::<Arc<WorkspaceManager>>()
+                .inner()
+                .close_all_terminal_sessions();
+
             let manager = app_handle.state::<Arc<AgentManager>>().inner().clone();
             let handle = app_handle.clone();
             let exit_approved = exit_approved.clone();
@@ -325,6 +330,11 @@ pub fn run() {
             if exit_approved.load(Ordering::SeqCst) {
                 return;
             }
+            app_handle
+                .state::<Arc<WorkspaceManager>>()
+                .inner()
+                .close_all_terminal_sessions();
+
             let manager = app_handle.state::<Arc<AgentManager>>().inner().clone();
             tauri::async_runtime::block_on(shutdown_all_threads(
                 manager,

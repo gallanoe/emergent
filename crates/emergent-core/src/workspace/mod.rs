@@ -7,6 +7,7 @@ pub use state::{
     WorkspaceState, WorkspaceStatus,
 };
 
+use std::io::Write;
 use std::path::PathBuf;
 
 use emergent_protocol::{Notification, WorkspaceEntry, WorkspaceInfo, WorkspaceStatusChangePayload};
@@ -165,7 +166,7 @@ impl WorkspaceManager {
                 .ok_or_else(|| format!("Workspace '{}' not found", id))?
         };
 
-        terminal::close_sessions_for_workspace(&self.terminal_sessions, id).await;
+        terminal::close_sessions_for_workspace(&self.terminal_sessions, id);
 
         tokio::fs::remove_dir_all(&workspace_path)
             .await
@@ -252,22 +253,32 @@ impl WorkspaceManager {
                 .ok_or_else(|| format!("Workspace '{}' not found", workspace_id))?
         };
 
-        let session = terminal::create_session(cwd, workspace_id.clone(), &self.event_tx).await?;
-
-        let session_id = session.session_id.clone();
-        self.terminal_sessions
-            .lock()
+        terminal::create_session(&self.terminal_sessions, cwd, workspace_id.clone(), &self.event_tx)
             .await
-            .insert(session_id.clone(), session);
-        Ok(session_id)
     }
 
     pub async fn write_terminal(&self, session_id: &str, data: &[u8]) -> Result<(), String> {
-        let mut sessions = self.terminal_sessions.lock().await;
-        let session = sessions
-            .get_mut(session_id)
-            .ok_or_else(|| format!("Terminal session '{}' not found", session_id))?;
-        session.write(data).await
+        // Clone the writer handle under a brief map lock, then release the map
+        // lock before the blocking write so one stuck terminal can't wedge all
+        // terminal operations.
+        let writer = {
+            let map = self.terminal_sessions.lock().unwrap();
+            map.get(session_id)
+                .map(|s| s.writer_handle())
+                .ok_or_else(|| format!("Terminal session '{}' not found", session_id))?
+        };
+        let data = data.to_vec();
+        tokio::task::spawn_blocking(move || {
+            let mut w = writer
+                .lock()
+                .map_err(|_| "terminal writer poisoned".to_string())?;
+            w.write_all(&data)
+                .map_err(|e| format!("Failed to write to terminal: {}", e))?;
+            w.flush()
+                .map_err(|e| format!("Failed to flush terminal: {}", e))
+        })
+        .await
+        .map_err(|e| format!("terminal write task failed: {}", e))?
     }
 
     pub async fn resize_terminal(
@@ -276,19 +287,30 @@ impl WorkspaceManager {
         cols: u16,
         rows: u16,
     ) -> Result<(), String> {
-        let sessions = self.terminal_sessions.lock().await;
-        let session = sessions
+        let map = self.terminal_sessions.lock().unwrap();
+        let session = map
             .get(session_id)
             .ok_or_else(|| format!("Terminal session '{}' not found", session_id))?;
         session.resize(cols, rows)
     }
 
     pub async fn close_terminal_session(&self, session_id: &str) -> Result<(), String> {
-        let mut sessions = self.terminal_sessions.lock().await;
-        let session = sessions
-            .remove(session_id)
-            .ok_or_else(|| format!("Terminal session '{}' not found", session_id))?;
-        session.close();
-        Ok(())
+        let session = {
+            let mut map = self.terminal_sessions.lock().unwrap();
+            map.remove(session_id)
+        };
+        match session {
+            Some(s) => {
+                s.close();
+                Ok(())
+            }
+            None => Err(format!("Terminal session '{}' not found", session_id)),
+        }
+    }
+
+    /// Close every terminal session (kills each shell's process group). Called
+    /// on application shutdown so host shells don't outlive the app.
+    pub fn close_all_terminal_sessions(&self) {
+        terminal::close_all_sessions(&self.terminal_sessions);
     }
 }

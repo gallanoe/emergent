@@ -102,6 +102,14 @@
   }
 
   async function reconnect() {
+    // Close the previous backend session (if any) so its shell + PTY don't leak.
+    if (sessionId) {
+      try {
+        await invoke("close_terminal_session", { sessionId });
+      } catch {
+        // already exited / removed by the backend — ignore
+      }
+    }
     dispose(workspaceId);
     exited = false;
     if (terminalEl) {

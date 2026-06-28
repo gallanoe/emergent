@@ -1,11 +1,15 @@
 use std::collections::HashMap;
 use std::io::{Read, Write};
-use std::sync::{Arc, Mutex as StdMutex};
+use std::sync::{Arc, Mutex};
 
 use emergent_protocol::{Notification, TerminalExitedPayload, TerminalOutputPayload, WorkspaceId};
 use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
-use tokio::sync::{broadcast, Mutex};
+use tokio::sync::broadcast;
 
+/// Sessions are held behind a std Mutex (not a tokio one) so the blocking PTY
+/// reader thread can remove its own entry on exit, and so no map lock is ever
+/// held across a blocking PTY write. Every lock here is brief — never across an
+/// `.await`.
 pub type TerminalSessions = Arc<Mutex<HashMap<String, TerminalSession>>>;
 
 pub fn new_terminal_sessions() -> TerminalSessions {
@@ -30,30 +34,39 @@ fn default_shell() -> String {
     }
 }
 
+/// Signal a whole process group (`kill -<signal> -<pgid>`). No-op off unix.
+fn signal_group(pgid: i32, signal: &str) {
+    #[cfg(unix)]
+    {
+        let _ = std::process::Command::new("kill")
+            .arg(format!("-{signal}"))
+            .arg(format!("-{pgid}"))
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = (pgid, signal);
+    }
+}
+
 /// An interactive terminal backed by a host PTY running the user's shell.
 pub struct TerminalSession {
-    pub session_id: String,
     pub workspace_id: WorkspaceId,
+    writer: Arc<Mutex<Box<dyn Write + Send>>>,
     master: Box<dyn MasterPty + Send>,
-    writer: Arc<StdMutex<Box<dyn Write + Send>>>,
-    child: Box<dyn portable_pty::Child + Send + Sync>,
+    /// Process-group leader (== the shell pid; portable-pty makes the shell a
+    /// session/group leader). Signalling the group also reaps the shell's
+    /// job-control children. `None` if the pid is unavailable.
+    pgid: Option<i32>,
 }
 
 impl TerminalSession {
-    pub async fn write(&mut self, data: &[u8]) -> Result<(), String> {
-        let writer = self.writer.clone();
-        let data = data.to_vec();
-        tokio::task::spawn_blocking(move || {
-            let mut w = writer
-                .lock()
-                .map_err(|_| "terminal writer poisoned".to_string())?;
-            w.write_all(&data)
-                .map_err(|e| format!("Failed to write to terminal: {}", e))?;
-            w.flush()
-                .map_err(|e| format!("Failed to flush terminal: {}", e))
-        })
-        .await
-        .map_err(|e| format!("terminal write task failed: {}", e))?
+    /// A cheap clone of the writer handle, so callers can write without holding
+    /// the sessions-map lock across the blocking write.
+    pub fn writer_handle(&self) -> Arc<Mutex<Box<dyn Write + Send>>> {
+        self.writer.clone()
     }
 
     pub fn resize(&self, cols: u16, rows: u16) -> Result<(), String> {
@@ -67,22 +80,28 @@ impl TerminalSession {
             .map_err(|e| format!("Failed to resize terminal: {}", e))
     }
 
-    pub fn close(mut self) {
-        // Killing the shell makes the PTY master read return EOF, which ends
-        // the reader thread; the writer/master are dropped with `self`.
-        let _ = self.child.kill();
+    /// Kill the shell's whole process group. The reader thread then observes
+    /// EOF, reaps the child, and removes the session from the map.
+    pub fn close(self) {
+        if let Some(pgid) = self.pgid {
+            signal_group(pgid, "TERM");
+            signal_group(pgid, "KILL");
+        }
     }
 }
 
+/// Open a host PTY, spawn the shell, register the session in `sessions`, and
+/// start the reader thread. Returns the new session id.
 pub async fn create_session(
+    sessions: &TerminalSessions,
     cwd: std::path::PathBuf,
     workspace_id: WorkspaceId,
     event_tx: &broadcast::Sender<Notification>,
-) -> Result<TerminalSession, String> {
+) -> Result<String, String> {
     let shell = default_shell();
 
     // Opening the PTY and spawning the shell are blocking operations.
-    let (master, writer, mut reader, child) = tokio::task::spawn_blocking(move || {
+    let (master, writer, mut reader, mut child) = tokio::task::spawn_blocking(move || {
         let pty_system = native_pty_system();
         let pair = pty_system
             .openpty(PtySize {
@@ -117,11 +136,27 @@ pub async fn create_session(
     .await
     .map_err(|e| format!("terminal setup task failed: {}", e))??;
 
+    let pgid = child.process_id().map(|p| p as i32);
     let session_id = generate_session_id();
 
-    // Reader thread: pump PTY output into notifications until EOF.
+    {
+        let mut map = sessions.lock().unwrap();
+        map.insert(
+            session_id.clone(),
+            TerminalSession {
+                workspace_id,
+                writer: Arc::new(Mutex::new(writer)),
+                master,
+                pgid,
+            },
+        );
+    }
+
+    // Reader thread owns the child + a master reader clone. It pumps output
+    // until EOF, then reaps the shell and removes the session from the map.
     let tx = event_tx.clone();
     let sid = session_id.clone();
+    let sessions_for_reader = sessions.clone();
     std::thread::Builder::new()
         .name(format!("term-{}", session_id))
         .spawn(move || {
@@ -138,33 +173,43 @@ pub async fn create_session(
                     Err(_) => break,
                 }
             }
+            // Reap the shell to avoid a zombie, drop the session, notify.
+            let _ = child.wait();
+            if let Ok(mut map) = sessions_for_reader.lock() {
+                map.remove(&sid);
+            }
             let _ = tx.send(Notification::TerminalExited(TerminalExitedPayload {
                 session_id: sid,
             }));
         })
         .map_err(|e| format!("Failed to spawn terminal reader thread: {}", e))?;
 
-    Ok(TerminalSession {
-        session_id,
-        workspace_id,
-        master,
-        writer: Arc::new(StdMutex::new(writer)),
-        child,
-    })
+    Ok(session_id)
 }
 
-/// Close all terminal sessions for a workspace.
-pub async fn close_sessions_for_workspace(sessions: &TerminalSessions, workspace_id: &WorkspaceId) {
-    let mut map = sessions.lock().await;
-    let ids_to_remove: Vec<String> = map
-        .iter()
-        .filter(|(_, s)| s.workspace_id == *workspace_id)
-        .map(|(id, _)| id.clone())
-        .collect();
+/// Close (kill the process group of) all terminal sessions for a workspace.
+pub fn close_sessions_for_workspace(sessions: &TerminalSessions, workspace_id: &WorkspaceId) {
+    let to_close: Vec<TerminalSession> = {
+        let mut map = sessions.lock().unwrap();
+        let ids: Vec<String> = map
+            .iter()
+            .filter(|(_, s)| s.workspace_id == *workspace_id)
+            .map(|(id, _)| id.clone())
+            .collect();
+        ids.into_iter().filter_map(|id| map.remove(&id)).collect()
+    };
+    for session in to_close {
+        session.close();
+    }
+}
 
-    for id in ids_to_remove {
-        if let Some(session) = map.remove(&id) {
-            session.close();
-        }
+/// Close every terminal session. Used on application shutdown.
+pub fn close_all_sessions(sessions: &TerminalSessions) {
+    let all: Vec<TerminalSession> = {
+        let mut map = sessions.lock().unwrap();
+        map.drain().map(|(_, s)| s).collect()
+    };
+    for session in all {
+        session.close();
     }
 }
