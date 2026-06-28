@@ -819,3 +819,77 @@ async fn user_message_payload_is_echo_roundtrips_through_notification() {
         _ => panic!("expected UserMessage notification"),
     }
 }
+
+// ---------------------------------------------------------------------------
+// shutdown_thread: dormant-demotion guard (init-cancel hygiene)
+// ---------------------------------------------------------------------------
+// A thread stopped before it obtained an ACP session (e.g. cancelled during the
+// init handshake) must NOT leave a dormant stub behind — there is nothing to
+// resume, so a stub would be a dead, un-resumable phantom. A thread WITH a
+// session must still demote to dormant so it stays resumable.
+
+#[tokio::test]
+async fn shutdown_thread_skips_dormant_for_session_less_thread() {
+    use emergent_protocol::WorkspaceId;
+
+    let (_, _tr, manager) = spawn_test_server().await;
+    let ws_id = WorkspaceId::from("it-ws-init-cancel");
+
+    manager
+        .thread_manager()
+        .register_live_thread_for_test(
+            "init-cancelled".into(),
+            "agent-z".into(),
+            ws_id.clone(),
+            None, // no ACP session yet — mirrors a thread killed mid-handshake
+        )
+        .await;
+
+    let ws = manager
+        .thread_manager()
+        .shutdown_thread("init-cancelled")
+        .await
+        .unwrap();
+    assert_eq!(ws, Some(ws_id.clone()));
+
+    // Gone from the live map.
+    assert!(!manager.live_thread_ids().await.contains("init-cancelled"));
+    // And NOT demoted to a dormant stub.
+    let dormant = manager.thread_manager().dormant_snapshot().await;
+    assert!(
+        !dormant.contains_key("init-cancelled"),
+        "a session-less thread must not leave a dormant stub: {:?}",
+        dormant.keys().collect::<Vec<_>>()
+    );
+}
+
+#[tokio::test]
+async fn shutdown_thread_demotes_thread_with_session() {
+    use emergent_protocol::WorkspaceId;
+
+    let (_, _tr, manager) = spawn_test_server().await;
+    let ws_id = WorkspaceId::from("it-ws-resumable");
+
+    manager
+        .thread_manager()
+        .register_live_thread_for_test(
+            "has-session".into(),
+            "agent-z".into(),
+            ws_id.clone(),
+            Some("acp-live".into()),
+        )
+        .await;
+
+    manager
+        .thread_manager()
+        .shutdown_thread("has-session")
+        .await
+        .unwrap();
+
+    assert!(!manager.live_thread_ids().await.contains("has-session"));
+    let dormant = manager.thread_manager().dormant_snapshot().await;
+    let stub = dormant
+        .get("has-session")
+        .expect("a thread with a session must demote to a resumable dormant stub");
+    assert_eq!(stub.acp_session_id.as_deref(), Some("acp-live"));
+}

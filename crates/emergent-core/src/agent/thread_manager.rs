@@ -8,7 +8,7 @@ use emergent_protocol::{
 };
 use tokio::sync::{broadcast, oneshot, Mutex, RwLock};
 
-use super::lifecycle::SessionInit;
+use super::lifecycle::{InitOutcome, SessionInit};
 use super::usage_store::{
     apply_cost_delta, apply_turn_delta, PersistedWorkspaceState, TurnDelta, WorkspaceUsageStore,
 };
@@ -329,24 +329,40 @@ impl ThreadManager {
         let persist_lock_for_persist = self.persist_lock.clone();
         let token_registry_for_cleanup = self.token_registry.clone();
 
+        // Phase 1: spawn the process + register the `Initializing` handle. Awaited
+        // synchronously so the thread is in the live map (and thus cancellable)
+        // before this id is returned to the caller. A failure here means the CLI
+        // could not even be launched: revoke the token and surface the error
+        // directly (no phantom handle was published).
+        let pending = match lifecycle::initialize_agent(
+            id.clone(),
+            agent_definition_id,
+            workspace_id,
+            agent_binary,
+            task_id,
+            SessionInit::New,
+            threads,
+            event_tx.clone(),
+            history,
+            mcp_port,
+            bearer_token,
+            agent_home,
+        )
+        .await
+        {
+            Ok(p) => p,
+            Err(e) => {
+                log::error!("Thread {} failed to start: {}", &id, e);
+                self.token_registry.revoke_agent(&id);
+                return Err(e);
+            }
+        };
+
+        // Phase 2: await the handshake on a background task so the spawn call
+        // returns immediately.
         tokio::spawn(async move {
-            match lifecycle::initialize_agent(
-                id.clone(),
-                agent_definition_id,
-                workspace_id,
-                agent_binary,
-                task_id,
-                SessionInit::New,
-                threads,
-                event_tx.clone(),
-                history,
-                mcp_port,
-                bearer_token,
-                agent_home,
-            )
-            .await
-            {
-                Ok(()) => {
+            match lifecycle::await_handshake(pending).await {
+                Ok(InitOutcome::Ready) => {
                     log::info!("Thread {} spawned successfully", &id);
                     // Persist thread mappings + usage after successful init
                     let workspace_dir = {
@@ -367,6 +383,11 @@ impl ThreadManager {
                         )
                         .await;
                     }
+                }
+                Ok(InitOutcome::Cancelled) => {
+                    // Stopped/killed during the handshake; the canceller already
+                    // tore down the process and revoked the token. Nothing to do.
+                    log::info!("Thread {} cancelled during initialization", &id);
                 }
                 Err(e) => {
                     log::error!("Thread {} failed to initialize: {}", &id, e);
@@ -440,24 +461,40 @@ impl ThreadManager {
         let mcp_port = self.mcp_port.load(std::sync::atomic::Ordering::Relaxed);
         let token_registry_for_cleanup = self.token_registry.clone();
 
+        // Phase 1: spawn + register the `Initializing` handle synchronously so a
+        // kill/stop targeting this id can never slip in before the handle is live
+        // (which on the resume path could otherwise purge the dormant stub + revoke
+        // the token, then have the initializer resurrect a live thread with a dead
+        // token). A failure here means the CLI could not be launched.
+        let pending = match lifecycle::initialize_agent(
+            id.clone(),
+            agent_definition_id,
+            workspace_id,
+            agent_binary,
+            task_id,
+            SessionInit::Load { acp_session_id },
+            threads,
+            event_tx.clone(),
+            history,
+            mcp_port,
+            bearer_token,
+            agent_home,
+        )
+        .await
+        {
+            Ok(p) => p,
+            Err(e) => {
+                log::error!("Thread {} failed to start resume: {}", &id, e);
+                // Leave the dormant entry intact so the user can retry.
+                self.token_registry.revoke_agent(&id);
+                return Err(e);
+            }
+        };
+
+        // Phase 2: await the handshake on a background task.
         tokio::spawn(async move {
-            match lifecycle::initialize_agent(
-                id.clone(),
-                agent_definition_id,
-                workspace_id,
-                agent_binary,
-                task_id,
-                SessionInit::Load { acp_session_id },
-                threads,
-                event_tx.clone(),
-                history,
-                mcp_port,
-                bearer_token,
-                agent_home,
-            )
-            .await
-            {
-                Ok(()) => {
+            match lifecycle::await_handshake(pending).await {
+                Ok(InitOutcome::Ready) => {
                     log::info!("Thread {} resumed successfully", &id);
                     // Promote: the live entry is now registered in `threads`
                     // by initialize_agent, so remove the dormant stub.
@@ -465,6 +502,12 @@ impl ThreadManager {
                     if let Some(ws_map) = dormant_guard.get_mut(&ws_id_for_promotion) {
                         ws_map.remove(&id);
                     }
+                }
+                Ok(InitOutcome::Cancelled) => {
+                    // Stopped/killed during the handshake. The canceller decided
+                    // the dormant fate (stop keeps the resumable stub, delete
+                    // purges it) and revoked the token; leave it untouched.
+                    log::info!("Thread {} cancelled during resume", &id);
                 }
                 Err(e) => {
                     log::error!("Thread {} failed to resume: {}", &id, e);
@@ -577,16 +620,21 @@ impl ThreadManager {
     ) -> Result<Option<WorkspaceId>, String> {
         log::info!("Shutting down thread {}", thread_id);
 
-        let _ = self
-            .event_tx
-            .send(Notification::StatusChange(StatusChangePayload {
-                thread_id: thread_id.to_string(),
-                status: AgentStatus::Dead.to_string(),
-            }));
-
         let handle_arc = {
             let mut threads = self.threads.write().await;
-            match threads.remove(thread_id) {
+            let removed = threads.remove(thread_id);
+            // Emit `Dead` while still holding the map write lock so it is strictly
+            // ordered AFTER any in-flight graduation's `SessionReady`/`Idle` (which
+            // are also sent under this lock in `await_handshake`). Sent before the
+            // lock, a `Dead` could race ahead of a graduating thread's `Idle` and
+            // leave the UI showing a killed thread as still running.
+            let _ = self
+                .event_tx
+                .send(Notification::StatusChange(StatusChangePayload {
+                    thread_id: thread_id.to_string(),
+                    status: AgentStatus::Dead.to_string(),
+                }));
+            match removed {
                 Some(h) => h,
                 None => return Ok(None),
             }
@@ -618,9 +666,10 @@ impl ThreadManager {
         drop(handle.thread_handle.take());
         drop(handle);
 
-        // Demote to dormant. We've already dropped the live entry + lock
-        // above, so no risk of holding both locks simultaneously.
-        {
+        // Demote to dormant only if there is a session to resume. A thread that
+        // was stopped mid-handshake never obtained an ACP session, so a dormant
+        // stub for it would be a dead, un-resumable phantom — skip it.
+        if mapping.acp_session_id.is_some() {
             let mut dormant = self.dormant_threads.write().await;
             dormant
                 .entry(workspace_id.clone())
@@ -1190,7 +1239,10 @@ impl ThreadManager {
             let live = threads.read().await;
             for (id, handle_arc) in live.iter() {
                 let handle = handle_arc.lock().await;
-                if &handle.workspace_id == workspace_id {
+                // Skip threads that have not yet established an ACP session (still
+                // mid-handshake): there is nothing resumable to persist, and a
+                // null-session mapping would hydrate as a dead phantom on restart.
+                if &handle.workspace_id == workspace_id && handle.acp_session_id.is_some() {
                     out.push(ThreadMapping {
                         thread_id: id.clone(),
                         agent_definition_id: handle.agent_id.clone(),

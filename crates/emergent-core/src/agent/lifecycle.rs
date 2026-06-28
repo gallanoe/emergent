@@ -29,6 +29,32 @@ pub(crate) enum SessionInit {
     Load { acp_session_id: String },
 }
 
+/// Outcome of a completed `await_handshake` future.
+pub(crate) enum InitOutcome {
+    /// The handshake completed and the thread graduated to `Idle`.
+    Ready,
+    /// A concurrent stop/kill claimed the thread during the handshake window;
+    /// the canceller already tore down the process and cleaned up. The caller
+    /// must NOT emit an error or revoke the token — that's the canceller's job.
+    Cancelled,
+}
+
+/// State handed from `initialize_agent` (which has already published the
+/// `Initializing` handle into the live map) to `await_handshake` (which runs in
+/// the background, waits for the ACP handshake, and graduates the handle).
+///
+/// Splitting these two phases lets the caller register the handle *synchronously*
+/// before returning the thread id, so there is no window in which a kill/stop
+/// targeting the freshly-returned id can no-op against an unregistered thread.
+pub(crate) struct PendingHandshake {
+    agent_id: String,
+    agent_binary: String,
+    handle_arc: Arc<Mutex<ThreadHandle>>,
+    init_rx: oneshot::Receiver<Result<(SessionId, Vec<ConfigOption>), String>>,
+    agents: Arc<RwLock<HashMap<String, Arc<Mutex<ThreadHandle>>>>>,
+    event_tx: broadcast::Sender<Notification>,
+}
+
 fn initial_config_from_load_response(
     load_resp: LoadSessionResponse,
     config_state: &[ConfigOption],
@@ -40,8 +66,12 @@ fn initial_config_from_load_response(
         .unwrap_or_else(|| config_state.to_vec())
 }
 
-/// Perform the full agent initialization: spawn process, ACP handshake,
-/// store handle, and emit notifications.
+/// Phase 1 of agent startup: spawn the process, start the ACP connection thread,
+/// and publish an `Initializing` handle into the live map. This is fast (it does
+/// NOT wait for the handshake) and is awaited synchronously by the caller so the
+/// thread is cancellable the instant its id is known. The returned
+/// `PendingHandshake` must be passed to `await_handshake` (typically on a
+/// background task) to complete startup.
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn initialize_agent(
     agent_id: String,
@@ -56,7 +86,7 @@ pub(crate) async fn initialize_agent(
     mcp_port: u16,
     bearer_token: String,
     agent_home: std::path::PathBuf,
-) -> Result<(), String> {
+) -> Result<PendingHandshake, String> {
     let spawner = super::spawner::LocalProcessSpawner::new();
     let parts: Vec<&str> = agent_binary.split_whitespace().collect();
 
@@ -88,6 +118,13 @@ pub(crate) async fn initialize_agent(
         .ok_or("Failed to capture agent stdout")?;
 
     let is_resume = matches!(session_init, SessionInit::Load { .. });
+    // Capture the session id up front for the resume case so the early-registered
+    // handle stays resumable even if it's stopped mid-handshake (stop demotes it
+    // back to a dormant stub keyed by this id).
+    let initial_acp_session_id = match &session_init {
+        SessionInit::New => None,
+        SessionInit::Load { acp_session_id } => Some(acp_session_id.clone()),
+    };
     let (command_tx, command_rx) = mpsc::unbounded_channel::<AgentCommand>();
 
     let agent_id_for_thread = agent_id.clone();
@@ -270,14 +307,10 @@ pub(crate) async fn initialize_agent(
                                         &agent_id,
                                         sid
                                     );
+                                    // The main side emits SessionReady once it has
+                                    // graduated the registered handle, so a thread
+                                    // cancelled mid-handshake produces nothing stray.
                                     let _ = init_tx.send(Ok((sid.clone(), config)));
-                                    let _ =
-                                        event_tx_clone.send(Notification::SessionReady(
-                                            SessionReadyPayload {
-                                                thread_id: agent_id.clone(),
-                                                acp_session_id: sid.0.to_string(),
-                                            },
-                                        ));
                                     sid
                                 }
                                 Err(e) => {
@@ -318,6 +351,70 @@ pub(crate) async fn initialize_agent(
         })
         .map_err(|e| format!("Failed to spawn agent thread: {}", e))?;
 
+    // Register the handle in the live map with status `Initializing` BEFORE the
+    // handshake completes. This makes the thread cancellable during the (up to
+    // 60s) ACP init window: stop/kill/delete and the bulk workspace/agent kills
+    // all operate on the live map, so they can now tear down a stuck-initializing
+    // agent (process, OS thread, and bearer token) instead of no-op'ing until the
+    // timeout fires. The handle is graduated to `Idle` in place once the
+    // handshake succeeds (see below).
+    let handle = ThreadHandle {
+        agent_id: agent_definition_id,
+        acp_session_id: initial_acp_session_id,
+        status: AgentStatus::Initializing,
+        workspace_id,
+        command_tx,
+        process,
+        thread_handle: Some(thread_handle),
+        config_options: Vec::new(),
+        has_management_permissions: false,
+        has_prompted: is_resume,
+        task_id,
+        completing: false,
+        last_prompted_permissions: false,
+        prompt_notify: Arc::new(tokio::sync::Notify::new()),
+        pending_prompt: None,
+        prompt_loop_handle: None,
+    };
+    let handle_arc = Arc::new(Mutex::new(handle));
+
+    // Initialize history and publish the handle before awaiting the handshake.
+    history.write().await.entry(agent_id.clone()).or_default();
+    agents
+        .write()
+        .await
+        .insert(agent_id.clone(), handle_arc.clone());
+    let _ = event_tx.send(Notification::StatusChange(StatusChangePayload {
+        thread_id: agent_id.clone(),
+        status: AgentStatus::Initializing.to_string(),
+    }));
+
+    Ok(PendingHandshake {
+        agent_id,
+        agent_binary,
+        handle_arc,
+        init_rx,
+        agents,
+        event_tx,
+    })
+}
+
+/// Phase 2 of agent startup: wait for the ACP handshake (bounded by a timeout)
+/// and graduate the already-registered handle to `Idle`, or tear it down on
+/// failure. Returns `Cancelled` if a concurrent stop/kill claimed the thread
+/// during the handshake window (the canceller owns teardown + token revocation).
+pub(crate) async fn await_handshake(
+    pending: PendingHandshake,
+) -> Result<InitOutcome, String> {
+    let PendingHandshake {
+        agent_id,
+        agent_binary,
+        handle_arc,
+        init_rx,
+        agents,
+        event_tx,
+    } = pending;
+
     // Wait for ACP initialization, bounded by a timeout so a binary that starts
     // but never speaks valid ACP can't hang "initializing" forever (which would
     // leak the process, its dedicated OS thread, and the bearer token).
@@ -331,72 +428,78 @@ pub(crate) async fn initialize_agent(
             init_timeout.as_secs()
         )),
     };
+
     let (session_id, initial_config) = match init_outcome {
         Ok(v) => v,
         Err(e) => {
-            // Kill the process group + reap; the ACP OS thread exits once its
-            // transport breaks. The caller revokes the token and emits Error.
-            let _ = process.shutdown(std::time::Duration::from_secs(2)).await;
-            return Err(e);
+            // Remove our entry and tear down the process — unless a concurrent
+            // stop/kill already claimed this thread (it owns the teardown).
+            let owned = {
+                let mut map = agents.write().await;
+                match map.get(&agent_id) {
+                    Some(h) if Arc::ptr_eq(h, &handle_arc) => {
+                        map.remove(&agent_id);
+                        true
+                    }
+                    _ => false,
+                }
+            };
+            if owned {
+                // Kill the process group + reap; the ACP OS thread exits once its
+                // transport breaks. The caller revokes the token and emits Error.
+                let mut h = handle_arc.lock().await;
+                let _ = h.process.shutdown(std::time::Duration::from_secs(2)).await;
+                h.thread_handle.take();
+                return Err(e);
+            }
+            return Ok(InitOutcome::Cancelled);
         }
     };
 
-    // Store the handle
-    let prompt_notify = Arc::new(tokio::sync::Notify::new());
-    let handle = ThreadHandle {
-        agent_id: agent_definition_id,
-        acp_session_id: Some(session_id.0.to_string()),
-        status: AgentStatus::Idle,
-        workspace_id,
-        command_tx,
-        process,
-        thread_handle: Some(thread_handle),
-        config_options: initial_config.clone(),
-        has_management_permissions: false,
-        has_prompted: is_resume,
-        task_id,
-        completing: false,
-        last_prompted_permissions: false,
-        prompt_notify,
-        pending_prompt: None,
-        prompt_loop_handle: None,
-    };
+    // Graduate the handle to `Idle` in place, atomically w.r.t. a concurrent
+    // stop/kill (which removes the entry under this same map write lock). If the
+    // entry is gone, we were cancelled mid-handshake: the canceller already tore
+    // down the process, so leave everything to it.
+    {
+        let map = agents.write().await;
+        if !matches!(map.get(&agent_id), Some(h) if Arc::ptr_eq(h, &handle_arc)) {
+            return Ok(InitOutcome::Cancelled);
+        }
+        {
+            let mut h = handle_arc.lock().await;
+            h.acp_session_id = Some(session_id.0.to_string());
+            h.config_options = initial_config.clone();
+            h.status = AgentStatus::Idle;
+            // Spawn the prompt loop while the map lock is held so a racing kill
+            // can never observe a graduated handle whose prompt_loop_handle is
+            // still None (which would leak an un-abortable task).
+            h.prompt_loop_handle = Some(tokio::spawn(prompt_loop(
+                agent_id.clone(),
+                handle_arc.clone(),
+                event_tx.clone(),
+            )));
+        }
 
-    let _ = event_tx.send(Notification::StatusChange(StatusChangePayload {
-        thread_id: agent_id.clone(),
-        status: AgentStatus::Idle.to_string(),
-    }));
-
-    // Emit initial config if the agent advertised any
-    if !initial_config.is_empty() {
-        let _ = event_tx.send(Notification::ConfigUpdate(ConfigUpdatePayload {
+        // Emit graduation notifications while holding the map lock so a racing
+        // kill cannot slip a `Dead` in ahead of these.
+        let _ = event_tx.send(Notification::SessionReady(SessionReadyPayload {
             thread_id: agent_id.clone(),
-            config_options: initial_config,
-            changes: vec![],
+            acp_session_id: session_id.0.to_string(),
         }));
+        let _ = event_tx.send(Notification::StatusChange(StatusChangePayload {
+            thread_id: agent_id.clone(),
+            status: AgentStatus::Idle.to_string(),
+        }));
+        if !initial_config.is_empty() {
+            let _ = event_tx.send(Notification::ConfigUpdate(ConfigUpdatePayload {
+                thread_id: agent_id.clone(),
+                config_options: initial_config,
+                changes: vec![],
+            }));
+        }
     }
 
-    let handle_arc = Arc::new(Mutex::new(handle));
-
-    // Initialize history for this thread.
-    history.write().await.entry(agent_id.clone()).or_default();
-
-    // Spawn the prompt loop and store its handle BEFORE publishing the thread
-    // into the map, so a concurrent kill can never observe a live thread whose
-    // prompt_loop_handle is still None (which would leak an un-abortable task).
-    let loop_handle = tokio::spawn(prompt_loop(
-        agent_id.clone(),
-        handle_arc.clone(),
-        event_tx.clone(),
-    ));
-    handle_arc.lock().await.prompt_loop_handle = Some(loop_handle);
-
-    agents
-        .write()
-        .await
-        .insert(agent_id.clone(), handle_arc.clone());
-
-    Ok(())
+    Ok(InitOutcome::Ready)
 }
 
 #[cfg(test)]
