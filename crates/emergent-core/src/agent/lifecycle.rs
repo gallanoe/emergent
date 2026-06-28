@@ -123,6 +123,35 @@ pub(crate) async fn initialize_agent(
         ),
     ];
 
+    // macOS: Claude Code (and other keychain-backed CLIs) read their OAuth token
+    // from the login Keychain, which the Security framework locates via
+    // $HOME/Library/Keychains. Because the agent runs with an isolated $HOME, that
+    // path resolves to an empty dir and auth silently fails ("Not logged in").
+    // Symlink the real user's Keychains dir into the agent home so keychain-backed
+    // auth still resolves while per-agent config stays isolated. The agent already
+    // runs as the user, so this grants no access it couldn't otherwise obtain.
+    // Best-effort: a failure here only costs keychain auth, so we log and continue.
+    #[cfg(target_os = "macos")]
+    if let Some(real_home) = std::env::var_os("HOME") {
+        let real_keychains = std::path::Path::new(&real_home)
+            .join("Library")
+            .join("Keychains");
+        let library = agent_home.join("Library");
+        let link = library.join("Keychains");
+        let real_exists = tokio::fs::metadata(&real_keychains).await.is_ok();
+        let already_linked = tokio::fs::symlink_metadata(&link).await.is_ok();
+        if real_exists && !already_linked {
+            let _ = tokio::fs::create_dir_all(&library).await;
+            if let Err(e) = tokio::fs::symlink(&real_keychains, &link).await {
+                log::warn!(
+                    "Failed to symlink login keychain into agent home '{}': {}",
+                    agent_workdir,
+                    e
+                );
+            }
+        }
+    }
+
     let mut process = super::spawner::ProcessSpawner::spawn(&spawner, &parts, &agent_home, &env)
         .await
         .map_err(|e| format!("Failed to spawn agent '{}': {}", agent_binary, e))?;
