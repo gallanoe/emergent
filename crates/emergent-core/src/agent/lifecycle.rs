@@ -318,10 +318,28 @@ pub(crate) async fn initialize_agent(
         })
         .map_err(|e| format!("Failed to spawn agent thread: {}", e))?;
 
-    // Wait for initialization to complete
-    let (session_id, initial_config) = init_rx
-        .await
-        .map_err(|_| "Agent thread terminated during initialization".to_string())??;
+    // Wait for ACP initialization, bounded by a timeout so a binary that starts
+    // but never speaks valid ACP can't hang "initializing" forever (which would
+    // leak the process, its dedicated OS thread, and the bearer token).
+    let init_timeout = std::time::Duration::from_secs(60);
+    let init_outcome = match tokio::time::timeout(init_timeout, init_rx).await {
+        Ok(Ok(result)) => result,
+        Ok(Err(_)) => Err("Agent thread terminated during initialization".to_string()),
+        Err(_) => Err(format!(
+            "Agent '{}' did not complete ACP initialization within {}s",
+            agent_binary,
+            init_timeout.as_secs()
+        )),
+    };
+    let (session_id, initial_config) = match init_outcome {
+        Ok(v) => v,
+        Err(e) => {
+            // Kill the process group + reap; the ACP OS thread exits once its
+            // transport breaks. The caller revokes the token and emits Error.
+            let _ = process.shutdown(std::time::Duration::from_secs(2)).await;
+            return Err(e);
+        }
+    };
 
     // Store the handle
     let prompt_notify = Arc::new(tokio::sync::Notify::new());

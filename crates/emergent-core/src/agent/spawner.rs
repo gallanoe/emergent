@@ -181,7 +181,7 @@ impl ProcessSpawner for LocalProcessSpawner {
         }
         cmd.stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::null())
+            .stderr(std::process::Stdio::piped())
             .kill_on_drop(true);
 
         // Put the agent in its own process group so we can later signal the
@@ -196,6 +196,19 @@ impl ProcessSpawner for LocalProcessSpawner {
         let stdin = child.stdin.take();
         let stdout = child.stdout.take();
         let pgid = child.id().map(|id| id as i32);
+
+        // Drain the agent's stderr into the log so a misconfigured / non-ACP
+        // binary is diagnosable (and the pipe never fills and blocks the child).
+        if let Some(stderr) = child.stderr.take() {
+            let prog = program.to_string();
+            tokio::spawn(async move {
+                use tokio::io::{AsyncBufReadExt, BufReader};
+                let mut lines = BufReader::new(stderr).lines();
+                while let Ok(Some(line)) = lines.next_line().await {
+                    log::warn!("agent stderr [{}]: {}", prog, line);
+                }
+            });
+        }
 
         Ok(LocalProcess {
             child,
