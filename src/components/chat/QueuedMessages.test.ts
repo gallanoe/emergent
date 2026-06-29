@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, fireEvent, cleanup } from "@testing-library/svelte";
+import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/svelte";
 import { tick } from "svelte";
 import QueuedMessages from "./QueuedMessages.svelte";
 import type { QueueItem } from "../../stores/types";
@@ -271,20 +271,6 @@ describe("QueuedMessages", () => {
       // "Queued · 2" text
       expect(screen.getByText(/queued\s*·\s*2/i)).toBeTruthy();
     });
-
-    it("shows 'sends after current turn' hint when working", () => {
-      render(QueuedMessages, {
-        props: defaultProps([makeItem("a", "x")], { working: true }),
-      });
-      expect(screen.getByText("sends after current turn")).toBeTruthy();
-    });
-
-    it("hides the working hint when not working", () => {
-      render(QueuedMessages, {
-        props: defaultProps([makeItem("a", "x")], { working: false }),
-      });
-      expect(screen.queryByText("sends after current turn")).toBeNull();
-    });
   });
 
   describe("panel collapse/expand toggle", () => {
@@ -309,8 +295,8 @@ describe("QueuedMessages", () => {
       });
       const toggle = getToggleRegion();
       await fireEvent.click(toggle);
-      // Row content should be gone
-      expect(screen.queryByText("hide me")).toBeNull();
+      // Row content should be gone once the collapse transition settles.
+      await waitFor(() => expect(screen.queryByText("hide me")).toBeNull());
       // Header count label still present
       expect(screen.getByText(/queued\s*·\s*1/i)).toBeTruthy();
     });
@@ -321,8 +307,9 @@ describe("QueuedMessages", () => {
       });
       const toggle = getToggleRegion();
       await fireEvent.click(toggle);
-      expect(screen.queryByText("show me again")).toBeNull();
+      await waitFor(() => expect(screen.queryByText("show me again")).toBeNull());
       await fireEvent.click(toggle);
+      // Re-expanding remounts the body immediately; content is present at once.
       expect(screen.getByText("show me again")).toBeTruthy();
     });
 
@@ -348,7 +335,9 @@ describe("QueuedMessages", () => {
     it("Clear all fires onClearAll while panel is collapsed", async () => {
       const onClearAll = vi.fn();
       render(QueuedMessages, {
-        props: defaultProps([makeItem("p6", "clear while collapsed")], { onClearAll }),
+        props: defaultProps([makeItem("p6", "clear while collapsed")], {
+          onClearAll,
+        }),
       });
       // Collapse first
       const toggle = getToggleRegion();
@@ -376,8 +365,8 @@ describe("QueuedMessages", () => {
       // Collapse
       const toggle = getToggleRegion();
       await fireEvent.click(toggle);
-      // Fade should be gone
-      expect(container.querySelector('[style*="linear-gradient"]')).toBeNull();
+      // Fade should be gone once the collapse transition settles.
+      await waitFor(() => expect(container.querySelector('[style*="linear-gradient"]')).toBeNull());
     });
   });
 });

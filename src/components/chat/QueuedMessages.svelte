@@ -1,10 +1,18 @@
 <script lang="ts">
+  import { slide } from "svelte/transition";
   import type { QueueItem } from "../../stores/types";
 
   // ── Props ──────────────────────────────────────────────────────────────────
   interface Props {
     items: QueueItem[];
     working?: boolean;
+    /**
+     * When true, the panel docks to the top of the composer as one connected
+     * unit: rounded top only, flat bottom, no own border-bottom or shadow (the
+     * composer wrapper carries the shadow for the whole stack). When false it's
+     * a self-contained floating card. See em-app-mock.jsx:471,818.
+     */
+    attached?: boolean;
     onRemove: (id: string) => void;
     onEdit: (id: string, content: string) => void;
     onClearAll: () => void;
@@ -13,6 +21,7 @@
   let {
     items,
     working = false,
+    attached = false,
     onRemove,
     onEdit,
     onClearAll,
@@ -81,19 +90,20 @@
 {#if items.length > 0}
   <div
     class="w-full"
-    style="max-width: 760px; margin: 0 auto;"
+    style={attached ? "" : "max-width: 760px; margin: 0 auto;"}
     aria-label="Queued messages"
   >
-    <!-- Segmented card: single border wrapping all rows with internal dividers -->
+    <!-- Segmented card: single border wrapping all rows with internal dividers.
+         When attached, the bottom border + shadow are dropped and only the top
+         corners round, so it reads as one surface with the composer below. -->
     <div
-      class="relative overflow-hidden rounded-[12px] border border-border-default bg-bg-elevated shadow-[var(--shadow-sm)]"
+      class="relative overflow-hidden border border-border-default bg-bg-elevated {attached
+        ? 'rounded-t-[18px] border-b-0'
+        : 'rounded-[12px] shadow-[var(--shadow-sm)]'}"
     >
-      <!-- Header strip: toggle region · spacer · clear all -->
-      <div
-        class="flex items-center gap-2 px-3 py-2 {expanded
-          ? 'border-b border-border-default'
-          : ''}"
-      >
+      <!-- Header strip: toggle region · spacer · clear all. The divider below
+           lives on the collapsible body so it slides away with it. -->
+      <div class="flex items-center gap-2 px-3 py-2">
         <!-- Left toggle region: status dot · count · hint · caret -->
         <div
           role="button"
@@ -118,15 +128,9 @@
             Queued · {items.length}
           </span>
 
-          {#if working}
-            <span
-              class="text-[11px] text-fg-disabled font-[family-name:var(--font-ui)]"
-            >
-              sends after current turn
-            </span>
-          {/if}
-
-          <!-- Caret: rotates 90deg when expanded (pointing down), 0deg when collapsed (pointing right) -->
+          <!-- Caret points toward where the body goes: up when collapsed (it
+               expands upward), down when expanded (it shrinks back down). The
+               base path is a right chevron, so -90deg → up, 90deg → down. -->
           <svg
             width="10"
             height="10"
@@ -135,7 +139,7 @@
             aria-hidden="true"
             class="ml-[1px] shrink-0 text-fg-disabled transition-transform duration-150 {expanded
               ? 'rotate-90'
-              : 'rotate-0'}"
+              : '-rotate-90'}"
           >
             <path
               d="M6 3l5 5-5 5"
@@ -158,138 +162,144 @@
       </div>
 
       {#if expanded}
-        <!-- Scrollable row list, capped at ~170px (~3 visible rows) -->
-        <ul
-          id="queued-messages-list"
-          class="m-0 list-none overflow-y-auto p-0"
-          style="max-height: 170px;"
+        <!-- Collapsible body — divider + rows slide together on toggle. -->
+        <div
+          transition:slide={{ duration: 150 }}
+          class="border-t border-border-default"
         >
-          {#each items as item, i (item.id)}
-            {@const isSelected = selectedId === item.id}
-            {@const isFailed = item.failed === true}
-            {@const isTaskNotification = item.kind === "task-notification"}
-            <li
-              class="{i > 0 ? 'border-t border-border-default' : ''} {isFailed
-                ? 'border-l-2 border-l-error/50'
-                : ''}"
-            >
-              <!-- Each row is a grid: 28px index / 1fr preview / auto gutter -->
-              <div
-                role="button"
-                tabindex="0"
-                class="grid w-full cursor-default gap-[10px] px-[12px] py-[10px] text-left transition-colors duration-[var(--duration-quick)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-border-focus {isSelected
-                  ? 'bg-bg-selected'
-                  : 'hover:bg-bg-hover'}"
-                style="grid-template-columns: 28px 1fr auto;"
-                aria-label="Queued message {i + 1} of {items.length}{isFailed
-                  ? ' — failed'
-                  : ''}{isTaskNotification ? ' (task notification)' : ''}"
-                aria-expanded={isSelected}
-                onclick={() => toggleRow(item.id)}
-                onkeydown={(e) => handleRowKey(e, item.id)}
+          <!-- Scrollable row list, capped at ~170px (~3 visible rows) -->
+          <ul
+            id="queued-messages-list"
+            class="m-0 list-none overflow-y-auto p-0"
+            style="max-height: 170px;"
+          >
+            {#each items as item, i (item.id)}
+              {@const isSelected = selectedId === item.id}
+              {@const isFailed = item.failed === true}
+              {@const isTaskNotification = item.kind === "task-notification"}
+              <li
+                class="{i > 0 ? 'border-t border-border-default' : ''} {isFailed
+                  ? 'border-l-2 border-l-error/50'
+                  : ''}"
               >
-                <!-- Index or task badge -->
-                {#if isTaskNotification}
-                  <span
-                    class="queue-row__badge pt-[2px] font-[family-name:var(--font-mono)] text-[9px] font-medium uppercase leading-none tracking-[0.06em] text-fg-disabled"
-                  >
-                    task
-                  </span>
-                {:else}
-                  <span
-                    class="pt-[2px] font-[family-name:var(--font-mono)] text-[10.5px] font-medium leading-none tracking-[0.02em] {isFailed
-                      ? 'text-error'
-                      : isSelected
-                        ? 'text-fg-default'
-                        : 'text-fg-disabled'}"
-                  >
-                    {String(i + 1).padStart(2, "0")}
-                  </span>
-                {/if}
-
-                <!-- Preview text: truncated when collapsed, full when expanded -->
-                <span
-                  class="min-w-0 text-[12.5px] leading-[1.5] {isSelected
-                    ? 'break-words whitespace-normal text-fg-heading'
-                    : 'truncate whitespace-nowrap text-fg-default'} {isFailed
-                    ? 'text-error'
-                    : ''}"
+                <!-- Each row is a grid: 28px index / 1fr preview / auto gutter -->
+                <div
+                  role="button"
+                  tabindex="0"
+                  class="grid w-full cursor-default items-baseline gap-[10px] px-[12px] py-[10px] text-left transition-colors duration-[var(--duration-quick)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-border-focus {isSelected
+                    ? 'bg-bg-selected'
+                    : 'hover:bg-bg-hover'}"
+                  style="grid-template-columns: 28px 1fr auto;"
+                  aria-label="Queued message {i + 1} of {items.length}{isFailed
+                    ? ' — failed'
+                    : ''}{isTaskNotification ? ' (task notification)' : ''}"
+                  aria-expanded={isSelected}
+                  onclick={() => toggleRow(item.id)}
+                  onkeydown={(e) => handleRowKey(e, item.id)}
                 >
-                  {item.content}
-                </span>
+                  <!-- Index or task badge -->
+                  {#if isTaskNotification}
+                    <span
+                      class="queue-row__badge font-[family-name:var(--font-mono)] text-[9px] font-medium uppercase leading-none tracking-[0.06em] text-fg-disabled"
+                    >
+                      task
+                    </span>
+                  {:else}
+                    <span
+                      class="font-[family-name:var(--font-mono)] text-[10.5px] font-medium leading-none tracking-[0.02em] {isFailed
+                        ? 'text-error'
+                        : isSelected
+                          ? 'text-fg-default'
+                          : 'text-fg-disabled'}"
+                    >
+                      {String(i + 1).padStart(2, "0")}
+                    </span>
+                  {/if}
 
-                <!-- Action gutter: omitted for task-notification rows -->
-                {#if !isTaskNotification}
-                  <div
-                    class="flex items-center gap-[2px]"
-                    onclick={(e) => e.stopPropagation()}
-                    role="presentation"
+                  <!-- Preview text: truncated when collapsed, full when expanded -->
+                  <span
+                    class="min-w-0 text-[12.5px] leading-[1.5] {isSelected
+                      ? 'break-words whitespace-normal text-fg-heading'
+                      : 'truncate whitespace-nowrap text-fg-default'} {isFailed
+                      ? 'text-error'
+                      : ''}"
                   >
-                    <!-- Edit — pulls item back into the composer -->
-                    <button
-                      type="button"
-                      title="Edit — pull back into composer"
-                      aria-label="Edit queued message: {item.content}"
-                      class="inline-flex h-[22px] w-[22px] items-center justify-center rounded-[5px] text-fg-disabled transition-colors duration-[var(--duration-quick)] hover:bg-bg-hover hover:text-fg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-border-focus"
-                      onclick={(e) => handleEdit(e, item)}
-                    >
-                      <svg
-                        width="11"
-                        height="11"
-                        viewBox="0 0 16 16"
-                        fill="none"
-                        aria-hidden="true"
-                      >
-                        <path
-                          d="M11 2.5l2.5 2.5L5.5 13H3v-2.5L11 2.5z"
-                          stroke="currentColor"
-                          stroke-width="1.4"
-                          stroke-linejoin="round"
-                        />
-                      </svg>
-                    </button>
+                    {item.content}
+                  </span>
 
-                    <!-- Remove -->
-                    <button
-                      type="button"
-                      title="Remove from queue"
-                      aria-label="Remove queued message: {item.content}"
-                      class="inline-flex h-[22px] w-[22px] items-center justify-center rounded-[5px] text-fg-disabled transition-colors duration-[var(--duration-quick)] hover:bg-bg-hover hover:text-fg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-border-focus"
-                      onclick={(e) => handleRemove(e, item.id)}
+                  <!-- Action gutter: omitted for task-notification rows -->
+                  {#if !isTaskNotification}
+                    <div
+                      class="flex items-center gap-[2px] self-start"
+                      onclick={(e) => e.stopPropagation()}
+                      role="presentation"
                     >
-                      <svg
-                        width="11"
-                        height="11"
-                        viewBox="0 0 16 16"
-                        fill="none"
-                        aria-hidden="true"
+                      <!-- Edit — pulls item back into the composer -->
+                      <button
+                        type="button"
+                        title="Edit — pull back into composer"
+                        aria-label="Edit queued message: {item.content}"
+                        class="inline-flex h-[22px] w-[22px] items-center justify-center rounded-[5px] text-fg-disabled transition-colors duration-[var(--duration-quick)] hover:bg-bg-hover hover:text-fg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-border-focus"
+                        onclick={(e) => handleEdit(e, item)}
                       >
-                        <path
-                          d="M4 4l8 8M12 4l-8 8"
-                          stroke="currentColor"
-                          stroke-width="1.4"
-                          stroke-linecap="round"
-                        />
-                      </svg>
-                    </button>
-                  </div>
-                {:else}
-                  <!-- Empty gutter placeholder so the grid column is still allocated -->
-                  <div aria-hidden="true"></div>
-                {/if}
-              </div>
-            </li>
-          {/each}
-        </ul>
+                        <svg
+                          width="11"
+                          height="11"
+                          viewBox="0 0 16 16"
+                          fill="none"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="M11 2.5l2.5 2.5L5.5 13H3v-2.5L11 2.5z"
+                            stroke="currentColor"
+                            stroke-width="1.4"
+                            stroke-linejoin="round"
+                          />
+                        </svg>
+                      </button>
 
-        <!-- Soft bottom fade when more than 3 items overflow the card -->
-        {#if items.length > 3}
-          <div
-            class="pointer-events-none absolute inset-x-0 bottom-0 h-[24px]"
-            style="background: linear-gradient(to bottom, transparent 0%, var(--color-background-card) 100%);"
-            aria-hidden="true"
-          ></div>
-        {/if}
+                      <!-- Remove -->
+                      <button
+                        type="button"
+                        title="Remove from queue"
+                        aria-label="Remove queued message: {item.content}"
+                        class="inline-flex h-[22px] w-[22px] items-center justify-center rounded-[5px] text-fg-disabled transition-colors duration-[var(--duration-quick)] hover:bg-bg-hover hover:text-fg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-border-focus"
+                        onclick={(e) => handleRemove(e, item.id)}
+                      >
+                        <svg
+                          width="11"
+                          height="11"
+                          viewBox="0 0 16 16"
+                          fill="none"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="M4 4l8 8M12 4l-8 8"
+                            stroke="currentColor"
+                            stroke-width="1.4"
+                            stroke-linecap="round"
+                          />
+                        </svg>
+                      </button>
+                    </div>
+                  {:else}
+                    <!-- Empty gutter placeholder so the grid column is still allocated -->
+                    <div aria-hidden="true"></div>
+                  {/if}
+                </div>
+              </li>
+            {/each}
+          </ul>
+
+          <!-- Soft bottom fade when more than 3 items overflow the card -->
+          {#if items.length > 3}
+            <div
+              class="pointer-events-none absolute inset-x-0 bottom-0 h-[24px]"
+              style="background: linear-gradient(to bottom, transparent 0%, var(--color-background-card) 100%);"
+              aria-hidden="true"
+            ></div>
+          {/if}
+        </div>
       {/if}
     </div>
   </div>
