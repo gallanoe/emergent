@@ -1,0 +1,5 @@
+# Generated + tooling artifacts — not ours to format.
+# (oxfmt reads .gitignore and .prettierignore by default.)
+graphify-out/
+.codex/
+.claude/skills/

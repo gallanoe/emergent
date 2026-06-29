@@ -14,6 +14,7 @@ docs/
 .superpowers/
 .worktrees/
 .screenshots/
+graphify-out/
 e2e/results/
 test-results/
 src-tauri/binaries/
