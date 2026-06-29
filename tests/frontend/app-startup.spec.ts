@@ -1,4 +1,4 @@
-// e2e/app-startup.spec.ts
+// tests/frontend/app-startup.spec.ts
 import { test, expect } from "@playwright/test";
 
 /**
@@ -60,6 +60,6 @@ test.describe("app startup", () => {
     // App renders directly with no loading state
     await expect(page.locator("text=Starting…")).not.toBeVisible();
 
-    await expect(page.getByTestId("e2e-create-workspace")).toBeVisible();
+    await expect(page.getByTestId("frontend-create-workspace")).toBeVisible();
   });
 });

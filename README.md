@@ -85,13 +85,13 @@ bun run fmt:check         # Prettier + oxfmt check
 bun run typecheck         # svelte-check
 bun run test              # Vitest unit/component tests
 bun run test:rust         # Rust unit + integration tests
-bun run test:e2e          # Playwright E2E tests
+bun run test:frontend     # Playwright frontend tests
 ```
 
 ### Development notes
 
 - The Cargo workspace uses `default-members = ["crates/*"]`, so prefer `bun run test:rust`, `cargo test --workspace`, and `cargo check --workspace` over bare root `cargo test` commands when you want full coverage including `src-tauri`.
-- Playwright starts `bunx vite` on port `1420` and uses mocked Tauri IPC, so the E2E suite exercises the web UI layer rather than full desktop shell automation.
+- Playwright starts `bunx vite` on port `1420` and uses mocked Tauri IPC, so the frontend suite exercises the web UI layer rather than full desktop shell automation.
 
 ### Build
 
@@ -113,7 +113,7 @@ Availability is detected on your host `PATH`.
 
 ## v1 redesign
 
-The v1 UI redesign ships on branch `redesign/v1`. Playwright regression coverage lives under `e2e/`, and artboard sign-off is recorded in `e2e/phase-7-visual-qa.md`. The only tagged follow-ups in the frontend tree are `TODO(real-metrics)` and `TODO(search)`.
+The v1 UI redesign ships on branch `redesign/v1`. Playwright regression coverage lives under `tests/frontend/`, and artboard sign-off is recorded in `tests/frontend/phase-7-visual-qa.md`. The only tagged follow-ups in the frontend tree are `TODO(real-metrics)` and `TODO(search)`.
 
 ## License
 

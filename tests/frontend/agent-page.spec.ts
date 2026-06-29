@@ -10,7 +10,7 @@ test("agent page shows system prompt and saves edits", async ({ page }) => {
   await expect(page.getByText("System prompt", { exact: true })).toBeVisible();
 
   await page.getByTitle("Edit system prompt").click();
-  const unique = `E2E prompt ${Date.now()}`;
+  const unique = `Frontend prompt ${Date.now()}`;
   await page.locator("textarea").fill(unique);
   await page.getByTitle("Save system prompt").click();
 

@@ -2,7 +2,7 @@
 
 Checked against `docs/design/v1/project/` mocks in `bun run dev` demo mode on macOS. Dates: 2026-04-22.
 
-> Note: `docs/` is gitignored in this repository; this checklist is stored under `e2e/` so it can be versioned with the Playwright suite.
+> Note: `docs/` is gitignored in this repository; this checklist is stored under `tests/frontend/` so it can be versioned with the Playwright suite.
 
 ## Artboard parity
 

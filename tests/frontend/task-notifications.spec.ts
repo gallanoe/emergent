@@ -1,5 +1,5 @@
 /**
- * E2E test: task:status-notification queue panel rendering.
+ * Frontend test: task:status-notification queue panel rendering.
  *
  * Strategy:
  *   - Boot in non-demo mode with a single workspace + one thread.
@@ -40,9 +40,9 @@ const mockScript = `
       if (cmd === "list_agent_definitions") {
         return Promise.resolve([
           {
-            id: "agent-e2e-1",
-            workspace_id: "ws-e2e-1",
-            name: "E2E Agent",
+            id: "agent-frontend-1",
+            workspace_id: "ws-frontend-1",
+            name: "Frontend Agent",
             cli: "claude",
             provider: "claude",
           },
@@ -51,9 +51,9 @@ const mockScript = `
       if (cmd === "list_thread_mappings") {
         return Promise.resolve([
           {
-            thread_id: "thread-e2e-1",
-            agent_definition_id: "agent-e2e-1",
-            acp_session_id: "sess-e2e-1",
+            thread_id: "thread-frontend-1",
+            agent_definition_id: "agent-frontend-1",
+            acp_session_id: "sess-frontend-1",
             task_id: null,
           },
         ]);
@@ -61,11 +61,11 @@ const mockScript = `
       if (cmd === "list_threads") {
         return Promise.resolve([
           {
-            id: "thread-e2e-1",
-            agent_id: "agent-e2e-1",
+            id: "thread-frontend-1",
+            agent_id: "agent-frontend-1",
             status: "working",
-            workspace_id: "ws-e2e-1",
-            acp_session_id: "sess-e2e-1",
+            workspace_id: "ws-frontend-1",
+            acp_session_id: "sess-frontend-1",
           },
         ]);
       }
@@ -78,8 +78,8 @@ const mockScript = `
         detect_agents: [],
         list_workspaces: [
           {
-            id: "ws-e2e-1",
-            name: "e2e-workspace",
+            id: "ws-frontend-1",
+            name: "frontend-workspace",
             status: { state: "ready" },
             agent_count: 1,
           },
@@ -147,10 +147,10 @@ test.describe("task:status-notification queue panel", () => {
     await page.goto("/");
 
     // Wait for the sidebar agent entry to appear.
-    await expect(page.getByText("E2E Agent").first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Frontend Agent").first()).toBeVisible({ timeout: 10_000 });
 
     // Click the agent to open the agent view (shows the threads list).
-    await page.getByText("E2E Agent").first().click();
+    await page.getByText("Frontend Agent").first().click();
 
     // Click "Thread 1" to open the chat view for that thread.
     await expect(page.getByText("Thread 1").first()).toBeVisible({ timeout: 5_000 });
@@ -163,7 +163,7 @@ test.describe("task:status-notification queue panel", () => {
     // lands in pendingQueue. The queue panel renders when pendingQueue is non-empty.
     const fired = await fireTauriEvent(page, "task:status-notification", {
       task_id: "task-001",
-      creator_thread_id: "thread-e2e-1",
+      creator_thread_id: "thread-frontend-1",
       kind: "update",
       message: "halfway through analysis",
     });
@@ -191,15 +191,15 @@ test.describe("task:status-notification queue panel", () => {
     await page.addInitScript(mockScript);
     await page.goto("/");
 
-    await expect(page.getByText("E2E Agent").first()).toBeVisible({ timeout: 10_000 });
-    await page.getByText("E2E Agent").first().click();
+    await expect(page.getByText("Frontend Agent").first()).toBeVisible({ timeout: 10_000 });
+    await page.getByText("Frontend Agent").first().click();
     await expect(page.getByText("Thread 1").first()).toBeVisible({ timeout: 5_000 });
     await page.getByText("Thread 1").first().click();
     await page.waitForTimeout(500);
 
     await fireTauriEvent(page, "task:status-notification", {
       task_id: "task-002",
-      creator_thread_id: "thread-e2e-1",
+      creator_thread_id: "thread-frontend-1",
       kind: "completed",
       message: "task finished",
     });

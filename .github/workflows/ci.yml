@@ -65,8 +65,8 @@ jobs:
       - name: Install Playwright browsers
         run: bunx playwright install --with-deps chromium
 
-      - name: E2E tests
-        run: bun run test:e2e
+      - name: Frontend tests
+        run: bun run test:frontend
 
       - name: Rust check
         run: cargo check --workspace

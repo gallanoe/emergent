@@ -1,5 +1,5 @@
 import { chromium } from "@playwright/test";
-import { tauriMockScript } from "../e2e/tauri-mock";
+import { tauriMockScript } from "../tests/frontend/tauri-mock";
 import * as fs from "fs";
 import * as path from "path";
 

@@ -1,4 +1,4 @@
-// e2e/smoke.spec.ts
+// tests/frontend/smoke.spec.ts
 import { test, expect } from "@playwright/test";
 import { setupMocks } from "./helpers";
 

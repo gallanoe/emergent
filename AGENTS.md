@@ -19,7 +19,7 @@ At startup, the Tauri app connects to Docker, creates the `WorkspaceManager` (wh
 - **Containers:** Docker (via bollard crate), per-workspace isolation
 - **Protocol:** Agent Client Protocol (ACP) for agent communication
 - **MCP transport:** Streamable HTTP served by the embedded app
-- **Testing:** Vitest + Testing Library (unit/component), Playwright (E2E), `cargo test --workspace` (Rust)
+- **Testing:** Vitest + Testing Library (unit/component), Playwright (frontend), `cargo test --workspace` (Rust)
 - **Linting/Formatting:** oxlint (JS/TS), Clippy (Rust), Prettier + oxfmt (formatting)
 - **Package Manager:** Bun (use `bun` instead of `npm`)
 
@@ -96,7 +96,7 @@ crates/
     └── src/
         └── main.rs
 
-e2e/                          # Playwright E2E tests
+tests/frontend/               # Playwright frontend tests (mocked Tauri IPC)
 .github/workflows/            # CI (ci.yml) and release (release.yml)
 ```
 
@@ -146,7 +146,7 @@ bun run typecheck               # svelte-check + TypeScript
 # Tests
 bun run test                    # Vitest unit/component tests
 bun run test:rust               # Rust unit + integration tests (all workspace crates)
-bun run test:e2e                # Playwright E2E tests (starts bunx vite)
+bun run test:frontend           # Playwright frontend tests (starts bunx vite)
 ```
 
 Or run the combined pre-build check (lint + lint:rust + fmt:check + typecheck):
@@ -158,4 +158,17 @@ bun run prebuild
 ## Contributor Notes
 
 - The Cargo workspace sets `default-members = ["crates/*"]`, so prefer `cargo check --workspace`, `cargo test --workspace`, or the Bun wrappers over bare root `cargo` commands when you want coverage that includes `src-tauri`.
-- Playwright E2E uses the Vite web server (`bunx vite` on port `1420`) plus mocked Tauri IPC, not the full `tauri dev` desktop shell.
+- Playwright frontend tests use the Vite web server (`bunx vite` on port `1420`) plus mocked Tauri IPC, not the full `tauri dev` desktop shell.
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+When the user types `/graphify`, invoke the `skill` tool with `skill: "graphify"` before doing anything else.
+
+Rules:
+- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- Dirty graphify-out/ files are expected after hooks or incremental updates; dirty graph files are not a reason to skip graphify. Only skip graphify if the task is about stale or incorrect graph output, or the user explicitly says not to use it.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).

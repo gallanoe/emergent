@@ -16,7 +16,7 @@
     "typecheck": "svelte-check --tsconfig ./tsconfig.json",
     "test": "vitest run",
     "test:rust": "cargo test --workspace",
-    "test:e2e": "bunx playwright test",
+    "test:frontend": "bunx playwright test",
     "screenshot": "bun scripts/screenshot.ts",
     "prepare": "husky"
   },

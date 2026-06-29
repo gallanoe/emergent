@@ -1,5 +1,5 @@
 /**
- * Minimal Tauri API mock for Playwright E2E tests.
+ * Minimal Tauri API mock for Playwright frontend tests.
  * Stubs window.__TAURI_INTERNALS__ so the Svelte app
  * can boot in a plain Chromium browser.
  */
