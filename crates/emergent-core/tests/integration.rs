@@ -3,26 +3,41 @@ use emergent_core::mcp::http_server;
 use emergent_core::mcp::TokenRegistry;
 use emergent_core::task::TaskManager;
 use emergent_core::workspace;
+use emergent_protocol::Notification;
 use std::sync::Arc;
+use tokio::sync::broadcast;
 
-/// Spawn an MCP HTTP server backed by a fresh AgentManager.
-async fn spawn_test_server() -> (String, Arc<TokenRegistry>, Arc<AgentManager>) {
+/// Spawn an MCP HTTP server backed by a fresh AgentManager, also returning the
+/// broadcast sender so a test can `subscribe()` to thread notifications
+/// (message chunks, tool-call updates, prompt-complete).
+async fn spawn_test_server_with_events() -> (
+    String,
+    Arc<TokenRegistry>,
+    Arc<AgentManager>,
+    broadcast::Sender<Notification>,
+) {
     let registry = Arc::new(TokenRegistry::new());
     let workspace_state = workspace::new_shared_state();
-    let (event_tx, _) = tokio::sync::broadcast::channel(1024);
+    let (event_tx, _) = broadcast::channel(1024);
     let manager = Arc::new(AgentManager::new(
         workspace_state,
         event_tx.clone(),
         registry.clone(),
     ));
-    let task_manager = Arc::new(TaskManager::new(manager.clone(), event_tx));
+    let task_manager = Arc::new(TaskManager::new(manager.clone(), event_tx.clone()));
     let server = http_server::start(manager.clone(), registry.clone(), task_manager)
         .await
         .expect("failed to start HTTP server");
     manager.set_mcp_port(server.port).await;
 
     let base_url = format!("http://127.0.0.1:{}/mcp", server.port);
-    (base_url, registry, manager)
+    (base_url, registry, manager, event_tx)
+}
+
+/// Spawn an MCP HTTP server backed by a fresh AgentManager.
+async fn spawn_test_server() -> (String, Arc<TokenRegistry>, Arc<AgentManager>) {
+    let (url, registry, manager, _event_tx) = spawn_test_server_with_events().await;
+    (url, registry, manager)
 }
 
 fn mcp_init_body() -> String {
@@ -316,7 +331,7 @@ async fn test_no_auth_header_tool_call_returns_error() {
 #[tokio::test]
 async fn task_session_survives_restart_and_respawn() {
     use emergent_core::agent::thread_manager::{ThreadManager, ThreadMapping};
-    use emergent_protocol::{WorkspaceStatus, WorkspaceId};
+    use emergent_protocol::{WorkspaceId, WorkspaceStatus};
     use tempfile::TempDir;
 
     let tmp = TempDir::new().unwrap();
@@ -391,7 +406,7 @@ async fn task_session_survives_restart_and_respawn() {
 #[tokio::test]
 async fn delete_workspace_clears_dormant_in_memory() {
     use emergent_core::agent::thread_manager::ThreadMapping;
-    use emergent_protocol::{WorkspaceStatus, WorkspaceId};
+    use emergent_protocol::{WorkspaceId, WorkspaceStatus};
     use tempfile::TempDir;
 
     let tmp = TempDir::new().unwrap();
@@ -432,13 +447,11 @@ async fn delete_workspace_clears_dormant_in_memory() {
     // This is what commands::delete_workspace invokes first.
     manager.kill_threads_in_workspace(&ws_id).await.unwrap();
 
-    assert!(
-        manager
-            .thread_manager()
-            .dormant_snapshot_for_workspace(&ws_id)
-            .await
-            .is_empty()
-    );
+    assert!(manager
+        .thread_manager()
+        .dormant_snapshot_for_workspace(&ws_id)
+        .await
+        .is_empty());
 }
 
 // ---------------------------------------------------------------------------
@@ -452,7 +465,7 @@ async fn delete_workspace_clears_dormant_in_memory() {
 async fn turn_usage_recorder_updates_store_and_persists() {
     use emergent_core::agent::thread_manager::ThreadMapping;
     use emergent_core::agent::usage_store::PersistedWorkspaceState;
-    use emergent_protocol::{WorkspaceStatus, Notification, TurnUsagePayload, WorkspaceId};
+    use emergent_protocol::{Notification, TurnUsagePayload, WorkspaceId, WorkspaceStatus};
     use tempfile::TempDir;
 
     let tmp = TempDir::new().unwrap();
@@ -594,7 +607,7 @@ async fn v0_threads_json_loads_with_empty_usage() {
 #[tokio::test]
 async fn recorder_broadcast_channel_turn_and_cost_coverage() {
     use emergent_protocol::{
-        WorkspaceStatus, Notification, ThreadTokenUsagePayload, TurnUsagePayload, WorkspaceId,
+        Notification, ThreadTokenUsagePayload, TurnUsagePayload, WorkspaceId, WorkspaceStatus,
     };
     use tempfile::TempDir;
 
@@ -645,7 +658,11 @@ async fn recorder_broadcast_channel_turn_and_cost_coverage() {
     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
     let snap = manager.thread_manager().get_workspace_usage(&ws_id).await;
-    assert_eq!(snap.agents.len(), 1, "expected one agent entry after TurnUsage");
+    assert_eq!(
+        snap.agents.len(),
+        1,
+        "expected one agent entry after TurnUsage"
+    );
     assert_eq!(snap.agents[0].input_tokens, 500);
     assert_eq!(snap.agents[0].output_tokens, 100);
     assert_eq!(snap.agents[0].total_tokens, 600);
@@ -811,10 +828,7 @@ async fn user_message_payload_is_echo_roundtrips_through_notification() {
     let n2 = rx.try_recv().expect("non-echo notification sent");
     match n2 {
         Notification::UserMessage(p) => {
-            assert!(
-                !p.is_echo,
-                "spontaneous message must carry is_echo=false"
-            );
+            assert!(!p.is_echo, "spontaneous message must carry is_echo=false");
         }
         _ => panic!("expected UserMessage notification"),
     }
@@ -892,4 +906,193 @@ async fn shutdown_thread_demotes_thread_with_session() {
         .get("has-session")
         .expect("a thread with a session must demote to a resumable dormant stub");
     assert_eq!(stub.acp_session_id.as_deref(), Some("acp-live"));
+}
+
+// ===========================================================================
+// Live mock-agent integration — spawn the real `mock-agent` binary over ACP as
+// a local host process (no Docker), drive a turn, and assert the streamed
+// response. This is the first test that exercises the full agent lifecycle:
+// spawn -> ACP handshake -> prompt -> streamed message + tool call -> complete.
+// ===========================================================================
+
+/// Absolute path to the compiled `mock-agent` binary, derived from this test
+/// runner's own location: `target/<profile>/deps/<test>` -> `target/<profile>/mock-agent`.
+fn mock_agent_bin() -> std::path::PathBuf {
+    let mut path = std::env::current_exe().expect("current_exe");
+    path.pop(); // drop the test binary name -> .../deps
+    if path.file_name().is_some_and(|n| n == "deps") {
+        path.pop(); // -> target/<profile>
+    }
+    path.push(format!("mock-agent{}", std::env::consts::EXE_SUFFIX));
+    path
+}
+
+/// Resolve the `mock-agent` binary, building it if a bare `cargo test -p
+/// emergent-core` skipped it. `cargo test --workspace` (CI, `bun run test:rust`)
+/// compiles every workspace member up front, so this fast-paths to the artifact.
+fn ensure_mock_agent() -> std::path::PathBuf {
+    let bin = mock_agent_bin();
+    if !bin.exists() {
+        let status = std::process::Command::new(env!("CARGO"))
+            .args(["build", "-p", "mock-agent"])
+            .status()
+            .expect("run `cargo build -p mock-agent`");
+        assert!(status.success(), "`cargo build -p mock-agent` failed");
+    }
+    assert!(
+        bin.exists(),
+        "mock-agent binary not found at {} — run via `cargo test --workspace`",
+        bin.display()
+    );
+    bin
+}
+
+/// Block until the ACP handshake completes for `thread_id` (a `SessionReady`
+/// notification), or panic after `within`.
+async fn wait_for_session_ready(
+    rx: &mut broadcast::Receiver<Notification>,
+    thread_id: &str,
+    within: std::time::Duration,
+) {
+    tokio::time::timeout(within, async {
+        loop {
+            match rx.recv().await {
+                Ok(Notification::SessionReady(p)) if p.thread_id == thread_id => return,
+                Ok(_) => continue,
+                Err(broadcast::error::RecvError::Lagged(_)) => continue,
+                Err(broadcast::error::RecvError::Closed) => {
+                    panic!("event channel closed before SessionReady")
+                }
+            }
+        }
+    })
+    .await
+    .expect("timed out waiting for SessionReady");
+}
+
+/// Collect this thread's notifications up to and including `PromptComplete`, or
+/// panic after `within`. Other threads' events and `Lagged` gaps are skipped.
+async fn collect_turn(
+    rx: &mut broadcast::Receiver<Notification>,
+    thread_id: &str,
+    within: std::time::Duration,
+) -> Vec<Notification> {
+    tokio::time::timeout(within, async {
+        let mut out = Vec::new();
+        loop {
+            match rx.recv().await {
+                Ok(n) => {
+                    let keep = match &n {
+                        Notification::MessageChunk(p) => p.thread_id == thread_id,
+                        Notification::ToolCallUpdate(p) => p.thread_id == thread_id,
+                        Notification::StatusChange(p) => p.thread_id == thread_id,
+                        Notification::PromptComplete(p) => p.thread_id == thread_id,
+                        _ => false,
+                    };
+                    let done =
+                        matches!(&n, Notification::PromptComplete(p) if p.thread_id == thread_id);
+                    if keep {
+                        out.push(n);
+                    }
+                    if done {
+                        return out;
+                    }
+                }
+                Err(broadcast::error::RecvError::Lagged(_)) => continue,
+                Err(broadcast::error::RecvError::Closed) => return out,
+            }
+        }
+    })
+    .await
+    .expect("timed out waiting for PromptComplete")
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn mock_agent_use_tools_streams_tool_call_and_message() {
+    use emergent_protocol::{WorkspaceId, WorkspaceStatus};
+    use std::time::Duration;
+    use tempfile::TempDir;
+
+    let mock_bin = ensure_mock_agent();
+    let tmp = TempDir::new().unwrap();
+    let ws_id = WorkspaceId::from("it-ws-mock-agent");
+
+    let (_url, _registry, manager, event_tx) = spawn_test_server_with_events().await;
+    manager
+        .thread_manager()
+        .register_workspace_for_test(
+            ws_id.clone(),
+            tmp.path().to_path_buf(),
+            WorkspaceStatus::Ready,
+        )
+        .await;
+
+    // The agent's CLI launches the mock-agent binary. Single-quote the path so
+    // the shell-split in `parse_agent_command` keeps it as one argument even if
+    // the temp/target path contains spaces.
+    let cli = format!("'{}'", mock_bin.display());
+    let agent_id = manager
+        .create_agent(ws_id.clone(), "mock".into(), cli, Some("mock".into()))
+        .await
+        .expect("create_agent");
+
+    // Subscribe BEFORE spawning so the one-shot SessionReady event isn't missed
+    // (broadcast channels don't replay history to late subscribers).
+    let mut rx = event_tx.subscribe();
+    let thread_id = manager
+        .spawn_thread(&agent_id, None)
+        .await
+        .expect("spawn_thread");
+
+    wait_for_session_ready(&mut rx, &thread_id, Duration::from_secs(20)).await;
+
+    // "use tools" makes the mock-agent emit a Read-file tool call (pending ->
+    // completed) followed by a message, then end the turn.
+    let _reply = manager
+        .queue_prompt(&thread_id, "use tools".into())
+        .await
+        .expect("queue_prompt");
+
+    let notifs = collect_turn(&mut rx, &thread_id, Duration::from_secs(20)).await;
+
+    // The tool call streamed through, titled and resolved to completed.
+    let saw_title = notifs.iter().any(
+        |n| matches!(n, Notification::ToolCallUpdate(p) if p.title.as_deref() == Some("Read file")),
+    );
+    assert!(
+        saw_title,
+        "expected a 'Read file' tool call; got {notifs:#?}"
+    );
+
+    let saw_completed = notifs.iter().any(|n| {
+        matches!(n, Notification::ToolCallUpdate(p)
+            if p.tool_call_id == "tc-001" && p.status.as_deref() == Some("completed"))
+    });
+    assert!(
+        saw_completed,
+        "expected tool call tc-001 to complete; got {notifs:#?}"
+    );
+
+    // The assistant message streamed through.
+    let message: String = notifs
+        .iter()
+        .filter_map(|n| match n {
+            Notification::MessageChunk(p) if p.kind == "message" => Some(p.content.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        message.contains("I read the file successfully."),
+        "expected the success message; got {message:?}"
+    );
+
+    // And the turn completed.
+    assert!(
+        notifs
+            .iter()
+            .any(|n| matches!(n, Notification::PromptComplete(_))),
+        "expected a PromptComplete; got {notifs:#?}"
+    );
+
+    manager.kill_thread(&thread_id).await.expect("kill_thread");
 }
