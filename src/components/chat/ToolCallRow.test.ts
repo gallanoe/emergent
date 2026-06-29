@@ -16,27 +16,43 @@ function makeToolCall(overrides: Partial<DisplayToolCall> = {}): DisplayToolCall
 }
 
 describe("ToolCallRow", () => {
-  it("renders the verb label for the tool kind", () => {
+  it("renders the canonical tool name from the title", () => {
     const { getByTestId } = render(ToolCallRow, {
       props: { toolCall: makeToolCall() },
     });
-    expect(getByTestId("tool-verb").textContent?.trim()).toBe("Read");
+    expect(getByTestId("tool-name").textContent?.trim()).toBe("Read");
   });
 
-  it("applies em-shimmer-text to the verb while in_progress", () => {
+  it("surfaces a canonical name distinct from the coarse kind", () => {
+    // ACP reports Write under kind `edit`; the chip recovers "Write" from the
+    // title rather than collapsing it to the kind label "Edit".
+    const { getByTestId } = render(ToolCallRow, {
+      props: { toolCall: makeToolCall({ name: "Write file", kind: "edit" }) },
+    });
+    expect(getByTestId("tool-name").textContent?.trim()).toBe("Write");
+  });
+
+  it("renders emergent MCP tools in Title Case", () => {
+    const { getByTestId } = render(ToolCallRow, {
+      props: { toolCall: makeToolCall({ name: "list_agents", kind: "other" }) },
+    });
+    expect(getByTestId("tool-name").textContent?.trim()).toBe("List Agents");
+  });
+
+  it("applies em-shimmer-text to the name while in_progress", () => {
     const { getByTestId } = render(ToolCallRow, {
       props: { toolCall: makeToolCall({ status: "in_progress" }) },
     });
-    const verb = getByTestId("tool-verb");
-    expect(verb.className).toContain("em-shimmer-text");
+    const nameEl = getByTestId("tool-name");
+    expect(nameEl.className).toContain("em-shimmer-text");
   });
 
-  it("does not shimmer the verb when completed", () => {
+  it("does not shimmer the name when completed", () => {
     const { getByTestId } = render(ToolCallRow, {
       props: { toolCall: makeToolCall({ status: "completed" }) },
     });
-    const verb = getByTestId("tool-verb");
-    expect(verb.className).not.toContain("em-shimmer-text");
+    const nameEl = getByTestId("tool-name");
+    expect(nameEl.className).not.toContain("em-shimmer-text");
   });
 
   it("renders a verb icon svg at the start of the row", () => {

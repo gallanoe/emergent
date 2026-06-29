@@ -62,7 +62,7 @@ describe("ChatArea", () => {
     expect(screen.getByText("Fix the bug")).toBeTruthy();
   });
 
-  it("renders generic tool calls as flat ToolRow lines", () => {
+  it("renders generic ACP tool calls as canonical chips", () => {
     const thread = makeThread([
       msg("assistant", "Let me check", "1:00 PM"),
       msg("tool-group", "", "1:00 PM", {
@@ -79,11 +79,12 @@ describe("ChatArea", () => {
       }),
     ]);
     render(ChatArea, { props: { thread } });
-    expect(screen.getByText("read_file")).toBeTruthy();
-    expect(screen.getByText("(src/foo.ts)")).toBeTruthy();
+    // The canonical chip surfaces "Read" (from the kind) and the bare location.
+    expect(screen.getByText("Read")).toBeTruthy();
+    expect(screen.getByText("src/foo.ts")).toBeTruthy();
   });
 
-  it("renders multiple generic tool calls as separate ToolRows", () => {
+  it("renders multiple generic tool calls as separate chips", () => {
     const thread = makeThread([
       msg("assistant", "Checking...", "1:00 PM"),
       msg("tool-group", "", "1:00 PM", {
@@ -108,8 +109,8 @@ describe("ChatArea", () => {
       }),
     ]);
     render(ChatArea, { props: { thread } });
-    expect(screen.getByText("(src/foo.ts)")).toBeTruthy();
-    expect(screen.getByText("(src/bar.ts)")).toBeTruthy();
+    expect(screen.getByText("src/foo.ts")).toBeTruthy();
+    expect(screen.getByText("src/bar.ts")).toBeTruthy();
   });
 
   it("renders custom MCP card for list_agents (collapsed by default, expands on click)", async () => {
@@ -137,11 +138,11 @@ describe("ChatArea", () => {
     ]);
     render(ChatArea, { props: { thread } });
     // Row chrome (verb + target meta) is visible collapsed.
-    expect(screen.getByText("Agents")).toBeTruthy();
+    expect(screen.getByText("List Agents")).toBeTruthy();
     expect(screen.getByText("2 agents")).toBeTruthy();
     // Rich body is hidden until expanded.
     expect(screen.queryByText("Planner")).toBeNull();
-    const row = screen.getByText("Agents").closest('[role="button"]') as HTMLElement;
+    const row = screen.getByText("List Agents").closest('[role="button"]') as HTMLElement;
     await fireEvent.click(row);
     expect(screen.getByText("Planner")).toBeTruthy();
     expect(screen.getByText("Reviewer")).toBeTruthy();
@@ -181,10 +182,10 @@ describe("ChatArea", () => {
       }),
     ]);
     render(ChatArea, { props: { thread } });
-    expect(screen.getByText("Tasks")).toBeTruthy();
+    expect(screen.getByText("List Tasks")).toBeTruthy();
     expect(screen.getByText("1 task")).toBeTruthy();
     expect(screen.queryByText("Write migration")).toBeNull();
-    const row = screen.getByText("Tasks").closest('[role="button"]') as HTMLElement;
+    const row = screen.getByText("List Tasks").closest('[role="button"]') as HTMLElement;
     await fireEvent.click(row);
     expect(screen.getByText("Write migration")).toBeTruthy();
     // Working-state tasks render a ● dot (per em-tool-calls.jsx:376-383)
@@ -254,8 +255,8 @@ describe("ChatArea", () => {
       }),
     ]);
     render(ChatArea, { props: { thread } });
-    expect(screen.getByText("Task Completed")).toBeTruthy();
-    expect(screen.queryByText("Complete Task")).toBeNull();
+    expect(screen.getByText("Complete Task")).toBeTruthy();
+    expect(screen.queryByText("Task Completed")).toBeNull();
   });
 
   it("renders thinking block with 'Thought' label and collapsed body by default", () => {

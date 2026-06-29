@@ -70,6 +70,19 @@ export function getEmergentToolName(name: string): EmergentToolName | null {
   return null;
 }
 
+/**
+ * Canonical display label for an Emergent MCP tool. The design renders MCP tools
+ * with a uniform "Verb Noun" Title Case rhythm — `list_agents` → "List Agents",
+ * `create_task` → "Create Task" (em-tool-calls.jsx:5,637). Deriving it
+ * mechanically from the snake_case name keeps every tool on-convention.
+ */
+export function emergentToolDisplayName(name: EmergentToolName): string {
+  return name
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
 export function parseAgentsToolContent(toolCall: DisplayToolCall): EmergentAgentSummary[] {
   return parseJson<EmergentAgentSummary[]>(firstTextContent(toolCall)) ?? [];
 }

@@ -4,6 +4,7 @@
   import { slide } from "svelte/transition";
   import {
     getEmergentToolName,
+    emergentToolDisplayName,
     parseAgentsToolContent,
     parseCreateTaskToolInput,
     parseCreateTaskToolContent,
@@ -58,6 +59,9 @@
     }
   }
 
+  // Fallback label per ACP `kind` (the design's icon categories). Used only
+  // when the agent's title doesn't carry a canonical tool name. `fetch` reads
+  // as "WebFetch" to match the canonical ACP set (em-tool-calls.jsx:4,625).
   const kindVerb: Record<ToolKind, string> = {
     read: "Read",
     edit: "Edit",
@@ -66,27 +70,46 @@
     search: "Search",
     execute: "Bash",
     think: "Think",
-    fetch: "Fetch",
+    fetch: "WebFetch",
     other: "Tool",
   };
+
+  // Canonical ACP tool names the design surfaces distinctly (em-tool-calls.jsx:4).
+  // ACP `kind` is too coarse to tell Grep from Glob or Write from Edit, so when
+  // the agent's title leads with one of these we promote it to the displayed
+  // name; otherwise we fall back to the kind label above.
+  const ACP_CANONICAL = [
+    "Read",
+    "Write",
+    "Edit",
+    "Bash",
+    "Grep",
+    "Glob",
+    "WebFetch",
+  ];
+
+  function canonicalAcpName(title: string, kind: ToolKind): string {
+    // Match the leading word whether the title is spaced ("Read file.txt") or a
+    // snake_case tool id ("read_file") — both should surface as "Read".
+    const leading = title.trim().split(/[\s_]+/)[0] ?? "";
+    const match = ACP_CANONICAL.find(
+      (n) => n.toLowerCase() === leading.toLowerCase(),
+    );
+    return match ?? kindVerb[kind] ?? "Tool";
+  }
 
   function stripCodeFence(text: string): string {
     return text.replace(/^```\w*\n?/, "").replace(/\n?```\s*$/, "");
   }
 
   // ── Derived display values ─────────────────────────────────────
-  let verb = $derived(
-    isListAgentsTool
-      ? "Agents"
-      : isListTasksTool
-        ? "Tasks"
-        : isCreateTaskTool
-          ? "Create Task"
-          : isCompleteTaskTool
-            ? "Task Completed"
-            : isUpdateTaskTool
-              ? "Update Task"
-              : (kindVerb[toolCall.kind] ?? "Tool"),
+  // The chip's `name` slot: the real tool name. Emergent MCP tools get the
+  // uniform Title Case label; ACP tools get their canonical name, with `kind`
+  // reserved for icon selection only (ToolVerbIcon below).
+  let displayName = $derived(
+    emergentToolName
+      ? emergentToolDisplayName(emergentToolName)
+      : canonicalAcpName(toolCall.name ?? "", toolCall.kind),
   );
 
   let target = $derived.by(() => {
@@ -111,11 +134,17 @@
     if (isUpdateTaskTool) {
       return parseUpdateTaskToolInput(toolCall)?.description ?? "";
     }
-    return (
-      toolCall.locations[0] ??
-      toolCall.name.replace(/^(Read|Write|Edit|Bash|Search)\s*/i, "") ??
-      ""
-    );
+    // Prefer an explicit file location; otherwise fall back to the first
+    // string argument (a shell command, URL, …) so non-file tools like Bash
+    // and WebFetch still carry a target, matching the design's target slot.
+    const loc = toolCall.locations[0];
+    if (loc) return loc;
+    const ri = toolCall.rawInput as Record<string, unknown> | undefined;
+    const firstString = ri
+      ? Object.values(ri).find((v) => typeof v === "string")
+      : undefined;
+    if (typeof firstString === "string") return firstString;
+    return toolCall.name.replace(/^(Read|Write|Edit|Bash|Search)\s*/i, "");
   });
 
   // Allow `statusLabel` on any status — design shows `exit 0`, `cached`,
@@ -169,13 +198,13 @@
       class="text-fg-muted shrink-0"
     />
     <span
-      data-testid="tool-verb"
+      data-testid="tool-name"
       class="text-[12px] font-[family-name:var(--font-mono)] font-medium text-fg-default min-w-[44px] shrink-0 {toolCall.status ===
       'in_progress'
         ? 'em-shimmer-text'
         : ''}"
     >
-      {verb}
+      {displayName}
     </span>
     <span
       class="text-[11px] font-[family-name:var(--font-mono)] text-fg-muted truncate min-w-0"
@@ -199,12 +228,12 @@
         {meta}
       </span>
     {/if}
-    <ToolStatusGlyph status={toolCall.status} size={10} />
     {#if statusLabel}
       <span class="text-[10px] {statusLabelColor} whitespace-nowrap shrink-0"
         >{statusLabel}</span
       >
     {/if}
+    <ToolStatusGlyph status={toolCall.status} size={10} />
   </div>
 
   {#if expanded}

@@ -3,11 +3,10 @@
   import StreamingText from "./StreamingText.svelte";
   import ToolCallRow from "./ToolCallRow.svelte";
   import ThinkingBlock from "./ThinkingBlock.svelte";
-  import type { DisplayThread, DisplayToolCall } from "../../stores/types";
+  import type { DisplayThread } from "../../stores/types";
   import { renderMarkdown } from "../../lib/render-markdown";
   import { highlightCodeBlocks } from "../../lib/highlight";
-  import { getEmergentToolName } from "../../lib/emergent-tool-calls";
-  import { ToolRow, Mono } from "../../lib/primitives";
+  import { Mono } from "../../lib/primitives";
 
   interface Props {
     thread: DisplayThread | undefined;
@@ -16,26 +15,6 @@
   }
 
   let { thread, hasTaskBanner = false, onEditQueue }: Props = $props();
-
-  function isRichTool(tc: DisplayToolCall): boolean {
-    return getEmergentToolName(tc.name) !== null;
-  }
-
-  function toRowStatus(
-    s: DisplayToolCall["status"],
-  ): "running" | "completed" | "error" | "pending" {
-    return s === "in_progress" ? "running" : s === "failed" ? "error" : s;
-  }
-
-  function summarizeArgs(tc: DisplayToolCall): string | undefined {
-    const ri = tc.rawInput as Record<string, unknown> | undefined;
-    if (ri) {
-      const firstString = Object.values(ri).find((v) => typeof v === "string");
-      if (typeof firstString === "string") return firstString;
-    }
-    const loc = tc.locations?.[0];
-    return loc ? String(loc) : undefined;
-  }
 
   function onChatClick(e: MouseEvent) {
     const target = e.target as HTMLElement | null;
@@ -226,16 +205,7 @@
           {:else if message.role === "tool-group"}
             <div class="flex flex-col gap-0">
               {#each message.toolCalls ?? [] as tc (tc.id)}
-                {#if isRichTool(tc)}
-                  <ToolCallRow toolCall={tc} />
-                {:else}
-                  {@const rowArgs = summarizeArgs(tc)}
-                  <ToolRow
-                    name={tc.name}
-                    status={toRowStatus(tc.status)}
-                    {...rowArgs !== undefined ? { args: rowArgs } : {}}
-                  />
-                {/if}
+                <ToolCallRow toolCall={tc} />
               {/each}
             </div>
           {:else if message.role === "system"}
@@ -258,16 +228,7 @@
         {#if thread.activeToolCalls.length > 0}
           <div class="flex flex-col gap-0">
             {#each thread.activeToolCalls as tc (tc.id)}
-              {#if isRichTool(tc)}
-                <ToolCallRow toolCall={tc} />
-              {:else}
-                {@const activeArgs = summarizeArgs(tc)}
-                <ToolRow
-                  name={tc.name}
-                  status="running"
-                  {...activeArgs !== undefined ? { args: activeArgs } : {}}
-                />
-              {/if}
+              <ToolCallRow toolCall={tc} />
             {/each}
           </div>
         {/if}
