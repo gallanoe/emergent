@@ -55,6 +55,14 @@
   margin-bottom: 0;
 }
 
+/* Streamed messages wrap each rendered block in a `.md-block`, so the last real
+   element is one level deeper than `.markdown > :last-child` reaches. Zero its
+   trailing margin too. While streaming, a cursor is the final child instead, so
+   the last block keeps its margin as spacing before the cursor. */
+.markdown > .md-block:last-child > :last-child {
+  margin-bottom: 0;
+}
+
 .markdown a {
   color: var(--color-fg-heading);
   text-decoration: underline;

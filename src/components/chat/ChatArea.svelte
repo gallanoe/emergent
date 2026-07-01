@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Loader, Check, XCircle, Mail, Square } from "@lucide/svelte";
-  import StreamingText from "./StreamingText.svelte";
+  import StreamingMarkdown from "./StreamingMarkdown.svelte";
   import ToolCallRow from "./ToolCallRow.svelte";
   import ThinkingBlock from "./ThinkingBlock.svelte";
   import type { DisplayThread } from "../../stores/types";
@@ -79,6 +79,16 @@
     // Track the message list length so this effect re-runs on new messages.
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const _msgCount = thread?.messages.length;
+    // Also track the last message's content and the process status: streamed
+    // code blocks commit into new DOM nodes while the message count is
+    // unchanged, and the working→idle flush reveals the final block. Without
+    // these, freshly-committed <pre><code> would stay unhighlighted.
+    const _msgs = thread?.messages;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const _lastContent =
+      _msgs && _msgs.length > 0 ? _msgs[_msgs.length - 1]!.content : "";
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const _status = thread?.processStatus;
     void highlightCodeBlocks(scrollContainer);
   });
 </script>
@@ -167,15 +177,11 @@
           {#if message.role === "thinking"}
             <ThinkingBlock content={message.content} />
           {:else if message.role === "assistant"}
-            {#if thread.processStatus === "working" && i === thread.messages.length - 1}
-              <div class="markdown">
-                <StreamingText content={message.content} streaming={true} />
-              </div>
-            {:else}
-              <div class="markdown">
-                {@html renderMarkdown(message.content)}
-              </div>
-            {/if}
+            <StreamingMarkdown
+              content={message.content}
+              streaming={thread.processStatus === "working" &&
+                i === thread.messages.length - 1}
+            />
             {#if message.cancelled}
               <div
                 class="flex items-center gap-[6px] text-[11px] text-fg-disabled mt-[4px]"

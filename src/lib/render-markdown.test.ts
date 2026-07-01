@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { renderMarkdown } from "./render-markdown";
+import { renderMarkdown, segmentStream } from "./render-markdown";
 
 describe("renderMarkdown", () => {
   it("renders plain text as a paragraph", () => {
@@ -126,5 +126,84 @@ describe("renderMarkdown", () => {
       expect(html).toMatch(/<span class="katex">/);
       expect(html).toMatch(/style="[^"]*em/);
     });
+  });
+});
+
+describe("segmentStream", () => {
+  it("returns nothing for empty content", () => {
+    expect(segmentStream("", false)).toEqual({ committed: [], tail: "" });
+  });
+
+  it("holds a lone partial paragraph as the tail", () => {
+    expect(segmentStream("Hello wor", false)).toEqual({ committed: [], tail: "Hello wor" });
+  });
+
+  it("splits a heading from adjacent body text with no blank line between", () => {
+    const { committed, tail } = segmentStream("## Section\nBody being typ", false);
+    expect(committed).toEqual(["## Section\n"]);
+    expect(tail).toBe("Body being typ");
+  });
+
+  it("keeps the final block in the tail even after a trailing blank line", () => {
+    // A trailing blank is not a commit signal: later text could still merge the
+    // block backwards (loose lists, lazy continuation), so it stays in the tail
+    // until another block follows or the turn is flushed.
+    expect(segmentStream("Para one\n\n", false)).toEqual({ committed: [], tail: "Para one" });
+  });
+
+  it("commits earlier paragraphs only once a following block exists", () => {
+    const { committed, tail } = segmentStream("Para one\n\nPara t", false);
+    expect(committed).toEqual(["Para one"]);
+    expect(tail).toBe("Para t");
+  });
+
+  it("never commits a list item that a later blank line could extend (loose list)", () => {
+    // Regression: committing "- a" on the blank line would make it disappear
+    // when "- a\n\n- b" re-lexes into one loose list. The whole list must stay
+    // in the tail until a non-list block follows.
+    expect(segmentStream("- a\n\n", false)).toEqual({ committed: [], tail: "- a" });
+    expect(segmentStream("- a\n\n- b", false)).toEqual({ committed: [], tail: "- a\n\n- b" });
+    const indented = segmentStream("- a\n\n    continuation", false);
+    expect(indented.committed).toEqual([]);
+    expect(indented.tail).toContain("- a");
+  });
+
+  it("commits a completed list atomically once a following paragraph starts", () => {
+    const { committed, tail } = segmentStream("- a\n\n- b\n\nNext", false);
+    expect(committed).toEqual(["- a\n\n- b"]);
+    expect(tail).toBe("Next");
+  });
+
+  it("keeps an unclosed code fence atomic in the tail", () => {
+    const { committed, tail } = segmentStream("Intro\n\n```rust\nfn main() {", false);
+    expect(committed).toEqual(["Intro"]);
+    expect(tail).toBe("```rust\nfn main() {");
+  });
+
+  it("commits a closed code fence once the next block starts", () => {
+    const { committed, tail } = segmentStream("```rust\nfn x(){}\n```\n\nnex", false);
+    expect(committed).toEqual(["```rust\nfn x(){}\n```"]);
+    expect(tail).toBe("nex");
+  });
+
+  it("treats a growing list as a single atomic tail block", () => {
+    expect(segmentStream("- a\n- b\n- c", false)).toEqual({ committed: [], tail: "- a\n- b\n- c" });
+  });
+
+  it("keeps a $$ math block atomic and committed", () => {
+    const { committed, tail } = segmentStream("Before\n\n$$\nx^2\n$$\n\naf", false);
+    expect(committed[0]).toBe("Before");
+    expect(committed[1]).toContain("$$\nx^2\n$$");
+    expect(tail).toBe("af");
+  });
+
+  it("commits the trailing block when flushed at end of turn", () => {
+    const { committed, tail } = segmentStream("Para one\n\nlast line no newline", true);
+    expect(committed).toEqual(["Para one", "last line no newline"]);
+    expect(tail).toBe("");
+  });
+
+  it("does not throw on a footnote reference (bare lexer footnote guard)", () => {
+    expect(() => segmentStream("Text with a ref[^1] here", false)).not.toThrow();
   });
 });

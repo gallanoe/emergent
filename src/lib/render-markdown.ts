@@ -189,3 +189,55 @@ export function renderMarkdown(content: string): string {
   const raw = md.parse(content) as string;
   return String(DOMPurify.sanitize(raw, SANITIZE_CONFIG));
 }
+
+// ── Streaming block segmentation ────────────────────────────────────────────
+// A dedicated lexer used only to split accumulated streaming markdown into
+// top-level blocks. It reuses marked's block tokenizer (so headings split from
+// adjacent text without a blank line, and fenced code / lists / $$-math / \[…\]
+// stay atomic) plus the KaTeX block extensions for correct math boundaries.
+//
+// It deliberately OMITS marked-footnote: that extension's inline tokenizer
+// assumes the full `md.parse()` pipeline set up a footnotes container and
+// throws (`this.lexer.tokens[0].rawItems`) when reached via a bare `lexer()`
+// call on a footnote reference — plus it emits a spurious `footnotes` token on
+// its first invocation. We only need block boundaries here, never rendering, so
+// dropping it is both safe and correct. Footnotes still render normally through
+// `renderMarkdown` (which uses `md.parse`).
+const segmentLexer = new Marked({ gfm: true, breaks: false, async: false });
+segmentLexer.use(markedKatex({ throwOnError: false, output: "html" }));
+segmentLexer.use({ extensions: [katexBracketBlock] });
+
+export interface StreamSegments {
+  /** Complete, committable blocks — each safe to render with `renderMarkdown`. */
+  committed: string[];
+  /** The in-progress trailing block, still being generated (empty when none). */
+  tail: string;
+}
+
+/**
+ * Split accumulated streaming markdown into committed blocks plus an in-progress
+ * tail. A block is only "committed" once another block follows it — proof that
+ * it is terminated and cannot be re-merged by later-arriving text. The final
+ * block always stays in the still-growing tail until the turn is flushed.
+ *
+ * A trailing blank line is deliberately NOT treated as a commit signal: streamed
+ * continuations (loose-list items, lazy paragraph continuation, setext
+ * underlines) can merge the apparent-last block backwards on a later frame. If
+ * we committed on the blank line, that block could later be reclassified into
+ * the tail and flicker out of view — and committed blocks must stay immutable so
+ * the index-keyed render and per-block HTML cache remain correct.
+ *
+ * When `flush` is true (the turn has ended), everything is committed and the
+ * tail is empty.
+ */
+export function segmentStream(content: string, flush: boolean): StreamSegments {
+  if (!content) return { committed: [], tail: "" };
+
+  const tokens = segmentLexer.lexer(content);
+  const blocks = tokens.filter((t) => t.type !== "space").map((t) => t.raw);
+  if (blocks.length === 0) return { committed: [], tail: "" };
+
+  if (flush) return { committed: blocks, tail: "" };
+
+  return { committed: blocks.slice(0, -1), tail: blocks[blocks.length - 1]! };
+}
