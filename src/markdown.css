@@ -344,23 +344,23 @@
   background: var(--color-error);
 }
 
-/* math (KaTeX passthrough; no-op until plugin exists) */
-.markdown .math-inline {
-  font-family: "KaTeX_Main", "Source Serif 4", Georgia, serif;
-  font-style: italic;
-  color: var(--color-fg-heading);
-}
-.markdown .math-block {
+/* Math — rendered by KaTeX (see src/lib/render-markdown.ts). The KaTeX
+   stylesheet, imported in src/main.ts, paints the glyphs via the KaTeX_*
+   web fonts and lays out inline math (.katex) in the text baseline. Here we
+   only style the block-math container (.katex-display) as an elevated card,
+   per em-markdown.jsx:301-310. */
+.markdown .katex-display {
   margin: 0 0 14px;
   padding: 14px 16px;
   background: var(--color-bg-elevated);
   border: 1px solid var(--color-border);
   border-radius: 8px;
-  text-align: center;
-  font-family: "KaTeX_Main", "Source Serif 4", Georgia, serif;
-  font-style: italic;
-  font-size: 14px;
-  color: var(--color-fg-heading);
+  overflow-x: auto;
+}
+/* $$…$$ math renders inside a <p>; zero that paragraph's margin so the card
+   owns its own spacing instead of stacking a second bottom margin. */
+.markdown p:has(> .katex-display) {
+  margin: 0;
 }
 
 /* footnotes — emitted by marked-footnote. References land as

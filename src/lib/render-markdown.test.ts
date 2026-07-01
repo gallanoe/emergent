@@ -83,4 +83,48 @@ describe("renderMarkdown", () => {
     expect(typeof result).toBe("string");
     expect(result).not.toBeInstanceOf(Promise);
   });
+
+  describe("KaTeX math", () => {
+    it("renders inline $…$ math", () => {
+      const html = renderMarkdown("Energy $E = mc^2$ flows.");
+      expect(html).toContain('class="katex"');
+      expect(html).not.toContain('class="katex-display"');
+    });
+
+    it("renders block $$…$$ math in a display container", () => {
+      const html = renderMarkdown("$$\\sum_{i=1}^n w_i$$");
+      expect(html).toContain('class="katex-display"');
+    });
+
+    it("renders inline \\(…\\) math", () => {
+      const html = renderMarkdown("value \\(a + b\\) here");
+      expect(html).toContain('class="katex"');
+      expect(html).not.toContain('class="katex-display"');
+    });
+
+    it("renders block \\[…\\] math in a display container", () => {
+      const html = renderMarkdown("\\[a + b = c\\]");
+      expect(html).toContain('class="katex-display"');
+    });
+
+    it("leaves currency-like prose untouched", () => {
+      const html = renderMarkdown("It costs $5 and $10 total.");
+      expect(html).not.toContain("katex");
+      expect(html).toContain("$5 and $10");
+    });
+
+    it("does not treat $…$ inside a code fence as math", () => {
+      const html = renderMarkdown("```\nprice = $5 + $x\n```");
+      expect(html).not.toContain("katex");
+      expect(html).toContain("$5 + $x");
+    });
+
+    it("preserves KaTeX inline styles through sanitization", () => {
+      const html = renderMarkdown("$x^2$");
+      // KaTeX positions glyphs with inline styles (e.g. height/vertical-align);
+      // DOMPurify must keep them or the math collapses visually.
+      expect(html).toMatch(/<span class="katex">/);
+      expect(html).toMatch(/style="[^"]*em/);
+    });
+  });
 });

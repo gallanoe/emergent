@@ -1,5 +1,7 @@
-import { Marked, type Tokens } from "marked";
+import { Marked, type Tokens, type TokenizerAndRendererExtension } from "marked";
 import markedFootnote from "marked-footnote";
+import markedKatex from "marked-katex-extension";
+import katex from "katex";
 import DOMPurify from "dompurify";
 
 function escapeHtml(s: string): string {
@@ -50,6 +52,63 @@ function stripCheckboxTokens(tokens: unknown[]): unknown[] {
 const md = new Marked({ gfm: true, breaks: false, async: false });
 
 md.use(markedFootnote());
+
+// Math via KaTeX. `output: "html"` matches the design spec's KaTeX serif
+// look (em-markdown.jsx:296-310); the KaTeX stylesheet is imported in
+// src/main.ts and paints the glyphs. `nonStandard` stays off so prose like
+// "$5 and $10" is left untouched.
+md.use(markedKatex({ throwOnError: false, output: "html" }));
+
+// marked-katex-extension only handles $…$ / $$…$$. LLM output also commonly
+// uses \(…\) (inline) and \[…\] (block), so add a companion extension for
+// those. It's an extension (not string preprocessing) so it never fires
+// inside code spans/fences. Delimiters are stripped by the tokenizer regex.
+function renderKatex(tex: string, displayMode: boolean): string {
+  try {
+    return katex.renderToString(tex, { throwOnError: false, output: "html", displayMode });
+  } catch {
+    // throwOnError:false means KaTeX renders parse errors inline rather than
+    // throwing; this only trips on unexpected failures. Fall back to the
+    // original (escaped) source so nothing is silently dropped.
+    return escapeHtml(displayMode ? `\\[${tex}\\]` : `\\(${tex}\\)`);
+  }
+}
+
+const katexBracketBlock: TokenizerAndRendererExtension = {
+  name: "katexBracketBlock",
+  level: "block",
+  start(src) {
+    const i = src.indexOf("\\[");
+    return i < 0 ? undefined : i;
+  },
+  tokenizer(src) {
+    const m = /^\\\[([\s\S]+?)\\\]/.exec(src);
+    if (m) return { type: "katexBracketBlock", raw: m[0], text: m[1]!.trim() };
+    return undefined;
+  },
+  renderer(token) {
+    return renderKatex(token.text as string, true);
+  },
+};
+
+const katexParenInline: TokenizerAndRendererExtension = {
+  name: "katexParenInline",
+  level: "inline",
+  start(src) {
+    const i = src.indexOf("\\(");
+    return i < 0 ? undefined : i;
+  },
+  tokenizer(src) {
+    const m = /^\\\(([\s\S]+?)\\\)/.exec(src);
+    if (m) return { type: "katexParenInline", raw: m[0], text: m[1]!.trim() };
+    return undefined;
+  },
+  renderer(token) {
+    return renderKatex(token.text as string, false);
+  },
+};
+
+md.use({ extensions: [katexBracketBlock, katexParenInline] });
 
 md.use({
   renderer: {
