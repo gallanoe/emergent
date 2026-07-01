@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { tick, flushSync } from "svelte";
-import { render, screen, fireEvent } from "@testing-library/svelte";
+import { render, screen, fireEvent, waitFor } from "@testing-library/svelte";
 import ChatInput from "./ChatInput.svelte";
 import type { DisplayThread, QueueItem } from "../../stores/types";
 
@@ -107,16 +107,28 @@ describe("ChatInput", () => {
     expect(screen.queryByTitle("Send")).toBeNull();
   });
 
-  it("toggles config popover when agent chip is clicked", async () => {
+  it("renders one value-only config pill per dimension (no agent name/avatar)", () => {
     render(ChatInput, {
       props: {
         thread: makeThread({
           configOptions: [
             {
-              id: "opt1",
+              id: "model",
               name: "Model",
-              current_value: "a",
-              options: [{ value: "a", name: "A" }],
+              current_value: "sonnet",
+              options: [
+                { value: "sonnet", name: "Sonnet" },
+                { value: "opus", name: "Opus" },
+              ],
+            },
+            {
+              id: "reasoning",
+              name: "Reasoning",
+              current_value: "high",
+              options: [
+                { value: "high", name: "High" },
+                { value: "low", name: "Low" },
+              ],
             },
           ],
         }),
@@ -124,23 +136,26 @@ describe("ChatInput", () => {
         onSend: () => {},
       },
     });
-    const chip = screen.getByRole("button", { name: /Alpha/i });
-    await fireEvent.click(chip);
-    expect(screen.getByText("Model")).toBeTruthy();
-    await fireEvent.click(chip);
-    expect(screen.queryByText("Model")).toBeNull();
+    // Each pill's face shows its current value…
+    expect(screen.getByRole("button", { name: /Sonnet/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /High/i })).toBeTruthy();
+    // …and the agent name is no longer part of the pill.
+    expect(screen.queryByText("Alpha")).toBeNull();
   });
 
-  it("closes config popover on Escape", async () => {
+  it("toggles a config pill's popup when the pill is clicked", async () => {
     render(ChatInput, {
       props: {
         thread: makeThread({
           configOptions: [
             {
-              id: "opt1",
+              id: "model",
               name: "Model",
-              current_value: "a",
-              options: [{ value: "a", name: "A" }],
+              current_value: "sonnet",
+              options: [
+                { value: "sonnet", name: "Sonnet" },
+                { value: "opus", name: "Opus" },
+              ],
             },
           ],
         }),
@@ -148,10 +163,82 @@ describe("ChatInput", () => {
         onSend: () => {},
       },
     });
-    await fireEvent.click(screen.getByRole("button", { name: /Alpha/i }));
+    const pill = screen.getByRole("button", { name: /Sonnet/i });
+    await fireEvent.click(pill);
+    // Opening reveals the dimension header and the other option.
     expect(screen.getByText("Model")).toBeTruthy();
+    expect(screen.getByText("Opus")).toBeTruthy();
+    await fireEvent.click(pill);
+    // The popup plays a close transition, so wait for it to be removed.
+    await waitFor(() => expect(screen.queryByText("Opus")).toBeNull());
+  });
+
+  it("closes a config pill's popup on Escape", async () => {
+    render(ChatInput, {
+      props: {
+        thread: makeThread({
+          configOptions: [
+            {
+              id: "model",
+              name: "Model",
+              current_value: "sonnet",
+              options: [
+                { value: "sonnet", name: "Sonnet" },
+                { value: "opus", name: "Opus" },
+              ],
+            },
+          ],
+        }),
+        demoMode: false,
+        onSend: () => {},
+      },
+    });
+    await fireEvent.click(screen.getByRole("button", { name: /Sonnet/i }));
+    expect(screen.getByText("Opus")).toBeTruthy();
     await fireEvent.keyDown(document, { key: "Escape" });
-    expect(screen.queryByText("Model")).toBeNull();
+    await waitFor(() => expect(screen.queryByText("Opus")).toBeNull());
+  });
+
+  it("keeps only one config pill open at a time when another is activated", async () => {
+    render(ChatInput, {
+      props: {
+        thread: makeThread({
+          configOptions: [
+            {
+              id: "model",
+              name: "Model",
+              current_value: "sonnet",
+              options: [
+                { value: "sonnet", name: "Sonnet" },
+                { value: "opus", name: "Opus" },
+              ],
+            },
+            {
+              id: "reasoning",
+              name: "Reasoning",
+              current_value: "high",
+              options: [
+                { value: "high", name: "High" },
+                { value: "low", name: "Low" },
+              ],
+            },
+          ],
+        }),
+        demoMode: false,
+        onSend: () => {},
+      },
+    });
+    // Open the Model pill.
+    await fireEvent.click(screen.getByRole("button", { name: /Sonnet/i }));
+    expect(screen.getByText("Opus")).toBeTruthy();
+
+    // Activate the Reasoning pill. fireEvent.click dispatches only a click (no
+    // preceding mousedown), matching keyboard (Enter/Space) activation — the
+    // case the old per-pill mousedown listener missed. Shared open state must
+    // still close the Model popup.
+    await fireEvent.click(screen.getByRole("button", { name: /High/i }));
+    expect(screen.getByText("Low")).toBeTruthy();
+    await waitFor(() => expect(screen.queryByText("Opus")).toBeNull());
   });
 
   it("shows context usage ring when tokenUsage is set", async () => {

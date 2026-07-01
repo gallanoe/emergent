@@ -1,15 +1,7 @@
 <script lang="ts">
-  import {
-    Plus,
-    Mic,
-    ArrowUp,
-    Square,
-    ChevronDown,
-    Loader,
-  } from "@lucide/svelte";
-  import ConfigPopover from "./ConfigPopover.svelte";
+  import { Plus, Mic, ArrowUp, Square, Loader } from "@lucide/svelte";
+  import ConfigPill from "./ConfigPill.svelte";
   import QueuedMessages from "./QueuedMessages.svelte";
-  import { AgentAvatar } from "../../lib/primitives";
   import type { DisplayThread, QueueItem } from "../../stores/types";
 
   interface Props {
@@ -50,7 +42,9 @@
 
   let message = $state("");
   let textareaEl: HTMLTextAreaElement | undefined = $state();
-  let configOpen = $state(false);
+  // Which config pill's popup is open, if any. Owned here (not per-pill) so that
+  // opening one pill — by mouse or keyboard — closes the others.
+  let openConfigId = $state<string | null>(null);
 
   const isWorking = $derived(
     thread?.processStatus === "working" ||
@@ -75,14 +69,12 @@
     return `Message ${thread.name}…`;
   });
 
-  const configSummary = $derived.by(() => {
-    const opts = thread?.configOptions ?? [];
-    if (opts.length === 0) return thread?.cli ?? "";
-    return opts
-      .filter((o) => o.current_value)
-      .map((o) => o.current_value)
-      .slice(0, 3)
-      .join(" · ");
+  // Reset the open pill when switching threads: config ids (e.g. "model") are
+  // shared across threads, so a stale openConfigId would otherwise render a
+  // pill pre-opened on the newly-selected thread.
+  $effect(() => {
+    void thread?.id;
+    openConfigId = null;
   });
 
   // ── Push-to-composer channel ───────────────────────────────────────────────
@@ -121,15 +113,6 @@
   function fmtK(n: number): string {
     return n >= 1000 ? `${Math.round(n / 1000)}k` : String(n);
   }
-
-  $effect(() => {
-    if (!configOpen) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") configOpen = false;
-    }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  });
 </script>
 
 <!--
@@ -195,33 +178,14 @@
         </button>
 
         {#if thread}
-          <div class="relative">
-            <button
-              type="button"
-              class="inline-flex h-[28px] items-center gap-[6px] rounded-full bg-bg-hover px-[10px] text-[11.5px] font-medium text-fg-default"
-              onclick={() => (configOpen = !configOpen)}
-            >
-              <AgentAvatar
-                provider={thread.provider}
-                cli={thread.cli}
-                name={thread.name}
-                size={13}
-              />
-              <span>{thread.name}</span>
-              {#if configSummary}
-                <span class="px-[2px] text-fg-disabled">@</span>
-                <span class="text-fg-muted">{configSummary}</span>
-              {/if}
-              <ChevronDown size={10} />
-            </button>
-            {#if configOpen && thread}
-              <ConfigPopover
-                configs={thread.configOptions}
-                onSetConfig={(id, v) => onSetConfig?.(id, v)}
-                onClose={() => (configOpen = false)}
-              />
-            {/if}
-          </div>
+          {#each thread.configOptions as config (config.id)}
+            <ConfigPill
+              {config}
+              open={openConfigId === config.id}
+              onOpenChange={(next) => (openConfigId = next ? config.id : null)}
+              onSetConfig={(id, v) => onSetConfig?.(id, v)}
+            />
+          {/each}
         {/if}
 
         <div class="min-w-0 flex-1"></div>
