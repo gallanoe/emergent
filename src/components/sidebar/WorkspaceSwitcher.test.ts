@@ -1,19 +1,17 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/svelte";
 import WorkspaceSwitcher from "./WorkspaceSwitcher.svelte";
-import type { WorkspaceStatus, DisplayWorkspace } from "../../stores/types";
+import type { DisplayWorkspace } from "../../stores/types";
 
 function makeWorkspace(
   id: string,
   name: string,
-  status: WorkspaceStatus = { state: "ready" },
   overrides?: Partial<DisplayWorkspace>,
 ): DisplayWorkspace {
   return {
     id,
     name,
     collapsed: false,
-    status,
     agentDefinitions: [],
     ...overrides,
   };
@@ -21,10 +19,7 @@ function makeWorkspace(
 
 describe("WorkspaceSwitcher", () => {
   it("renders the selected workspace name and glyph", () => {
-    const ws = [
-      makeWorkspace("a", "Alpha", { state: "ready" }),
-      makeWorkspace("b", "Bravo", { state: "ready" }),
-    ];
+    const ws = [makeWorkspace("a", "Alpha"), makeWorkspace("b", "Bravo")];
     render(WorkspaceSwitcher, {
       props: {
         workspaces: ws,
@@ -41,10 +36,7 @@ describe("WorkspaceSwitcher", () => {
   it("clicking the name zone calls onOpenOverview (does not open popover)", async () => {
     const onOpenOverview = vi.fn();
     const onSelect = vi.fn();
-    const ws = [
-      makeWorkspace("a", "Alpha", { state: "ready" }),
-      makeWorkspace("b", "Bravo", { state: "ready" }),
-    ];
+    const ws = [makeWorkspace("a", "Alpha"), makeWorkspace("b", "Bravo")];
     render(WorkspaceSwitcher, {
       props: {
         workspaces: ws,
@@ -65,10 +57,7 @@ describe("WorkspaceSwitcher", () => {
   it("clicking the caret opens the popover", async () => {
     const onSelect = vi.fn();
     const onOpenOverview = vi.fn();
-    const ws = [
-      makeWorkspace("a", "Alpha", { state: "ready" }),
-      makeWorkspace("b", "Bravo", { state: "ready" }),
-    ];
+    const ws = [makeWorkspace("a", "Alpha"), makeWorkspace("b", "Bravo")];
     render(WorkspaceSwitcher, {
       props: {
         workspaces: ws,
@@ -90,10 +79,7 @@ describe("WorkspaceSwitcher", () => {
 
   it("lists all workspaces in the popover and calls onSelect for a row click", async () => {
     const onSelect = vi.fn();
-    const ws = [
-      makeWorkspace("a", "Alpha", { state: "ready" }),
-      makeWorkspace("b", "Bravo", { state: "error", message: "boom" }),
-    ];
+    const ws = [makeWorkspace("a", "Alpha"), makeWorkspace("b", "Bravo")];
     render(WorkspaceSwitcher, {
       props: {
         workspaces: ws,
@@ -105,15 +91,14 @@ describe("WorkspaceSwitcher", () => {
       },
     });
     await fireEvent.click(screen.getByTitle("Switch workspace"));
-    expect(screen.getByText("Ready")).toBeTruthy();
-    expect(screen.getByText("Error")).toBeTruthy();
+    expect(screen.getByText("Bravo")).toBeTruthy();
     await fireEvent.click(screen.getByText("Bravo"));
     expect(onSelect).toHaveBeenCalledWith("b");
   });
 
   it("calls onCreateWorkspace when 'New workspace' is clicked", async () => {
     const onCreateWorkspace = vi.fn();
-    const ws = [makeWorkspace("a", "Alpha", { state: "ready" })];
+    const ws = [makeWorkspace("a", "Alpha")];
     render(WorkspaceSwitcher, {
       props: {
         workspaces: ws,
@@ -131,7 +116,7 @@ describe("WorkspaceSwitcher", () => {
 
   it("calls onOpenWorkspaceSettings when the workspace settings row is clicked", async () => {
     const onOpenWorkspaceSettings = vi.fn();
-    const ws = [makeWorkspace("a", "Alpha", { state: "ready" })];
+    const ws = [makeWorkspace("a", "Alpha")];
     render(WorkspaceSwitcher, {
       props: {
         workspaces: ws,

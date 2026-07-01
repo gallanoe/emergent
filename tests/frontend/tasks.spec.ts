@@ -19,17 +19,3 @@ test("task filters and navigating a session-backed task opens chat", async ({ pa
 
   await expect(page.locator("textarea")).toBeVisible();
 });
-
-test("new task is disabled when workspace container is stopped", async ({ page }) => {
-  await setupMocks(page);
-  await page.goto("/");
-
-  await page.getByTitle("Switch workspace").click();
-  await page.getByRole("button", { name: "api-migration" }).click();
-  await page
-    .locator("aside")
-    .getByRole("button", { name: /^Tasks/ })
-    .click();
-
-  await expect(page.getByRole("button", { name: "New task" })).toBeDisabled();
-});

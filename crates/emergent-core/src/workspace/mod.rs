@@ -4,36 +4,32 @@ pub mod terminal;
 
 pub use state::{
     new_shared_state, SharedWorkspaceState, Workspace, WorkspaceId, WorkspaceMetadata,
-    WorkspaceState, WorkspaceStatus,
+    WorkspaceState,
 };
 
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use emergent_protocol::{Notification, WorkspaceEntry, WorkspaceInfo, WorkspaceStatusChangePayload};
-use tokio::sync::broadcast;
+use emergent_protocol::{WorkspaceEntry, WorkspaceInfo};
 
 pub struct WorkspaceManager {
     state: SharedWorkspaceState,
-    event_tx: broadcast::Sender<Notification>,
     workspaces_dir: PathBuf,
     terminal_sessions: terminal::TerminalSessions,
     /// Terminal output is delivered through this sink (straight to the Tauri
-    /// layer) instead of the shared `event_tx` broadcast, so a flooding terminal
-    /// cannot evict unrelated agent notifications.
+    /// layer) rather than the shared notification broadcast, so a flooding
+    /// terminal cannot evict unrelated agent notifications.
     terminal_sink: Arc<dyn terminal::TerminalEventSink>,
 }
 
 impl WorkspaceManager {
     pub async fn new(
         state: SharedWorkspaceState,
-        event_tx: broadcast::Sender<Notification>,
         terminal_sink: Arc<dyn terminal::TerminalEventSink>,
     ) -> Self {
         Self {
             state,
-            event_tx,
             workspaces_dir: crate::workspace::paths::emergent_root(),
             terminal_sessions: terminal::new_terminal_sessions(),
             terminal_sink,
@@ -43,15 +39,6 @@ impl WorkspaceManager {
     // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------
-
-    fn emit_status(&self, workspace_id: &WorkspaceId, status: WorkspaceStatus) {
-        let _ = self.event_tx.send(Notification::WorkspaceStatusChange(
-            WorkspaceStatusChangePayload {
-                workspace_id: workspace_id.clone(),
-                status,
-            },
-        ));
-    }
 
     fn generate_id() -> String {
         use std::fmt::Write;
@@ -126,11 +113,9 @@ impl WorkspaceManager {
 
             let workspace_id = WorkspaceId(metadata.id.clone());
 
-            // Workspaces are ready as soon as their directory exists.
             let workspace = Workspace {
                 name: metadata.name,
                 path: entry_path,
-                status: WorkspaceStatus::Ready,
             };
 
             self.state
@@ -178,11 +163,9 @@ impl WorkspaceManager {
                 Workspace {
                     name,
                     path: workspace_path,
-                    status: WorkspaceStatus::Ready,
                 },
             );
         }
-        self.emit_status(&workspace_id, WorkspaceStatus::Ready);
 
         Ok(workspace_id)
     }
@@ -216,7 +199,6 @@ impl WorkspaceManager {
             .map(|(id, ws)| WorkspaceEntry {
                 id: id.clone(),
                 name: ws.name.clone(),
-                status: ws.status.clone(),
             })
             .collect()
     }
@@ -232,7 +214,6 @@ impl WorkspaceManager {
             id: id.clone(),
             name: ws.name.clone(),
             path: ws.path.to_string_lossy().into_owned(),
-            status: ws.status.clone(),
         })
     }
 

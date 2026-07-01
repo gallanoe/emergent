@@ -150,34 +150,16 @@ impl From<&str> for WorkspaceId {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(tag = "state", rename_all = "snake_case")]
-pub enum WorkspaceStatus {
-    Ready,
-    Error { message: String },
-}
-
-impl std::fmt::Display for WorkspaceStatus {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            WorkspaceStatus::Ready => write!(f, "ready"),
-            WorkspaceStatus::Error { message } => write!(f, "error: {}", message),
-        }
-    }
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WorkspaceEntry {
     pub id: WorkspaceId,
     pub name: String,
-    pub status: WorkspaceStatus,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WorkspaceSummary {
     pub id: WorkspaceId,
     pub name: String,
-    pub status: WorkspaceStatus,
     pub agent_count: usize,
 }
 
@@ -186,13 +168,6 @@ pub struct WorkspaceInfo {
     pub id: WorkspaceId,
     pub name: String,
     pub path: String,
-    pub status: WorkspaceStatus,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct WorkspaceStatusChangePayload {
-    pub workspace_id: WorkspaceId,
-    pub status: WorkspaceStatus,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -414,8 +389,6 @@ pub enum Notification {
     SystemMessage(SystemMessagePayload),
     #[serde(rename = "swarm:topology-changed")]
     TopologyChanged(TopologyChangedPayload),
-    #[serde(rename = "workspace:status-change")]
-    WorkspaceStatusChange(WorkspaceStatusChangePayload),
     #[serde(rename = "terminal:output")]
     TerminalOutput(TerminalOutputPayload),
     #[serde(rename = "terminal:exited")]
@@ -451,7 +424,6 @@ impl Notification {
             Notification::NudgeDelivered(_) => "thread:nudge-delivered",
             Notification::SystemMessage(_) => "thread:system-message",
             Notification::TopologyChanged(_) => "swarm:topology-changed",
-            Notification::WorkspaceStatusChange(_) => "workspace:status-change",
             Notification::TerminalOutput(_) => "terminal:output",
             Notification::TerminalExited(_) => "terminal:exited",
             Notification::AgentCreated(_) => "agent:definition-created",
@@ -477,7 +449,6 @@ impl Notification {
             Notification::NudgeDelivered(p) => Some(&p.thread_id),
             Notification::SystemMessage(p) => Some(&p.thread_id),
             Notification::TopologyChanged(_) => None, // not thread-specific
-            Notification::WorkspaceStatusChange(_) => None,
             Notification::TerminalOutput(_) => None,
             Notification::TerminalExited(_) => None,
             Notification::AgentCreated(_) => None,
@@ -596,19 +567,6 @@ mod tests {
             Notification::TerminalExited(p) => assert_eq!(p.session_id, "sess-456"),
             _ => panic!("Wrong variant"),
         }
-    }
-
-    #[test]
-    fn workspace_status_change_notification_roundtrips() {
-        let n = Notification::WorkspaceStatusChange(WorkspaceStatusChangePayload {
-            workspace_id: WorkspaceId::from("ws-abc"),
-            status: WorkspaceStatus::Ready,
-        });
-        let json = serde_json::to_string(&n).unwrap();
-        assert!(json.contains("workspace:status-change"));
-        let restored: Notification = serde_json::from_str(&json).unwrap();
-        assert_eq!(restored.event_name(), "workspace:status-change");
-        assert!(restored.thread_id().is_none());
     }
 
     #[test]

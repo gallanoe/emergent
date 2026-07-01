@@ -212,12 +212,9 @@ export type ActiveView =
   | "terminal"
   | "tasks";
 
-export type WorkspaceStatus = { state: "ready" } | { state: "error"; message: string };
-
 export interface WorkspaceSummary {
   id: string;
   name: string;
-  status: WorkspaceStatus;
   agent_count: number;
 }
 
@@ -225,19 +222,12 @@ export interface WorkspaceInfo {
   id: string;
   name: string;
   path: string;
-  status: WorkspaceStatus;
-}
-
-export interface WorkspaceStatusChangePayload {
-  workspace_id: string;
-  status: WorkspaceStatus;
 }
 
 export interface DisplayWorkspace {
   id: string;
   name: string;
   collapsed: boolean;
-  status: WorkspaceStatus;
   agentDefinitions: DisplayAgentDefinition[];
 }
 

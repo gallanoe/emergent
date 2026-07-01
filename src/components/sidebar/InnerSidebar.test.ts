@@ -20,7 +20,6 @@ function makeSwarm(overrides?: Partial<DisplayWorkspace>): DisplayWorkspace {
     id: "swarm-1",
     name: "Research Swarm",
     collapsed: false,
-    status: { state: "ready" },
     agentDefinitions: [
       makeAgentDef(),
       makeAgentDef({ id: "agent-2", name: "Gemini", provider: "gemini" }),

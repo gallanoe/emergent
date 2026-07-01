@@ -1055,7 +1055,6 @@ impl ThreadManager {
         &self,
         workspace_id: WorkspaceId,
         path: std::path::PathBuf,
-        status: emergent_protocol::WorkspaceStatus,
     ) {
         use crate::workspace::Workspace;
         let mut state = self.workspace_state.write().await;
@@ -1064,7 +1063,6 @@ impl ThreadManager {
             Workspace {
                 name: "test-ws".into(),
                 path,
-                status,
             },
         );
     }

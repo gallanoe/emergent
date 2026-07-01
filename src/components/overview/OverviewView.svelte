@@ -85,10 +85,6 @@
     ),
   );
 
-  const heroMeta = $derived(
-    workspace.status.state === "error" ? workspace.status.message : "ready",
-  );
-
   function fmtK(n: number): string {
     if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
     if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
@@ -135,9 +131,6 @@
             </h1>
             <span class="text-[13px] text-fg-muted">overview</span>
           </div>
-          <Mono size={11} color="var(--color-fg-disabled)" class="mt-1 block"
-            >{heroMeta}</Mono
-          >
         </div>
         <!-- TODO(real-metrics): wire time-range filter -->
         <Button variant="ghost" size="xs" type="button">

@@ -7,7 +7,6 @@ import { normalizeThreadSummaryStatus } from "./types";
 import type {
   ActiveView,
   AgentDefinition,
-  WorkspaceStatus,
   ConfigOption,
   DisplayAgentDefinition,
   DisplayTask,
@@ -19,7 +18,6 @@ import type {
   ThreadSummary,
   TopologyChangedPayload,
   WorkspaceSummary,
-  WorkspaceStatusChangePayload,
 } from "./types";
 
 // Import mock data for demo mode
@@ -41,7 +39,6 @@ interface Workspace {
   id: string;
   name: string;
   collapsed: boolean;
-  status: WorkspaceStatus;
   agentDefinitionIds: string[];
 }
 
@@ -79,7 +76,6 @@ function createAppState() {
           id: ws.id,
           name: ws.name,
           collapsed: false,
-          status: ws.status,
           agentDefinitionIds: [],
         });
       }
@@ -217,13 +213,6 @@ function createAppState() {
     if (listenersReady) return;
 
     listenerCleanup.push(
-      await listen<WorkspaceStatusChangePayload>("workspace:status-change", (e) => {
-        const ws = workspaces.find((w) => w.id === e.payload.workspace_id);
-        if (ws) ws.status = e.payload.status;
-      }),
-    );
-
-    listenerCleanup.push(
       await listen<TopologyChangedPayload>("swarm:topology-changed", (e) => {
         refreshConnections(e.payload.thread_id_a);
         refreshConnections(e.payload.thread_id_b);
@@ -269,7 +258,6 @@ function createAppState() {
       id,
       name,
       collapsed: false,
-      status: { state: "ready" },
       agentDefinitionIds: [],
     });
     selectedWorkspaceId = id;
@@ -317,7 +305,6 @@ function createAppState() {
         id: w.id,
         name: w.name,
         collapsed: w.collapsed,
-        status: w.status,
         agentDefinitions: w.agentDefinitions.map((ad) => ({
           id: ad.id,
           name: ad.name,
@@ -332,7 +319,6 @@ function createAppState() {
       id: w.id,
       name: w.name,
       collapsed: w.collapsed,
-      status: w.status,
       agentDefinitions: (w.agentDefinitionIds ?? [])
         .map((defId): DisplayAgentDefinition | null => {
           const def = agentDefinitions[defId];

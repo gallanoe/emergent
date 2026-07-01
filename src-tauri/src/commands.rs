@@ -270,7 +270,6 @@ pub async fn list_workspaces(
             WorkspaceSummary {
                 id: entry.id,
                 name: entry.name,
-                status: entry.status,
                 agent_count,
             }
         })

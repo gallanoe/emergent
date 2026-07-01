@@ -331,7 +331,7 @@ async fn test_no_auth_header_tool_call_returns_error() {
 #[tokio::test]
 async fn task_session_survives_restart_and_respawn() {
     use emergent_core::agent::thread_manager::{ThreadManager, ThreadMapping};
-    use emergent_protocol::{WorkspaceId, WorkspaceStatus};
+    use emergent_protocol::WorkspaceId;
     use tempfile::TempDir;
 
     let tmp = TempDir::new().unwrap();
@@ -343,11 +343,7 @@ async fn task_session_survives_restart_and_respawn() {
         let (_, _tr, manager) = spawn_test_server().await;
         manager
             .thread_manager()
-            .register_workspace_for_test(
-                ws_id.clone(),
-                tmp.path().to_path_buf(),
-                WorkspaceStatus::Ready,
-            )
+            .register_workspace_for_test(ws_id.clone(), tmp.path().to_path_buf())
             .await;
 
         manager
@@ -376,11 +372,7 @@ async fn task_session_survives_restart_and_respawn() {
     let (_, _tr, manager2) = spawn_test_server().await;
     manager2
         .thread_manager()
-        .register_workspace_for_test(
-            ws_id.clone(),
-            tmp.path().to_path_buf(),
-            WorkspaceStatus::Ready,
-        )
+        .register_workspace_for_test(ws_id.clone(), tmp.path().to_path_buf())
         .await;
 
     let mappings = ThreadManager::load_from_dir(tmp.path()).await.unwrap();
@@ -406,7 +398,7 @@ async fn task_session_survives_restart_and_respawn() {
 #[tokio::test]
 async fn delete_workspace_clears_dormant_in_memory() {
     use emergent_core::agent::thread_manager::ThreadMapping;
-    use emergent_protocol::{WorkspaceId, WorkspaceStatus};
+    use emergent_protocol::WorkspaceId;
     use tempfile::TempDir;
 
     let tmp = TempDir::new().unwrap();
@@ -415,11 +407,7 @@ async fn delete_workspace_clears_dormant_in_memory() {
     let (_, _tr, manager) = spawn_test_server().await;
     manager
         .thread_manager()
-        .register_workspace_for_test(
-            ws_id.clone(),
-            tmp.path().to_path_buf(),
-            WorkspaceStatus::Ready,
-        )
+        .register_workspace_for_test(ws_id.clone(), tmp.path().to_path_buf())
         .await;
 
     manager
@@ -465,7 +453,7 @@ async fn delete_workspace_clears_dormant_in_memory() {
 async fn turn_usage_recorder_updates_store_and_persists() {
     use emergent_core::agent::thread_manager::ThreadMapping;
     use emergent_core::agent::usage_store::PersistedWorkspaceState;
-    use emergent_protocol::{Notification, TurnUsagePayload, WorkspaceId, WorkspaceStatus};
+    use emergent_protocol::{Notification, TurnUsagePayload, WorkspaceId};
     use tempfile::TempDir;
 
     let tmp = TempDir::new().unwrap();
@@ -474,11 +462,7 @@ async fn turn_usage_recorder_updates_store_and_persists() {
     let (_, _tr, manager) = spawn_test_server().await;
     manager
         .thread_manager()
-        .register_workspace_for_test(
-            ws_id.clone(),
-            tmp.path().to_path_buf(),
-            WorkspaceStatus::Ready,
-        )
+        .register_workspace_for_test(ws_id.clone(), tmp.path().to_path_buf())
         .await;
 
     // Hydrate a dormant thread so persist_threads_for_workspace has something to write.
@@ -564,11 +548,7 @@ async fn turn_usage_recorder_updates_store_and_persists() {
     let (_, _tr2, manager2) = spawn_test_server().await;
     manager2
         .thread_manager()
-        .register_workspace_for_test(
-            ws_id.clone(),
-            tmp.path().to_path_buf(),
-            WorkspaceStatus::Ready,
-        )
+        .register_workspace_for_test(ws_id.clone(), tmp.path().to_path_buf())
         .await;
     manager2
         .thread_manager()
@@ -606,9 +586,7 @@ async fn v0_threads_json_loads_with_empty_usage() {
 
 #[tokio::test]
 async fn recorder_broadcast_channel_turn_and_cost_coverage() {
-    use emergent_protocol::{
-        Notification, ThreadTokenUsagePayload, TurnUsagePayload, WorkspaceId, WorkspaceStatus,
-    };
+    use emergent_protocol::{Notification, ThreadTokenUsagePayload, TurnUsagePayload, WorkspaceId};
     use tempfile::TempDir;
 
     let tmp = TempDir::new().unwrap();
@@ -617,11 +595,7 @@ async fn recorder_broadcast_channel_turn_and_cost_coverage() {
     let (_, _tr, manager) = spawn_test_server().await;
     manager
         .thread_manager()
-        .register_workspace_for_test(
-            ws_id.clone(),
-            tmp.path().to_path_buf(),
-            WorkspaceStatus::Ready,
-        )
+        .register_workspace_for_test(ws_id.clone(), tmp.path().to_path_buf())
         .await;
 
     // Register a synthetic live thread so the recorder can resolve acp_session_id.
@@ -1009,7 +983,7 @@ async fn collect_turn(
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn mock_agent_use_tools_streams_tool_call_and_message() {
-    use emergent_protocol::{WorkspaceId, WorkspaceStatus};
+    use emergent_protocol::WorkspaceId;
     use std::time::Duration;
     use tempfile::TempDir;
 
@@ -1020,11 +994,7 @@ async fn mock_agent_use_tools_streams_tool_call_and_message() {
     let (_url, _registry, manager, event_tx) = spawn_test_server_with_events().await;
     manager
         .thread_manager()
-        .register_workspace_for_test(
-            ws_id.clone(),
-            tmp.path().to_path_buf(),
-            WorkspaceStatus::Ready,
-        )
+        .register_workspace_for_test(ws_id.clone(), tmp.path().to_path_buf())
         .await;
 
     // The agent's CLI launches the mock-agent binary. Single-quote the path so

@@ -13,23 +13,13 @@
   import TaskTableView from "./components/tasks/TaskTableView.svelte";
   import TaskDetailSidebar from "./components/tasks/TaskDetailSidebar.svelte";
   import CreateTaskSidebar from "./components/tasks/CreateTaskSidebar.svelte";
-  import { ConfirmDialog } from "./lib/primitives";
-  import ContextMenu from "./components/sidebar/ContextMenu.svelte";
   import CreateWorkspaceDialog from "./components/CreateWorkspaceDialog.svelte";
   import SearchCommand from "./components/SearchCommand.svelte";
-  import { Plus, Trash2 } from "@lucide/svelte";
+  import { Plus } from "@lucide/svelte";
   import { isEditableTarget } from "./lib/editable-guard";
   import { onMount } from "svelte";
-  import { listen } from "@tauri-apps/api/event";
-  import type { MenuItem, WorkspaceStatusChangePayload } from "./stores/types";
 
   let showCreateWorkspace = $state(false);
-  let workspaceMenu = $state<{
-    x: number;
-    y: number;
-    workspaceId: string;
-  } | null>(null);
-  let deleteTarget = $state<{ id: string; name: string } | null>(null);
   let searchOpen = $state(false);
 
   // Push-to-composer channel for the Edit-queue action.
@@ -86,31 +76,6 @@
     );
   });
 
-  const workspaceMenuItems: MenuItem[] = [
-    { id: "delete", label: "Delete", icon: Trash2, danger: true },
-  ];
-
-  function handleWorkspaceMenuAction(actionId: string) {
-    if (!workspaceMenu) return;
-    const wsId = workspaceMenu.workspaceId;
-    const ws = appState.swarms.find((s) => s.id === wsId);
-    workspaceMenu = null;
-
-    if (actionId === "delete" && ws) {
-      deleteTarget = { id: wsId, name: ws.name };
-    }
-  }
-
-  async function confirmDeleteWorkspace() {
-    if (!deleteTarget) return;
-    const id = deleteTarget.id;
-    deleteTarget = null;
-    if (appState.selectedSwarmId === id) {
-      appState.activeView = "overview";
-    }
-    await appState.deleteWorkspace(id);
-  }
-
   function onGlobalKeydown(e: KeyboardEvent) {
     const meta = e.metaKey || e.ctrlKey;
     if (!meta || e.altKey || e.shiftKey) return;
@@ -142,22 +107,8 @@
 
     window.addEventListener("keydown", onGlobalKeydown);
 
-    // Close workspace menu when its target workspace changes status
-    const unlistenPromise = listen<WorkspaceStatusChangePayload>(
-      "workspace:status-change",
-      (e) => {
-        if (
-          workspaceMenu &&
-          e.payload.workspace_id === workspaceMenu.workspaceId
-        ) {
-          workspaceMenu = null;
-        }
-      },
-    );
-
     return () => {
       window.removeEventListener("keydown", onGlobalKeydown);
-      unlistenPromise.then((fn) => fn());
     };
   });
 
@@ -488,33 +439,6 @@
       await appState.createWorkspace(name);
     }}
     onCancel={() => (showCreateWorkspace = false)}
-  />
-{/if}
-
-{#if workspaceMenu}
-  {@const menu = workspaceMenu}
-  {@const ws = appState.swarms.find((s) => s.id === menu.workspaceId)}
-  {#if ws}
-    <ContextMenu
-      x={menu.x}
-      y={menu.y}
-      items={workspaceMenuItems}
-      onSelect={handleWorkspaceMenuAction}
-      onClose={() => (workspaceMenu = null)}
-    />
-  {/if}
-{/if}
-
-{#if deleteTarget}
-  <ConfirmDialog
-    title="Delete {deleteTarget.name}?"
-    description="All agents will be terminated. The workspace and its files will be permanently deleted."
-    confirmLabel="Delete"
-    confirmVariant="danger"
-    onConfirm={confirmDeleteWorkspace}
-    onCancel={() => {
-      deleteTarget = null;
-    }}
   />
 {/if}
 

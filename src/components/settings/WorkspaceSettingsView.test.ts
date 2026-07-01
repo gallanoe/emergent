@@ -8,7 +8,6 @@ const sampleWorkspace: WorkspaceInfo = {
   id: "ws-1",
   name: "Alpha Lab",
   path: "/tmp/alpha",
-  status: { state: "ready" },
 };
 
 const { invokeMock } = vi.hoisted(() => ({

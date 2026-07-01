@@ -80,7 +80,6 @@ const mockScript = `
           {
             id: "ws-frontend-1",
             name: "frontend-workspace",
-            status: { state: "ready" },
             agent_count: 1,
           },
         ],

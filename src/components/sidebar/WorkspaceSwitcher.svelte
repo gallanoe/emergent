@@ -1,7 +1,6 @@
 <script lang="ts">
   import { ChevronDown, Cog, Plus } from "@lucide/svelte";
-  import type { WorkspaceStatus, DisplayWorkspace } from "../../stores/types";
-  import { Mono } from "../../lib/primitives";
+  import type { DisplayWorkspace } from "../../stores/types";
 
   interface Props {
     workspaces: DisplayWorkspace[];
@@ -31,14 +30,6 @@
       | DisplayWorkspace
       | undefined,
   );
-
-  function statusDotClass(s: WorkspaceStatus) {
-    return s.state === "error" ? "bg-error" : "bg-success";
-  }
-
-  function statusLabel(s: WorkspaceStatus) {
-    return s.state === "error" ? "Error" : "Ready";
-  }
 
   $effect(() => {
     if (!open) return;
@@ -79,18 +70,10 @@
       >
         {current.name.charAt(0).toUpperCase()}
       </span>
-      <span class="flex flex-1 min-w-0 items-center gap-1.5">
-        <span
-          class="min-w-0 flex-1 truncate text-[12.5px] font-semibold text-fg-heading"
-          >{current.name}</span
-        >
-        <span
-          class="size-1.5 shrink-0 rounded-full {statusDotClass(
-            current.status,
-          )}"
-          title={statusLabel(current.status)}
-        ></span>
-      </span>
+      <span
+        class="min-w-0 flex-1 truncate text-[12.5px] font-semibold text-fg-heading"
+        >{current.name}</span
+      >
     </button>
     <button
       type="button"
@@ -127,9 +110,6 @@
               >{w.name.charAt(0).toUpperCase()}</span
             >
             <span class="min-w-0 flex-1 truncate">{w.name}</span>
-            <Mono class="!font-normal !capitalize text-fg-disabled" size={10}
-              >{statusLabel(w.status)}</Mono
-            >
           </button>
         {/each}
         <div class="h-px bg-border-default my-[6px] mx-[2px]"></div>

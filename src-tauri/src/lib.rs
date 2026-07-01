@@ -75,12 +75,7 @@ pub fn run() {
 
             // Create workspace manager (async — use block_on)
             let workspace_manager = tauri::async_runtime::block_on(async {
-                let wm = WorkspaceManager::new(
-                    workspace_state.clone(),
-                    event_tx.clone(),
-                    terminal_sink,
-                )
-                .await;
+                let wm = WorkspaceManager::new(workspace_state.clone(), terminal_sink).await;
                 if let Err(e) = wm.load_workspaces().await {
                     log::error!("Failed to load workspaces: {}", e);
                 }
@@ -238,9 +233,6 @@ pub fn run() {
                                     let _ = bridge_handle.emit(event_name, p);
                                 }
                                 Notification::TopologyChanged(p) => {
-                                    let _ = bridge_handle.emit(event_name, p);
-                                }
-                                Notification::WorkspaceStatusChange(p) => {
                                     let _ = bridge_handle.emit(event_name, p);
                                 }
                                 // Terminal output/exit are delivered directly to

@@ -57,7 +57,6 @@ function makeWorkspace(overrides?: Partial<DisplayWorkspace>): DisplayWorkspace 
     id: "ws1",
     name: "emergent-core",
     collapsed: false,
-    status: { state: "ready" },
     agentDefinitions: [
       makeAgentDef("d1", "claude-sonnet", [
         makeThread("t-live", "Refine API", "working", { updatedAt: "now" }),

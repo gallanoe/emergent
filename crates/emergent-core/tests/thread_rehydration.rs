@@ -4,7 +4,7 @@ use std::sync::Arc;
 use emergent_core::agent::thread_manager::{ThreadManager, ThreadMapping};
 use emergent_core::mcp::TokenRegistry;
 use emergent_core::workspace;
-use emergent_protocol::{WorkspaceStatus, WorkspaceId};
+use emergent_protocol::WorkspaceId;
 use tempfile::TempDir;
 
 /// Build a ThreadManager suitable for tests that don't need to spawn real
@@ -24,7 +24,7 @@ pub(crate) async fn register_workspace(
     path: PathBuf,
 ) {
     manager
-        .register_workspace_for_test(workspace_id.clone(), path, WorkspaceStatus::Ready)
+        .register_workspace_for_test(workspace_id.clone(), path)
         .await;
 }
 
