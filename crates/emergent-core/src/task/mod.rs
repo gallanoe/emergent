@@ -572,8 +572,9 @@ impl TaskManager {
 
     /// Transition every Working task in a workspace to Failed.
     ///
-    /// Call this when the workspace's container is about to stop, so tasks
-    /// whose threads may have crashed externally are not left stuck.
+    /// Call this when the workspace is shutting down (its agent processes are
+    /// about to stop), so tasks whose threads may have crashed externally are
+    /// not left stuck.
     pub async fn fail_working_tasks_in_workspace(&self, workspace_id: &WorkspaceId) {
         let mut persisted = false;
         {
@@ -601,10 +602,11 @@ impl TaskManager {
 
     /// Resume Working task threads and start unblocked Pending tasks for a workspace.
     ///
-    /// Called at startup for each workspace with a running container and
-    /// after `start_container` brings one up later. Assumes the workspace's
-    /// container is running — if it is not, the resume and spawn attempts
-    /// will fail and the affected tasks will be marked Failed.
+    /// Called at startup for each workspace whose directory is ready and
+    /// after a workspace is brought up later. Assumes the workspace's
+    /// directory exists and its agent processes can be spawned — if not, the
+    /// resume and spawn attempts will fail and the affected tasks will be
+    /// marked Failed.
     ///
     /// For each Working task:
     ///   - If its thread is already live, skip it.
@@ -701,7 +703,8 @@ impl TaskManager {
         }
 
         // Kick off any Pending tasks whose blockers are all Completed. Safe to
-        // call now that we know the container is running.
+        // call now that we know the workspace directory exists and its agent
+        // processes can be spawned.
         self.start_unblocked_tasks(workspace_id).await;
     }
 

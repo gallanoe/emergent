@@ -1,22 +1,22 @@
 # Emergent
 
-A Tauri 2 desktop application for running LLM agents in parallel inside containerized workspaces. Agents communicate via the Agent Client Protocol (ACP) and work on tasks concurrently through a chat-based interface.
+A Tauri 2 desktop application for running LLM agents in parallel as isolated local host processes. Agents communicate via the Agent Client Protocol (ACP) and work on tasks concurrently through a chat-based interface.
 
 ## Architecture
 
-The Tauri app embeds the agent manager and workspace manager directly — there is no separate daemon process. Agent threads connect back to the embedded MCP HTTP server over bearer-token authenticated HTTP calls.
+The Tauri app embeds the agent, workspace, and task managers directly — there is no separate daemon process. Each agent runs as a local host process (no Docker), isolated by its own working directory and `$HOME`. Agent threads connect back to the embedded MCP HTTP server over bearer-token authenticated HTTP calls.
 
-- **Tauri app** (in `src-tauri/`) — desktop app that owns the `AgentManager` and `WorkspaceManager`, spawns agent processes over ACP inside Docker containers, and runs the embedded MCP HTTP server used by agent threads
-- **`emergent-core`** (in `crates/emergent-core/`) — core library containing agent orchestration, workspace/container management, terminal sessions, MCP server, swarm coordination, and system prompt logic
+- **Tauri app** (in `src-tauri/`) — desktop app that owns the `AgentManager`, `WorkspaceManager`, and `TaskManager`, spawns agent processes over ACP as local host processes, and runs the embedded MCP HTTP server used by agent threads
+- **`emergent-core`** (in `crates/emergent-core/`) — core library containing agent orchestration, workspace management, host terminal sessions, the MCP server, the task graph, swarm coordination, and system-prompt logic
 - **`emergent-protocol`** (in `crates/emergent-protocol/`) — shared types and notification definitions used by both the Tauri app and core library
 
-At startup, the Tauri app connects to Docker, creates the `WorkspaceManager` (which loads persisted workspaces and inspects container states), creates the `AgentManager`, starts an MCP HTTP server, and bridges notifications to the Svelte frontend via Tauri events.
+At startup, the Tauri app creates the `WorkspaceManager` (which loads persisted workspaces from `~/.emergent/`), creates the `AgentManager` and `TaskManager`, starts the embedded MCP HTTP server, rehydrates persisted threads/tasks, and bridges notifications to the Svelte frontend via Tauri events.
 
 ## Tech Stack
 
 - **Frontend:** Svelte 5, TypeScript, Tailwind CSS 4, Vite 7
 - **Backend:** Rust (edition 2021), Tauri 2, Tokio (async runtime)
-- **Containers:** Docker (via bollard crate), per-workspace isolation
+- **Execution:** Local host processes, isolated per-agent by working directory + `$HOME` (no Docker)
 - **Protocol:** Agent Client Protocol (ACP) for agent communication
 - **MCP transport:** Streamable HTTP served by the embedded app
 - **Testing:** Vitest + Testing Library (unit/component), Playwright (frontend), `cargo test --workspace` (Rust)
@@ -30,30 +30,34 @@ Cargo.toml                    # Workspace root
 
 src/                          # Frontend (Svelte 5 + TypeScript)
 ├── components/               # Svelte components
-│   ├── agent/                # AgentCreatorView, AgentSettingsView, ThreadListView
-│   ├── chat/                 # ChatArea, ChatInput
-│   ├── swarm/                # (reserved; swarm view removed in v1)
-│   ├── sidebar/              # InnerSidebar, ContextMenu, AgentPickerPopover
-│   ├── settings/             # SettingsView, GeneralTab, ContainerTab
+│   ├── agent/                # AgentCreatorView, ThreadListView, ThreadListSection, SystemPromptCard
+│   ├── chat/                 # ChatArea, ChatInput, StreamingMarkdown, tool-call renders, ToolCallRow
+│   ├── overview/             # OverviewView dashboard + metric tiles
+│   ├── settings/             # AppSettingsView, WorkspaceSettingsView, ConfigRow, ThemeSelect
+│   ├── sidebar/              # InnerSidebar, WorkspaceSwitcher, ContextMenu
+│   ├── tasks/                # TaskTableView, TaskDetailSidebar, CreateTaskSidebar
 │   ├── terminal/             # TerminalView (xterm.js)
-│   ├── topbar/               # TopBar, SettingsPopover
-│   └── *.svelte              # Shared dialogs like CreateWorkspaceDialog, ConfirmDialog
+│   └── *.svelte              # Shared dialogs like CreateWorkspaceDialog, SearchCommand
 ├── stores/                   # Rune-based state (.svelte.ts files)
 │   ├── app-state.svelte.ts   # Central app state (workspaces, agents, views)
-│   ├── agents.svelte.ts      # Agent connection store
+│   ├── agents.svelte.ts      # Agent connection + streaming store
+│   ├── usage.svelte.ts       # Per-workspace token/cost usage
 │   ├── theme.svelte.ts       # Theme persistence
 │   ├── mock-data.svelte.ts   # Demo/test data helpers
+│   ├── mock-token-metrics.svelte.ts # Demo/test token-usage fixtures
 │   └── types.ts              # Shared display types
-├── lib/                      # Utility functions
+├── lib/                      # Utility functions (render-markdown, highlight, tool-call parsing, ...)
+│   └── primitives/           # Shared UI primitives (Button, Input, Card, Badge, ConfirmDialog, StatusDot, TaskStatusPill, ...)
 ├── App.svelte                # Root layout component
 └── main.ts                   # Vite entry point
 
-src-tauri/                    # Tauri app (embeds agent manager + workspace manager)
+src-tauri/                    # Tauri app (embeds the managers + MCP server)
 ├── src/
 │   ├── main.rs               # Tauri app entry
-│   ├── lib.rs                # App setup, Docker connection, notification bridge
+│   ├── lib.rs                # App setup, manager wiring, notification bridge
 │   ├── commands.rs           # Tauri IPC command handlers
 │   └── tray.rs               # System tray icon setup
+├── build.rs
 ├── Cargo.toml
 └── tauri.conf.json
 
@@ -64,34 +68,41 @@ crates/
 │   │   ├── agent/            # Agent lifecycle and ACP communication
 │   │   │   ├── mod.rs        # AgentManager coordinator
 │   │   │   ├── acp_bridge.rs # ACP client adapter + command loop
-│   │   │   ├── lifecycle.rs  # Agent spawn/resume via docker exec + ACP handshake
+│   │   │   ├── lifecycle.rs  # Agent spawn/resume (local process) + ACP handshake
 │   │   │   ├── prompt_loop.rs # Prompt wake/inject/send cycle
 │   │   │   ├── registry.rs   # Agent definition persistence
-│   │   │   ├── spawner.rs    # Agent spawner trait + Docker implementation
-│   │   │   └── thread_manager.rs # Running thread lifecycle + history
-│   │   ├── workspace/        # Workspace and container management
-│   │   │   ├── mod.rs        # WorkspaceManager (CRUD, container lifecycle)
-│   │   │   ├── container.rs  # Docker operations (build, start, stop, remove)
+│   │   │   ├── spawner.rs    # Agent spawner trait + local-process implementation
+│   │   │   ├── thread_manager.rs # Running thread lifecycle + history
+│   │   │   └── usage_store.rs # Per-workspace token/cost accounting
+│   │   ├── workspace/        # Workspace management (host directories, no containers)
+│   │   │   ├── mod.rs        # WorkspaceManager (CRUD, lifecycle)
+│   │   │   ├── paths.rs      # ~/.emergent path layout
 │   │   │   ├── state.rs      # Workspace state types (SharedWorkspaceState)
-│   │   │   └── terminal.rs   # Terminal sessions via docker exec
+│   │   │   └── terminal.rs   # Host PTY terminal sessions (portable_pty)
 │   │   ├── mcp/              # MCP server and auth
 │   │   │   ├── mod.rs        # Re-exports
-│   │   │   ├── handler.rs    # MCP tool implementations
+│   │   │   ├── handler.rs    # MCP tool implementations (create/list/update/complete task, list_agents)
 │   │   │   ├── http_server.rs # Axum HTTP server
 │   │   │   └── token_registry.rs # Bearer token management
+│   │   ├── task/            # Task graph
+│   │   │   ├── mod.rs        # TaskManager, subscription registry + event loop
+│   │   │   ├── registry.rs   # Task persistence
+│   │   │   └── subscribe.rs  # SubscribeMode enum (notification tiers)
 │   │   ├── swarm/            # Inter-agent coordination
 │   │   │   ├── mod.rs        # Re-exports
-│   │   │   ├── mailbox.rs    # Message queue
-│   │   │   ├── topology.rs   # Connection graph
+│   │   │   ├── topology.rs   # Connection graph (UI/bookkeeping)
 │   │   │   └── system_prompt.rs # System block injection
 │   │   ├── config.rs         # ACP config conversion
 │   │   └── detect.rs         # Agent binary detection
 │   └── tests/
-│       └── integration.rs    # Integration tests
+│       ├── integration.rs    # Integration tests
+│       ├── thread_rehydration.rs # Dormant-thread rehydration tests
+│       └── usage_aggregator.rs   # Usage accounting tests
 ├── emergent-protocol/        # Shared types
 │   └── src/
 │       ├── lib.rs
-│       └── types.rs          # Notification and payload types
+│       ├── types.rs          # Notification and payload types
+│       └── task.rs           # Task types
 └── mock-agent/               # Test-only ACP agent (prompt-driven behavior)
     └── src/
         └── main.rs
@@ -110,7 +121,7 @@ bun install
 bun run dev
 ```
 
-Docker Desktop must be running for workspace containers to work. The app will start without Docker but workspaces cannot be created.
+Agents run as local host processes, so no Docker is required. Install at least one supported agent CLI on your `PATH` (see the README for the list); the app detects available agents on startup.
 
 ## Best Practices
 
