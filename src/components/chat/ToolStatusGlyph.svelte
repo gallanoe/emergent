@@ -1,4 +1,12 @@
 <script lang="ts">
+  import type { Component } from "svelte";
+  import {
+    CircleDashed,
+    LoaderCircle,
+    Check,
+    X,
+    TriangleAlert,
+  } from "@lucide/svelte";
   import type { DisplayToolCall } from "../../stores/types";
 
   // Accept the normal `DisplayToolCall["status"]` plus a forward-looking
@@ -24,102 +32,23 @@
     permission: "var(--color-warning)",
   };
 
+  const ICONS: Record<ToolStatusGlyphStatus, Component> = {
+    pending: CircleDashed,
+    in_progress: LoaderCircle,
+    completed: Check,
+    failed: X,
+    permission: TriangleAlert,
+  };
+
   let color = $derived(COLORS[status]);
+  let Icon = $derived(ICONS[status]);
 </script>
 
-{#if status === "pending"}
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 10 10"
-    fill="none"
-    style:color
-    aria-label="pending"
-  >
-    <circle
-      cx="5"
-      cy="5"
-      r="3.5"
-      stroke="currentColor"
-      stroke-width="1"
-      stroke-dasharray="2 1.5"
-    />
-  </svg>
-{:else if status === "in_progress"}
-  <svg
-    class="em-tc-spin"
-    width={size}
-    height={size}
-    viewBox="0 0 10 10"
-    fill="none"
-    style:color
-    aria-label="running"
-  >
-    <circle
-      cx="5"
-      cy="5"
-      r="3.5"
-      stroke="currentColor"
-      stroke-width="1.2"
-      stroke-linecap="round"
-      stroke-dasharray="10 10"
-    />
-  </svg>
-{:else if status === "completed"}
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 10 10"
-    fill="none"
-    style:color
-    aria-label="completed"
-  >
-    <path
-      d="M2 5.5l2 2 4-4"
-      stroke="currentColor"
-      stroke-width="1.4"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    />
-  </svg>
-{:else if status === "failed"}
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 10 10"
-    fill="none"
-    style:color
-    aria-label="failed"
-  >
-    <path
-      d="M3 3l4 4M7 3l-4 4"
-      stroke="currentColor"
-      stroke-width="1.4"
-      stroke-linecap="round"
-    />
-  </svg>
-{:else if status === "permission"}
-  <!-- Amber triangle from em-tool-calls.jsx:155-162. Reserved for the
-       backend's future `permission` status; unused today. -->
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 16 16"
-    fill="none"
-    style:color
-    aria-label="permission"
-  >
-    <path
-      d="M8 2l6.5 11.5h-13z"
-      stroke="currentColor"
-      stroke-width="1.6"
-      stroke-linejoin="round"
-    />
-    <path
-      d="M8 6.5v3M8 11.2v.3"
-      stroke="currentColor"
-      stroke-width="1.6"
-      stroke-linecap="round"
-    />
-  </svg>
-{/if}
+<!-- Lucide icons stroke with `currentColor`, so setting `color` via inline
+     style tints them without a per-icon `stroke` override. -->
+<Icon
+  {size}
+  style="color: {color}"
+  class={status === "in_progress" ? "em-tc-spin" : ""}
+  aria-label={status}
+/>
