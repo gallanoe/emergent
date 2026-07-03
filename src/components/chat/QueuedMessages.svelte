@@ -186,7 +186,7 @@
                 <div
                   role="button"
                   tabindex="0"
-                  class="grid w-full cursor-default items-baseline gap-[10px] px-[12px] py-[10px] text-left transition-colors duration-[var(--duration-quick)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-border-focus {isSelected
+                  class="grid w-full cursor-default items-center gap-[10px] px-[12px] py-[10px] text-left transition-colors duration-[var(--duration-quick)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-border-focus {isSelected
                     ? 'bg-bg-selected'
                     : 'hover:bg-bg-hover'}"
                   style="grid-template-columns: 28px 1fr auto;"
