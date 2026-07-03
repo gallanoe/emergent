@@ -3,7 +3,11 @@
   import StreamingMarkdown from "./StreamingMarkdown.svelte";
   import ToolCallRow from "./ToolCallRow.svelte";
   import ThinkingBlock from "./ThinkingBlock.svelte";
-  import type { DisplayThread } from "../../stores/types";
+  import type {
+    DisplayThread,
+    DisplayMessage,
+    DisplayToolCall,
+  } from "../../stores/types";
   import { renderMarkdown } from "../../lib/render-markdown";
   import { highlightCodeBlocks } from "../../lib/highlight";
   import { Mono } from "../../lib/primitives";
@@ -15,6 +19,49 @@
   }
 
   let { thread, hasTaskBanner = false, onEditQueue }: Props = $props();
+
+  // ── Render blocks ──────────────────────────────────────────────
+  // Consecutive tool-group messages (plus any live active tool calls) collapse
+  // into one `tools` block so a run of tool calls renders as a single dense
+  // wrapper. The outer gap then only breathes at text↔tool boundaries — never
+  // between adjacent tool calls.
+  type RenderBlock =
+    | { kind: "msg"; id: string; message: DisplayMessage; index: number }
+    | { kind: "tools"; id: string; toolCalls: DisplayToolCall[] };
+
+  let blocks = $derived.by<RenderBlock[]>(() => {
+    const out: RenderBlock[] = [];
+    const messages = thread?.messages ?? [];
+    messages.forEach((message, index) => {
+      if (message.role === "tool-group") {
+        const last = out[out.length - 1];
+        if (last?.kind === "tools") {
+          last.toolCalls.push(...(message.toolCalls ?? []));
+        } else {
+          out.push({
+            kind: "tools",
+            id: message.id,
+            toolCalls: [...(message.toolCalls ?? [])],
+          });
+        }
+      } else {
+        out.push({ kind: "msg", id: message.id, message, index });
+      }
+    });
+
+    const active = thread?.activeToolCalls ?? [];
+    if (active.length > 0) {
+      const last = out[out.length - 1];
+      if (last?.kind === "tools") {
+        last.toolCalls.push(...active);
+      } else {
+        out.push({ kind: "tools", id: "active-tools", toolCalls: [...active] });
+      }
+    }
+    return out;
+  });
+
+  let lastMessageIndex = $derived((thread?.messages.length ?? 0) - 1);
 
   function onChatClick(e: MouseEvent) {
     const target = e.target as HTMLElement | null;
@@ -204,16 +251,25 @@
         class:pt-[60px]={hasTaskBanner}
         class:pt-9={!hasTaskBanner}
       >
-        {#each thread.messages as message, i (message.id)}
-          {#if message.role === "thinking"}
-            <ThinkingBlock content={message.content} />
-          {:else if message.role === "assistant"}
+        {#each blocks as block (block.id)}
+          {#if block.kind === "tools"}
+            <!-- One wrapper per run of consecutive tool calls; grows until the
+                 next text block. Tight inner spacing, outer gap handles the
+                 text↔tool boundary. -->
+            <div class="flex flex-col gap-0">
+              {#each block.toolCalls as tc (tc.id)}
+                <ToolCallRow toolCall={tc} />
+              {/each}
+            </div>
+          {:else if block.message.role === "thinking"}
+            <ThinkingBlock content={block.message.content} />
+          {:else if block.message.role === "assistant"}
             <StreamingMarkdown
-              content={message.content}
+              content={block.message.content}
               streaming={thread.processStatus === "working" &&
-                i === thread.messages.length - 1}
+                block.index === lastMessageIndex}
             />
-            {#if message.cancelled}
+            {#if block.message.cancelled}
               <div
                 class="flex items-center gap-[6px] text-[11px] text-fg-disabled mt-[4px]"
               >
@@ -221,54 +277,40 @@
                 <span>Stopped</span>
               </div>
             {/if}
-          {:else if message.role === "user"}
+          {:else if block.message.role === "user"}
             <div class="flex justify-end">
               <div
                 class="max-w-[78%] rounded-[14px] bg-bg-selected px-[14px] py-[10px] text-[12.5px] leading-[1.55] text-fg-default"
               >
                 <div class="markdown">
-                  {@html renderMarkdown(message.content)}
+                  {@html renderMarkdown(block.message.content)}
                 </div>
-                {#if message.nudgeCount}
+                {#if block.message.nudgeCount}
                   <div class="my-1.5 h-px bg-border-default"></div>
                   <div
                     class="flex items-center gap-1.5 text-[11px] text-fg-muted"
                   >
-                    {@render nudgeBadge(message.nudgeCount ?? 0)}
+                    {@render nudgeBadge(block.message.nudgeCount ?? 0)}
                   </div>
                 {/if}
               </div>
             </div>
-          {:else if message.role === "tool-group"}
-            <div class="flex flex-col gap-0">
-              {#each message.toolCalls ?? [] as tc (tc.id)}
-                <ToolCallRow toolCall={tc} />
-              {/each}
-            </div>
-          {:else if message.role === "system"}
+          {:else if block.message.role === "system"}
             <div class="flex items-center gap-[10px] py-[2px]">
               <div class="h-px flex-1 bg-border-default"></div>
               <Mono size={10} color="var(--color-fg-disabled)"
-                >{message.content}</Mono
+                >{block.message.content}</Mono
               >
               <div class="h-px flex-1 bg-border-default"></div>
             </div>
-          {:else if message.role === "nudge"}
+          {:else if block.message.role === "nudge"}
             <div
               class="flex items-center gap-1.5 py-1 text-[11px] text-fg-muted"
             >
-              {@render nudgeBadge(message.nudgeCount ?? 0)}
+              {@render nudgeBadge(block.message.nudgeCount ?? 0)}
             </div>
           {/if}
         {/each}
-
-        {#if thread.activeToolCalls.length > 0}
-          <div class="flex flex-col gap-0">
-            {#each thread.activeToolCalls as tc (tc.id)}
-              <ToolCallRow toolCall={tc} />
-            {/each}
-          </div>
-        {/if}
 
         <!--
           Spacer reserves scroll height under the absolutely-positioned
