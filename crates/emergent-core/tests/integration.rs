@@ -246,6 +246,38 @@ async fn test_list_tools_shows_update_task_for_task_session() {
 }
 
 #[tokio::test]
+async fn test_list_tools_shows_search_tools_for_conversation_session() {
+    // The read-only search tools are available to every session, including
+    // plain conversation sessions (no task_id).
+    let (url, registry, _manager) = spawn_test_server().await;
+    let token = registry.register("search-agent", None);
+    let client = reqwest::Client::new();
+
+    let (status, _) = post_mcp(&client, &url, mcp_init_body(), Some(&token)).await;
+    assert_eq!(status, 200);
+
+    let list_body = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/list",
+        "params": {}
+    })
+    .to_string();
+    let (status, body) = post_mcp(&client, &url, list_body, Some(&token)).await;
+    assert_eq!(status, 200);
+    assert!(
+        body.contains("\"search_tasks\""),
+        "search_tasks must be visible, got: {}",
+        body
+    );
+    assert!(
+        body.contains("\"search_conversations\""),
+        "search_conversations must be visible, got: {}",
+        body
+    );
+}
+
+#[tokio::test]
 async fn test_invalid_token_tool_call_returns_error() {
     let (url, _registry, _manager) = spawn_test_server().await;
     let client = reqwest::Client::new();

@@ -65,6 +65,26 @@ pub struct ListTasksParams {
     pub agent_id: Option<String>,
 }
 
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct SearchTasksParams {
+    /// Filter by status (pending, working, completed, failed)
+    pub status: Option<String>,
+    /// Filter by agent definition ID
+    pub agent_id: Option<String>,
+    /// Case-insensitive substring match on the task title
+    pub name: Option<String>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct SearchConversationsParams {
+    /// Filter by status (initializing, idle, working, error, dead)
+    pub status: Option<String>,
+    /// Filter by agent definition ID
+    pub agent_id: Option<String>,
+    /// Filter to the conversation bound to this task ID
+    pub task_id: Option<String>,
+}
+
 #[derive(Debug, Serialize)]
 struct AvailableAgent {
     id: String,
@@ -230,6 +250,103 @@ impl McpHandler {
         }
 
         let json = serde_json::to_string_pretty(&tasks)
+            .map_err(|e| rmcp::model::ErrorData::internal_error(e.to_string(), None))?;
+        Ok(rmcp::model::CallToolResult::success(vec![
+            rmcp::model::Content::text(json),
+        ]))
+    }
+
+    /// Search tasks in the caller's workspace, filtering by status, assigned
+    /// agent, and/or a case-insensitive title substring. All filters are
+    /// optional and combine with AND.
+    #[tool]
+    async fn search_tasks(
+        &self,
+        Extension(parts): Extension<http::request::Parts>,
+        Parameters(params): Parameters<SearchTasksParams>,
+    ) -> Result<rmcp::model::CallToolResult, rmcp::model::ErrorData> {
+        let thread_id = self
+            .agent_id_from_parts(&parts)
+            .map_err(|e| rmcp::model::ErrorData::internal_error(e, None))?;
+        let workspace_id = self
+            .manager
+            .get_thread_workspace_id(&thread_id)
+            .await
+            .ok_or_else(|| rmcp::model::ErrorData::internal_error("Thread not found", None))?;
+
+        let mut tasks = self.task_manager.list_tasks(&workspace_id).await;
+
+        if let Some(ref s) = params.status {
+            let predicate: fn(&emergent_protocol::TaskState) -> bool = match s.as_str() {
+                "pending" => emergent_protocol::TaskState::is_pending,
+                "working" => emergent_protocol::TaskState::is_working,
+                "completed" => emergent_protocol::TaskState::is_completed,
+                "failed" => emergent_protocol::TaskState::is_failed,
+                _ => {
+                    return Err(rmcp::model::ErrorData::invalid_params(
+                        format!("Invalid status: {}", s),
+                        None,
+                    ))
+                }
+            };
+            tasks.retain(|t| predicate(&t.state));
+        }
+        if let Some(ref aid) = params.agent_id {
+            tasks.retain(|t| &t.agent_id == aid);
+        }
+        if let Some(ref name) = params.name {
+            let needle = name.to_lowercase();
+            tasks.retain(|t| t.title.to_lowercase().contains(&needle));
+        }
+
+        let json = serde_json::to_string_pretty(&tasks)
+            .map_err(|e| rmcp::model::ErrorData::internal_error(e.to_string(), None))?;
+        Ok(rmcp::model::CallToolResult::success(vec![
+            rmcp::model::Content::text(json),
+        ]))
+    }
+
+    /// Search conversations (agent threads) in the caller's workspace, filtering
+    /// by status, agent, and/or bound task ID. All filters are optional and
+    /// combine with AND. Returns live and dormant conversations; dormant ones
+    /// report status "dead".
+    #[tool]
+    async fn search_conversations(
+        &self,
+        Extension(parts): Extension<http::request::Parts>,
+        Parameters(params): Parameters<SearchConversationsParams>,
+    ) -> Result<rmcp::model::CallToolResult, rmcp::model::ErrorData> {
+        let thread_id = self
+            .agent_id_from_parts(&parts)
+            .map_err(|e| rmcp::model::ErrorData::internal_error(e, None))?;
+        let workspace_id = self
+            .manager
+            .get_thread_workspace_id(&thread_id)
+            .await
+            .ok_or_else(|| rmcp::model::ErrorData::internal_error("Thread not found", None))?;
+
+        let mut conversations = self.manager.list_conversations(&workspace_id).await;
+
+        if let Some(ref s) = params.status {
+            if !matches!(
+                s.as_str(),
+                "initializing" | "idle" | "working" | "error" | "dead"
+            ) {
+                return Err(rmcp::model::ErrorData::invalid_params(
+                    format!("Invalid status: {}", s),
+                    None,
+                ));
+            }
+            conversations.retain(|c| &c.status == s);
+        }
+        if let Some(ref aid) = params.agent_id {
+            conversations.retain(|c| &c.agent_id == aid);
+        }
+        if let Some(ref tid) = params.task_id {
+            conversations.retain(|c| c.task_id.as_deref() == Some(tid.as_str()));
+        }
+
+        let json = serde_json::to_string_pretty(&conversations)
             .map_err(|e| rmcp::model::ErrorData::internal_error(e.to_string(), None))?;
         Ok(rmcp::model::CallToolResult::success(vec![
             rmcp::model::Content::text(json),

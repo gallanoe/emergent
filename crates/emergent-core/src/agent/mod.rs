@@ -8,7 +8,19 @@ pub mod usage_store;
 
 pub use registry::AgentRegistry;
 pub use spawner::{AgentProcess, LocalProcess, LocalProcessSpawner, ProcessSpawner};
-pub use thread_manager::{ThreadManager, ThreadMapping};
+pub use thread_manager::{ThreadInWorkspace, ThreadManager, ThreadMapping};
+
+/// A conversation (thread) summary surfaced to MCP callers. Enriches
+/// [`ThreadInWorkspace`] with the human-readable agent name.
+#[derive(Clone, Debug, serde::Serialize)]
+pub struct ConversationSummary {
+    pub id: String,
+    pub agent_id: String,
+    pub agent_name: String,
+    pub status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub task_id: Option<String>,
+}
 
 use std::sync::Arc;
 
@@ -418,6 +430,30 @@ impl AgentManager {
 
     pub async fn list_threads(&self, agent_id: &str) -> Vec<ThreadSummary> {
         self.threads.list_threads(agent_id).await
+    }
+
+    /// List all conversations (threads) in a workspace, enriched with the
+    /// agent's display name. Unions live and dormant threads across every agent
+    /// definition in the workspace.
+    pub async fn list_conversations(&self, workspace_id: &WorkspaceId) -> Vec<ConversationSummary> {
+        let threads = self.threads.list_threads_in_workspace(workspace_id).await;
+        let registry = self.registry.read().await;
+        threads
+            .into_iter()
+            .map(|t| {
+                let agent_name = registry
+                    .get_agent(&t.agent_id)
+                    .map(|d| d.name.clone())
+                    .unwrap_or_default();
+                ConversationSummary {
+                    id: t.id,
+                    agent_id: t.agent_id,
+                    agent_name,
+                    status: t.status,
+                    task_id: t.task_id,
+                }
+            })
+            .collect()
     }
 
     pub async fn get_config(&self, thread_id: &str) -> Result<Vec<ConfigOption>, String> {

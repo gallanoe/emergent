@@ -24,6 +24,17 @@ pub struct ThreadMapping {
     pub task_id: Option<String>,
 }
 
+/// A thread belonging to a workspace, unioned across the live and dormant maps.
+/// Carries the fields needed to build an MCP conversation summary; `agent_name`
+/// is resolved separately by the coordinator (the registry lives there).
+#[derive(Clone, Debug)]
+pub struct ThreadInWorkspace {
+    pub id: String,
+    pub agent_id: String,
+    pub status: String,
+    pub task_id: Option<String>,
+}
+
 pub struct ThreadManager {
     pub(crate) threads: Arc<RwLock<HashMap<String, Arc<Mutex<ThreadHandle>>>>>,
     pub(crate) dormant_threads:
@@ -866,6 +877,52 @@ impl ThreadManager {
                             status: AgentStatus::Dead.to_string(),
                             workspace_id: ws_id.clone(),
                             acp_session_id: m.acp_session_id.clone(),
+                        });
+                    }
+                }
+            }
+        }
+
+        result
+    }
+
+    /// List every thread in a workspace, unioning the live and dormant maps
+    /// and deduping by `thread_id` (live wins). Unlike `list_threads`, this is
+    /// scoped by workspace rather than agent definition. Dormant entries report
+    /// `status = "dead"`.
+    pub async fn list_threads_in_workspace(
+        &self,
+        workspace_id: &WorkspaceId,
+    ) -> Vec<ThreadInWorkspace> {
+        let mut result: Vec<ThreadInWorkspace> = Vec::new();
+        let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+        {
+            let threads = self.threads.read().await;
+            for (id, handle_arc) in threads.iter() {
+                let handle = handle_arc.lock().await;
+                if &handle.workspace_id == workspace_id {
+                    result.push(ThreadInWorkspace {
+                        id: id.clone(),
+                        agent_id: handle.agent_id.clone(),
+                        status: handle.status.to_string(),
+                        task_id: handle.task_id.clone(),
+                    });
+                    seen.insert(id.clone());
+                }
+            }
+        }
+
+        {
+            let dormant = self.dormant_threads.read().await;
+            if let Some(ws_map) = dormant.get(workspace_id) {
+                for (id, m) in ws_map {
+                    if seen.insert(id.clone()) {
+                        result.push(ThreadInWorkspace {
+                            id: id.clone(),
+                            agent_id: m.agent_definition_id.clone(),
+                            status: AgentStatus::Dead.to_string(),
+                            task_id: m.task_id.clone(),
                         });
                     }
                 }
