@@ -25,9 +25,19 @@
 
   // ── Auto-scroll ────────────────────────────────────────────────
   let scrollContainer: HTMLDivElement | undefined = $state();
-  // Plain let — not $state. Never affects template, and keeping it
-  // non-reactive avoids re-triggering the auto-scroll effect on scroll.
+  // Plain lets — never affect the template, and keeping them non-reactive
+  // avoids re-triggering the auto-scroll effect on scroll.
   let userScrolledAway = false;
+  // Last observed scrollTop, used to tell a user's upward drag (detach) apart
+  // from our own downward programmatic scroll (which must not detach).
+  let lastScrollTop = 0;
+  // Last height we scrolled to. Skip redundant scrolls when height is
+  // unchanged so a smooth animation isn't restarted every streamed frame.
+  let lastScrollHeight = 0;
+
+  const prefersReducedMotion =
+    typeof window !== "undefined" &&
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
   function isNearBottom(el: HTMLElement): boolean {
     const threshold = 80;
@@ -36,20 +46,34 @@
 
   function onScroll() {
     if (!scrollContainer) return;
-    userScrolledAway = !isNearBottom(scrollContainer);
+    const top = scrollContainer.scrollTop;
+    // A decrease means the user scrolled up (our auto-scroll only moves down),
+    // so detach and stop following. Otherwise re-attach once near the bottom.
+    if (top < lastScrollTop - 2) {
+      userScrolledAway = true;
+    } else if (isNearBottom(scrollContainer)) {
+      userScrolledAway = false;
+    }
+    lastScrollTop = top;
   }
 
-  function scrollToBottom() {
+  function scrollToBottom(smooth = false) {
     if (!scrollContainer) return;
-    scrollContainer.scrollTo({ top: scrollContainer.scrollHeight });
+    scrollContainer.scrollTo({
+      top: scrollContainer.scrollHeight,
+      behavior: smooth && !prefersReducedMotion ? "smooth" : "auto",
+    });
+    lastScrollHeight = scrollContainer.scrollHeight;
   }
 
-  // Reset scroll state when switching threads
+  // Reset scroll state when switching threads. Jump instantly — smooth-scrolling
+  // to the bottom of an already-rendered history would animate a long scroll.
   let scrollThreadId = $derived(thread?.id);
   $effect(() => {
     const _id = scrollThreadId;
     userScrolledAway = false;
-    requestAnimationFrame(() => scrollToBottom());
+    lastScrollHeight = 0;
+    requestAnimationFrame(() => scrollToBottom(false));
   });
 
   // Auto-scroll on content changes (DOM manipulation — legitimate $effect use)
@@ -68,7 +92,14 @@
     if (lastRole === "user") userScrolledAway = false;
 
     if (!scrollContainer || userScrolledAway) return;
-    requestAnimationFrame(() => scrollToBottom());
+    requestAnimationFrame(() => {
+      if (!scrollContainer || userScrolledAway) return;
+      // Height only changes when a block commits (the still-generating block
+      // is hidden), so skip frames where nothing grew to avoid restarting the
+      // smooth animation mid-flight.
+      if (scrollContainer.scrollHeight === lastScrollHeight) return;
+      scrollToBottom(true);
+    });
   });
 
   $effect(() => {
