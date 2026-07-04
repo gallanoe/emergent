@@ -1,6 +1,7 @@
 mod acp_bridge;
 mod lifecycle;
 mod prompt_loop;
+pub mod queue;
 pub mod registry;
 pub mod spawner;
 pub mod thread_manager;
@@ -78,10 +79,6 @@ pub(crate) struct ThreadHandle {
     pub(crate) completing: bool,
     /// Permission state at time of last prompt — used to detect changes.
     pub(crate) last_prompted_permissions: bool,
-    /// Wakes the prompt loop when work is available.
-    pub(crate) prompt_notify: Arc<tokio::sync::Notify>,
-    /// Queued user prompt + reply channel. At most one pending at a time.
-    pub(crate) pending_prompt: Option<(String, oneshot::Sender<Result<(), String>>)>,
     /// Handle to the prompt loop task (aborted on kill).
     pub(crate) prompt_loop_handle: Option<tokio::task::JoinHandle<()>>,
 }
@@ -376,16 +373,78 @@ impl AgentManager {
     // Thread operations (delegated to ThreadManager)
     // -----------------------------------------------------------------------
 
-    pub async fn queue_prompt(
+    /// Enqueue a message for a thread, holding it in the backend queue until the
+    /// thread is idle and its prompt loop drains it. Accepts messages in any
+    /// state; if the target is dormant, it is resumed (woken) so it can drain.
+    ///
+    /// Fire-and-forget: returns `Ok(())` once the message is queued (and a wake
+    /// initiated if needed) — it does NOT block until the agent reads it.
+    pub async fn enqueue_message(
         &self,
         thread_id: &str,
-        text: String,
-    ) -> Result<oneshot::Receiver<Result<(), String>>, String> {
-        self.threads.queue_prompt(thread_id, text).await
+        source: queue::MessageSource,
+        content: String,
+    ) -> Result<(), String> {
+        // Live target: enqueue and let the running prompt loop drain on idle.
+        if let Some(ws) = self.threads.live_workspace(thread_id).await {
+            self.threads.enqueue(thread_id, &ws, source, content).await?;
+            return Ok(());
+        }
+
+        // Dormant target: it must be resumable, otherwise the message could
+        // never be delivered — reject rather than silently hold it forever.
+        let (ws, mapping) = self
+            .threads
+            .dormant_entry(thread_id)
+            .await
+            .ok_or_else(|| format!("Thread '{}' not found", thread_id))?;
+        let acp_session_id = mapping
+            .acp_session_id
+            .clone()
+            .ok_or_else(|| format!("Thread '{}' is not resumable", thread_id))?;
+
+        // Enqueue first (so the held message is present the instant the resumed
+        // prompt loop starts), then wake the thread from dormancy.
+        self.threads.enqueue(thread_id, &ws, source, content).await?;
+        self.resume_thread(thread_id, &mapping.agent_definition_id, &acp_session_id)
+            .await
     }
 
     pub async fn notify_prompt_loop(&self, thread_id: &str) {
         self.threads.notify_prompt_loop(thread_id).await
+    }
+
+    pub async fn list_queue(&self, thread_id: &str) -> Vec<emergent_protocol::QueuedMessageView> {
+        self.threads.list_queue(thread_id).await
+    }
+
+    pub async fn edit_queued(
+        &self,
+        thread_id: &str,
+        msg_id: &str,
+        content: String,
+    ) -> Result<Vec<emergent_protocol::QueuedMessageView>, String> {
+        self.threads.edit_queued(thread_id, msg_id, content).await
+    }
+
+    pub async fn remove_queued(
+        &self,
+        thread_id: &str,
+        msg_id: &str,
+    ) -> Result<Vec<emergent_protocol::QueuedMessageView>, String> {
+        self.threads.remove_queued(thread_id, msg_id).await
+    }
+
+    pub async fn reorder_queue(
+        &self,
+        thread_id: &str,
+        ids: &[String],
+    ) -> Result<Vec<emergent_protocol::QueuedMessageView>, String> {
+        self.threads.reorder_queue(thread_id, ids).await
+    }
+
+    pub async fn clear_queue(&self, thread_id: &str) {
+        self.threads.clear_queue(thread_id).await
     }
 
     pub async fn cancel_prompt(&self, thread_id: &str) -> Result<(), String> {
@@ -577,6 +636,18 @@ impl AgentManager {
         let handle_arc = threads.get(thread_id)?;
         let handle = handle_arc.lock().await;
         Some(handle.workspace_id.clone())
+    }
+
+    /// Resolve a thread's workspace whether it is live or dormant. Used to
+    /// validate that a `send_message` target shares the sender's workspace.
+    pub async fn thread_workspace(&self, thread_id: &str) -> Option<WorkspaceId> {
+        if let Some(ws) = self.threads.live_workspace(thread_id).await {
+            return Some(ws);
+        }
+        self.threads
+            .dormant_entry(thread_id)
+            .await
+            .map(|(ws, _)| ws)
     }
 }
 

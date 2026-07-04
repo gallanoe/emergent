@@ -18,6 +18,7 @@ use super::acp_bridge::{
     agent_command_loop, build_permission_response, handle_session_update,
 };
 use super::prompt_loop::prompt_loop;
+use super::queue::ThreadQueue;
 use super::spawner::AgentProcess;
 use super::{AgentCommand, ThreadHandle};
 
@@ -53,6 +54,7 @@ pub(crate) struct PendingHandshake {
     init_rx: oneshot::Receiver<Result<(SessionId, Vec<ConfigOption>), String>>,
     agents: Arc<RwLock<HashMap<String, Arc<Mutex<ThreadHandle>>>>>,
     event_tx: broadcast::Sender<Notification>,
+    queue: Arc<ThreadQueue>,
 }
 
 /// Split an agent command string into argv with shell-style quoting, so a binary
@@ -98,6 +100,7 @@ pub(crate) async fn initialize_agent(
     mcp_port: u16,
     bearer_token: String,
     agent_home: std::path::PathBuf,
+    queue: Arc<ThreadQueue>,
 ) -> Result<PendingHandshake, String> {
     let spawner = super::spawner::LocalProcessSpawner::new();
     let parts = parse_agent_command(&agent_binary)?;
@@ -450,8 +453,6 @@ pub(crate) async fn initialize_agent(
         task_id,
         completing: false,
         last_prompted_permissions: false,
-        prompt_notify: Arc::new(tokio::sync::Notify::new()),
-        pending_prompt: None,
         prompt_loop_handle: None,
     };
     let handle_arc = Arc::new(Mutex::new(handle));
@@ -474,6 +475,7 @@ pub(crate) async fn initialize_agent(
         init_rx,
         agents,
         event_tx,
+        queue,
     })
 }
 
@@ -491,6 +493,7 @@ pub(crate) async fn await_handshake(
         init_rx,
         agents,
         event_tx,
+        queue,
     } = pending;
 
     // Wait for ACP initialization, bounded by a timeout so a binary that starts
@@ -554,6 +557,7 @@ pub(crate) async fn await_handshake(
             h.prompt_loop_handle = Some(tokio::spawn(prompt_loop(
                 agent_id.clone(),
                 handle_arc.clone(),
+                queue.clone(),
                 event_tx.clone(),
             )));
         }

@@ -266,6 +266,9 @@ pub fn run() {
                                 Notification::TaskStatusNotification(ref p) => {
                                     let _ = bridge_handle.emit(event_name, p);
                                 }
+                                Notification::QueueChanged(ref p) => {
+                                    let _ = bridge_handle.emit(event_name, p);
+                                }
                             }
                         }
                         Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
@@ -298,6 +301,11 @@ pub fn run() {
             commands::delete_thread,
             commands::send_prompt,
             commands::cancel_prompt,
+            commands::list_queue,
+            commands::edit_queued,
+            commands::remove_queued,
+            commands::reorder_queue,
+            commands::clear_queue,
             commands::kill_thread,
             commands::shutdown_thread,
             commands::get_daemon_status,

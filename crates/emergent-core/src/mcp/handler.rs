@@ -85,10 +85,25 @@ pub struct SearchConversationsParams {
     pub task_id: Option<String>,
 }
 
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct SendMessageParams {
+    /// Target conversation (thread) ID to deliver the message to. Get IDs from
+    /// `search_conversations`. Must be in your workspace.
+    pub to: String,
+    /// Message body delivered to the target agent on its next turn.
+    pub content: String,
+}
+
 #[derive(Debug, Serialize)]
 struct AvailableAgent {
     id: String,
     name: String,
+}
+
+#[derive(Debug, Serialize)]
+struct SendMessageResult {
+    to: String,
+    status: &'static str,
 }
 
 #[derive(Debug, Serialize)]
@@ -348,6 +363,77 @@ impl McpHandler {
 
         let json = serde_json::to_string_pretty(&conversations)
             .map_err(|e| rmcp::model::ErrorData::internal_error(e.to_string(), None))?;
+        Ok(rmcp::model::CallToolResult::success(vec![
+            rmcp::model::Content::text(json),
+        ]))
+    }
+
+    /// Send a message to another conversation (thread) in your workspace. The
+    /// message is held in the target's queue and delivered on its next turn; if
+    /// the target is dormant it is woken to receive it. Fire-and-forget: returns
+    /// once queued, not when the target reads it.
+    #[tool]
+    async fn send_message(
+        &self,
+        Extension(parts): Extension<http::request::Parts>,
+        Parameters(params): Parameters<SendMessageParams>,
+    ) -> Result<rmcp::model::CallToolResult, rmcp::model::ErrorData> {
+        let from_thread_id = self
+            .agent_id_from_parts(&parts)
+            .map_err(|e| rmcp::model::ErrorData::internal_error(e, None))?;
+        let from_workspace = self
+            .manager
+            .get_thread_workspace_id(&from_thread_id)
+            .await
+            .ok_or_else(|| rmcp::model::ErrorData::internal_error("Sender thread not found", None))?;
+
+        // Reject self-sends and cross-workspace sends.
+        if params.to == from_thread_id {
+            return Err(rmcp::model::ErrorData::invalid_params(
+                "Cannot send a message to yourself",
+                None,
+            ));
+        }
+        let to_workspace = self
+            .manager
+            .thread_workspace(&params.to)
+            .await
+            .ok_or_else(|| {
+                rmcp::model::ErrorData::invalid_params(
+                    format!("Target conversation '{}' not found", params.to),
+                    None,
+                )
+            })?;
+        if to_workspace != from_workspace {
+            return Err(rmcp::model::ErrorData::invalid_params(
+                "Target conversation is in a different workspace",
+                None,
+            ));
+        }
+
+        let from_name = self
+            .manager
+            .get_agent_name_for_thread(&from_thread_id)
+            .await
+            .unwrap_or_else(|| from_thread_id.clone());
+
+        self.manager
+            .enqueue_message(
+                &params.to,
+                crate::agent::queue::MessageSource::Thread {
+                    from_thread_id: from_thread_id.clone(),
+                    from_name,
+                },
+                params.content,
+            )
+            .await
+            .map_err(|e| rmcp::model::ErrorData::internal_error(e, None))?;
+
+        let json = serde_json::to_string_pretty(&SendMessageResult {
+            to: params.to,
+            status: "queued",
+        })
+        .map_err(|e| rmcp::model::ErrorData::internal_error(e.to_string(), None))?;
         Ok(rmcp::model::CallToolResult::success(vec![
             rmcp::model::Content::text(json),
         ]))

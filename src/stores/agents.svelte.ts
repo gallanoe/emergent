@@ -8,9 +8,10 @@ import {
   type DisplayThread,
   type DisplayToolCall,
   type NudgeDeliveredPayload,
+  type QueueChangedPayload,
   type QueueItem,
+  type QueuedMessageView,
   type SystemMessagePayload,
-  type TaskStatusNotificationPayload,
   type ToolCallContentItem,
   type ToolKind,
 } from "./types";
@@ -350,13 +351,8 @@ function createAgentStore() {
       }
     }
 
-    // B3c: if there are queued items, set drain flag.
-    // Do NOT call sendPrompt here — the race is fixed by B3d (drain happens on idle event).
-    if (thread.pendingQueue.length > 0) {
-      thread.drainQueueOnIdle = true;
-      return;
-    }
-
+    // Draining is the backend's job now: it coalesces the queue into the next
+    // turn and emits `QueueChanged`. Nothing to arm here.
     if (thread.status === "working" || thread.status === "cancelling") {
       thread.status = "idle";
     }
@@ -443,11 +439,6 @@ function createAgentStore() {
     }
 
     thread.status = next;
-
-    // B3d: drain queued items once the backend confirms idle
-    if (next === "idle" && thread.drainQueueOnIdle && thread.pendingQueue.length > 0) {
-      drainQueueNow(thread);
-    }
   }
 
   function handleNudgeDelivered(payload: NudgeDeliveredPayload) {
@@ -517,69 +508,33 @@ function createAgentStore() {
   }
 
   /**
-   * Drain the pending queue for a thread that is currently idle.
-   * Shared by both the status-change handler (B3d) and the task-notification
-   * handler (when the thread is already idle when a notification arrives).
-   *
-   * Precondition: caller must have verified `thread.pendingQueue.length > 0`
-   * and `thread.status === "idle"` before calling.
+   * Map a backend queue item (wire format) to the frontend `QueueItem`.
+   * `source` drives the read-only badge: user items are editable, task/thread
+   * items are inbound and rendered read-only (reusing the "task-notification"
+   * kind the queue component already understands).
    */
-  function drainQueueNow(thread: ThreadState) {
-    thread.drainQueueOnIdle = false;
-    const items = thread.pendingQueue;
-    const joinedText = items.map((item) => item.content).join("\n\n");
-    thread.pendingQueue = [];
-
-    thread.messages.push({
-      id: crypto.randomUUID(),
-      role: "user",
-      content: joinedText,
-      timestamp: new Date().toLocaleTimeString([], {
-        hour: "numeric",
-        minute: "2-digit",
-      }),
-      sending: true,
-    });
-
-    thread.status = "working";
-
-    invoke("send_prompt", { threadId: thread.id, text: joinedText }).catch((err) => {
-      for (const msg of thread.messages) {
-        if (msg.sending) {
-          msg.sending = false;
-        }
-      }
-      thread.status = "error";
-      console.error("send_prompt (drain) failed:", err);
-    });
+  function viewToQueueItem(v: QueuedMessageView): QueueItem {
+    const item: QueueItem = {
+      id: v.id,
+      content: v.content,
+      submittedAt: Date.parse(v.created_at) || Date.now(),
+      kind: v.source === "user" ? "user" : "task-notification",
+      source: v.source,
+    };
+    if (v.from !== undefined) item.from = v.from;
+    return item;
   }
 
-  function handleTaskStatusNotification(payload: TaskStatusNotificationPayload) {
-    const thread = threads[payload.creator_thread_id];
-    if (!thread) {
-      console.debug(`[task:status-notification] thread not found: ${payload.creator_thread_id}`);
-      return;
-    }
-
-    const content = `[Task ${payload.task_id}] ${payload.kind}: ${payload.message}`;
-
-    thread.pendingQueue.push({
-      id: crypto.randomUUID(),
-      content,
-      submittedAt: Date.now(),
-      kind: "task-notification",
-    });
-
-    // If the thread is already idle and not draining, arm the drain flag and
-    // drain immediately so the agent processes the notification right away.
-    if (thread.status === "idle") {
-      thread.drainQueueOnIdle = true;
-      drainQueueNow(thread);
-    } else {
-      // Thread is working/cancelling/etc. — arm the flag so the existing
-      // drain-on-idle path (handleStatusChange) picks it up when idle arrives.
-      thread.drainQueueOnIdle = true;
-    }
+  /**
+   * The backend queue is the source of truth. `QueueChanged` is emitted only for
+   * mutations the frontend did NOT initiate (an inbound inter-thread/task
+   * message landed, or the prompt loop drained at turn start). Self-initiated
+   * edits update the mirror from their command's return value instead.
+   */
+  function handleQueueChanged(payload: QueueChangedPayload) {
+    const thread = threads[payload.thread_id];
+    if (!thread) return;
+    thread.pendingQueue = payload.items.map(viewToQueueItem);
   }
 
   // ── Event listener setup ──────────────────────────────────────
@@ -639,8 +594,8 @@ function createAgentStore() {
       ),
     );
     listenerCleanup.push(
-      await listen<TaskStatusNotificationPayload>("task:status-notification", (e) =>
-        handleTaskStatusNotification(e.payload),
+      await listen<QueueChangedPayload>("thread:queue-changed", (e) =>
+        handleQueueChanged(e.payload),
       ),
     );
     listenersReady = true;
@@ -717,13 +672,12 @@ function createAgentStore() {
     const thread = threads[threadId];
     if (!thread) throw new Error(`Thread ${threadId} not found`);
 
-    // Queue path: thread is busy or cancelling — accumulate in pendingQueue.
-    // Do NOT push to thread.messages here; the chip stack (P0-1) renders pendingQueue.
+    // Queue path: thread is busy or cancelling — enqueue backend-side. The
+    // backend holds it and the chip appears via the `QueueChanged` event. Do NOT
+    // push to thread.messages here; the chip stack renders pendingQueue.
     if (thread.status === "working" || thread.status === "cancelling") {
-      thread.pendingQueue.push({
-        id: crypto.randomUUID(),
-        content: text,
-        submittedAt: Date.now(),
+      invoke("send_prompt", { threadId, text }).catch((err) => {
+        console.error("send_prompt (enqueue) failed:", err);
       });
       return;
     }
@@ -778,28 +732,63 @@ function createAgentStore() {
     }
   }
 
-  /** Remove one item from pendingQueue by id. No-op if not found. */
-  function removeQueueItem(threadId: string, itemId: string): void {
+  /**
+   * Remove one queued message via the backend. The mirror is updated from the
+   * command's returned snapshot (self-initiated → no `QueueChanged` event).
+   */
+  async function removeQueueItem(threadId: string, itemId: string): Promise<void> {
     const thread = threads[threadId];
     if (!thread) return;
-    thread.pendingQueue = thread.pendingQueue.filter((item) => item.id !== itemId);
-  }
-
-  /** Replace the content of one pendingQueue item in place; preserves id and submittedAt. */
-  function updateQueueItem(threadId: string, itemId: string, content: string): void {
-    const thread = threads[threadId];
-    if (!thread) return;
-    const item = thread.pendingQueue.find((i) => i.id === itemId);
-    if (item) {
-      item.content = content;
+    try {
+      const items = await invoke<QueuedMessageView[]>("remove_queued", {
+        threadId,
+        msgId: itemId,
+      });
+      thread.pendingQueue = items.map(viewToQueueItem);
+    } catch (err) {
+      // Likely already drained — the next QueueChanged/list_queue reconciles.
+      console.error("remove_queued failed:", err);
     }
   }
 
-  /** Clear all pending queue items for a thread. */
-  function clearQueue(threadId: string): void {
+  /** Replace the content of one queued message via the backend. */
+  async function updateQueueItem(threadId: string, itemId: string, content: string): Promise<void> {
     const thread = threads[threadId];
     if (!thread) return;
-    thread.pendingQueue = [];
+    try {
+      const items = await invoke<QueuedMessageView[]>("edit_queued", {
+        threadId,
+        msgId: itemId,
+        text: content,
+      });
+      thread.pendingQueue = items.map(viewToQueueItem);
+    } catch (err) {
+      console.error("edit_queued failed:", err);
+    }
+  }
+
+  /** Clear all queued messages for a thread via the backend. */
+  async function clearQueue(threadId: string): Promise<void> {
+    const thread = threads[threadId];
+    if (!thread) return;
+    try {
+      await invoke("clear_queue", { threadId });
+      thread.pendingQueue = [];
+    } catch (err) {
+      console.error("clear_queue failed:", err);
+    }
+  }
+
+  /** Seed the queue mirror from the backend (e.g. when a thread view opens). */
+  async function refreshQueue(threadId: string): Promise<void> {
+    const thread = threads[threadId];
+    if (!thread) return;
+    try {
+      const items = await invoke<QueuedMessageView[]>("list_queue", { threadId });
+      thread.pendingQueue = items.map(viewToQueueItem);
+    } catch (err) {
+      console.error("list_queue failed:", err);
+    }
   }
 
   async function setConfig(threadId: string, configId: string, value: string): Promise<void> {
@@ -1069,6 +1058,7 @@ function createAgentStore() {
     removeQueueItem,
     updateQueueItem,
     clearQueue,
+    refreshQueue,
     replayNotifications,
     syncThreadSnapshot,
     // Exposed for testing only — do not call from production components
@@ -1077,7 +1067,7 @@ function createAgentStore() {
       handleStatusChange,
       handleError,
       handleUserMessage,
-      handleTaskStatusNotification,
+      handleQueueChanged,
       get chunkBuffers() {
         return chunkBuffers;
       },

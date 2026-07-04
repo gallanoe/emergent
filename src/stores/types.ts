@@ -51,7 +51,7 @@ export interface ConfigOption {
   options: ConfigSelectOption[] | ConfigSelectGroup[];
 }
 
-/** An item waiting in the pre-submission queue (not yet sent to the agent). */
+/** An item waiting in the backend message queue (held until the thread drains). */
 export interface QueueItem {
   id: string;
   content: string;
@@ -63,6 +63,25 @@ export interface QueueItem {
    * Absence (undefined) implies "user".
    */
   kind?: "user" | "task-notification";
+  /** Backend message source: "user" | "task" | "thread". */
+  source?: "user" | "task" | "thread";
+  /** For `source: "thread"`, the sending agent's display name. */
+  from?: string;
+}
+
+/** Wire-format of a single backend queue item (matches Rust `QueuedMessageView`). */
+export interface QueuedMessageView {
+  id: string;
+  source: "user" | "task" | "thread";
+  from?: string;
+  content: string;
+  created_at: string;
+}
+
+/** Wire-format payload for the `thread:queue-changed` Tauri event. */
+export interface QueueChangedPayload {
+  thread_id: string;
+  items: QueuedMessageView[];
 }
 
 /** Wire-format payload for the `task:status-notification` Tauri event.

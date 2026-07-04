@@ -1050,10 +1050,14 @@ async fn mock_agent_use_tools_streams_tool_call_and_message() {
 
     // "use tools" makes the mock-agent emit a Read-file tool call (pending ->
     // completed) followed by a message, then end the turn.
-    let _reply = manager
-        .queue_prompt(&thread_id, "use tools".into())
+    manager
+        .enqueue_message(
+            &thread_id,
+            emergent_core::agent::queue::MessageSource::User,
+            "use tools".into(),
+        )
         .await
-        .expect("queue_prompt");
+        .expect("enqueue_message");
 
     let notifs = collect_turn(&mut rx, &thread_id, Duration::from_secs(20)).await;
 

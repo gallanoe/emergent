@@ -190,6 +190,29 @@ pub struct TaskStatusNotificationPayload {
     pub message: String,
 }
 
+/// A single queued message, flattened for the frontend. `source` is one of
+/// "user" | "task" | "thread"; `from` carries the sending agent's display name
+/// when `source == "thread"`.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct QueuedMessageView {
+    pub id: String,
+    pub source: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub from: Option<String>,
+    pub content: String,
+    pub created_at: String,
+}
+
+/// Emitted whenever a thread's backend message queue changes for a reason the
+/// frontend did not directly initiate (an inbound inter-thread/task message
+/// landed, or the prompt loop drained the queue at turn start). Self-initiated
+/// edits are answered by the command's return value, not this event.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct QueueChangedPayload {
+    pub thread_id: String,
+    pub items: Vec<QueuedMessageView>,
+}
+
 mod base64_bytes {
     use base64::Engine;
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -409,6 +432,8 @@ pub enum Notification {
     TokenUsage(ThreadTokenUsagePayload),
     #[serde(rename = "thread:turn-usage")]
     TurnUsage(TurnUsagePayload),
+    #[serde(rename = "thread:queue-changed")]
+    QueueChanged(QueueChangedPayload),
 }
 
 impl Notification {
@@ -434,6 +459,7 @@ impl Notification {
             Notification::SessionReady(_) => "thread:session-ready",
             Notification::TokenUsage(_) => "thread:token-usage",
             Notification::TurnUsage(_) => "thread:turn-usage",
+            Notification::QueueChanged(_) => "thread:queue-changed",
         }
     }
 
@@ -459,6 +485,7 @@ impl Notification {
             Notification::SessionReady(p) => Some(&p.thread_id),
             Notification::TokenUsage(p) => Some(&p.thread_id),
             Notification::TurnUsage(p) => Some(&p.thread_id),
+            Notification::QueueChanged(p) => Some(&p.thread_id),
         }
     }
 }

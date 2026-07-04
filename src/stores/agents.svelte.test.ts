@@ -66,10 +66,10 @@ describe("B1: cancelPrompt", () => {
   });
 });
 
-// ── B2: sendPrompt queues to pendingQueue during "cancelling"/"working" ───────
+// ── B2: sendPrompt while busy enqueues backend-side ──────────────────────────
 
-describe("B2: sendPrompt while cancelling", () => {
-  it("pushes item to pendingQueue, leaves messages unchanged, does not invoke", async () => {
+describe("B2: sendPrompt while busy enqueues backend-side", () => {
+  it("invokes send_prompt and pushes no local bubble/chip (chip arrives via QueueChanged)", async () => {
     makeThread("t-b2", "cancelling");
 
     const invokeSend = vi.fn().mockResolvedValue(null);
@@ -84,16 +84,15 @@ describe("B2: sendPrompt while cancelling", () => {
     flushSync();
 
     const thread = agentStore.threads["t-b2"]!;
-    expect(thread.pendingQueue).toHaveLength(1);
-    expect(thread.pendingQueue[0]!.content).toBe("hello world");
-
-    // No bubble pushed to messages
+    // Queue mirror is backend-driven; no optimistic local push here.
+    expect(thread.pendingQueue).toHaveLength(0);
     expect(thread.messages).toHaveLength(0);
 
-    expect(invokeSend).not.toHaveBeenCalled();
+    await Promise.resolve();
+    expect(invokeSend).toHaveBeenCalled();
   });
 
-  it("also queues during 'working' status", async () => {
+  it("also enqueues during 'working' status", async () => {
     makeThread("t-b2-working", "working");
 
     const invokeSend = vi.fn().mockResolvedValue(null);
@@ -108,10 +107,9 @@ describe("B2: sendPrompt while cancelling", () => {
     flushSync();
 
     const thread = agentStore.threads["t-b2-working"]!;
-    expect(thread.pendingQueue).toHaveLength(1);
-    expect(thread.pendingQueue[0]!.content).toBe("queued msg");
     expect(thread.messages).toHaveLength(0);
-    expect(invokeSend).not.toHaveBeenCalled();
+    await Promise.resolve();
+    expect(invokeSend).toHaveBeenCalled();
   });
 });
 
@@ -133,7 +131,7 @@ describe("B3: handlePromptComplete", () => {
     expect(assistantMsg?.cancelled).toBe(true);
   });
 
-  it("B3c: with pending queue items — drainQueueOnIdle set; sendPrompt not called (status stays unchanged)", () => {
+  it("B3c: does not drain or invoke send_prompt — backend owns draining", () => {
     makeThread("t-b3c", "cancelling");
     const thread = agentStore.threads["t-b3c"]!;
     thread.pendingQueue.push(
@@ -152,12 +150,12 @@ describe("B3: handlePromptComplete", () => {
     agentStore._test.handlePromptComplete({ thread_id: "t-b3c", stop_reason: "EndTurn" });
     flushSync();
 
-    // Drain flag set
-    expect(thread.drainQueueOnIdle).toBe(true);
-    // sendPrompt not called (no invoke to send_prompt)
+    // No frontend drain: the backend coalesces and emits QueueChanged instead.
     expect(sendCalled).not.toHaveBeenCalled();
-    // pendingQueue preserved for later drain
+    // Mirror left untouched here (backend clears it via QueueChanged on drain).
     expect(thread.pendingQueue).toHaveLength(2);
+    // cancelling → idle once the turn completes.
+    expect(thread.status).toBe("idle");
   });
 
   it("B3a: chunk buffer for the thread is deleted after flush", () => {
@@ -184,10 +182,9 @@ describe("B3d + B5: handleStatusChange", () => {
     expect(agentStore.threads["t-b5"]?.status).toBe("cancelling");
   });
 
-  it("B3d: when idle and drainQueueOnIdle=true with pendingQueue items, drains and calls send_prompt", async () => {
+  it("B3d: idle transition just sets status — no frontend drain, no send_prompt", async () => {
     makeThread("t-b3d", "cancelling");
     const thread = agentStore.threads["t-b3d"]!;
-    thread.drainQueueOnIdle = true;
     thread.pendingQueue.push({ id: "q1", content: "queued message", submittedAt: Date.now() });
 
     const sendCalled = vi.fn().mockResolvedValue(null);
@@ -201,17 +198,11 @@ describe("B3d + B5: handleStatusChange", () => {
     agentStore._test.handleStatusChange({ thread_id: "t-b3d", status: "idle" });
     flushSync();
 
-    expect(thread.drainQueueOnIdle).toBe(false);
-    expect(thread.pendingQueue).toHaveLength(0);
-
-    // One sending bubble added for the drained content
-    const sendingBubble = thread.messages.find((m) => m.sending === true);
-    expect(sendingBubble).toBeDefined();
-    expect(sendingBubble?.content).toBe("queued message");
-
-    // sendPrompt is called async via void — wait a tick
+    expect(thread.status).toBe("idle");
+    // Draining is the backend's job; the mirror is untouched until QueueChanged.
+    expect(thread.pendingQueue).toHaveLength(1);
     await Promise.resolve();
-    expect(sendCalled).toHaveBeenCalled();
+    expect(sendCalled).not.toHaveBeenCalled();
   });
 });
 
@@ -361,88 +352,56 @@ describe("Fixup 3: cancelPrompt IPC failure clears sending bubble", () => {
   });
 });
 
-// ── task:status-notification handler ─────────────────────────────────────────
+// ── thread:queue-changed handler (backend queue mirror) ──────────────────────
 
-describe("handleTaskStatusNotification", () => {
-  it("pushes a kind='task-notification' item to pendingQueue of the target thread", () => {
-    makeThread("t-tsn-idle", "working");
-    const thread = agentStore.threads["t-tsn-idle"]!;
+describe("handleQueueChanged", () => {
+  it("mirrors backend queue items into pendingQueue, mapping source → kind/from", () => {
+    makeThread("t-qc", "working");
+    const thread = agentStore.threads["t-qc"]!;
 
-    agentStore._test.handleTaskStatusNotification({
-      task_id: "task-42",
-      creator_thread_id: "t-tsn-idle",
-      kind: "update",
-      message: "halfway done",
+    agentStore._test.handleQueueChanged({
+      thread_id: "t-qc",
+      items: [
+        { id: "m1", source: "user", content: "hi", created_at: new Date().toISOString() },
+        {
+          id: "m2",
+          source: "thread",
+          from: "Agent B",
+          content: "ping",
+          created_at: new Date().toISOString(),
+        },
+        {
+          id: "m3",
+          source: "task",
+          content: "update: halfway",
+          created_at: new Date().toISOString(),
+        },
+      ],
     });
     flushSync();
 
-    expect(thread.pendingQueue).toHaveLength(1);
-    const item = thread.pendingQueue[0]!;
-    expect(item.kind).toBe("task-notification");
-    expect(item.content).toBe("[Task task-42] update: halfway done");
+    expect(thread.pendingQueue).toHaveLength(3);
+    expect(thread.pendingQueue[0]!.kind).toBe("user");
+    expect(thread.pendingQueue[1]!.kind).toBe("task-notification");
+    expect(thread.pendingQueue[1]!.from).toBe("Agent B");
+    expect(thread.pendingQueue[2]!.source).toBe("task");
   });
 
-  it("arms drainQueueOnIdle when thread is working", () => {
-    makeThread("t-tsn-working", "working");
-    const thread = agentStore.threads["t-tsn-working"]!;
+  it("empty items clears the mirror (drain at turn start)", () => {
+    makeThread("t-qc-empty", "working");
+    const thread = agentStore.threads["t-qc-empty"]!;
+    thread.pendingQueue.push({ id: "old", content: "x", submittedAt: Date.now() });
 
-    agentStore._test.handleTaskStatusNotification({
-      task_id: "task-1",
-      creator_thread_id: "t-tsn-working",
-      kind: "completed",
-      message: "done",
-    });
+    agentStore._test.handleQueueChanged({ thread_id: "t-qc-empty", items: [] });
     flushSync();
 
-    expect(thread.drainQueueOnIdle).toBe(true);
-    expect(thread.pendingQueue).toHaveLength(1);
-  });
-
-  it("drains immediately when thread is idle, calling send_prompt", async () => {
-    makeThread("t-tsn-drain", "idle");
-    const thread = agentStore.threads["t-tsn-drain"]!;
-
-    const sendCalled = vi.fn().mockResolvedValue(null);
-    mockIPC((cmd) => {
-      if (cmd === "send_prompt") {
-        sendCalled();
-        return Promise.resolve(null);
-      }
-    });
-
-    agentStore._test.handleTaskStatusNotification({
-      task_id: "task-99",
-      creator_thread_id: "t-tsn-drain",
-      kind: "update",
-      message: "progress report",
-    });
-    flushSync();
-
-    // Queue drained — no items remain
     expect(thread.pendingQueue).toHaveLength(0);
-
-    // A sending bubble was pushed
-    const sendingBubble = thread.messages.find((m) => m.sending === true);
-    expect(sendingBubble).toBeDefined();
-    expect(sendingBubble?.content).toBe("[Task task-99] update: progress report");
-
-    // Thread status set to working
-    expect(thread.status).toBe("working");
-
-    // invoke was called
-    await Promise.resolve();
-    expect(sendCalled).toHaveBeenCalled();
   });
 
-  it("is a no-op when creator_thread_id does not match any thread", () => {
-    expect(() => {
-      agentStore._test.handleTaskStatusNotification({
-        task_id: "task-x",
-        creator_thread_id: "no-such-thread",
-        kind: "update",
-        message: "ignored",
-      });
-    }).not.toThrow();
+  it("is a no-op when the thread is not found", () => {
+    expect(() =>
+      agentStore._test.handleQueueChanged({ thread_id: "no-such-thread", items: [] }),
+    ).not.toThrow();
   });
 });
 
@@ -461,7 +420,7 @@ describe("removed legacy exports", () => {
 // ── Per-item queue operations ─────────────────────────────────────────────────
 
 describe("removeQueueItem", () => {
-  it("removes the item with the matching id", () => {
+  it("calls remove_queued and mirrors the returned snapshot", async () => {
     makeThread("t-remove", "working");
     const thread = agentStore.threads["t-remove"]!;
     thread.pendingQueue.push(
@@ -469,62 +428,59 @@ describe("removeQueueItem", () => {
       { id: "q2", content: "second", submittedAt: Date.now() },
     );
 
-    agentStore.removeQueueItem("t-remove", "q1");
+    mockIPC((cmd) => {
+      if (cmd === "remove_queued") {
+        return Promise.resolve([
+          { id: "q2", source: "user", content: "second", created_at: new Date().toISOString() },
+        ]);
+      }
+    });
+
+    await agentStore.removeQueueItem("t-remove", "q1");
     flushSync();
 
     expect(thread.pendingQueue).toHaveLength(1);
     expect(thread.pendingQueue[0]!.id).toBe("q2");
   });
 
-  it("is a no-op when the id is not found", () => {
-    makeThread("t-remove-noop", "working");
-    const thread = agentStore.threads["t-remove-noop"]!;
-    thread.pendingQueue.push({ id: "q1", content: "msg", submittedAt: Date.now() });
-
-    agentStore.removeQueueItem("t-remove-noop", "does-not-exist");
-    flushSync();
-
-    expect(thread.pendingQueue).toHaveLength(1);
-  });
-
-  it("is a no-op when the thread is not found", () => {
-    expect(() => agentStore.removeQueueItem("nonexistent", "q1")).not.toThrow();
+  it("is a no-op when the thread is not found", async () => {
+    await expect(agentStore.removeQueueItem("nonexistent", "q1")).resolves.toBeUndefined();
   });
 });
 
 describe("updateQueueItem", () => {
-  it("replaces content in place, preserving id and submittedAt", () => {
+  it("calls edit_queued and mirrors the returned snapshot", async () => {
     makeThread("t-update", "working");
     const thread = agentStore.threads["t-update"]!;
-    const ts = Date.now();
-    thread.pendingQueue.push({ id: "q1", content: "original", submittedAt: ts });
+    thread.pendingQueue.push({ id: "q1", content: "original", submittedAt: Date.now() });
 
-    agentStore.updateQueueItem("t-update", "q1", "updated content");
+    mockIPC((cmd) => {
+      if (cmd === "edit_queued") {
+        return Promise.resolve([
+          {
+            id: "q1",
+            source: "user",
+            content: "updated content",
+            created_at: new Date().toISOString(),
+          },
+        ]);
+      }
+    });
+
+    await agentStore.updateQueueItem("t-update", "q1", "updated content");
     flushSync();
 
     expect(thread.pendingQueue[0]!.content).toBe("updated content");
     expect(thread.pendingQueue[0]!.id).toBe("q1");
-    expect(thread.pendingQueue[0]!.submittedAt).toBe(ts);
   });
 
-  it("is a no-op when the id is not found", () => {
-    makeThread("t-update-noop", "working");
-    const thread = agentStore.threads["t-update-noop"]!;
-    thread.pendingQueue.push({ id: "q1", content: "original", submittedAt: Date.now() });
-
-    agentStore.updateQueueItem("t-update-noop", "does-not-exist", "new content");
-    flushSync();
-
-    expect(thread.pendingQueue[0]!.content).toBe("original");
-  });
-
-  it("is a no-op when the thread is not found", () => {
-    expect(() => agentStore.updateQueueItem("nonexistent", "q1", "x")).not.toThrow();
+  it("is a no-op when the thread is not found", async () => {
+    await expect(agentStore.updateQueueItem("nonexistent", "q1", "x")).resolves.toBeUndefined();
   });
 });
 
 describe("clearQueue", () => {
-  it("empties the pendingQueue", () => {
+  it("calls clear_queue and empties the mirror", async () => {
     makeThread("t-clear", "working");
     const thread = agentStore.threads["t-clear"]!;
     thread.pendingQueue.push(
@@ -532,14 +488,23 @@ describe("clearQueue", () => {
       { id: "q2", content: "b", submittedAt: Date.now() },
     );
 
-    agentStore.clearQueue("t-clear");
+    const cleared = vi.fn();
+    mockIPC((cmd) => {
+      if (cmd === "clear_queue") {
+        cleared();
+        return Promise.resolve(null);
+      }
+    });
+
+    await agentStore.clearQueue("t-clear");
     flushSync();
 
+    expect(cleared).toHaveBeenCalled();
     expect(thread.pendingQueue).toHaveLength(0);
   });
 
-  it("is a no-op when the thread is not found", () => {
-    expect(() => agentStore.clearQueue("nonexistent")).not.toThrow();
+  it("is a no-op when the thread is not found", async () => {
+    await expect(agentStore.clearQueue("nonexistent")).resolves.toBeUndefined();
   });
 });
 

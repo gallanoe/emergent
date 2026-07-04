@@ -226,17 +226,14 @@ impl TaskManager {
             }
 
             let prompt = build_task_prompt(&task_id, &title, &description);
-            match agent_manager.queue_prompt(thread_id, prompt).await {
-                Ok(_reply_rx) => {
-                    // Drop the receiver — task completion is driven by the agent calling complete_task.
-                }
-                Err(e) => {
-                    log::error!(
-                        "Failed to queue task prompt for thread {}: {}",
-                        thread_id,
-                        e
-                    );
-                }
+            // The initial task assignment is the thread's first prompt; enqueue it
+            // as a bare `User` message (it is already fully formatted). Delivery is
+            // fire-and-forget — task completion is driven by `complete_task`.
+            if let Err(e) = agent_manager
+                .enqueue_message(thread_id, crate::agent::queue::MessageSource::User, prompt)
+                .await
+            {
+                log::error!("Failed to queue task prompt for thread {}: {}", thread_id, e);
             }
         }
     }
@@ -531,6 +528,7 @@ impl TaskManager {
             if !mode.covers(kind) {
                 continue;
             }
+            // 1) Broadcast for the frontend UI.
             let payload = TaskStatusNotificationPayload {
                 task_id: task_id.to_string(),
                 creator_thread_id: thread_id.clone(),
@@ -540,6 +538,29 @@ impl TaskManager {
             self.event_tx
                 .send(Notification::TaskStatusNotification(payload))
                 .ok();
+
+            // 2) Inject into the subscriber's backend queue so the agent actually
+            // ingests the update on its next turn (waking it if dormant).
+            // Best-effort: a missing/unresumable subscriber thread just skips
+            // injection — the broadcast above still reached the UI.
+            if let Err(e) = self
+                .agent_manager
+                .enqueue_message(
+                    &thread_id,
+                    crate::agent::queue::MessageSource::Task {
+                        task_id: task_id.to_string(),
+                        kind: kind.to_string(),
+                    },
+                    message.to_string(),
+                )
+                .await
+            {
+                log::debug!(
+                    "Skipped task-notification injection for thread {}: {}",
+                    thread_id,
+                    e
+                );
+            }
         }
     }
 

@@ -464,6 +464,10 @@ function createAppState() {
     selectedThreadId = threadId;
     activeView = "agent-chat";
 
+    // Seed the queue mirror from the backend (the authoritative source) so a
+    // thread opened after messages were injected shows its held queue.
+    void agentStore.refreshQueue(threadId);
+
     // Ensure the agent is selected (needed when navigating from task views)
     const conn = agentStore.getThread(threadId);
     if (conn && conn.agentDefinitionId && conn.agentDefinitionId !== selectedAgentId) {

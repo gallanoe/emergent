@@ -7,8 +7,8 @@ use emergent_core::detect;
 use emergent_core::task::TaskManager;
 use emergent_core::workspace::WorkspaceManager;
 use emergent_protocol::{
-    AgentDefinition, ConfigOption, KnownAgent, Notification, ThreadSummary, WorkspaceInfo,
-    WorkspaceSummary,
+    AgentDefinition, ConfigOption, KnownAgent, Notification, QueuedMessageView, ThreadSummary,
+    WorkspaceInfo, WorkspaceSummary,
 };
 
 #[tauri::command]
@@ -130,10 +130,15 @@ pub async fn send_prompt(
     thread_id: String,
     text: String,
 ) -> Result<(), String> {
-    let reply_rx = manager.queue_prompt(&thread_id, text).await?;
-    reply_rx
+    // Fire-and-forget: enqueue the user message and return once it is queued.
+    // Turn-level errors surface later via the `thread:error` event, not here.
+    manager
+        .enqueue_message(
+            &thread_id,
+            emergent_core::agent::queue::MessageSource::User,
+            text,
+        )
         .await
-        .map_err(|_| "Agent prompt loop terminated".to_string())?
 }
 
 #[tauri::command]
@@ -142,6 +147,53 @@ pub async fn cancel_prompt(
     thread_id: String,
 ) -> Result<(), String> {
     manager.cancel_prompt(&thread_id).await
+}
+
+// ── Backend message queue (view/edit/reorder/remove) ───────────
+
+#[tauri::command]
+pub async fn list_queue(
+    manager: State<'_, Arc<AgentManager>>,
+    thread_id: String,
+) -> Result<Vec<QueuedMessageView>, String> {
+    Ok(manager.list_queue(&thread_id).await)
+}
+
+#[tauri::command]
+pub async fn edit_queued(
+    manager: State<'_, Arc<AgentManager>>,
+    thread_id: String,
+    msg_id: String,
+    text: String,
+) -> Result<Vec<QueuedMessageView>, String> {
+    manager.edit_queued(&thread_id, &msg_id, text).await
+}
+
+#[tauri::command]
+pub async fn remove_queued(
+    manager: State<'_, Arc<AgentManager>>,
+    thread_id: String,
+    msg_id: String,
+) -> Result<Vec<QueuedMessageView>, String> {
+    manager.remove_queued(&thread_id, &msg_id).await
+}
+
+#[tauri::command]
+pub async fn reorder_queue(
+    manager: State<'_, Arc<AgentManager>>,
+    thread_id: String,
+    ids: Vec<String>,
+) -> Result<Vec<QueuedMessageView>, String> {
+    manager.reorder_queue(&thread_id, &ids).await
+}
+
+#[tauri::command]
+pub async fn clear_queue(
+    manager: State<'_, Arc<AgentManager>>,
+    thread_id: String,
+) -> Result<(), String> {
+    manager.clear_queue(&thread_id).await;
+    Ok(())
 }
 
 #[tauri::command]

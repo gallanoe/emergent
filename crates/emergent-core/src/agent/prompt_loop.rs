@@ -1,42 +1,49 @@
 use std::sync::Arc;
 
-use emergent_protocol::{AgentStatus, Notification, StatusChangePayload, SystemMessagePayload};
+use emergent_protocol::{
+    AgentStatus, Notification, QueueChangedPayload, StatusChangePayload, SystemMessagePayload,
+};
 use tokio::sync::{broadcast, oneshot, Mutex};
 
+use super::queue::ThreadQueue;
 use super::{AgentCommand, ThreadHandle};
 use crate::swarm::build_system_block;
 
 /// Per-thread prompt loop. Owns the prompt lifecycle for a single thread.
-/// Wakes on `Notify`, checks for a queued user prompt, constructs the prompt,
-/// and sends it to the ACP command loop.
+/// Wakes on the queue's `Notify`, drains the **whole** queue into one coalesced
+/// turn (each message rendered with a source-appropriate header), constructs the
+/// prompt, and sends it to the ACP command loop. Draining is the only place the
+/// idle gate applies: messages may be enqueued in any state and are held here
+/// until the thread is idle and this loop picks them up.
 pub(crate) async fn prompt_loop(
     agent_id: String,
     handle_arc: Arc<Mutex<ThreadHandle>>,
+    queue: Arc<ThreadQueue>,
     event_tx: broadcast::Sender<Notification>,
 ) {
-    // Grab the Notify from the handle (it's Arc-wrapped, so clone is cheap).
-    let notify = handle_arc.lock().await.prompt_notify.clone();
-
     loop {
-        // Phase 1: Check for work — take pending prompt.
-        let pending = {
-            let mut handle = handle_arc.lock().await;
-            handle.pending_prompt.take()
-        };
-
-        // If no work, wait for a notification.
-        if pending.is_none() {
-            notify.notified().await;
+        // Phase 1: wait for work. Drain the entire queue in one shot so all
+        // currently-pending messages coalesce into a single turn.
+        let pending = queue.drain_all().await;
+        let Some(messages) = pending else {
+            queue.notify.notified().await;
             continue; // Re-check after waking.
-        }
-
-        // Phase 2: Build prompt text.
-        let (user_text, reply_tx) = match pending {
-            Some((text, reply)) => (text, Some(reply)),
-            None => (String::new(), None),
         };
 
-        // Determine injection parameters
+        // The queue is now empty — tell the frontend so its chip stack clears.
+        let _ = event_tx.send(Notification::QueueChanged(QueueChangedPayload {
+            thread_id: agent_id.clone(),
+            items: Vec::new(),
+        }));
+
+        // Phase 2: render + coalesce the drained messages into the user text.
+        let user_text = messages
+            .iter()
+            .map(|m| m.render())
+            .collect::<Vec<_>>()
+            .join("\n\n");
+
+        // Determine injection parameters.
         let (is_first_turn, is_task_session, permission_change) = {
             let handle = handle_arc.lock().await;
             let first = !handle.has_prompted;
@@ -76,9 +83,6 @@ pub(crate) async fn prompt_loop(
 
         // Edge case: empty prompt — guard against it.
         if prompt_text.is_empty() {
-            if let Some(reply) = reply_tx {
-                let _ = reply.send(Err("Empty prompt".to_string()));
-            }
             continue;
         }
 
@@ -139,11 +143,6 @@ pub(crate) async fn prompt_loop(
                     }));
                 }
             }
-        }
-
-        // Phase 5: Send result back to caller (if this was a user-initiated prompt).
-        if let Some(reply) = reply_tx {
-            let _ = reply.send(send_result);
         }
 
         // Loop back — immediately re-check for more work.

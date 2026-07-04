@@ -3,12 +3,13 @@ use std::path::Path;
 use std::sync::Arc;
 
 use emergent_protocol::{
-    AgentStatus, ConfigOption, ConfigUpdatePayload, Notification, StatusChangePayload,
-    ThreadErrorPayload, ThreadSummary, WorkspaceId,
+    AgentStatus, ConfigOption, ConfigUpdatePayload, Notification, QueueChangedPayload,
+    QueuedMessageView, StatusChangePayload, ThreadErrorPayload, ThreadSummary, WorkspaceId,
 };
 use tokio::sync::{broadcast, oneshot, Mutex, RwLock};
 
 use super::lifecycle::{InitOutcome, SessionInit};
+use super::queue::{MessageSource, QueuedMessage, ThreadQueue};
 use super::usage_store::{
     apply_cost_delta, apply_turn_delta, PersistedWorkspaceState, TurnDelta, WorkspaceUsageStore,
 };
@@ -39,6 +40,10 @@ pub struct ThreadManager {
     pub(crate) threads: Arc<RwLock<HashMap<String, Arc<Mutex<ThreadHandle>>>>>,
     pub(crate) dormant_threads:
         Arc<RwLock<HashMap<WorkspaceId, HashMap<String, ThreadMapping>>>>,
+    /// Per-thread backend message queues, keyed by `thread_id`. Owned here (not
+    /// on `ThreadHandle`) so a queue outlives the live process and can hold
+    /// messages for a dormant thread until it is resumed and drains them.
+    pub(crate) queues: Arc<RwLock<HashMap<String, Arc<ThreadQueue>>>>,
     pub(crate) event_tx: broadcast::Sender<Notification>,
     pub(crate) history: Arc<RwLock<HashMap<String, Vec<Notification>>>>,
     pub(crate) token_registry: Arc<crate::mcp::TokenRegistry>,
@@ -252,6 +257,7 @@ impl ThreadManager {
         Self {
             threads,
             dormant_threads,
+            queues: Arc::new(RwLock::new(HashMap::new())),
             event_tx,
             history,
             token_registry,
@@ -333,6 +339,10 @@ impl ThreadManager {
         let bearer_token = self.token_registry.register(&id, task_id.clone());
         let mcp_port = self.mcp_port.load(std::sync::atomic::Ordering::Relaxed);
 
+        // Ensure the thread's queue exists and hand its Arc to the prompt loop.
+        // A fresh spawn starts empty; the queue map entry is created here.
+        let queue = self.get_or_create_queue(&id, &workspace_id).await;
+
         let ws_id_for_persist = workspace_id.clone();
         let threads_for_persist = self.threads.clone();
         let dormant_for_persist = self.dormant_threads.clone();
@@ -358,6 +368,7 @@ impl ThreadManager {
             mcp_port,
             bearer_token,
             agent_home,
+            queue,
         )
         .await
         {
@@ -472,6 +483,11 @@ impl ThreadManager {
         let mcp_port = self.mcp_port.load(std::sync::atomic::Ordering::Relaxed);
         let token_registry_for_cleanup = self.token_registry.clone();
 
+        // Reuse an existing queue if a message already woke this thread from
+        // dormancy (its held messages will drain once the loop starts);
+        // otherwise create an empty one.
+        let queue = self.get_or_create_queue(&id, &workspace_id).await;
+
         // Phase 1: spawn + register the `Initializing` handle synchronously so a
         // kill/stop targeting this id can never slip in before the handle is live
         // (which on the resume path could otherwise purge the dormant stub + revoke
@@ -490,6 +506,7 @@ impl ThreadManager {
             mcp_port,
             bearer_token,
             agent_home,
+            queue,
         )
         .await
         {
@@ -535,54 +552,152 @@ impl ThreadManager {
         Ok(())
     }
 
-    /// Queue a user prompt for a thread.
-    pub async fn queue_prompt(
+    /// Get the queue for `thread_id`, creating an empty one bound to
+    /// `workspace_id` if none exists yet. The queue is `Arc`-shared with the
+    /// prompt loop and survives the thread going dormant.
+    pub(crate) async fn get_or_create_queue(
         &self,
         thread_id: &str,
-        text: String,
-    ) -> Result<oneshot::Receiver<Result<(), String>>, String> {
-        let handle_arc = {
+        workspace_id: &WorkspaceId,
+    ) -> Arc<ThreadQueue> {
+        {
+            let queues = self.queues.read().await;
+            if let Some(q) = queues.get(thread_id) {
+                return q.clone();
+            }
+        }
+        let mut queues = self.queues.write().await;
+        queues
+            .entry(thread_id.to_string())
+            .or_insert_with(|| Arc::new(ThreadQueue::new(workspace_id.clone())))
+            .clone()
+    }
+
+    /// Look up an existing queue without creating one.
+    async fn queue_for(&self, thread_id: &str) -> Option<Arc<ThreadQueue>> {
+        self.queues.read().await.get(thread_id).cloned()
+    }
+
+    /// Append a message to a thread's queue and wake its prompt loop. Accepts a
+    /// message in **any** thread state (working, dormant, idle) — the queue is
+    /// the hold buffer; draining is gated on idle by the prompt loop. Rejects
+    /// only a thread that is shutting down after task completion.
+    ///
+    /// Returns `true` if the target thread is currently live (in-process), so
+    /// the caller can decide whether it must be woken from dormancy.
+    pub async fn enqueue(
+        &self,
+        thread_id: &str,
+        workspace_id: &WorkspaceId,
+        source: MessageSource,
+        content: String,
+    ) -> Result<bool, String> {
+        let (is_live, completing) = {
             let threads = self.threads.read().await;
-            threads
-                .get(thread_id)
-                .cloned()
-                .ok_or_else(|| format!("Thread '{}' not found", thread_id))?
+            match threads.get(thread_id) {
+                Some(h) => (true, h.lock().await.completing),
+                None => (false, false),
+            }
         };
-
-        let mut handle = handle_arc.lock().await;
-
-        if handle.completing {
+        if completing {
             return Err(format!(
                 "Thread '{}' has completed its task and is shutting down",
                 thread_id
             ));
         }
-        if handle.pending_prompt.is_some() {
-            return Err(format!(
-                "Thread '{}' already has a pending prompt",
-                thread_id
-            ));
-        }
-        if handle.status != AgentStatus::Idle {
-            return Err(format!(
-                "Thread '{}' is not idle (current status: {})",
-                thread_id, handle.status
-            ));
-        }
 
-        let (reply_tx, reply_rx) = oneshot::channel();
-        handle.pending_prompt = Some((text, reply_tx));
-        handle.prompt_notify.notify_one();
-
-        Ok(reply_rx)
+        let queue = self.get_or_create_queue(thread_id, workspace_id).await;
+        let msg = QueuedMessage {
+            id: Self::generate_short_id(),
+            source,
+            content,
+            created_at: chrono::Utc::now().to_rfc3339(),
+        };
+        let items = queue.push(msg).await;
+        self.emit_queue_changed(thread_id, items);
+        Ok(is_live)
     }
 
-    /// Wake a thread's prompt loop.
+    /// Snapshot a thread's queue for the frontend. Empty if the thread has no
+    /// queue yet.
+    pub async fn list_queue(&self, thread_id: &str) -> Vec<QueuedMessageView> {
+        match self.queue_for(thread_id).await {
+            Some(q) => q.snapshot().await,
+            None => Vec::new(),
+        }
+    }
+
+    /// Edit a queued message's text. Returns the fresh queue snapshot. Errors if
+    /// the message id is not present (already drained or never existed).
+    pub async fn edit_queued(
+        &self,
+        thread_id: &str,
+        msg_id: &str,
+        content: String,
+    ) -> Result<Vec<QueuedMessageView>, String> {
+        let queue = self
+            .queue_for(thread_id)
+            .await
+            .ok_or_else(|| format!("Thread '{}' has no queue", thread_id))?;
+        if !queue.edit(msg_id, content).await {
+            return Err(format!("Queued message '{}' not found (already sent?)", msg_id));
+        }
+        Ok(queue.snapshot().await)
+    }
+
+    /// Remove a queued message. Returns the fresh queue snapshot.
+    pub async fn remove_queued(
+        &self,
+        thread_id: &str,
+        msg_id: &str,
+    ) -> Result<Vec<QueuedMessageView>, String> {
+        let queue = self
+            .queue_for(thread_id)
+            .await
+            .ok_or_else(|| format!("Thread '{}' has no queue", thread_id))?;
+        if !queue.remove(msg_id).await {
+            return Err(format!("Queued message '{}' not found (already sent?)", msg_id));
+        }
+        Ok(queue.snapshot().await)
+    }
+
+    /// Clear a thread's queue. No-op if the thread has no queue.
+    pub async fn clear_queue(&self, thread_id: &str) {
+        if let Some(q) = self.queue_for(thread_id).await {
+            q.clear().await;
+        }
+    }
+
+    /// Reorder a thread's queue to match `ids`. Returns the fresh snapshot.
+    pub async fn reorder_queue(
+        &self,
+        thread_id: &str,
+        ids: &[String],
+    ) -> Result<Vec<QueuedMessageView>, String> {
+        let queue = self
+            .queue_for(thread_id)
+            .await
+            .ok_or_else(|| format!("Thread '{}' has no queue", thread_id))?;
+        queue.reorder(ids).await;
+        Ok(queue.snapshot().await)
+    }
+
+    /// Emit a `QueueChanged` event for unsolicited queue mutations (inbound
+    /// message landed, or the prompt loop drained). Self-initiated edits use the
+    /// command return value instead and do not call this.
+    pub(crate) fn emit_queue_changed(&self, thread_id: &str, items: Vec<QueuedMessageView>) {
+        let _ = self
+            .event_tx
+            .send(Notification::QueueChanged(QueueChangedPayload {
+                thread_id: thread_id.to_string(),
+                items,
+            }));
+    }
+
+    /// Wake a thread's prompt loop (re-check the queue).
     pub async fn notify_prompt_loop(&self, thread_id: &str) {
-        let threads = self.threads.read().await;
-        if let Some(handle_arc) = threads.get(thread_id) {
-            let handle = handle_arc.lock().await;
-            handle.prompt_notify.notify_one();
+        if let Some(q) = self.queue_for(thread_id).await {
+            q.notify.notify_one();
         }
     }
 
@@ -706,6 +821,11 @@ impl ThreadManager {
                 .get(thread_id)
                 .and_then(|h| h.try_lock().ok().and_then(|g| g.acp_session_id.clone()))
         };
+
+        // Purge the message queue: a kill is a full teardown, so any held/queued
+        // messages are discarded (unlike shutdown_thread, which keeps the queue
+        // so a dormant thread's held messages survive until resume).
+        self.queues.write().await.remove(thread_id);
 
         // Clear usage snapshots so the next session starts fresh.
         // Primary key is acp_session_id; also remove by thread_id as a defensive fallback.
@@ -1079,6 +1199,29 @@ impl ThreadManager {
             .unwrap_or_default()
     }
 
+    /// Return the workspace of a **live** thread, or `None` if it is not
+    /// currently in-process.
+    pub async fn live_workspace(&self, thread_id: &str) -> Option<WorkspaceId> {
+        let handle_arc = {
+            let threads = self.threads.read().await;
+            threads.get(thread_id).cloned()?
+        };
+        let ws = handle_arc.lock().await.workspace_id.clone();
+        Some(ws)
+    }
+
+    /// Return the workspace + persisted mapping for a **dormant** thread, or
+    /// `None` if no dormant entry exists for `thread_id`.
+    pub async fn dormant_entry(&self, thread_id: &str) -> Option<(WorkspaceId, ThreadMapping)> {
+        let dormant = self.dormant_threads.read().await;
+        for (ws, ws_map) in dormant.iter() {
+            if let Some(m) = ws_map.get(thread_id) {
+                return Some((ws.clone(), m.clone()));
+            }
+        }
+        None
+    }
+
     /// Flat snapshot of all dormant entries across workspaces, keyed by
     /// `thread_id`. Used for lookups when only a thread_id is known.
     pub async fn dormant_snapshot(&self) -> HashMap<String, ThreadMapping> {
@@ -1161,8 +1304,6 @@ impl ThreadManager {
             task_id: None,
             completing: false,
             last_prompted_permissions: false,
-            prompt_notify: Arc::new(tokio::sync::Notify::new()),
-            pending_prompt: None,
             prompt_loop_handle: None,
         };
 
