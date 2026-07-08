@@ -560,15 +560,15 @@ notifications)` split for: user-only, notification-only, and mixed drains.
 - Decide whether `app-state` exposes a new `notificationQueue` selector or the
   composer selector is narrowed to user-only (either works; pick the smaller diff).
 
-## Open decision for the user
+## Resolved decisions
 
-- **Emit `failed` (and/or an unblock) task notification?** The mock's red/amber
-  status states never appear today, because `fail_task` doesn't notify subscribers
-  and there is no dedicated unblock kind (see
-  [Task notification vocabulary](#task-notification-vocabulary-real-kinds--gap)).
-  Adding `failed` is ~a one-line `notify_subscribers` call; an unblock signal is a
-  bit more. This is a small but real scope addition — **default: out of scope**
-  (render only `started`/`update`/`completed`), pull in on request.
+- **Emit `failed` / unblock task notifications? → No (out of scope).** Decided
+  2026-07-08. This feature renders only the kinds that exist today
+  (`started`/`update`/`completed`). The `NotificationRail` component still supports
+  `failed` (red) / `ready` (amber) visually, so adding those notifications later
+  (a `notify_subscribers` call in `fail_task`, plus a dependency-clear signal) is a
+  drop-in follow-up. See
+  [Task notification vocabulary](#task-notification-vocabulary-real-kinds--gap).
 
 ## Revision log
 
