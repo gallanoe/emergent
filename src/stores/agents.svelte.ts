@@ -547,6 +547,19 @@ function createAgentStore() {
   }
 
   /**
+   * Settle a turn's notifications as read-only transcript blocks, deduped by id.
+   * Shared by the live `handleTurnDispatched` path and history replay — both
+   * append the same notification rails, they only differ in how the paired user
+   * bubble is rendered (live re-anchors an optimistic bubble; replay does not).
+   */
+  function appendNotificationBlocks(thread: ThreadState, notifications: QueuedMessageView[]) {
+    for (const v of notifications) {
+      if (thread.messages.some((m) => m.role === "notification" && m.id === v.id)) continue;
+      thread.messages.push(viewToNotification(v));
+    }
+  }
+
+  /**
    * A drained turn was accepted by the command loop. Settle its notifications as
    * read-only transcript blocks (dedupe-by-id), then render the user bubble from
    * `user_text` only — notifications-first canonical order. Owns the reconciliation
@@ -556,10 +569,7 @@ function createAgentStore() {
     const thread = threads[payload.thread_id];
     if (!thread) return;
 
-    for (const v of payload.notifications) {
-      if (thread.messages.some((m) => m.role === "notification" && m.id === v.id)) continue;
-      thread.messages.push(viewToNotification(v));
-    }
+    appendNotificationBlocks(thread, payload.notifications);
 
     if (payload.user_text != null && payload.user_text !== "") {
       const ts = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
@@ -913,6 +923,7 @@ function createAgentStore() {
     | ({ type: "thread:status-change" } & StatusChangePayload)
     | ({ type: "thread:config-update" } & ConfigUpdatePayload)
     | ({ type: "thread:user-message" } & UserMessagePayload)
+    | ({ type: "thread:turn-dispatched" } & TurnDispatchedPayload)
     | ({ type: "thread:error" } & ThreadErrorPayload)
     | ({ type: "thread:nudge-delivered" } & NudgeDeliveredPayload)
     | ({ type: "thread:system-message" } & SystemMessagePayload)
@@ -947,6 +958,8 @@ function createAgentStore() {
         }
 
         case "thread:user-message":
+          // Drained-turn echoes are owned by thread:turn-dispatched — skip them.
+          if (n.is_echo) break;
           thread.messages.push({
             id: crypto.randomUUID(),
             role: "user",
@@ -957,6 +970,22 @@ function createAgentStore() {
             }),
           });
           break;
+
+        case "thread:turn-dispatched": {
+          appendNotificationBlocks(thread, n.notifications);
+          if (n.user_text != null && n.user_text !== "") {
+            thread.messages.push({
+              id: crypto.randomUUID(),
+              role: "user",
+              content: n.user_text,
+              timestamp: new Date().toLocaleTimeString([], {
+                hour: "numeric",
+                minute: "2-digit",
+              }),
+            });
+          }
+          break;
+        }
 
         case "thread:tool-call-update": {
           const threadTCs = (replayToolCalls[n.thread_id] ??= {});
@@ -1120,6 +1149,7 @@ function createAgentStore() {
       handleUserMessage,
       handleQueueChanged,
       handleTurnDispatched,
+      replayNotifications,
       get chunkBuffers() {
         return chunkBuffers;
       },

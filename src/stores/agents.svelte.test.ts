@@ -626,3 +626,41 @@ describe("handleUserMessage echo drop", () => {
     expect(thread.messages[0]!.role).toBe("user");
   });
 });
+
+describe("replayNotifications with turn-dispatched", () => {
+  it("rebuilds settled rails and skips the paired is_echo user-message", () => {
+    makeThread("t-replay", "idle");
+    const thread = agentStore.threads["t-replay"]!;
+
+    agentStore._test.replayNotifications([
+      {
+        type: "thread:turn-dispatched",
+        thread_id: "t-replay",
+        user_text: "do the thing",
+        notifications: [
+          {
+            id: "n1",
+            source: "task",
+            task_id: "TSK-1",
+            task_status: "completed",
+            content: "done",
+            created_at: new Date().toISOString(),
+          },
+        ],
+      },
+      // The recorded echo of the same turn — must be ignored (no duplicate bubble).
+      {
+        type: "thread:user-message",
+        thread_id: "t-replay",
+        content: "[task completed] done\n\ndo the thing",
+        is_echo: true,
+      },
+    ]);
+    flushSync();
+
+    const roles = thread.messages.map((m) => m.role);
+    expect(roles).toEqual(["notification", "user"]);
+    expect(thread.messages[0]!.taskId).toBe("TSK-1");
+    expect(thread.messages[1]!.content).toBe("do the thing");
+  });
+});
