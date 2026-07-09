@@ -14,6 +14,7 @@ import {
   type SystemMessagePayload,
   type ToolCallContentItem,
   type ToolKind,
+  type TurnDispatchedPayload,
 } from "./types";
 
 // ── Internal state per thread ────────────────────────────────────
@@ -385,17 +386,9 @@ function createAgentStore() {
     const thread = threads[payload.thread_id];
     if (!thread) return;
 
-    // B7: if this is the echo of our own send_prompt call, flip the in-flight
-    // sending bubble to sending=false (confirming the agent received it) and skip
-    // the push — we already have the bubble in thread.messages.
-    if (payload.is_echo) {
-      const sendingBubble = thread.messages.findLast((m) => m.sending === true);
-      if (sendingBubble) {
-        sendingBubble.sending = false;
-        return;
-      }
-      // No sending bubble found (e.g. replay path) — fall through to normal push.
-    }
+    // The drained-turn echo is now owned by handleTurnDispatched — drop it.
+    // Only spontaneous (non-echo) user messages are pushed here.
+    if (payload.is_echo) return;
 
     thread.messages.push({
       id: crypto.randomUUID(),
@@ -537,6 +530,59 @@ function createAgentStore() {
     thread.pendingQueue = payload.items.map(viewToQueueItem);
   }
 
+  /** Map a backend queue item (wire format) to a read-only notification transcript block. */
+  function viewToNotification(v: QueuedMessageView): DisplayMessage {
+    const m: DisplayMessage = {
+      id: v.id,
+      role: "notification",
+      content: v.content,
+      timestamp: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
+      source: v.source === "thread" ? "thread" : "task",
+    };
+    if (v.from !== undefined) m.from = v.from;
+    if (v.task_id !== undefined) m.taskId = v.task_id;
+    if (v.task_status !== undefined)
+      m.taskStatus = v.task_status as NonNullable<DisplayMessage["taskStatus"]>;
+    return m;
+  }
+
+  /**
+   * A drained turn was accepted by the command loop. Settle its notifications as
+   * read-only transcript blocks (dedupe-by-id), then render the user bubble from
+   * `user_text` only — notifications-first canonical order. Owns the reconciliation
+   * of the idle optimistic bubble (handleUserMessage no longer does).
+   */
+  function handleTurnDispatched(payload: TurnDispatchedPayload) {
+    const thread = threads[payload.thread_id];
+    if (!thread) return;
+
+    for (const v of payload.notifications) {
+      if (thread.messages.some((m) => m.role === "notification" && m.id === v.id)) continue;
+      thread.messages.push(viewToNotification(v));
+    }
+
+    if (payload.user_text != null && payload.user_text !== "") {
+      const ts = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+      const optimistic = thread.messages.find((m) => m.sending === true);
+      if (optimistic) {
+        // Re-anchor below the notifications + normalize the timestamp so it does
+        // not read earlier than the rails now above it.
+        const idx = thread.messages.indexOf(optimistic);
+        thread.messages.splice(idx, 1);
+        optimistic.sending = false;
+        optimistic.timestamp = ts;
+        thread.messages.push(optimistic);
+      } else {
+        thread.messages.push({
+          id: crypto.randomUUID(),
+          role: "user",
+          content: payload.user_text,
+          timestamp: ts,
+        });
+      }
+    }
+  }
+
   // ── Event listener setup ──────────────────────────────────────
 
   async function setupListeners() {
@@ -596,6 +642,11 @@ function createAgentStore() {
     listenerCleanup.push(
       await listen<QueueChangedPayload>("thread:queue-changed", (e) =>
         handleQueueChanged(e.payload),
+      ),
+    );
+    listenerCleanup.push(
+      await listen<TurnDispatchedPayload>("thread:turn-dispatched", (e) =>
+        handleTurnDispatched(e.payload),
       ),
     );
     listenersReady = true;
@@ -1068,6 +1119,7 @@ function createAgentStore() {
       handleError,
       handleUserMessage,
       handleQueueChanged,
+      handleTurnDispatched,
       get chunkBuffers() {
         return chunkBuffers;
       },

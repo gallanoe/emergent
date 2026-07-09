@@ -6,6 +6,7 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { flushSync } from "svelte";
 import { mockIPC, clearMocks } from "@tauri-apps/api/mocks";
 import { agentStore } from "./agents.svelte";
+import type { TurnDispatchedPayload } from "./types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -508,65 +509,120 @@ describe("clearQueue", () => {
   });
 });
 
-// ── B7: handleUserMessage uses is_echo for dedup ─────────────────────────────
+// ── handleTurnDispatched: settles notifications + reconciles the optimistic bubble ─
 
-describe("B7: handleUserMessage echo dedup via is_echo", () => {
-  it("is_echo=true with a sending bubble: flips sending=false, no duplicate pushed", () => {
-    makeThread("t-b7", "working");
-    const thread = agentStore.threads["t-b7"]!;
-    thread.messages.push({
-      id: "send-1",
-      role: "user",
-      content: "echoed content",
-      timestamp: "1:00 PM",
-      sending: true,
-    });
-    const msgCountBefore = thread.messages.length;
+describe("handleTurnDispatched", () => {
+  it("appends settled notification blocks then a user bubble (busy path)", () => {
+    makeThread("t-td", "working");
+    const thread = agentStore.threads["t-td"]!;
 
-    agentStore._test.handleUserMessage({
-      thread_id: "t-b7",
-      content: "echoed content",
-      is_echo: true,
+    agentStore._test.handleTurnDispatched({
+      thread_id: "t-td",
+      user_text: "do the thing",
+      notifications: [
+        {
+          id: "n1",
+          source: "thread",
+          from: "Agent B",
+          content: "ping",
+          created_at: new Date().toISOString(),
+        },
+        {
+          id: "n2",
+          source: "task",
+          task_id: "TSK-1",
+          task_status: "completed",
+          content: "done",
+          created_at: new Date().toISOString(),
+        },
+      ],
     });
     flushSync();
 
-    // No new message pushed
-    expect(thread.messages.length).toBe(msgCountBefore);
-    // sending bubble confirmed (sending=false)
-    const bubble = thread.messages.find((m) => m.id === "send-1");
-    expect(bubble?.sending).toBeFalsy();
+    const roles = thread.messages.map((m) => m.role);
+    expect(roles).toEqual(["notification", "notification", "user"]);
+    expect(thread.messages[0]!.id).toBe("n1");
+    expect(thread.messages[0]!.from).toBe("Agent B");
+    expect(thread.messages[1]!.taskId).toBe("TSK-1");
+    expect(thread.messages[2]!.content).toBe("do the thing");
   });
 
-  it("is_echo=false pushes message normally", () => {
-    makeThread("t-b7-normal", "working");
-    const thread = agentStore.threads["t-b7-normal"]!;
-    const msgCountBefore = thread.messages.length;
+  it("is idempotent — a repeated notification id is not duplicated", () => {
+    makeThread("t-td2", "working");
+    const thread = agentStore.threads["t-td2"]!;
+    const payload: TurnDispatchedPayload = {
+      thread_id: "t-td2",
+      notifications: [
+        {
+          id: "n1",
+          source: "task",
+          task_id: "TSK-9",
+          task_status: "update",
+          content: "half",
+          created_at: new Date().toISOString(),
+        },
+      ],
+    };
+    agentStore._test.handleTurnDispatched(payload);
+    agentStore._test.handleTurnDispatched(payload);
+    flushSync();
+    expect(thread.messages.filter((m) => m.role === "notification")).toHaveLength(1);
+  });
+
+  it("re-anchors an idle optimistic bubble below the notifications", () => {
+    makeThread("t-td3", "working");
+    const thread = agentStore.threads["t-td3"]!;
+    thread.messages.push({
+      id: "opt",
+      role: "user",
+      content: "do the thing",
+      timestamp: "12:00",
+      sending: true,
+    });
+
+    agentStore._test.handleTurnDispatched({
+      thread_id: "t-td3",
+      user_text: "do the thing",
+      notifications: [
+        {
+          id: "n1",
+          source: "thread",
+          from: "Agent B",
+          content: "ping",
+          created_at: new Date().toISOString(),
+        },
+      ],
+    });
+    flushSync();
+
+    const roles = thread.messages.map((m) => m.role);
+    expect(roles).toEqual(["notification", "user"]);
+    const bubble = thread.messages[1]!;
+    expect(bubble.id).toBe("opt");
+    expect(bubble.sending).toBeFalsy();
+  });
+});
+
+describe("handleUserMessage echo drop", () => {
+  it("ignores is_echo=true and pushes is_echo=false", () => {
+    makeThread("t-echo", "working");
+    const thread = agentStore.threads["t-echo"]!;
 
     agentStore._test.handleUserMessage({
-      thread_id: "t-b7-normal",
-      content: "normal message",
+      thread_id: "t-echo",
+      content: "[task completed] x",
+      is_echo: true,
+    });
+    flushSync();
+    expect(thread.messages).toHaveLength(0);
+
+    agentStore._test.handleUserMessage({
+      thread_id: "t-echo",
+      content: "spontaneous",
       is_echo: false,
     });
     flushSync();
-
-    expect(thread.messages.length).toBe(msgCountBefore + 1);
-    expect(thread.messages.at(-1)?.content).toBe("normal message");
-  });
-
-  it("is_echo=true with no sending bubble: falls through to normal push", () => {
-    makeThread("t-b7-fallthrough", "working");
-    const thread = agentStore.threads["t-b7-fallthrough"]!;
-    const msgCountBefore = thread.messages.length;
-
-    agentStore._test.handleUserMessage({
-      thread_id: "t-b7-fallthrough",
-      content: "sub-agent message",
-      is_echo: true,
-    });
-    flushSync();
-
-    // No sending bubble, so it falls through to a normal push
-    expect(thread.messages.length).toBe(msgCountBefore + 1);
-    expect(thread.messages.at(-1)?.content).toBe("sub-agent message");
+    expect(thread.messages).toHaveLength(1);
+    expect(thread.messages[0]!.role).toBe("user");
   });
 });

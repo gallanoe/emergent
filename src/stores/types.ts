@@ -74,6 +74,8 @@ export interface QueuedMessageView {
   id: string;
   source: "user" | "task" | "thread";
   from?: string;
+  task_id?: string;
+  task_status?: string;
   content: string;
   created_at: string;
 }
@@ -82,6 +84,13 @@ export interface QueuedMessageView {
 export interface QueueChangedPayload {
   thread_id: string;
   items: QueuedMessageView[];
+}
+
+/** Wire-format payload for the `thread:turn-dispatched` Tauri event. */
+export interface TurnDispatchedPayload {
+  thread_id: string;
+  user_text?: string | null;
+  notifications: QueuedMessageView[];
 }
 
 /** Wire-format payload for the `task:status-notification` Tauri event.
@@ -95,7 +104,7 @@ export interface TaskStatusNotificationPayload {
 
 export interface DisplayMessage {
   id: string;
-  role: "assistant" | "thinking" | "user" | "tool-group" | "system" | "nudge";
+  role: "assistant" | "thinking" | "user" | "tool-group" | "system" | "nudge" | "notification";
   content: string;
   toolCalls?: DisplayToolCall[];
   timestamp: string;
@@ -103,6 +112,12 @@ export interface DisplayMessage {
   /** True while the merged prompt is in-flight (IPC call sent, echo not yet received). */
   sending?: boolean;
   cancelled?: boolean;
+  // Notification-block fields (role === "notification"):
+  source?: "task" | "thread";
+  from?: string;
+  taskId?: string;
+  // Real kinds: "started" | "update" | "completed". "failed"/"ready" supported but not emitted today.
+  taskStatus?: "started" | "update" | "completed" | "failed" | "ready";
 }
 
 export interface NudgeDeliveredPayload {
