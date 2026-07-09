@@ -198,6 +198,23 @@ describe("QueuedMessages", () => {
     });
   });
 
+  describe("user-only composer (no task-notification branch)", () => {
+    it("renders every item as an editable user row (no task-notification branch)", () => {
+      render(QueuedMessages, {
+        props: defaultProps([
+          makeItem("u1", "user message"),
+          // Even if an item carries a non-user kind, the user-only composer treats it as a normal row.
+          { id: "k1", content: "task note", submittedAt: Date.now(), kind: "task-notification" },
+        ]),
+      });
+      // Every row exposes edit + remove actions (2 buttons per row).
+      const rows = getRowButtons();
+      expect(rows).toHaveLength(2);
+      // No "task" badge remains.
+      expect(screen.queryByText("task")).toBeNull();
+    });
+  });
+
   describe("failed item styling", () => {
     it("renders a failed item with error color on the index", () => {
       const { container } = render(QueuedMessages, {

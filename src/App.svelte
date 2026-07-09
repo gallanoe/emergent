@@ -346,11 +346,15 @@
           {#if task}
             <ChatTaskBanner {task} onOpen={(id) => appState.selectTask(id)} />
           {/if}
-          <ChatArea {thread} hasTaskBanner={task != null} />
+          <ChatArea
+            {thread}
+            hasTaskBanner={task != null}
+            notificationQueue={appState.selectedThreadNotificationQueue}
+          />
           <ChatInput
             {thread}
             demoMode={appState.demoMode}
-            pendingQueue={appState.selectedThreadPendingQueue}
+            pendingQueue={appState.selectedThreadComposerQueue}
             pushToComposer={composerPush}
             onSend={(text) => {
               const threadId = appState.selectedThreadId;
@@ -398,11 +402,15 @@
       </div>
     {:else}
       <div class="relative flex min-h-0 min-w-0 flex-1 flex-col">
-        <ChatArea thread={appState.selectedAgent} hasTaskBanner={false} />
+        <ChatArea
+          thread={appState.selectedAgent}
+          hasTaskBanner={false}
+          notificationQueue={appState.selectedThreadNotificationQueue}
+        />
         <ChatInput
           thread={appState.selectedAgent}
           demoMode={appState.demoMode}
-          pendingQueue={appState.selectedThreadPendingQueue}
+          pendingQueue={appState.selectedThreadComposerQueue}
           pushToComposer={composerPush}
           onSend={(text) => {
             const agent = appState.selectedAgent;
