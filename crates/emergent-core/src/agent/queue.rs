@@ -89,6 +89,31 @@ impl QueuedMessage {
     }
 }
 
+/// Split a drained batch into the transcript-facing `(user_text, notifications)`
+/// for a `TurnDispatched` event. `user_text` is the bare-coalesced `User`
+/// messages joined by a blank line (None if there were none); `notifications`
+/// are the `Task`/`Thread` items as views, in queue order. This is independent
+/// of the agent-facing prompt, which is still built from `render()` over all
+/// sources.
+pub fn partition_dispatch(messages: &[QueuedMessage]) -> (Option<String>, Vec<QueuedMessageView>) {
+    let user_parts: Vec<&str> = messages
+        .iter()
+        .filter(|m| matches!(m.source, MessageSource::User))
+        .map(|m| m.content.as_str())
+        .collect();
+    let user_text = if user_parts.is_empty() {
+        None
+    } else {
+        Some(user_parts.join("\n\n"))
+    };
+    let notifications = messages
+        .iter()
+        .filter(|m| !matches!(m.source, MessageSource::User))
+        .map(QueuedMessage::view)
+        .collect();
+    (user_text, notifications)
+}
+
 /// A thread's message queue plus the notifier its prompt loop waits on. Stored
 /// in `ThreadManager` behind an `Arc`, independent of the `ThreadHandle`'s
 /// lifecycle so held messages survive dormancy.
@@ -181,5 +206,58 @@ impl ThreadQueue {
         for m in remaining {
             items.push_back(m);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn msg(id: &str, source: MessageSource, content: &str) -> QueuedMessage {
+        QueuedMessage {
+            id: id.into(),
+            source,
+            content: content.into(),
+            created_at: "2026-07-08T00:00:00Z".into(),
+        }
+    }
+
+    fn thread_src() -> MessageSource {
+        MessageSource::Thread { from_thread_id: "b".into(), from_name: "Agent B".into() }
+    }
+    fn task_src() -> MessageSource {
+        MessageSource::Task { task_id: "TSK-1".into(), kind: "completed".into() }
+    }
+
+    #[test]
+    fn partition_dispatch_splits_mixed_batch() {
+        let batch = vec![
+            msg("u1", MessageSource::User, "first"),
+            msg("t1", thread_src(), "ping"),
+            msg("u2", MessageSource::User, "second"),
+            msg("k1", task_src(), "done"),
+        ];
+        let (user_text, notifications) = partition_dispatch(&batch);
+        assert_eq!(user_text.as_deref(), Some("first\n\nsecond"));
+        assert_eq!(notifications.len(), 2);
+        assert_eq!(notifications[0].source, "thread");
+        assert_eq!(notifications[0].from.as_deref(), Some("Agent B"));
+        assert_eq!(notifications[1].source, "task");
+        assert_eq!(notifications[1].task_id.as_deref(), Some("TSK-1"));
+        assert_eq!(notifications[1].task_status.as_deref(), Some("completed"));
+    }
+
+    #[test]
+    fn partition_dispatch_notification_only_has_no_user_text() {
+        let (user_text, notifications) = partition_dispatch(&[msg("t1", thread_src(), "ping")]);
+        assert_eq!(user_text, None);
+        assert_eq!(notifications.len(), 1);
+    }
+
+    #[test]
+    fn partition_dispatch_user_only_has_empty_notifications() {
+        let (user_text, notifications) = partition_dispatch(&[msg("u1", MessageSource::User, "hi")]);
+        assert_eq!(user_text.as_deref(), Some("hi"));
+        assert!(notifications.is_empty());
     }
 }
