@@ -3,10 +3,12 @@
   import StreamingMarkdown from "./StreamingMarkdown.svelte";
   import ToolCallRow from "./ToolCallRow.svelte";
   import ThinkingBlock from "./ThinkingBlock.svelte";
+  import NotificationRail from "./NotificationRail.svelte";
   import type {
     DisplayThread,
     DisplayMessage,
     DisplayToolCall,
+    QueueItem,
   } from "../../stores/types";
   import { renderMarkdown } from "../../lib/render-markdown";
   import { highlightCodeBlocks } from "../../lib/highlight";
@@ -16,9 +18,15 @@
     thread: DisplayThread | undefined;
     hasTaskBanner?: boolean;
     onEditQueue?: () => void;
+    notificationQueue?: QueueItem[];
   }
 
-  let { thread, hasTaskBanner = false, onEditQueue }: Props = $props();
+  let {
+    thread,
+    hasTaskBanner = false,
+    onEditQueue,
+    notificationQueue = [],
+  }: Props = $props();
 
   // ── Render blocks ──────────────────────────────────────────────
   // Consecutive tool-group messages (plus any live active tool calls) collapse
@@ -309,7 +317,28 @@
             >
               {@render nudgeBadge(block.message.nudgeCount ?? 0)}
             </div>
+          {:else if block.message.role === "notification"}
+            <NotificationRail
+              state="submitted"
+              source={block.message.source ?? "task"}
+              label={block.message.source === "thread"
+                ? (block.message.from ?? "agent")
+                : (block.message.taskId ?? "task")}
+              content={block.message.content}
+              {...block.message.taskStatus
+                ? { taskStatus: block.message.taskStatus }
+                : {}}
+            />
           {/if}
+        {/each}
+
+        {#each notificationQueue as item (item.id)}
+          <NotificationRail
+            state="pending"
+            source={item.source === "thread" ? "thread" : "task"}
+            label={item.source === "thread" ? (item.from ?? "agent") : item.id}
+            content={item.content}
+          />
         {/each}
 
         <!--

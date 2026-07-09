@@ -328,6 +328,36 @@ describe("ChatArea", () => {
     expect(bubble).toBeNull();
   });
 
+  it("renders settled notification blocks inline and pending rails at the tail", () => {
+    const thread = makeThread([
+      msg("assistant", "working on it", "1:00 PM"),
+      msg("notification", "done", "12:00 PM", {
+        source: "task",
+        taskId: "TSK-1",
+        taskStatus: "completed",
+      }),
+    ]);
+    render(ChatArea, {
+      props: {
+        thread,
+        hasTaskBanner: false,
+        notificationQueue: [
+          { id: "n2", content: "ping", submittedAt: 1, source: "thread", from: "Agent B" },
+        ],
+      },
+    });
+    // settled block
+    const settled = screen
+      .getAllByTestId("notification-rail")
+      .filter((el) => el.getAttribute("data-state") === "submitted");
+    expect(settled).toHaveLength(1);
+    // pending rail at tail
+    const pending = screen
+      .getAllByTestId("notification-rail")
+      .filter((el) => el.getAttribute("data-state") === "pending");
+    expect(pending).toHaveLength(1);
+  });
+
   it("copies fenced code when md-copy is clicked", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     const prev = navigator.clipboard;
