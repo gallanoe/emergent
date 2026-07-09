@@ -166,29 +166,41 @@ No backend change is needed for the pending split — it is pure frontend filter
 
 **Emission point (accept-gated, ordering-correct).** `TurnDispatched` is emitted
 inside `prompt_loop` **Phase 3, immediately after `command_tx.send(AgentCommand::
-Prompt{…})` returns `Ok`** — i.e. once the command has been accepted into the ACP
-command loop of a live thread — and **before** awaiting the turn's reply (so it is
+Prompt{…})` returns `Ok`** and **before** awaiting the turn's reply (so it is
 recorded ahead of the assistant's streamed chunks; see [Replay ordering](#replay-ordering-within-a-session)).
-This gates the settled blocks on the thread actually being alive and accepting the
-prompt, which resolves the "settled-but-never-received" failure mode: if
-`command_tx.send` returns `Err` (thread terminated), **no `TurnDispatched` is
-emitted** and the drained batch is lost with the thread going `Error` — the exact
-same loss semantics the current code already has for a failed user send (the queue
-is drained before the send in today's code). The agent still receives the full
-coalesced text; agent-facing behavior is unchanged.
+
+⚠️ **What `send Ok` actually guarantees (Codex, 2nd pass):** it means the command
+was accepted into the local Tokio command channel of a live thread — **not** that
+the ACP agent has received or accepted the prompt. `agent_command_loop` can still
+fail while issuing the ACP request _after_ we've emitted the event. This is the
+earliest reliable gate that also preserves ordering (the only stronger signal,
+`prompt_reply_rx`, resolves at **turn completion**, which would put the settled
+blocks after the assistant's response). We accept channel-acceptance as the gate
+and word the semantics accordingly below. If `command_tx.send` returns `Err`
+(thread terminated), **no `TurnDispatched` is emitted** and the drained batch is
+lost with the thread going `Error` — the same loss semantics today's code already
+has for a failed user send (the queue is drained before the send). Agent-facing
+behavior is unchanged.
 
 > **Semantics of "submitted":** a notification is _submitted_ once it has been
-> **dispatched into an accepted agent turn**, not once the turn _completes_. A turn
-> that errors after acceptance still leaves its notifications submitted (their
-> content was delivered); the thread's `Error` status is the separate signal that
-> the turn did not finish. We deliberately do **not** emit on turn-completion,
-> because that would place the settled blocks _after_ the assistant's streamed
-> response instead of before it (wrong transcript order).
+> **accepted for attempted delivery by the command loop** (channel-accepted into
+> an agent turn), not once the turn _completes_. A turn that errors after
+> channel-acceptance still leaves its notifications submitted (their content was
+> handed to the command loop for delivery); the thread's `Error` status is the
+> separate signal that the turn did not finish. We deliberately do **not** emit on
+> turn-completion, because that would place the settled blocks _after_ the
+> assistant's streamed response instead of before it (wrong transcript order).
+
+**Implementation note — lock discipline.** Today the `Ok(())` arm does
+`drop(handle)` and then awaits `prompt_reply_rx`. Emit `TurnDispatched` **after
+`drop(handle)`** (the `event_tx.send` needs no `ThreadHandle` lock) and before the
+`await`, so the event is broadcast without holding the handle lock across an await
+point.
 
 The frontend `TurnDispatched` handler, in this fixed order:
 
-1. Appends each notification as a **submitted (solid, full-opacity) Rail** block —
-   `DisplayMessage { role: "notification", … }`, keyed by the notification's
+1. For each notification, append a **submitted (solid, full-opacity) Rail** block —
+   `DisplayMessage { role: "notification", … }` whose `id` **is** the notification's
    queue `id` — in list order, woven inline at the consumption point.
 2. **Then** renders the user bubble (if `user_text` is present): if an in-flight
    optimistic bubble exists (idle send), **re-anchor it below the notification
@@ -197,10 +209,22 @@ The frontend `TurnDispatched` handler, in this fixed order:
 3. The paired `is_echo=true` `UserMessage` is **ignored** (see the authoritative
    rule below).
 
+**Idempotency (required).** Step 1 must be **dedupe-by-id**: if a `role:
+"notification"` message with the same queue `id` already exists in
+`thread.messages`, update it in place (or skip) rather than appending a second
+copy. The identical rule applies in `replayNotifications`. This makes the handler
+safe against a replayed log that already contains the event, an out-of-order
+`QueueChanged`/`TurnDispatched` pair, or an accidental re-delivery — no duplicate
+submitted rails under any of them.
+
 **Canonical order = notifications, then user bubble.** Step 2 re-anchors the
 optimistic idle bubble so the order is identical on both the idle and busy/queued
 paths (Codex flagged the earlier "accepted variance" as a weak transcript model;
-re-anchoring removes it). Re-anchoring is safe — same content, same thread.
+re-anchoring removes it). Re-anchoring is safe — same content, same thread. When
+re-anchoring, **also normalize the bubble's timestamp** to the dispatch time so it
+does not read _earlier_ than the submitted rails now sitting above it (Codex 2nd
+pass) — the moved bubble should never appear to predate the notifications it now
+follows.
 
 ### Authoritative rule for the echo
 
@@ -420,8 +444,12 @@ The composer now shows only `User` items, but the backend queue still holds all
 sources interleaved. Composer-driven mutations must therefore be **user-scoped** so
 they can't reach the hidden `Task`/`Thread` items:
 
-- **Remove / Edit** — already `id`-based, and the composer only ever holds user
-  ids, so these are safe as-is.
+- **Remove / Edit** — `id`-based. The composer only ever holds user ids, but this
+  safety must be **backend-enforced, not UI-scoped** (Codex 2nd pass):
+  `ThreadQueue::edit`/`remove` (or the `edit_queued`/`remove_queued` commands)
+  **reject an id whose queued item is not `MessageSource::User`**, so a stray or
+  buggy caller can never mutate a read-only notification. Returns the same
+  not-found/rejected result the frontend already tolerates.
 - **Clear all** — must clear **only `User`-source items**; task/thread items are
   read-only in the transcript and were never user-clearable. Backend `ThreadQueue::
 clear` becomes source-filtered (or a `clear_user()` variant); the `clear_queue`
@@ -434,6 +462,10 @@ clear` becomes source-filtered (or a `clear_user()` variant); the `clear_queue`
 The relative order of `Task`/`Thread` vs `User` items in the _agent-facing
 coalesced prompt_ is unaffected by these — only user-item ordering is user-editable.
 
+**Invariant:** `Task`/`Thread` items are immutable from the moment they are
+enqueued to the moment they are drained — no composer command can edit, remove,
+reorder, or clear them, enforced in the backend queue.
+
 ## Replay ordering within a session
 
 Because `TurnDispatched` is emitted **before** the turn's assistant chunks stream
@@ -442,6 +474,21 @@ Because `TurnDispatched` is emitted **before** the turn's assistant chunks strea
 in the same position relative to tool calls, system messages, and assistant
 content as they did live. (This is a second reason the emission point is pre-reply,
 not on turn completion.)
+
+**Replay handling per event type (pin this in the plan):**
+
+- `thread:turn-dispatched` — **added** to the `DaemonNotification` union and
+  handled in `replayNotifications` with the same logic (incl. dedupe-by-id) as the
+  live handler. This is what rebuilds submitted Rails on reopen.
+- `thread:queue-changed` — **still excluded** from replay, deliberately.
+  `QueueChanged` is transient pending-state (it's already empty by the time a
+  drained turn is recorded), and the **pending** queue is re-seeded independently
+  by `refreshQueue`/`list_queue` when the thread is opened — not from the recorded
+  log. So replaying `QueueChanged` would add nothing and risk resurrecting stale
+  pending rails; leave it out.
+- `thread:user-message` — replayed **only when `is_echo=false`** (see the
+  [authoritative rule](#authoritative-rule-for-the-echo)); `is_echo=true` records
+  are skipped because `TurnDispatched` owns the drained turn.
 
 ## Compatibility
 
@@ -528,6 +575,11 @@ notifications)` split for: user-only, notification-only, and mixed drains.
   from the real kinds (`started`/`update`/`completed`).
 - Source-scoped mutations: `clear` removes only `User` items; `reorder` reorders
   only `User` items and preserves `Task`/`Thread` positions.
+- **Backend-enforced immutability:** `edit`/`remove` on a `Task`/`Thread` id are
+  **rejected** (no mutation), even when called directly.
+- **Failed-send event sequence (regression):** on `send Err`, assert the exact
+  order — empty `QueueChanged` fired, **no** `TurnDispatched`, status `Error` — and
+  that no submitted rails are produced.
 - `Notification::TurnDispatched.thread_id()` returns the thread id (so the
   recorder logs it) — assert it lands in `get_history`.
 
@@ -540,6 +592,10 @@ notifications)` split for: user-only, notification-only, and mixed drains.
 - `replayNotifications` rebuilds settled Rails from a recorded `TurnDispatched`
   **and** skips the paired `is_echo=true` `thread:user-message` record (no
   duplication) — regression guard for the two-path change.
+- **Idempotency:** a `TurnDispatched` whose notification `id`s already exist in
+  `thread.messages` produces **no duplicate** submitted rails (live + replay).
+- **Re-anchored bubble timestamp** is normalized so it does not read earlier than
+  the submitted rails above it.
 - Derived `composerQueue` / `notificationQueue` partition by source; composer
   `clearQueue`/reorder only affect user items.
 - `QueuedMessages` renders only user items (no task-notification branch).
@@ -583,3 +639,14 @@ notifications)` split for: user-only, notification-only, and mixed drains.
   [→ Task notification vocabulary]; (5) `id`-keyed reconciliation, canonical
   ordering (re-anchor the idle bubble), the `DaemonNotification` union addition,
   compatibility, and the impossibility of a fully-empty event were all pinned down.
+- **2026-07-08 — Codex 2nd pass incorporated.** Fresh review confirmed all five
+  revisions landed and match the code. Tightened the remaining semantics:
+  (1) `send Ok` = **channel-acceptance**, not ACP delivery — reworded "submitted"
+  to "accepted for attempted delivery," and added the lock-discipline note (emit
+  after `drop(handle)`) [→ Emission point]; (2) explicit **dedupe-by-id
+  idempotency** in `handleTurnDispatched` + replay [→ Consumed state];
+  (3) **backend-enforced** immutability — `edit`/`remove` reject non-`User` ids,
+  not just UI-scoped [→ Composer queue operations]; (4) pinned per-event **replay
+  behavior**, incl. `QueueChanged` deliberately excluded [→ Replay ordering];
+  (5) **re-anchored bubble timestamp** normalized; (6) failed-send event-sequence
+  regression test added [→ Testing plan].
