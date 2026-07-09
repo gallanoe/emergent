@@ -199,6 +199,13 @@ pub struct QueuedMessageView {
     pub source: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub from: Option<String>,
+    /// Present when `source == "task"` — the task id for the Rail label.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub task_id: Option<String>,
+    /// Present when `source == "task"` — the notification kind
+    /// (`started` | `update` | `completed`) driving the Rail status glyph.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub task_status: Option<String>,
     pub content: String,
     pub created_at: String,
 }
@@ -211,6 +218,18 @@ pub struct QueuedMessageView {
 pub struct QueueChangedPayload {
     pub thread_id: String,
     pub items: Vec<QueuedMessageView>,
+}
+
+/// Emitted by the prompt loop once a drained turn is **accepted by the command
+/// loop** (channel-accepted), carrying the split for the transcript: `user_text`
+/// is the bare-coalesced user messages (None if the batch had none), and
+/// `notifications` are the task/thread items that were dispatched this turn.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TurnDispatchedPayload {
+    pub thread_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user_text: Option<String>,
+    pub notifications: Vec<QueuedMessageView>,
 }
 
 mod base64_bytes {
@@ -434,6 +453,8 @@ pub enum Notification {
     TurnUsage(TurnUsagePayload),
     #[serde(rename = "thread:queue-changed")]
     QueueChanged(QueueChangedPayload),
+    #[serde(rename = "thread:turn-dispatched")]
+    TurnDispatched(TurnDispatchedPayload),
 }
 
 impl Notification {
@@ -460,6 +481,7 @@ impl Notification {
             Notification::TokenUsage(_) => "thread:token-usage",
             Notification::TurnUsage(_) => "thread:turn-usage",
             Notification::QueueChanged(_) => "thread:queue-changed",
+            Notification::TurnDispatched(_) => "thread:turn-dispatched",
         }
     }
 
@@ -486,6 +508,7 @@ impl Notification {
             Notification::TokenUsage(p) => Some(&p.thread_id),
             Notification::TurnUsage(p) => Some(&p.thread_id),
             Notification::QueueChanged(p) => Some(&p.thread_id),
+            Notification::TurnDispatched(p) => Some(&p.thread_id),
         }
     }
 }
@@ -636,5 +659,31 @@ mod tests {
             }
             _ => panic!("Wrong variant"),
         }
+    }
+
+    #[test]
+    fn turn_dispatched_event_name_thread_id_and_roundtrip() {
+        let n = Notification::TurnDispatched(TurnDispatchedPayload {
+            thread_id: "t1".into(),
+            user_text: Some("do the thing".into()),
+            notifications: vec![QueuedMessageView {
+                id: "m1".into(),
+                source: "task".into(),
+                from: None,
+                task_id: Some("TSK-1".into()),
+                task_status: Some("completed".into()),
+                content: "done".into(),
+                created_at: "2026-07-08T00:00:00Z".into(),
+            }],
+        });
+        assert_eq!(n.event_name(), "thread:turn-dispatched");
+        assert_eq!(n.thread_id(), Some("t1"));
+
+        let json = serde_json::to_string(&n).unwrap();
+        assert!(json.contains("thread:turn-dispatched"));
+        assert!(json.contains("TSK-1"));
+
+        let back: Notification = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.thread_id(), Some("t1"));
     }
 }

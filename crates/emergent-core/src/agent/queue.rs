@@ -73,10 +73,16 @@ impl QueuedMessage {
     }
 
     fn view(&self) -> QueuedMessageView {
+        let (task_id, task_status) = match &self.source {
+            MessageSource::Task { task_id, kind } => (Some(task_id.clone()), Some(kind.clone())),
+            _ => (None, None),
+        };
         QueuedMessageView {
             id: self.id.clone(),
             source: self.source.tag().to_string(),
             from: self.source.sender_label(),
+            task_id,
+            task_status,
             content: self.content.clone(),
             created_at: self.created_at.clone(),
         }

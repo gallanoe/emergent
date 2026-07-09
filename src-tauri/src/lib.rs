@@ -269,6 +269,9 @@ pub fn run() {
                                 Notification::QueueChanged(ref p) => {
                                     let _ = bridge_handle.emit(event_name, p);
                                 }
+                                Notification::TurnDispatched(p) => {
+                                    let _ = bridge_handle.emit(event_name, p);
+                                }
                             }
                         }
                         Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
