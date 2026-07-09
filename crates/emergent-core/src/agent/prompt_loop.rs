@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use emergent_protocol::{
     AgentStatus, Notification, QueueChangedPayload, StatusChangePayload, SystemMessagePayload,
+    TurnDispatchedPayload,
 };
 use tokio::sync::{broadcast, oneshot, Mutex};
 
@@ -35,6 +36,10 @@ pub(crate) async fn prompt_loop(
             thread_id: agent_id.clone(),
             items: Vec::new(),
         }));
+
+        // Compute the transcript-facing split now, while `messages` is in scope.
+        // Emitted only once the command loop accepts the prompt (Phase 3).
+        let (td_user_text, td_notifications) = super::queue::partition_dispatch(&messages);
 
         // Phase 2: render + coalesce the drained messages into the user text.
         let user_text = messages
@@ -115,6 +120,15 @@ pub(crate) async fn prompt_loop(
                 match cmd_result {
                     Ok(()) => {
                         drop(handle); // Release lock while waiting.
+                        // Accept-gated: the command was accepted into the live
+                        // thread's channel. Emit the settled-notification event
+                        // before awaiting the reply so it is recorded ahead of the
+                        // assistant's streamed chunks.
+                        let _ = event_tx.send(Notification::TurnDispatched(TurnDispatchedPayload {
+                            thread_id: agent_id.clone(),
+                            user_text: td_user_text,
+                            notifications: td_notifications,
+                        }));
                         prompt_reply_rx
                             .await
                             .unwrap_or(Err("Agent thread terminated during prompt".to_string()))

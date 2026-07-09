@@ -1013,6 +1013,101 @@ async fn collect_turn(
     .expect("timed out waiting for PromptComplete")
 }
 
+/// Collect ALL notifications for `thread_id` (including TurnDispatched) until the
+/// turn's PromptComplete. Unlike `collect_turn`, this does not filter by variant.
+async fn collect_all_for_thread(
+    rx: &mut broadcast::Receiver<Notification>,
+    thread_id: &str,
+    within: std::time::Duration,
+) -> Vec<Notification> {
+    tokio::time::timeout(within, async {
+        let mut out = Vec::new();
+        loop {
+            match rx.recv().await {
+                Ok(n) => {
+                    if n.thread_id() == Some(thread_id) {
+                        let done = matches!(&n, Notification::PromptComplete(_));
+                        out.push(n);
+                        if done {
+                            return out;
+                        }
+                    }
+                }
+                Err(broadcast::error::RecvError::Lagged(_)) => continue,
+                Err(broadcast::error::RecvError::Closed) => return out,
+            }
+        }
+    })
+    .await
+    .expect("timed out waiting for PromptComplete")
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn turn_dispatched_emitted_before_response_and_recorded() {
+    use emergent_protocol::WorkspaceId;
+    use std::time::Duration;
+    use tempfile::TempDir;
+
+    let mock_bin = ensure_mock_agent();
+    let tmp = TempDir::new().unwrap();
+    let ws_id = WorkspaceId::from("it-ws-turn-dispatched");
+
+    let (_url, _registry, manager, event_tx) = spawn_test_server_with_events().await;
+    manager
+        .thread_manager()
+        .register_workspace_for_test(ws_id.clone(), tmp.path().to_path_buf())
+        .await;
+
+    let cli = format!("'{}'", mock_bin.display());
+    let agent_id = manager
+        .create_agent(ws_id.clone(), "mock".into(), cli, Some("mock".into()))
+        .await
+        .expect("create_agent");
+
+    let mut rx = event_tx.subscribe();
+    let thread_id = manager.spawn_thread(&agent_id, None).await.expect("spawn_thread");
+    wait_for_session_ready(&mut rx, &thread_id, Duration::from_secs(20)).await;
+
+    // A single inbound inter-thread notification, no user text.
+    manager
+        .enqueue_message(
+            &thread_id,
+            emergent_core::agent::queue::MessageSource::Thread {
+                from_thread_id: "b".into(),
+                from_name: "Agent B".into(),
+            },
+            "ping from B".into(),
+        )
+        .await
+        .expect("enqueue_message");
+
+    let notifs = collect_all_for_thread(&mut rx, &thread_id, Duration::from_secs(20)).await;
+
+    let td_idx = notifs
+        .iter()
+        .position(|n| matches!(n, Notification::TurnDispatched(_)))
+        .expect("TurnDispatched emitted");
+    if let Some(chunk_idx) = notifs.iter().position(|n| matches!(n, Notification::MessageChunk(_))) {
+        assert!(td_idx < chunk_idx, "TurnDispatched must precede the assistant response");
+    }
+    match &notifs[td_idx] {
+        Notification::TurnDispatched(p) => {
+            assert_eq!(p.user_text, None);
+            assert_eq!(p.notifications.len(), 1);
+            assert_eq!(p.notifications[0].source, "thread");
+            assert_eq!(p.notifications[0].from.as_deref(), Some("Agent B"));
+            assert_eq!(p.notifications[0].content, "ping from B");
+        }
+        _ => unreachable!(),
+    }
+
+    let history = manager.thread_manager().get_history(&thread_id).await.unwrap();
+    assert!(
+        history.iter().any(|n| matches!(n, Notification::TurnDispatched(_))),
+        "TurnDispatched must be recorded in history"
+    );
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn mock_agent_use_tools_streams_tool_call_and_message() {
     use emergent_protocol::WorkspaceId;
