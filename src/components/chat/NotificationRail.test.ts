@@ -28,7 +28,6 @@ describe("NotificationRail", () => {
         state: "submitted",
         source: "thread",
         label: "Agent B",
-        from: "Agent B",
         content: "ping",
       },
     });

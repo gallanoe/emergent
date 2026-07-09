@@ -1087,9 +1087,11 @@ async fn turn_dispatched_emitted_before_response_and_recorded() {
         .iter()
         .position(|n| matches!(n, Notification::TurnDispatched(_)))
         .expect("TurnDispatched emitted");
-    if let Some(chunk_idx) = notifs.iter().position(|n| matches!(n, Notification::MessageChunk(_))) {
-        assert!(td_idx < chunk_idx, "TurnDispatched must precede the assistant response");
-    }
+    let chunk_idx = notifs
+        .iter()
+        .position(|n| matches!(n, Notification::MessageChunk(_)))
+        .expect("expected at least one MessageChunk in the turn");
+    assert!(td_idx < chunk_idx, "TurnDispatched must precede the assistant response");
     match &notifs[td_idx] {
         Notification::TurnDispatched(p) => {
             assert_eq!(p.user_text, None);

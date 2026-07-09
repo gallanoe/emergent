@@ -179,13 +179,6 @@ impl ThreadQueue {
         }
     }
 
-    /// Remove all queued messages, regardless of source. Used by kill/purge
-    /// paths that tear down a thread's queue entirely; the composer's "Clear
-    /// all" should call [`Self::clear_user`] instead.
-    pub async fn clear(&self) {
-        self.items.lock().await.clear();
-    }
-
     /// Remove only `User`-source items (the composer's "Clear all"). Task/Thread
     /// notifications are read-only and stay queued until drained.
     pub async fn clear_user(&self) {

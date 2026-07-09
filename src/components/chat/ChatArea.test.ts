@@ -358,6 +358,27 @@ describe("ChatArea", () => {
     expect(pending).toHaveLength(1);
   });
 
+  it("shows the task id (not the queue UUID) and status glyph for a pending task notification", () => {
+    const thread = makeThread([msg("assistant", "working on it", "1:00 PM")]);
+    render(ChatArea, {
+      props: {
+        thread,
+        notificationQueue: [
+          {
+            id: "queue-uuid-abc",
+            content: "done",
+            submittedAt: 1,
+            source: "task",
+            taskId: "TSK-1",
+            taskStatus: "completed",
+          },
+        ],
+      },
+    });
+    expect(screen.getByText("TSK-1")).toBeTruthy();
+    expect(screen.queryByText("queue-uuid-abc")).toBeNull();
+  });
+
   it("copies fenced code when md-copy is clicked", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     const prev = navigator.clipboard;

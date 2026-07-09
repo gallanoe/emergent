@@ -67,6 +67,10 @@ export interface QueueItem {
   source?: "user" | "task" | "thread";
   /** For `source: "thread"`, the sending agent's display name. */
   from?: string;
+  /** For `source: "task"`, the human-readable task id (e.g. "TSK-1"). */
+  taskId?: string;
+  /** For `source: "task"`, the task lifecycle kind (e.g. "completed"). */
+  taskStatus?: string;
 }
 
 /** Wire-format of a single backend queue item (matches Rust `QueuedMessageView`). */

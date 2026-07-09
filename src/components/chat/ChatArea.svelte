@@ -336,8 +336,17 @@
           <NotificationRail
             state="pending"
             source={item.source === "thread" ? "thread" : "task"}
-            label={item.source === "thread" ? (item.from ?? "agent") : item.id}
+            label={item.source === "thread"
+              ? (item.from ?? "agent")
+              : (item.taskId ?? item.id)}
             content={item.content}
+            {...item.taskStatus
+              ? {
+                  taskStatus: item.taskStatus as NonNullable<
+                    DisplayMessage["taskStatus"]
+                  >,
+                }
+              : {}}
           />
         {/each}
 

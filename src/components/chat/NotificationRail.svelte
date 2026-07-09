@@ -8,7 +8,6 @@
     state: "pending" | "submitted";
     source: "task" | "thread";
     label: string;
-    from?: string;
     taskStatus?: "started" | "update" | "completed" | "failed" | "ready";
     content: string;
     onJump?: () => void;

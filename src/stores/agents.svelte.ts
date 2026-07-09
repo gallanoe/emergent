@@ -515,6 +515,8 @@ function createAgentStore() {
       source: v.source,
     };
     if (v.from !== undefined) item.from = v.from;
+    if (v.task_id !== undefined) item.taskId = v.task_id;
+    if (v.task_status !== undefined) item.taskStatus = v.task_status;
     return item;
   }
 
