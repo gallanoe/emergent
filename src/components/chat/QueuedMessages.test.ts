@@ -207,9 +207,11 @@ describe("QueuedMessages", () => {
           { id: "k1", content: "task note", submittedAt: Date.now(), kind: "task-notification" },
         ]),
       });
-      // Every row exposes edit + remove actions (2 buttons per row).
-      const rows = getRowButtons();
-      expect(rows).toHaveLength(2);
+      // Every row exposes edit + remove actions — including the former
+      // task-notification row, which used to render an empty aria-hidden
+      // placeholder instead of the edit/remove gutter.
+      expect(screen.getAllByTitle("Edit — pull back into composer")).toHaveLength(2);
+      expect(screen.getAllByTitle("Remove from queue")).toHaveLength(2);
       // No "task" badge remains.
       expect(screen.queryByText("task")).toBeNull();
     });
