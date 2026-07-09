@@ -166,45 +166,67 @@ impl ThreadQueue {
         self.items.lock().await.iter().map(QueuedMessage::view).collect()
     }
 
-    /// Replace the text of a queued message. Returns `false` if `id` is not
-    /// present (already drained or never existed).
+    /// Replace the text of a queued **user** message. Returns `false` if `id` is
+    /// absent or names a non-`User` (immutable) item.
     pub async fn edit(&self, id: &str, content: String) -> bool {
         let mut items = self.items.lock().await;
-        if let Some(m) = items.iter_mut().find(|m| m.id == id) {
-            m.content = content;
-            true
-        } else {
-            false
+        match items.iter_mut().find(|m| m.id == id) {
+            Some(m) if matches!(m.source, MessageSource::User) => {
+                m.content = content;
+                true
+            }
+            _ => false,
         }
     }
 
-    /// Remove all queued messages.
+    /// Remove all queued messages, regardless of source. Used by kill/purge
+    /// paths that tear down a thread's queue entirely; the composer's "Clear
+    /// all" should call [`Self::clear_user`] instead.
     pub async fn clear(&self) {
         self.items.lock().await.clear();
     }
 
-    /// Remove a queued message by id. Returns `false` if not present.
-    pub async fn remove(&self, id: &str) -> bool {
-        let mut items = self.items.lock().await;
-        let before = items.len();
-        items.retain(|m| m.id != id);
-        items.len() != before
+    /// Remove only `User`-source items (the composer's "Clear all"). Task/Thread
+    /// notifications are read-only and stay queued until drained.
+    pub async fn clear_user(&self) {
+        self.items.lock().await.retain(|m| !matches!(m.source, MessageSource::User));
     }
 
-    /// Reorder the queue to match `ids`. Any id not present is ignored; any
-    /// currently-queued message not named in `ids` is dropped to the end in its
-    /// existing relative order (so a stale reorder can't silently delete work).
+    /// Remove a queued **user** message by id. Returns `false` if not present or
+    /// if `id` names a non-`User` (immutable) item.
+    pub async fn remove(&self, id: &str) -> bool {
+        let mut items = self.items.lock().await;
+        let removable = items.iter().any(|m| m.id == id && matches!(m.source, MessageSource::User));
+        if !removable {
+            return false;
+        }
+        items.retain(|m| m.id != id);
+        true
+    }
+
+    /// Reorder only the `User` items to match `ids`, leaving `Task`/`Thread`
+    /// items in their existing positions. User ids not named are appended after
+    /// the named ones, in their prior relative order.
     pub async fn reorder(&self, ids: &[String]) {
         let mut items = self.items.lock().await;
-        let mut remaining: Vec<QueuedMessage> = items.drain(..).collect();
+        let user_slots: Vec<usize> = items
+            .iter()
+            .enumerate()
+            .filter(|(_, m)| matches!(m.source, MessageSource::User))
+            .map(|(i, _)| i)
+            .collect();
+        let mut users: Vec<QueuedMessage> = user_slots.iter().map(|&i| items[i].clone()).collect();
+
+        let mut reordered: Vec<QueuedMessage> = Vec::with_capacity(users.len());
         for id in ids {
-            if let Some(pos) = remaining.iter().position(|m| &m.id == id) {
-                items.push_back(remaining.remove(pos));
+            if let Some(pos) = users.iter().position(|m| &m.id == id) {
+                reordered.push(users.remove(pos));
             }
         }
-        // Append any leftovers not named in `ids`, in their existing order.
-        for m in remaining {
-            items.push_back(m);
+        reordered.extend(users);
+
+        for (slot, m) in user_slots.iter().zip(reordered) {
+            items[*slot] = m;
         }
     }
 }
@@ -259,5 +281,57 @@ mod tests {
         let (user_text, notifications) = partition_dispatch(&[msg("u1", MessageSource::User, "hi")]);
         assert_eq!(user_text.as_deref(), Some("hi"));
         assert!(notifications.is_empty());
+    }
+
+    use emergent_protocol::WorkspaceId;
+
+    async fn queue_with(items: Vec<QueuedMessage>) -> ThreadQueue {
+        let q = ThreadQueue::new(WorkspaceId::from("ws-test"));
+        for m in items {
+            q.push(m).await;
+        }
+        q
+    }
+
+    #[tokio::test]
+    async fn clear_user_removes_only_user_items() {
+        let q = queue_with(vec![
+            msg("u1", MessageSource::User, "a"),
+            msg("t1", thread_src(), "ping"),
+            msg("k1", task_src(), "done"),
+        ])
+        .await;
+        q.clear_user().await;
+        let ids: Vec<String> = q.snapshot().await.into_iter().map(|v| v.id).collect();
+        assert_eq!(ids, vec!["t1".to_string(), "k1".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn edit_and_remove_reject_non_user_items() {
+        let q = queue_with(vec![
+            msg("u1", MessageSource::User, "a"),
+            msg("t1", thread_src(), "ping"),
+        ])
+        .await;
+        assert!(!q.edit("t1", "hacked".into()).await);
+        assert!(!q.remove("t1").await);
+        assert!(q.edit("u1", "edited".into()).await);
+        assert!(q.remove("u1").await);
+        let ids: Vec<String> = q.snapshot().await.into_iter().map(|v| v.id).collect();
+        assert_eq!(ids, vec!["t1".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn reorder_reorders_only_user_items_in_place() {
+        let q = queue_with(vec![
+            msg("u1", MessageSource::User, "a"),
+            msg("t1", thread_src(), "ping"),
+            msg("u2", MessageSource::User, "b"),
+        ])
+        .await;
+        q.reorder(&["u2".to_string(), "u1".to_string()]).await;
+        let ids: Vec<String> = q.snapshot().await.into_iter().map(|v| v.id).collect();
+        // t1 keeps its middle slot; the two user slots swap.
+        assert_eq!(ids, vec!["u2".to_string(), "t1".to_string(), "u1".to_string()]);
     }
 }

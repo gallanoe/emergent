@@ -661,10 +661,13 @@ impl ThreadManager {
         Ok(queue.snapshot().await)
     }
 
-    /// Clear a thread's queue. No-op if the thread has no queue.
+    /// Clear the **user** items from a thread's queue (the composer's "Clear
+    /// all"). Task/Thread notifications are immutable and stay queued; use
+    /// `ThreadQueue::clear()` directly for kill/purge paths that must drop
+    /// everything. No-op if the thread has no queue.
     pub async fn clear_queue(&self, thread_id: &str) {
         if let Some(q) = self.queue_for(thread_id).await {
-            q.clear().await;
+            q.clear_user().await;
         }
     }
 
