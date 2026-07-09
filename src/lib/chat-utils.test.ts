@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import type { DisplayMessage } from "../stores/types";
-import { isNewTurn } from "./chat-utils";
+import type { DisplayMessage, QueueItem } from "../stores/types";
+import { isNewTurn, partitionPendingQueue } from "./chat-utils";
 
 function msg(role: DisplayMessage["role"], timestamp: string, id?: string): DisplayMessage {
   return {
@@ -84,5 +84,25 @@ describe("isNewTurn", () => {
     const messages = [msg("tool-group", "1:00 PM"), msg("assistant", "1:01 PM")];
     // No non-tool-group message found before — no turn change
     expect(isNewTurn(messages, 1)).toBe(false);
+  });
+});
+
+describe("partitionPendingQueue", () => {
+  const items: QueueItem[] = [
+    { id: "u1", content: "a", submittedAt: 1, source: "user" },
+    { id: "t1", content: "ping", submittedAt: 2, source: "thread" },
+    { id: "k1", content: "done", submittedAt: 3, source: "task" },
+    { id: "u2", content: "b", submittedAt: 4, source: "user" },
+  ];
+
+  it("puts user items in composer, task/thread in notifications, preserving order", () => {
+    const { composer, notifications } = partitionPendingQueue(items);
+    expect(composer.map((i) => i.id)).toEqual(["u1", "u2"]);
+    expect(notifications.map((i) => i.id)).toEqual(["t1", "k1"]);
+  });
+
+  it("treats a missing source as user (back-compat)", () => {
+    const { composer } = partitionPendingQueue([{ id: "x", content: "c", submittedAt: 1 }]);
+    expect(composer.map((i) => i.id)).toEqual(["x"]);
   });
 });

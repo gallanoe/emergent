@@ -4,6 +4,7 @@ import { agentStore } from "./agents.svelte";
 import { usageStore } from "./usage.svelte";
 import { dispose as disposeTerminal } from "../components/terminal/terminal-instances";
 import { normalizeThreadSummaryStatus } from "./types";
+import { partitionPendingQueue } from "../lib/chat-utils";
 import type {
   ActiveView,
   AgentDefinition,
@@ -587,6 +588,16 @@ function createAppState() {
     get selectedThreadPendingQueue() {
       if (!selectedThreadId) return [];
       return agentStore.getThread(selectedThreadId)?.pendingQueue ?? [];
+    },
+    get selectedThreadComposerQueue() {
+      if (!selectedThreadId) return [];
+      return partitionPendingQueue(agentStore.getThread(selectedThreadId)?.pendingQueue ?? [])
+        .composer;
+    },
+    get selectedThreadNotificationQueue() {
+      if (!selectedThreadId) return [];
+      return partitionPendingQueue(agentStore.getThread(selectedThreadId)?.pendingQueue ?? [])
+        .notifications;
     },
     get selectedAgentDef(): DisplayAgentDefinition | undefined {
       if (demoMode) {
