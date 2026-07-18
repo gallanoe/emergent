@@ -22,6 +22,7 @@
   let selectedAgentId = $state<string>("");
   let selectedBlockerIds = $state<string[]>([]);
   let submitting = $state(false);
+  let submitError = $state<string | null>(null);
 
   const canSubmit = $derived(
     title.trim().length > 0 &&
@@ -43,6 +44,7 @@
   async function handleSubmit() {
     if (!canSubmit || selectedAgentId.length === 0 || submitting) return;
     submitting = true;
+    submitError = null;
     try {
       await onCreate(
         title.trim(),
@@ -50,6 +52,11 @@
         selectedAgentId,
         selectedBlockerIds,
       );
+    } catch (err) {
+      // On success the parent closes this sidebar; on failure it stays open, so
+      // without this the form just sits there and the rejection escapes
+      // unhandled. Keep the entered values and say what went wrong.
+      submitError = err instanceof Error ? err.message : String(err);
     } finally {
       submitting = false;
     }
@@ -148,6 +155,15 @@
     </div>
 
     <div class="flex-1"></div>
+
+    {#if submitError}
+      <div
+        role="alert"
+        class="rounded border border-error/25 bg-error/10 px-2 py-1.5 text-[11px] leading-relaxed text-error"
+      >
+        Could not create the task — {submitError}
+      </div>
+    {/if}
 
     <div class="flex justify-end gap-2 pt-1">
       <Button variant="ghost" size="sm" onclick={onClose}>

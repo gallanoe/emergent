@@ -28,6 +28,27 @@ function withText(text: string): DisplayToolCall {
   return makeToolCall({ content: [{ type: "text", text }] });
 }
 
+/**
+ * A task as the Rust `Task` struct actually serializes it — `status` is the
+ * flattened TaskState tag, and `workspace_id` is the transparent WorkspaceId
+ * newtype. Tests override individual fields to probe the validator.
+ */
+function wireTask(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    id: "T-1",
+    title: "Ship",
+    description: "Ship the thing",
+    status: "working",
+    parent_id: null,
+    blocker_ids: [],
+    agent_id: "agent-1",
+    session_id: "th-1",
+    workspace_id: "ws-1",
+    created_at: "2026-07-18T00:00:00Z",
+    ...overrides,
+  };
+}
+
 describe("getEmergentToolName", () => {
   it("maps each MCP-prefixed tool name to its bare emergent name", () => {
     expect(getEmergentToolName("mcp__emergent__create_task")).toBe("create_task");
@@ -95,9 +116,69 @@ describe("parseAgentsToolContent", () => {
 
 describe("parseTasksToolContent", () => {
   it("parses a JSON task array", () => {
-    const tasks = parseTasksToolContent(withText(JSON.stringify([{ id: "T-1", title: "Ship" }])));
+    const tasks = parseTasksToolContent(withText(JSON.stringify([wireTask({ id: "T-1" })])));
     expect(tasks).toHaveLength(1);
     expect(tasks[0]!.id).toBe("T-1");
+  });
+
+  it("drops entries that are not well-formed tasks, keeping the rest", () => {
+    // A partial object used to be cast straight through and handed to the
+    // render layer typed as a DisplayTask it did not satisfy.
+    const tasks = parseTasksToolContent(
+      withText(JSON.stringify([{ id: "T-1", title: "Ship" }, wireTask({ id: "T-2" })])),
+    );
+    expect(tasks.map((t) => t.id)).toEqual(["T-2"]);
+  });
+
+  it("accepts the wire shape for a pending task, which omits session_id entirely", () => {
+    // Rust marks parent_id/session_id skip_serializing_if = Option::is_none, so
+    // they are absent rather than null. Both normalize to null.
+    const wire = wireTask({ id: "T-3", status: "pending" });
+    delete (wire as Record<string, unknown>).session_id;
+    delete (wire as Record<string, unknown>).parent_id;
+
+    const [task] = parseTasksToolContent(withText(JSON.stringify([wire])));
+    expect(task).toBeDefined();
+    expect(task!.session_id).toBeNull();
+    expect(task!.parent_id).toBeNull();
+  });
+
+  it("accepts the exact JSON the Rust serializer emits for a pending task", () => {
+    // Captured from `serde_json::to_string(&Task { state: Pending, .. })`. Kept
+    // verbatim: if the Rust shape drifts, this fails rather than silently
+    // filtering every task out of the list.
+    const wire =
+      '[{"id":"t1","title":"x","description":"y","status":"pending","blocker_ids":[],' +
+      '"agent_id":"a1","workspace_id":"ws1","created_at":"2026-01-01T00:00:00Z"}]';
+    const [task] = parseTasksToolContent(withText(wire));
+    expect(task).toEqual({
+      id: "t1",
+      title: "x",
+      description: "y",
+      status: "pending",
+      parent_id: null,
+      blocker_ids: [],
+      agent_id: "a1",
+      session_id: null,
+      workspace_id: "ws1",
+      created_at: "2026-01-01T00:00:00Z",
+    });
+  });
+
+  it("ignores wire fields the frontend does not model", () => {
+    const wire = { ...wireTask({ id: "T-4" }), summary: "done", creator_thread_id: "th-1" };
+    const [task] = parseTasksToolContent(withText(JSON.stringify([wire])));
+    expect(task!.id).toBe("T-4");
+    expect(task).not.toHaveProperty("summary");
+  });
+
+  it("rejects a task carrying an unknown status", () => {
+    const wire = wireTask({ id: "T-5", status: "exploded" });
+    expect(parseTasksToolContent(withText(JSON.stringify([wire])))).toEqual([]);
+  });
+
+  it("returns an empty list when the payload is not an array", () => {
+    expect(parseTasksToolContent(withText(JSON.stringify({ id: "T-1" })))).toEqual([]);
   });
 
   it("returns an empty array on malformed JSON", () => {
@@ -123,6 +204,27 @@ describe("parseCreateTaskToolContent", () => {
   it("returns null when neither rawOutput nor parseable text is present", () => {
     expect(parseCreateTaskToolContent(makeToolCall())).toBeNull();
     expect(parseCreateTaskToolContent(withText("<html>"))).toBeNull();
+  });
+
+  it("falls through to the text content when rawOutput is the wrong shape", () => {
+    // Previously any non-null rawOutput won outright and was cast unchecked,
+    // so a malformed one shadowed a perfectly good text payload.
+    const call = makeToolCall({
+      rawOutput: { unexpected: true },
+      content: [{ type: "text", text: JSON.stringify({ task_id: "FROM-TEXT" }) }],
+    });
+    expect(parseCreateTaskToolContent(call)?.task_id).toBe("FROM-TEXT");
+  });
+
+  it("rejects a rawOutput whose task_id is not a string", () => {
+    expect(parseCreateTaskToolContent(makeToolCall({ rawOutput: { task_id: 42 } }))).toBeNull();
+  });
+
+  it("rejects array and primitive payloads", () => {
+    expect(
+      parseCreateTaskToolContent(makeToolCall({ rawOutput: [{ task_id: "T-1" }] })),
+    ).toBeNull();
+    expect(parseCreateTaskToolContent(makeToolCall({ rawOutput: "T-1" }))).toBeNull();
   });
 });
 
@@ -160,6 +262,36 @@ describe("parseCreateTaskToolInput", () => {
 
   it("returns null when rawInput is explicitly null", () => {
     expect(parseCreateTaskToolInput(makeToolCall({ rawInput: null }))).toBeNull();
+  });
+
+  it("accepts blocker_ids omitted, null, or a string array", () => {
+    const base = { title: "Build", description: "do it", agent_id: "a-1" };
+    expect(parseCreateTaskToolInput(makeToolCall({ rawInput: base }))?.blocker_ids).toBeUndefined();
+    expect(
+      parseCreateTaskToolInput(makeToolCall({ rawInput: { ...base, blocker_ids: null } })),
+    ).not.toBeNull();
+    expect(
+      parseCreateTaskToolInput(makeToolCall({ rawInput: { ...base, blocker_ids: ["T-1"] } }))
+        ?.blocker_ids,
+    ).toEqual(["T-1"]);
+  });
+
+  it("rejects rawInput missing a required field or with a mistyped one", () => {
+    expect(
+      parseCreateTaskToolInput(makeToolCall({ rawInput: { title: "Build", description: "d" } })),
+    ).toBeNull();
+    expect(
+      parseCreateTaskToolInput(
+        makeToolCall({ rawInput: { title: 1, description: "d", agent_id: "a-1" } }),
+      ),
+    ).toBeNull();
+    expect(
+      parseCreateTaskToolInput(
+        makeToolCall({
+          rawInput: { title: "B", description: "d", agent_id: "a-1", blocker_ids: [1, 2] },
+        }),
+      ),
+    ).toBeNull();
   });
 });
 

@@ -208,4 +208,57 @@ describe("CreateTaskSidebar", () => {
     await fireEvent.click(getByRole("button", { name: "Cancel" }));
     expect(onClose).toHaveBeenCalledTimes(2);
   });
+
+  describe("when onCreate rejects", () => {
+    /** The parent leaves the sidebar mounted on failure, so the form persists. */
+    async function submitFailing(rejection: unknown) {
+      const onCreate = vi.fn(() => Promise.reject(rejection));
+      const utils = setup({ onCreate });
+      await fillValidForm(utils.container);
+      await fireEvent.click(utils.getByRole("button", { name: "Create" }));
+      await tick();
+      await tick();
+      return { ...utils, onCreate };
+    }
+
+    it("surfaces the failure instead of silently doing nothing", async () => {
+      const { getByRole } = await submitFailing(new Error("workspace is gone"));
+      const alert = getByRole("alert");
+      expect(alert.textContent).toContain("Could not create the task");
+      expect(alert.textContent).toContain("workspace is gone");
+    });
+
+    it("stringifies a non-Error rejection", async () => {
+      const { getByRole } = await submitFailing("create_task failed");
+      expect(getByRole("alert").textContent).toContain("create_task failed");
+    });
+
+    it("re-enables Create and keeps the entered values so the user can retry", async () => {
+      const { getByRole, container } = await submitFailing(new Error("boom"));
+      expect((getByRole("button", { name: "Create" }) as HTMLButtonElement).disabled).toBe(false);
+      expect(
+        container.querySelector<HTMLInputElement>('input[placeholder="Task title"]')!.value,
+      ).toBe("  Ship it  ");
+    });
+
+    it("clears a previous error when the next attempt succeeds", async () => {
+      const onCreate = vi
+        .fn()
+        .mockImplementationOnce(() => Promise.reject(new Error("transient")))
+        .mockImplementationOnce(() => Promise.resolve());
+      const { container, getByRole, queryByRole } = setup({ onCreate });
+      await fillValidForm(container);
+
+      await fireEvent.click(getByRole("button", { name: "Create" }));
+      await tick();
+      await tick();
+      expect(queryByRole("alert")).not.toBeNull();
+
+      await fireEvent.click(getByRole("button", { name: "Create" }));
+      await tick();
+      await tick();
+      expect(queryByRole("alert")).toBeNull();
+      expect(onCreate).toHaveBeenCalledTimes(2);
+    });
+  });
 });
