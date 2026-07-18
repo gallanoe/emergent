@@ -190,7 +190,7 @@ function createAppState() {
 
   async function initialize() {
     if (demoMode) {
-      const firstWs = (mockState.swarms as unknown as DisplayWorkspace[])[0];
+      const firstWs = (mockState.workspaces as unknown as DisplayWorkspace[])[0];
       if (firstWs && !selectedWorkspaceId) {
         selectedWorkspaceId = firstWs.id;
       }
@@ -278,12 +278,12 @@ function createAppState() {
     }
   }
 
-  function toggleSwarmCollapsed(swarmId: string) {
+  function toggleWorkspaceCollapsed(workspaceId: string) {
     if (demoMode) {
-      mockState.toggleSwarmCollapsed(swarmId);
+      mockState.toggleWorkspaceCollapsed(workspaceId);
       return;
     }
-    const workspace = workspaces.find((w) => w.id === swarmId);
+    const workspace = workspaces.find((w) => w.id === workspaceId);
     if (workspace) workspace.collapsed = !workspace.collapsed;
   }
 
@@ -291,7 +291,7 @@ function createAppState() {
 
   function getDisplayWorkspaces(): DisplayWorkspace[] {
     if (demoMode) {
-      const list = mockState.swarms as unknown as DisplayWorkspace[];
+      const list = mockState.workspaces as unknown as DisplayWorkspace[];
       return list.map((w) => ({
         id: w.id,
         name: w.name,
@@ -455,10 +455,10 @@ function createAppState() {
     }
   }
 
-  function getSelectedSwarm(): DisplayWorkspace | undefined {
+  function getSelectedWorkspace(): DisplayWorkspace | undefined {
     if (demoMode) {
-      const swarmList = mockState.swarms as unknown as DisplayWorkspace[];
-      return swarmList.find((s) => s.id === selectedWorkspaceId) ?? swarmList[0];
+      const workspaceList = mockState.workspaces as unknown as DisplayWorkspace[];
+      return workspaceList.find((s) => s.id === selectedWorkspaceId) ?? workspaceList[0];
     }
     const displayWorkspaces = getDisplayWorkspaces();
     return displayWorkspaces.find((w) => w.id === selectedWorkspaceId) ?? displayWorkspaces[0];
@@ -494,7 +494,7 @@ function createAppState() {
         selectedAgentId = id;
       }
     },
-    get swarms() {
+    get workspaces() {
       return getDisplayWorkspaces();
     },
     get selectedAgent() {
@@ -503,7 +503,7 @@ function createAppState() {
     get knownAgents() {
       return knownAgents;
     },
-    get selectedSwarmId() {
+    get selectedWorkspaceId() {
       return selectedWorkspaceId;
     },
     get activeView() {
@@ -512,12 +512,12 @@ function createAppState() {
     set activeView(v: ActiveView) {
       activeView = v;
     },
-    get selectedSwarm() {
-      return getSelectedSwarm();
+    get selectedWorkspace() {
+      return getSelectedWorkspace();
     },
     initialize,
     createWorkspace,
-    toggleSwarmCollapsed,
+    toggleWorkspaceCollapsed,
     updateWorkspace,
     deleteWorkspace,
     sendPrompt: agentStore.sendPrompt,
@@ -563,8 +563,8 @@ function createAppState() {
       if (demoMode) {
         const id = mockState.selectedAgentId;
         if (!id) return undefined;
-        const swarmList = mockState.swarms as unknown as DisplayWorkspace[];
-        for (const ws of swarmList) {
+        const workspaceList = mockState.workspaces as unknown as DisplayWorkspace[];
+        for (const ws of workspaceList) {
           const def = ws.agentDefinitions.find((d) => d.id === id);
           if (def) {
             return {

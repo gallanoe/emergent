@@ -78,9 +78,9 @@
   };
 
   const searchThreads = $derived.by<ThreadHit[]>(() => {
-    const swarm = appState.selectedSwarm;
-    if (!swarm) return [];
-    return swarm.agentDefinitions.flatMap((def) =>
+    const workspace = appState.selectedWorkspace;
+    if (!workspace) return [];
+    return workspace.agentDefinitions.flatMap((def) =>
       def.threads.map((t) => ({
         id: t.id,
         name: t.name,
@@ -112,7 +112,7 @@
       void handleNewThread();
     } else if (e.key === ".") {
       e.preventDefault();
-      if (appState.selectedSwarmId) {
+      if (appState.selectedWorkspaceId) {
         appState.showOverview();
       }
     }
@@ -157,9 +157,9 @@
 
 <div class="grid h-screen grid-cols-[240px_1fr]">
   <InnerSidebar
-    swarm={appState.selectedSwarm}
-    workspaces={appState.swarms}
-    selectedWorkspaceId={appState.selectedSwarmId}
+    workspace={appState.selectedWorkspace}
+    workspaces={appState.workspaces}
+    selectedWorkspaceId={appState.selectedWorkspaceId}
     activeView={appState.activeView}
     selectedAgentId={appState.selectedAgentId}
     demoMode={appState.demoMode}
@@ -192,7 +192,7 @@
       data-tauri-drag-region
       aria-hidden="true"
     ></div>
-    {#if !appState.demoMode && appState.swarms.length === 0}
+    {#if !appState.demoMode && appState.workspaces.length === 0}
       <div
         class="flex flex-col items-center justify-center flex-1 gap-4 text-center px-6"
       >
@@ -216,42 +216,42 @@
           Create Workspace
         </button>
       </div>
-    {:else if appState.activeView === "overview" && appState.selectedSwarm}
+    {:else if appState.activeView === "overview" && appState.selectedWorkspace}
       <OverviewView
-        workspace={appState.selectedSwarm}
+        workspace={appState.selectedWorkspace}
         tasks={appState.workspaceTasks}
         onSelectThread={(id) => appState.selectThread(id)}
         onOpenTasks={() => appState.showTasks()}
       />
     {:else if appState.activeView === "app-settings"}
       <AppSettingsView />
-    {:else if appState.activeView === "settings" && appState.selectedSwarmId}
+    {:else if appState.activeView === "settings" && appState.selectedWorkspaceId}
       <WorkspaceSettingsView
-        workspaceId={appState.selectedSwarmId}
+        workspaceId={appState.selectedWorkspaceId}
         onUpdateName={(name) =>
-          appState.updateWorkspace(appState.selectedSwarmId!, name)}
+          appState.updateWorkspace(appState.selectedWorkspaceId!, name)}
         onDelete={() => {
-          const id = appState.selectedSwarmId!;
+          const id = appState.selectedWorkspaceId!;
           appState.activeView = "overview";
           void appState.deleteWorkspace(id);
         }}
       />
-    {:else if appState.activeView === "terminal" && appState.selectedSwarmId}
+    {:else if appState.activeView === "terminal" && appState.selectedWorkspaceId}
       <TerminalView
-        workspaceId={appState.selectedSwarmId}
-        sessionId={appState.terminalSessionIds[appState.selectedSwarmId] ??
+        workspaceId={appState.selectedWorkspaceId}
+        sessionId={appState.terminalSessionIds[appState.selectedWorkspaceId] ??
           null}
         onSessionCreated={(sid) =>
-          appState.setTerminalSessionId(appState.selectedSwarmId!, sid)}
+          appState.setTerminalSessionId(appState.selectedWorkspaceId!, sid)}
         onSessionEnded={() =>
-          appState.setTerminalSessionId(appState.selectedSwarmId!, null)}
+          appState.setTerminalSessionId(appState.selectedWorkspaceId!, null)}
       />
-    {:else if appState.activeView === "create-agent" && appState.selectedSwarmId}
+    {:else if appState.activeView === "create-agent" && appState.selectedWorkspaceId}
       <AgentCreatorView
         knownAgents={appState.knownAgents}
         onCreate={async (cli, name, provider) => {
           const agentId = await appState.createAgentDefinition(
-            appState.selectedSwarmId!,
+            appState.selectedWorkspaceId!,
             name,
             cli,
             provider,
@@ -259,12 +259,12 @@
           appState.selectAgent(agentId);
         }}
         onCancel={() => {
-          if (appState.selectedSwarmId) {
-            appState.selectWorkspace(appState.selectedSwarmId);
+          if (appState.selectedWorkspaceId) {
+            appState.selectWorkspace(appState.selectedWorkspaceId);
           }
         }}
       />
-    {:else if appState.activeView === "tasks" && appState.selectedSwarmId}
+    {:else if appState.activeView === "tasks" && appState.selectedWorkspaceId}
       <div
         class="grid min-h-0 flex-1 min-w-0"
         style="grid-template-columns: {taskGridColumns};"
@@ -284,7 +284,7 @@
             onClose={() => appState.closeTaskSidebar()}
             onCreate={async (title, desc, agentId, blockerIds) => {
               await appState.createTask(
-                appState.selectedSwarmId!,
+                appState.selectedWorkspaceId!,
                 title,
                 desc,
                 agentId,

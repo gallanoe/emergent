@@ -15,9 +15,9 @@ function makeAgentDef(overrides?: Partial<DisplayAgentDefinition>): DisplayAgent
   };
 }
 
-function makeSwarm(overrides?: Partial<DisplayWorkspace>): DisplayWorkspace {
+function makeWorkspace(overrides?: Partial<DisplayWorkspace>): DisplayWorkspace {
   return {
-    id: "swarm-1",
+    id: "ws-1",
     name: "Research Swarm",
     collapsed: false,
     agentDefinitions: [
@@ -29,9 +29,9 @@ function makeSwarm(overrides?: Partial<DisplayWorkspace>): DisplayWorkspace {
 }
 
 const baseProps = (overrides: Record<string, unknown> = {}) => ({
-  swarm: (overrides.swarm as DisplayWorkspace | undefined) ?? makeSwarm(),
-  workspaces: (overrides.workspaces as DisplayWorkspace[]) ?? [makeSwarm()],
-  selectedWorkspaceId: (overrides.selectedWorkspaceId as string | null) ?? "swarm-1",
+  workspace: (overrides.workspace as DisplayWorkspace | undefined) ?? makeWorkspace(),
+  workspaces: (overrides.workspaces as DisplayWorkspace[]) ?? [makeWorkspace()],
+  selectedWorkspaceId: (overrides.selectedWorkspaceId as string | null) ?? "ws-1",
   activeView:
     (overrides.activeView as
       | "overview"

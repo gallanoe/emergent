@@ -12,7 +12,7 @@
   import WorkspaceSwitcher from "./WorkspaceSwitcher.svelte";
 
   interface Props {
-    swarm: DisplayWorkspace | undefined;
+    workspace: DisplayWorkspace | undefined;
     workspaces: DisplayWorkspace[];
     selectedWorkspaceId: string | null;
     activeView: ActiveView;
@@ -35,7 +35,7 @@
   }
 
   let {
-    swarm,
+    workspace,
     workspaces,
     selectedWorkspaceId,
     activeView,
@@ -183,7 +183,7 @@
       {/if}
     </div>
     <div class="flex min-h-0 flex-1 flex-col gap-px overflow-y-auto px-2">
-      {#each swarm?.agentDefinitions ?? [] as def (def.id)}
+      {#each workspace?.agentDefinitions ?? [] as def (def.id)}
         {@const active =
           activeView.startsWith("agent") && selectedAgentId === def.id}
         <button

@@ -366,7 +366,7 @@ const agentDefinitions: DisplayAgentDefinition[] = [
   },
 ];
 
-const swarms: DisplayWorkspace[] = [
+const workspaces: DisplayWorkspace[] = [
   {
     id: "ws1",
     name: "emergent-core",
@@ -382,7 +382,7 @@ const swarms: DisplayWorkspace[] = [
 ];
 
 function findThread(threadId: string): DisplayThread | undefined {
-  for (const s of swarms) {
+  for (const s of workspaces) {
     for (const d of s.agentDefinitions) {
       const t = d.threads.find((th) => th.id === threadId);
       if (t) return t;
@@ -404,12 +404,12 @@ function agentIdForThread(threadId: string): string | null {
 }
 
 function createAppState() {
-  let _swarms = $state(swarms);
+  let _workspaces = $state(workspaces);
   let _selectedAgentId = $state("a1");
 
   return {
-    get swarms() {
-      return _swarms;
+    get workspaces() {
+      return _workspaces;
     },
     get selectedAgentId() {
       return _selectedAgentId;
@@ -431,9 +431,9 @@ function createAppState() {
       return DEMO_TASKS.filter((t) => t.workspace_id === wid);
     },
 
-    toggleSwarmCollapsed(swarmId: string) {
-      const swarm = _swarms.find((s) => s.id === swarmId);
-      if (swarm) swarm.collapsed = !swarm.collapsed;
+    toggleWorkspaceCollapsed(workspaceId: string) {
+      const workspace = _workspaces.find((s) => s.id === workspaceId);
+      if (workspace) workspace.collapsed = !workspace.collapsed;
     },
   };
 }

@@ -2,7 +2,7 @@
 import { test, expect } from "@playwright/test";
 
 /**
- * Tauri mock that simulates the app with no swarms or agents.
+ * Tauri mock that simulates the app with no workspaces or agents.
  * Provides known agent definitions but none are running.
  */
 const emptyStateMock = `
