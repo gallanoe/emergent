@@ -55,7 +55,6 @@ impl emergent_core::workspace::terminal::TerminalEventSink for TauriTerminalSink
 pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_log::Builder::new().build())
-        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let _rt_guard = tauri::async_runtime::handle().inner().enter();
 
