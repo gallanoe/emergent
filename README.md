@@ -103,13 +103,13 @@ bun run build             # Tauri desktop app (includes agent manager)
 
 Availability is detected on your host `PATH`.
 
-| Agent       | Command                                 |
-| ----------- | --------------------------------------- |
-| Claude Code | `bunx @zed-industries/claude-agent-acp` |
-| Codex       | `bunx @zed-industries/codex-acp`        |
-| Gemini      | `gemini --experimental-acp`             |
-| Kiro        | `kiro-cli acp`                          |
-| OpenCode    | `opencode acp`                          |
+| Agent       | Command                                      |
+| ----------- | -------------------------------------------- |
+| Claude Code | `bunx @agentclientprotocol/claude-agent-acp` |
+| Codex       | `bunx @agentclientprotocol/codex-acp`        |
+| Gemini      | `gemini --experimental-acp`                  |
+| Kiro        | `kiro-cli acp`                               |
+| OpenCode    | `opencode acp`                               |
 
 ## v1 redesign
 

@@ -653,8 +653,8 @@ mod tests {
     #[test]
     fn parse_agent_command_splits_plain_args() {
         assert_eq!(
-            parse_agent_command("bunx @zed-industries/claude-agent-acp").unwrap(),
-            vec!["bunx", "@zed-industries/claude-agent-acp"]
+            parse_agent_command("bunx @agentclientprotocol/claude-agent-acp").unwrap(),
+            vec!["bunx", "@agentclientprotocol/claude-agent-acp"]
         );
     }
 

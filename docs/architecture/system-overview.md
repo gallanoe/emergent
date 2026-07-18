@@ -202,7 +202,7 @@ Precise definitions, grounded in the types. Getting these right prevents most co
 
 - **Workspace** — a named project scope identified by a `WorkspaceId` newtype (an 8-hex string). On disk it is just a directory `~/.emergent/<id>/` holding `metadata.json`, `agents.json`, `threads.json`, `tasks.json`. It is **not** a container. See [workspaces-and-terminals.md](./workspaces-and-terminals.md).
 
-- **Agent definition** — a reusable _template_ for spawning threads (`AgentDefinition`). It records which CLI to launch (e.g. `bunx @zed-industries/claude-agent-acp`) and branding, and is persisted in `agents.json`. Creating a definition does not start a process.
+- **Agent definition** — a reusable _template_ for spawning threads (`AgentDefinition`). It records which CLI to launch (e.g. `bunx @agentclientprotocol/claude-agent-acp`) and branding, and is persisted in `agents.json`. Creating a definition does not start a process.
 
 - **Thread** — a _running (or dormant) instance_ of an agent definition: one live agent process + its ACP session + its history + its bearer token. Threads move through an `AgentStatus` lifecycle (`Initializing → Idle → Working → …`) and live in `ThreadManager`'s **live** map, or are demoted to **dormant** stubs on shutdown. This is the unit that streams messages to the UI.
 

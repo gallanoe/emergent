@@ -22,13 +22,13 @@ describe("AgentAvatar", () => {
     const { container } = render(AgentAvatar, {
       props: {
         provider: null,
-        cli: "bunx @zed-industries/claude-agent-acp",
+        cli: "bunx @agentclientprotocol/claude-agent-acp",
         name: "Reviewer",
       },
     });
     const img = container.querySelector("img");
     expect(img?.getAttribute("src")).toBe(
-      getLogoUrlForAgent(null, "bunx @zed-industries/claude-agent-acp"),
+      getLogoUrlForAgent(null, "bunx @agentclientprotocol/claude-agent-acp"),
     );
   });
 

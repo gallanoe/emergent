@@ -59,15 +59,15 @@ const KNOWN_AGENTS: &[KnownAgentRow] = &[
     (
         "Claude Code",
         "bunx",
-        &["@zed-industries/claude-agent-acp"],
-        &["claude", "bunx"],
+        &["@agentclientprotocol/claude-agent-acp"],
+        &["bunx"],
         "claude",
     ),
     (
         "Codex",
         "bunx",
-        &["@zed-industries/codex-acp"],
-        &["codex", "bunx"],
+        &["@agentclientprotocol/codex-acp"],
+        &["bunx"],
         "codex",
     ),
     ("Gemini", "gemini", &["--experimental-acp"], &[], "gemini"),
@@ -122,7 +122,10 @@ mod tests {
         let agents = known_agents_on_host();
         assert_eq!(agents.len(), KNOWN_AGENTS.len());
         assert_eq!(agents[0].name, "Claude Code");
-        assert_eq!(agents[0].command, "bunx @zed-industries/claude-agent-acp");
+        assert_eq!(
+            agents[0].command,
+            "bunx @agentclientprotocol/claude-agent-acp"
+        );
     }
 
     #[test]

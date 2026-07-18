@@ -15,8 +15,8 @@ describe("agent-logos", () => {
   });
 
   it("infers provider id from known spawn commands", () => {
-    expect(inferProviderIdFromCli("bunx @zed-industries/claude-agent-acp")).toBe("claude");
-    expect(inferProviderIdFromCli("bunx @zed-industries/codex-acp")).toBe("codex");
+    expect(inferProviderIdFromCli("bunx @agentclientprotocol/claude-agent-acp")).toBe("claude");
+    expect(inferProviderIdFromCli("bunx @agentclientprotocol/codex-acp")).toBe("codex");
     expect(inferProviderIdFromCli("gemini --experimental-acp")).toBe("gemini");
     expect(inferProviderIdFromCli("kiro-cli acp")).toBe("kiro");
     expect(inferProviderIdFromCli("opencode acp")).toBe("opencode");
@@ -24,7 +24,7 @@ describe("agent-logos", () => {
 
   it("getLogoUrlForAgent prefers provider then cli", () => {
     expect(getLogoUrlForAgent("claude", "nope")).toBe(claudeLogo);
-    expect(getLogoUrlForAgent(null, "bunx @zed-industries/claude-agent-acp")).toBe(claudeLogo);
+    expect(getLogoUrlForAgent(null, "bunx @agentclientprotocol/claude-agent-acp")).toBe(claudeLogo);
     expect(getLogoUrlForAgent(null, "unknown-bin")).toBeNull();
   });
 });
