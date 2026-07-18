@@ -5,7 +5,8 @@ use agent_client_protocol as acp;
 use agent_client_protocol::schema::v1::{
     CancelNotification, ConfigOptionUpdate, ContentBlock, PromptRequest,
     RequestPermissionOutcome, RequestPermissionRequest, RequestPermissionResponse,
-    SelectedPermissionOutcome, SessionUpdate, SetSessionConfigOptionRequest, ToolCallContent,
+    PermissionOptionKind, SelectedPermissionOutcome, SessionUpdate, SetSessionConfigOptionRequest,
+    ToolCallContent,
     ToolCallLocation, ToolKind,
 };
 use emergent_protocol::{
@@ -220,15 +221,50 @@ pub(crate) fn handle_session_update(
     }
 }
 
+/// Rank a permission option by how much authority it grants, lowest first.
+///
+/// Ordering is what keeps a grant scoped to the single call that prompted it:
+/// an `AllowAlways` choice persists inside the agent and silently covers every
+/// later call of that kind, so it must never win over an `AllowOnce` that the
+/// agent happened to list second.
+/// `PermissionOptionKind` is `#[non_exhaustive]`; a kind added in a later spec
+/// revision ranks below every known one, because we cannot tell how much
+/// authority it confers and must not hand it out by accident.
+const UNKNOWN_PERMISSION_RANK: u8 = 4;
+
+fn permission_option_rank(kind: &PermissionOptionKind) -> u8 {
+    match kind {
+        PermissionOptionKind::AllowOnce => 0,
+        PermissionOptionKind::AllowAlways => 1,
+        PermissionOptionKind::RejectOnce => 2,
+        PermissionOptionKind::RejectAlways => 3,
+        _ => UNKNOWN_PERMISSION_RANK,
+    }
+}
+
 /// Build the permission-approval response for a `RequestPermissionRequest`.
-/// Auto-approves by selecting the first option if available, otherwise cancels.
+///
+/// Auto-approves, but picks the least-privileged option the agent offered
+/// rather than trusting list order — the agent controls that order, so
+/// `options.first()` was effectively letting it choose its own authority.
 pub(crate) fn build_permission_response(
     args: &RequestPermissionRequest,
 ) -> RequestPermissionResponse {
-    let outcome = if let Some(first) = args.options.first() {
-        RequestPermissionOutcome::Selected(SelectedPermissionOutcome::new(
-            first.option_id.clone(),
-        ))
+    let choice = args
+        .options
+        .iter()
+        .min_by_key(|opt| permission_option_rank(&opt.kind));
+
+    let outcome = if let Some(opt) = choice {
+        if permission_option_rank(&opt.kind) == UNKNOWN_PERMISSION_RANK {
+            log::warn!(
+                "Auto-selecting permission option {:?} of unrecognized kind {:?}; \
+                 its authority is unknown",
+                opt.option_id,
+                opt.kind,
+            );
+        }
+        RequestPermissionOutcome::Selected(SelectedPermissionOutcome::new(opt.option_id.clone()))
     } else {
         RequestPermissionOutcome::Cancelled
     };
@@ -433,8 +469,55 @@ pub(crate) async fn agent_command_loop(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use agent_client_protocol::schema::v1::UsageUpdate;
+    use agent_client_protocol::schema::v1::{
+        PermissionOption, ToolCallUpdate, ToolCallUpdateFields, UsageUpdate,
+    };
     use tokio::sync::broadcast;
+
+    fn permission_request(options: Vec<PermissionOption>) -> RequestPermissionRequest {
+        RequestPermissionRequest::new(
+            "sess-1",
+            ToolCallUpdate::new("tool-1", ToolCallUpdateFields::default()),
+            options,
+        )
+    }
+
+    fn selected_id(resp: &RequestPermissionResponse) -> String {
+        match &resp.outcome {
+            RequestPermissionOutcome::Selected(sel) => sel.option_id.to_string(),
+            other => panic!("expected Selected outcome, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn permission_prefers_allow_once_over_earlier_allow_always() {
+        // Agents control option order, so listing AllowAlways first must not be
+        // enough to win a persistent grant.
+        let resp = build_permission_response(&permission_request(vec![
+            PermissionOption::new("always", "Always allow", PermissionOptionKind::AllowAlways),
+            PermissionOption::new("once", "Allow once", PermissionOptionKind::AllowOnce),
+        ]));
+        assert_eq!(selected_id(&resp), "once");
+    }
+
+    #[test]
+    fn permission_falls_back_to_allow_always_when_it_is_the_only_grant() {
+        let resp = build_permission_response(&permission_request(vec![
+            PermissionOption::new("reject", "Reject", PermissionOptionKind::RejectOnce),
+            PermissionOption::new("always", "Always allow", PermissionOptionKind::AllowAlways),
+        ]));
+        assert_eq!(selected_id(&resp), "always");
+    }
+
+    // No test covers the unrecognized-kind ranking: PermissionOptionKind is
+    // non_exhaustive but its deserializer rejects unknown strings, so a variant
+    // we cannot rank is not constructible until the schema crate adds one.
+
+    #[test]
+    fn permission_cancels_when_no_options_offered() {
+        let resp = build_permission_response(&permission_request(vec![]));
+        assert!(matches!(resp.outcome, RequestPermissionOutcome::Cancelled));
+    }
 
     #[test]
     fn usage_update_emits_token_usage_notification() {

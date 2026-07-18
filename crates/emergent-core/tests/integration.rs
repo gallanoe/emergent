@@ -1119,6 +1119,64 @@ async fn turn_dispatched_emitted_before_response_and_recorded() {
     );
 }
 
+/// The mock agent reports `load_session: false` and does not implement the
+/// method, which is exactly the shape of a real agent that only supports fresh
+/// sessions. Resuming against it must fall back to `session/new` and come up
+/// usable, rather than surfacing a raw `method_not_found` and stranding the
+/// thread the way an unconditional `session/load` did.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn resume_falls_back_to_new_session_when_agent_lacks_load_capability() {
+    use emergent_protocol::WorkspaceId;
+    use std::time::Duration;
+    use tempfile::TempDir;
+
+    let mock_bin = ensure_mock_agent();
+    let tmp = TempDir::new().unwrap();
+    let ws_id = WorkspaceId::from("it-ws-resume-fallback");
+
+    let (_url, _registry, manager, event_tx) = spawn_test_server_with_events().await;
+    manager
+        .thread_manager()
+        .register_workspace_for_test(ws_id.clone(), tmp.path().to_path_buf())
+        .await;
+
+    let cli = format!("'{}'", mock_bin.display());
+    let agent_id = manager
+        .create_agent(ws_id.clone(), "mock".into(), cli, Some("mock".into()))
+        .await
+        .expect("create_agent");
+
+    let mut rx = event_tx.subscribe();
+    let thread_id = manager.spawn_thread(&agent_id, None).await.expect("spawn_thread");
+    wait_for_session_ready(&mut rx, &thread_id, Duration::from_secs(20)).await;
+
+    manager.shutdown_thread(&thread_id).await.expect("shutdown_thread");
+
+    let mut rx2 = event_tx.subscribe();
+    manager
+        .resume_thread(&thread_id, &agent_id, "stale-session-id")
+        .await
+        .expect("resume must succeed by falling back to a new session");
+    wait_for_session_ready(&mut rx2, &thread_id, Duration::from_secs(20)).await;
+
+    // Falling back is only worth anything if the thread can actually take a turn.
+    manager
+        .enqueue_message(
+            &thread_id,
+            emergent_core::agent::queue::MessageSource::User,
+            "hello".into(),
+        )
+        .await
+        .expect("enqueue_message");
+
+    let notifs = collect_all_for_thread(&mut rx2, &thread_id, Duration::from_secs(20)).await;
+    assert!(
+        notifs.iter().any(|n| matches!(n, Notification::MessageChunk(_))),
+        "resumed thread must complete a turn, got: {:?}",
+        notifs
+    );
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn mock_agent_use_tools_streams_tool_call_and_message() {
     use emergent_protocol::WorkspaceId;

@@ -292,19 +292,40 @@ pub(crate) async fn initialize_agent(
                             log::debug!("Agent {} starting ACP handshake", agent_id);
 
                             // Initialize
-                            conn.send_request(
-                                acp::schema::v1::InitializeRequest::new(ProtocolVersion::V1)
-                                    .client_info(
-                                        Implementation::new("emergent", "0.1.0")
+                            let init_resp = conn
+                                .send_request(
+                                    acp::schema::v1::InitializeRequest::new(ProtocolVersion::V1)
+                                        .client_info(
+                                            Implementation::new(
+                                                "emergent",
+                                                env!("CARGO_PKG_VERSION"),
+                                            )
                                             .title("Emergent"),
+                                        ),
+                                )
+                                .block_task()
+                                .await
+                                .map_err(|e| {
+                                    acp::schema::v1::Error::internal_error()
+                                        .data(format!("ACP initialize failed: {}", e))
+                                })?;
+
+                            // The agent answers with the version it will actually speak,
+                            // which may be lower than what we asked for. We only know how
+                            // to talk V1, so anything else is a hard stop rather than a
+                            // handshake that fails later in a confusing place.
+                            if init_resp.protocol_version != ProtocolVersion::V1 {
+                                return Err(acp::schema::v1::Error::internal_error().data(
+                                    format!(
+                                        "agent negotiated unsupported ACP protocol version {:?}, expected {:?}",
+                                        init_resp.protocol_version,
+                                        ProtocolVersion::V1
                                     ),
-                            )
-                            .block_task()
-                            .await
-                            .map_err(|e| {
-                                acp::schema::v1::Error::internal_error()
-                                    .data(format!("ACP initialize failed: {}", e))
-                            })?;
+                                ));
+                            }
+
+                            let load_session_supported =
+                                init_resp.agent_capabilities.load_session;
 
                             // Build MCP server config for swarm communication (HTTP)
                             let mcp_config = McpServer::Http(
@@ -320,8 +341,32 @@ pub(crate) async fn initialize_agent(
 
                             let init_result: Result<(SessionId, Vec<ConfigOption>), String> =
                                 async {
-                                    match session_init {
-                                        SessionInit::New => {
+                                    // session/load is optional. An agent that does not
+                                    // advertise it answers with method_not_found, which
+                                    // used to surface as an opaque handshake failure and
+                                    // strand the thread. Falling back to a fresh session
+                                    // loses replayed history but keeps the thread usable.
+                                    let load_target = match &session_init {
+                                        SessionInit::Load { acp_session_id }
+                                            if load_session_supported =>
+                                        {
+                                            Some(acp_session_id.clone())
+                                        }
+                                        SessionInit::Load { acp_session_id } => {
+                                            log::warn!(
+                                                "Agent {} does not support session/load; \
+                                                 starting a fresh session instead of \
+                                                 resuming {}",
+                                                agent_id,
+                                                acp_session_id,
+                                            );
+                                            None
+                                        }
+                                        SessionInit::New => None,
+                                    };
+
+                                    match load_target {
+                                        None => {
                                             let session_resp = conn
                                                 .send_request(
                                                     NewSessionRequest::new(&agent_workdir)
@@ -344,7 +389,7 @@ pub(crate) async fn initialize_agent(
 
                                             Ok((session_resp.session_id, initial_config))
                                         }
-                                        SessionInit::Load { acp_session_id } => {
+                                        Some(acp_session_id) => {
                                             log::info!(
                                                 "Agent {} loading existing session {}",
                                                 agent_id,
