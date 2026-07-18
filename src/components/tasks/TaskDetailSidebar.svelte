@@ -58,6 +58,7 @@
 </script>
 
 <div
+  data-testid="task-detail-sidebar"
   class="flex h-full min-h-0 flex-col border-l border-border-default bg-bg-sidebar px-4 py-4"
 >
   <div class="mb-3 flex items-start justify-between gap-2">

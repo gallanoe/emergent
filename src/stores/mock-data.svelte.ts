@@ -431,6 +431,16 @@ function createAppState() {
       return DEMO_TASKS.filter((t) => t.workspace_id === wid);
     },
 
+    /**
+     * Every demo task, across workspaces — the mock counterpart of the real
+     * store's global `tasks` record. Views that resolve a task by id (the
+     * detail sidebar's blocker/parent graph, the chat banner) need the whole
+     * set, not just the selected workspace's slice.
+     */
+    get allTasks(): DisplayTask[] {
+      return DEMO_TASKS;
+    },
+
     toggleWorkspaceCollapsed(workspaceId: string) {
       const workspace = _workspaces.find((s) => s.id === workspaceId);
       if (workspace) workspace.collapsed = !workspace.collapsed;

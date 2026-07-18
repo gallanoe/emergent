@@ -369,6 +369,16 @@ function createAppState() {
       : Object.values(tasks).filter((t) => t.workspace_id === selectedWorkspaceId),
   );
 
+  /**
+   * Task lookup by id. Demo mode has no backend to populate the `tasks` record,
+   * so it is projected from the mock data — otherwise `workspaceTasks` would
+   * render a populated table while every by-id lookup against `tasks` returned
+   * undefined, leaving the detail sidebar blank and the chat banner missing.
+   */
+  const tasksById = $derived(
+    demoMode ? Object.fromEntries(mockState.allTasks.map((t) => [t.id, t])) : tasks,
+  );
+
   const activeWorkspaceTaskCount = $derived(
     workspaceTasks.filter((t) => t.status === "working" || t.status === "pending").length,
   );
@@ -712,7 +722,7 @@ function createAppState() {
       }
     },
     get tasks() {
-      return tasks;
+      return tasksById;
     },
     get selectedTaskId() {
       return selectedTaskId;
