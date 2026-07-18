@@ -54,27 +54,7 @@ The frontend has a **forward-looking, currently-unused** `"permission"` glyph st
 
 ---
 
-## 3. `swarm::Topology` is decorative — it gates nothing
-
-**Current behavior.** `swarm/topology.rs` is a small undirected graph — canonicalized `(a, b)` edges with `connect` / `disconnect` / `peers` / `is_connected`. It is mutated by the `connect_agents` / `disconnect_agents` IPC commands and read back by `get_thread_connections`.
-
-But no coordination path consults it:
-
-- `list_agents` (`mcp/handler.rs`) returns **all** agent definitions in the caller's workspace via `list_agent_definitions`. It never filters by topology edges.
-- `swarm::build_system_block` (`swarm/system_prompt.rs`) takes only turn/session/permission context — it has no topology parameter and injects the same swarm guide regardless of connections.
-- Task creation / routing (via the MCP task tools) is unaffected by edges.
-
-So topology is UI/bookkeeping state only. The **real** inter-agent coordination channel is the MCP task tools — see [Task & Swarm Coordination](task-and-swarm-coordination.md).
-
-**Impact.** The "swarm" connection UI implies a routing/visibility model that does not exist. An edge between two agents changes nothing about what either can see or do.
-
-> **Gotcha:** `Topology` is also **not persisted** (see [Persistence & Usage](persistence-and-usage.md)) — it is rebuilt empty on every boot, so even the decorative edges vanish on restart.
-
-**Possible direction.** Either make topology _load-bearing_ (e.g. scope `list_agents` to `peers()`, or feed peer identity into `build_system_block` so an agent only "knows about" its neighbors), or drop it and frame swarm coordination purely around the task graph. Until then, do not describe topology as a security or routing boundary.
-
----
-
-## 4. Live cost is only reflected after a workspace reload
+## 3. Live cost is only reflected after a workspace reload
 
 **Current behavior.** There are two distinct usage notifications:
 
@@ -93,7 +73,7 @@ Cost therefore only enters the UI through the persisted snapshot: `get_workspace
 
 ---
 
-## 5. The `recent_turns` ring buffer is persisted and returned but never consumed
+## 4. The `recent_turns` ring buffer is persisted and returned but never consumed
 
 **Current behavior.** `agent/usage_store.rs` maintains a per-workspace `recent_turns` ring buffer, capped at `RECENT_TURNS_CAP` (oldest evicted when full). It is serialized into `threads.json` and returned as part of `WorkspaceUsageStore` from `get_workspace_usage`.
 
@@ -107,7 +87,7 @@ The frontend never reads it. `WorkspaceUsageStorePayload` (`stores/usage.svelte.
 
 ---
 
-## 6. Per-agent system prompts are frontend-only / in-memory
+## 5. Per-agent system prompts are frontend-only / in-memory
 
 **Current behavior.** The UI lets you edit a per-agent system prompt, but it lives entirely in the frontend. `stores/app-state.svelte.ts` holds an `agentSystemPrompts` map, and `updateAgentSystemPrompt` only writes to it — its own comment: _"Display-only until `AgentDefinition` / `update_agent` gain a persisted system-prompt field."_
 
@@ -121,7 +101,7 @@ The backend `AgentDefinition` (`emergent-protocol`) has **no system-prompt field
 
 ---
 
-## 7. The task registry is a single global map keyed by short hex ids
+## 6. The task registry is a single global map keyed by short hex ids
 
 **Current behavior.** `task/registry.rs` stores every task, across every workspace, in one `HashMap`. Ids come from `generate_id()` — 4 random bytes rendered as 8 hex chars (32 bits of entropy). Workspace isolation is achieved purely by _filtering_: `list_tasks`, `find_unblocked_tasks`, and `delete_tasks_for_workspace` all match on `workspace_id`.
 
@@ -133,7 +113,7 @@ The backend `AgentDefinition` (`emergent-protocol`) has **no system-prompt field
 
 ---
 
-## 8. Legacy "daemon" IPC stubs remain (embedded model is canonical)
+## 7. Legacy "daemon" IPC stubs remain (embedded model is canonical)
 
 **Current behavior.** Emergent has no separate daemon — the backend is embedded directly in the Tauri app ([System Overview](system-overview.md)). Two IPC handlers survive from an earlier separate-process design and are now stubs:
 
@@ -148,7 +128,7 @@ The backend `AgentDefinition` (`emergent-protocol`) has **no system-prompt field
 
 ---
 
-## 9. A failed blocker permanently stalls its dependents
+## 8. A failed blocker permanently stalls its dependents
 
 **Current behavior.** Task dependencies are enforced by `find_unblocked_tasks` (`task/registry.rs`), which returns a pending task only when **every** blocker is `is_completed()`:
 
@@ -172,10 +152,10 @@ The backend `AgentDefinition` (`emergent-protocol`) has **no system-prompt field
 ## See also
 
 - [Documentation Index](../README.md) — full docs map and reading order.
-- [Task & Swarm Coordination](task-and-swarm-coordination.md) — the task lifecycle, blocker semantics, and why the MCP task tools (not `Topology`) are the real coordination channel (items #3, #7, #9).
-- [Persistence & Usage](persistence-and-usage.md) — what is and isn't persisted, id lengths, and the usage-recorder pipeline (items #4, #5, #7).
+- [Task & Swarm Coordination](task-and-swarm-coordination.md) — the task lifecycle, blocker semantics, and the MCP task tools as the coordination channel (items #6, #8).
+- [Persistence & Usage](persistence-and-usage.md) — what is and isn't persisted, id lengths, and the usage-recorder pipeline (items #3, #4, #6).
 - [MCP Server & Auth](mcp-server-and-auth.md) — the loopback + bearer-token model whose safety depends on the local-process design (items #1, #2).
 - [Agent Lifecycle & ACP](agent-lifecycle-and-acp.md) — `LocalProcessSpawner`, `$HOME` isolation, credential symlinks, and the permission callback (items #1, #2).
-- [IPC & Events Reference](../reference/ipc-and-events.md) — the command/event catalog, including the legacy stubs (item #8).
+- [IPC & Events Reference](../reference/ipc-and-events.md) — the command/event catalog, including the legacy stubs (item #7).
   </content>
   </invoke>

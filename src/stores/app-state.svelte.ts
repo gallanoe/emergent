@@ -17,7 +17,6 @@ import type {
   TaskUpdatedPayload,
   ThreadMapping,
   ThreadSummary,
-  TopologyChangedPayload,
   WorkspaceSummary,
 } from "./types";
 
@@ -53,7 +52,6 @@ function createAppState() {
   let selectedThreadId = $state<string | null>(null);
   let agentDefinitions = $state<Record<string, AgentDefinition>>({});
   let knownAgents = $state<KnownAgent[]>([]);
-  let agentConnections = $state<Record<string, string[]>>({});
   let selectedWorkspaceId = $state<string | null>(null);
   let activeView = $state<ActiveView>("overview");
   let terminalSessionIds = $state<Record<string, string>>({});
@@ -212,13 +210,6 @@ function createAppState() {
 
   async function setupListeners() {
     if (listenersReady) return;
-
-    listenerCleanup.push(
-      await listen<TopologyChangedPayload>("swarm:topology-changed", (e) => {
-        refreshConnections(e.payload.thread_id_a);
-        refreshConnections(e.payload.thread_id_b);
-      }),
-    );
 
     listenerCleanup.push(
       await listen<TaskCreatedPayload>("task:created", (e) => {
@@ -404,31 +395,6 @@ function createAppState() {
     });
   }
 
-  // ── Swarm connection management ──────────────────────────────
-
-  async function refreshConnections(agentId: string) {
-    try {
-      const connections = await invoke<string[]>("get_thread_connections", {
-        threadId: agentId,
-      });
-      agentConnections[agentId] = connections;
-    } catch {
-      // Agent may have been killed
-    }
-  }
-
-  async function connectAgents(agentIdA: string, agentIdB: string) {
-    await invoke("connect_agents", { agentIdA, agentIdB });
-    await refreshConnections(agentIdA);
-    await refreshConnections(agentIdB);
-  }
-
-  async function disconnectAgents(agentIdA: string, agentIdB: string) {
-    await invoke("disconnect_agents", { agentIdA, agentIdB });
-    await refreshConnections(agentIdA);
-    await refreshConnections(agentIdB);
-  }
-
   function selectWorkspace(workspaceId: string) {
     selectedWorkspaceId = workspaceId;
     activeView = "overview";
@@ -550,9 +516,6 @@ function createAppState() {
     get selectedSwarm() {
       return getSelectedSwarm();
     },
-    get agentConnections() {
-      return agentConnections;
-    },
     initialize,
     createWorkspace,
     toggleSwarmCollapsed,
@@ -564,8 +527,6 @@ function createAppState() {
     removeQueueItem: agentStore.removeQueueItem,
     updateQueueItem: agentStore.updateQueueItem,
     clearQueue: agentStore.clearQueue,
-    connectAgents,
-    disconnectAgents,
     selectWorkspace,
     selectAgent,
     selectThread,
@@ -718,7 +679,6 @@ function createAppState() {
         throw e;
       }
     },
-    refreshConnections,
     get tasks() {
       return tasks;
     },

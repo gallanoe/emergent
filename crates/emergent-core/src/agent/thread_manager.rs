@@ -741,8 +741,6 @@ impl ThreadManager {
     /// Use this for task-completion teardown, where the process should stop
     /// but the session mapping must remain resumable. Callers that want the
     /// mapping purged from disk should use `kill_thread` instead.
-    ///
-    /// Does NOT handle topology cleanup — that's the coordinator's job.
     pub async fn shutdown_thread(
         &self,
         thread_id: &str,

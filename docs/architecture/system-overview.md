@@ -21,13 +21,13 @@ Docker is mentioned in these docs only to say it is **not** used. If you arrived
 
 Four Rust crates plus a Svelte frontend, all in one Cargo workspace (`default-members = ["crates/*"]`).
 
-| Piece                   | Path                        | Role                                                                                                                                                                                                                                |
-| ----------------------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Tauri shell**         | `src-tauri/`                | The desktop app. Owns and embeds all managers, runs the notification bridge and MCP server, exposes the IPC command surface, and hosts the webview. This _is_ the "backend process".                                                |
-| **`emergent-core`**     | `crates/emergent-core/`     | The engine: agent orchestration (`agent/`), workspaces + host PTY terminals (`workspace/`), the MCP server (`mcp/`), task graph (`task/`), swarm topology (`swarm/`), agent detection (`detect`), ACP config conversion (`config`). |
-| **`emergent-protocol`** | `crates/emergent-protocol/` | The shared wire contract: the `Notification` enum, payload structs, `Task`/`TaskState`, `AgentDefinition`, config option types, IDs. Depended on by every layer so the Rust and TypeScript sides agree on shapes.                   |
-| **`mock-agent`**        | `crates/mock-agent/`        | A test-only ACP agent whose behavior is driven by prompt substrings, so the Rust suite can exercise the full spawn → prompt → stream → complete path with no real CLI or network.                                                   |
-| **Frontend**            | `src/`                      | Svelte 5 + TypeScript. Rune stores (`.svelte.ts`) fold Tauri events into reactive `$state`; components render streaming Markdown, tool calls, and terminals.                                                                        |
+| Piece                   | Path                        | Role                                                                                                                                                                                                                                         |
+| ----------------------- | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Tauri shell**         | `src-tauri/`                | The desktop app. Owns and embeds all managers, runs the notification bridge and MCP server, exposes the IPC command surface, and hosts the webview. This _is_ the "backend process".                                                         |
+| **`emergent-core`**     | `crates/emergent-core/`     | The engine: agent orchestration (`agent/`), workspaces + host PTY terminals (`workspace/`), the MCP server (`mcp/`), task graph (`task/`), system-prompt injection (`swarm/`), agent detection (`detect`), ACP config conversion (`config`). |
+| **`emergent-protocol`** | `crates/emergent-protocol/` | The shared wire contract: the `Notification` enum, payload structs, `Task`/`TaskState`, `AgentDefinition`, config option types, IDs. Depended on by every layer so the Rust and TypeScript sides agree on shapes.                            |
+| **`mock-agent`**        | `crates/mock-agent/`        | A test-only ACP agent whose behavior is driven by prompt substrings, so the Rust suite can exercise the full spawn → prompt → stream → complete path with no real CLI or network.                                                            |
+| **Frontend**            | `src/`                      | Svelte 5 + TypeScript. Rune stores (`.svelte.ts`) fold Tauri events into reactive `$state`; components render streaming Markdown, tool calls, and terminals.                                                                                 |
 
 **Why the crate split (`core` vs `protocol`):** the protocol crate carries only serde types with no logic, so it can be a leaf dependency of both `emergent-core` and `src-tauri` without pulling in Tokio, Axum, or PTY machinery. The frontend mirrors these shapes in TypeScript. This is the single source of truth for anything crossing a process or language boundary.
 
@@ -44,7 +44,7 @@ Four Rust crates plus a Svelte frontend, all in one Cargo workspace (`default-me
 │     appState ─► agentStore (ThreadState, chunk buffer + rAF flush, queue FSM)  │
 │              └► usageStore      themeStore                                      │
 └──────────▲───────────────────────────────────────────────────────┬───────────┘
-   listen() │ events: thread:* task:* swarm:* terminal:*      invoke │ IPC commands
+   listen() │ events: thread:* task:* agent:* terminal:*      invoke │ IPC commands
            │                                                         ▼
 ┌──────────┴──────────────────────────────────────────────────────────────────┐
 │ TAURI SHELL  (src-tauri/)  — the one backend process, no daemon               │
@@ -61,12 +61,12 @@ Four Rust crates plus a Svelte frontend, all in one Cargo workspace (`default-me
 │  ┌───────────────┐  owns  ┌────────────────────┐  spawns ┌───────────────┐   │
 │  │ AgentManager  ├───────►│ ThreadManager      ├────────►│ recorder task │   │
 │  │  registry     │        │ live / dormant maps│broadcast│ history+usage │   │
-│  │  topology     │        │ usage stores       │         └───────────────┘   │
+│  │               │        │ usage stores       │         └───────────────┘   │
 │  └──┬────────────┘        │ TokenRegistry ref  │                             │
 │     │  per-thread ThreadHandle ══ mpsc AgentCommand ══► [ dedicated OS thread]│
 │     │                          ◄══ oneshot reply ══         acp::Client       │
 │     ▼                                                            ▲ ACP over   │
-│  swarm::Topology (UI/bookkeeping only)  ·  build_system_block    ║ piped stdio│
+│  swarm::build_system_block (system-prompt injection)             ║ piped stdio│
 │  ┌──────────────┐  subscribe  ┌────────────────────────┐        ║            │
 │  │ TaskManager  │◄────────────┤ MCP HTTP server (Axum) │        ║            │
 │  │ TaskRegistry │  create/    │ 127.0.0.1:{port}/mcp   │        ║            │
@@ -122,7 +122,7 @@ Agents don't just receive prompts; they call _back into the app_ to coordinate w
 - **Why loopback HTTP rather than piping tool calls through ACP:** it lets standard MCP-capable CLIs discover and call the tools with zero Emergent-specific glue, and it cleanly separates "the app tells the agent what to do" (ACP) from "the agent asks the app to change shared state" (MCP).
 - **Invariant / security:** the MCP server binds loopback-only. This is safe _precisely because agents are local host processes_ on the same machine — there is no network surface.
 
-> **Gotcha — the MCP task tools, not the swarm graph, are the real inter-agent coordination.** `create_task` can spawn a _dependent_ agent thread; `complete_task` marks a thread completing and queues teardown. The `swarm::Topology` graph is UI/bookkeeping only — its edges do not gate context, tool access, or routing. Read [task-and-swarm-coordination.md](./task-and-swarm-coordination.md) before assuming "swarm" means message passing.
+> **Gotcha — the MCP task tools are the inter-agent coordination path.** `create_task` can spawn a _dependent_ agent thread; `complete_task` marks a thread completing and queues teardown. There is no message bus and no connection graph between agents. Read [task-and-swarm-coordination.md](./task-and-swarm-coordination.md) before assuming "swarm" means message passing.
 
 ---
 
@@ -173,7 +173,7 @@ Data moves in two clearly separated directions, and this asymmetry is intentiona
 
 ### Downstream: broadcast → bridge → webview events (fire-and-forget)
 
-Core publishes into **one** bounded `tokio::broadcast::channel<Notification>`. A bridge task in `lib.rs` `recv()`s each `Notification` and re-`emit()`s it as a Tauri webview event keyed by `notification.event_name()` (`thread:*`, `task:*`, `swarm:*`, `agent:*`). Frontend rune stores `listen()` and fold events into `$state`.
+Core publishes into **one** bounded `tokio::broadcast::channel<Notification>`. A bridge task in `lib.rs` `recv()`s each `Notification` and re-`emit()`s it as a Tauri webview event keyed by `notification.event_name()` (`thread:*`, `task:*`, `agent:*`, `terminal:*`). Frontend rune stores `listen()` and fold events into `$state`.
 
 - **Why a broadcast:** multiple in-process subscribers need the same stream — the bridge, the TaskManager event loop, and the recorder task all subscribe. A broadcast fans out without coupling producers to consumers.
 - **Gotcha — wire asymmetry.** The `Notification` enum is `#[serde(tag = "type")]`, but the bridge emits only the **inner payload**, not the tagged envelope. The tagged form survives only in `get_history` replay. So a live `thread:message-chunk` event carries `MessageChunkPayload` fields directly, with no `type` field.
@@ -188,7 +188,7 @@ Terminal PTY output/exit go straight to the webview through `TauriTerminalSink` 
 
 ### Upstream: IPC commands (request/response)
 
-The frontend `invoke()`s `#[tauri::command]` handlers registered in `generate_handler![…]`. These are ordinary async request/response calls, grouped into agent-definition CRUD, thread lifecycle (spawn/resume/prompt/cancel/kill), thread config + history, connections/topology, workspace CRUD, terminal I/O, usage queries, and task queries. `send_prompt` is notably **synchronous over a oneshot** — it awaits the turn's completion rather than returning immediately.
+The frontend `invoke()`s `#[tauri::command]` handlers registered in `generate_handler![…]`. These are ordinary async request/response calls, grouped into agent-definition CRUD, thread lifecycle (spawn/resume/prompt/cancel/kill), thread config + history, workspace CRUD, terminal I/O, usage queries, and task queries. `send_prompt` is notably **synchronous over a oneshot** — it awaits the turn's completion rather than returning immediately.
 
 - **Why split events from commands:** commands are user-initiated and want a return value / error to act on; notifications are server-initiated and many-to-one. Conflating them would force every state change through request/response and lose the streaming model.
 
@@ -210,9 +210,7 @@ Precise definitions, grounded in the types. Getting these right prevents most co
 
 - **Task** — a unit of work in the coordination graph (`Task`, with `TaskState` = `Pending | Working | Completed | Failed`), carrying its blockers and creator thread. Tasks are created/updated/completed by agents via MCP tools and can spawn dependent threads. **Gotcha:** `TaskState::session_id` holds a **thread ID**, not an `acp_session_id` — the field name is kept for wire compatibility.
 
-- **Topology** — the `swarm::Topology` undirected in-memory graph of thread↔thread connections, surfaced via `swarm:topology-changed`. **UI/bookkeeping only** — it does not gate context, tools, or routing. Do not confuse it with a message bus.
-
-- **Notification** — the tagged union of all server→client events (the `Notification` enum), each with an `event_name()` (its `thread:*`/`task:*`/`swarm:*`/`agent:*`/`terminal:*` channel) and an optional `thread_id()`. This is the entire downstream vocabulary between backend and frontend.
+- **Notification** — the tagged union of all server→client events (the `Notification` enum), each with an `event_name()` (its `thread:*`/`task:*`/`agent:*`/`terminal:*` channel) and an optional `thread_id()`. This is the entire downstream vocabulary between backend and frontend.
 
 - **Token (bearer)** — a per-thread hex credential in the in-memory `TokenRegistry`, minted **before** the agent subprocess spawns, embedded in the agent's MCP config, resolved on every MCP request (token → thread_id → workspace/task scope), and revoked on kill. No expiry. The only auth in the system.
 
@@ -241,13 +239,13 @@ Each with the rationale, so you know what's load-bearing and what's incidental.
    _Rationale:_ a single serde source of truth across the Rust backend, the Tauri boundary, and (mirrored) the TypeScript frontend, without dragging Tokio/Axum/PTY deps into a leaf crate.
 
 7. **State is in-memory-authoritative, persisted as atomic per-workspace JSON.**
-   _Rationale:_ no database; the in-memory maps are the truth and the JSON files are rebuilt from them via temp-file + rename. Not everything is persisted (topology, notification history, per-session usage snapshots are rebuilt on boot). See [persistence-and-usage.md](./persistence-and-usage.md).
+   _Rationale:_ no database; the in-memory maps are the truth and the JSON files are rebuilt from them via temp-file + rename. Not everything is persisted (notification history and per-session usage snapshots are rebuilt on boot). See [persistence-and-usage.md](./persistence-and-usage.md).
 
 8. **Two-phase, cancellable thread spawn.**
    _Rationale:_ an `Initializing` `ThreadHandle` is inserted into the live map _before_ the ACP handshake completes, so a spawn can be cancelled mid-handshake; a follow-up task graduates it to `Idle` on success. See [agent-lifecycle-and-acp.md](./agent-lifecycle-and-acp.md).
 
-9. **Swarm topology is decorative; MCP tasks are the real coordination.**
-   _Rationale:_ inter-agent work flows through `create_task` (which can spawn dependents) and `complete_task`, not through topology edges or a mailbox. Framing "swarm" as messaging would mislead. See [task-and-swarm-coordination.md](./task-and-swarm-coordination.md).
+9. **Inter-agent coordination runs entirely through the MCP task graph.**
+   _Rationale:_ inter-agent work flows through `create_task` (which can spawn dependents) and `complete_task` — there is no mailbox and no connection graph. Framing "swarm" as messaging would mislead. See [task-and-swarm-coordination.md](./task-and-swarm-coordination.md).
 
 ---
 
@@ -256,7 +254,7 @@ Each with the rationale, so you know what's load-bearing and what's incidental.
 - **Boot / recovery / shutdown, step by step:** [runtime-lifecycle.md](./runtime-lifecycle.md)
 - **How an agent is spawned, driven, and torn down over ACP:** [agent-lifecycle-and-acp.md](./agent-lifecycle-and-acp.md)
 - **Workspaces on disk and host PTY terminals:** [workspaces-and-terminals.md](./workspaces-and-terminals.md)
-- **Tasks, dependencies, and swarm topology:** [task-and-swarm-coordination.md](./task-and-swarm-coordination.md)
+- **Tasks, dependencies, and inter-agent coordination:** [task-and-swarm-coordination.md](./task-and-swarm-coordination.md)
 - **The MCP server, its tools, and bearer auth:** [mcp-server-and-auth.md](./mcp-server-and-auth.md)
 - **The event catalog and wire protocol:** [notifications-and-protocol.md](./notifications-and-protocol.md)
 - **On-disk data model and usage accounting:** [persistence-and-usage.md](./persistence-and-usage.md)

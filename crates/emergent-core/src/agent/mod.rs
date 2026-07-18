@@ -90,7 +90,6 @@ pub(crate) struct ThreadHandle {
 pub struct AgentManager {
     registry: Arc<RwLock<AgentRegistry>>,
     pub(crate) threads: ThreadManager,
-    topology: Arc<RwLock<crate::swarm::Topology>>,
     workspace_state: crate::workspace::SharedWorkspaceState,
     event_tx: broadcast::Sender<Notification>,
 }
@@ -107,7 +106,6 @@ impl AgentManager {
         Self {
             registry: Arc::new(RwLock::new(AgentRegistry::new())),
             threads,
-            topology: Arc::new(RwLock::new(crate::swarm::Topology::new())),
             workspace_state,
             event_tx: event_tx.clone(),
         }
@@ -451,11 +449,8 @@ impl AgentManager {
         self.threads.cancel_prompt(thread_id).await
     }
 
-    /// Kill a thread and clean up topology.
     pub async fn kill_thread(&self, thread_id: &str) -> Result<(), String> {
-        self.threads.kill_thread(thread_id).await?;
-        self.topology.write().await.remove_node(thread_id);
-        Ok(())
+        self.threads.kill_thread(thread_id).await
     }
 
     /// Shut down a thread's subprocess but preserve its persisted mapping in
@@ -463,7 +458,6 @@ impl AgentManager {
     /// task's session remains resumable after restart.
     pub async fn shutdown_thread(&self, thread_id: &str) -> Result<(), String> {
         self.threads.shutdown_thread(thread_id).await?;
-        self.topology.write().await.remove_node(thread_id);
         Ok(())
     }
 
@@ -557,51 +551,6 @@ impl AgentManager {
 
     pub async fn is_agent_idle(&self, thread_id: &str) -> bool {
         self.threads.is_thread_idle(thread_id).await
-    }
-
-    // -----------------------------------------------------------------------
-    // Swarm: topology (stays on coordinator)
-    // -----------------------------------------------------------------------
-
-    pub async fn connect_agents(&self, a: &str, b: &str) -> Result<(), String> {
-        // Validate both threads are in the same workspace
-        let threads = self.threads.threads.read().await;
-        let handle_a = threads
-            .get(a)
-            .ok_or_else(|| format!("Thread '{}' not found", a))?;
-        let handle_b = threads
-            .get(b)
-            .ok_or_else(|| format!("Thread '{}' not found", b))?;
-        let ws_a = handle_a.lock().await.workspace_id.clone();
-        let ws_b = handle_b.lock().await.workspace_id.clone();
-        drop(threads);
-
-        if ws_a != ws_b {
-            return Err("Cannot connect threads in different workspaces".to_string());
-        }
-
-        self.topology.write().await.connect(a, b);
-        let _ = self.event_tx.send(Notification::TopologyChanged(
-            emergent_protocol::TopologyChangedPayload {
-                thread_id_a: a.to_string(),
-                thread_id_b: b.to_string(),
-            },
-        ));
-        Ok(())
-    }
-
-    pub async fn disconnect_agents(&self, a: &str, b: &str) {
-        self.topology.write().await.disconnect(a, b);
-        let _ = self.event_tx.send(Notification::TopologyChanged(
-            emergent_protocol::TopologyChangedPayload {
-                thread_id_a: a.to_string(),
-                thread_id_b: b.to_string(),
-            },
-        ));
-    }
-
-    pub async fn get_connections(&self, thread_id: &str) -> Vec<String> {
-        self.topology.read().await.peers(thread_id)
     }
 
     // -----------------------------------------------------------------------

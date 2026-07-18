@@ -94,12 +94,6 @@ pub struct NudgeDeliveredPayload {
     pub count: usize,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct TopologyChangedPayload {
-    pub thread_id_a: String,
-    pub thread_id_b: String,
-}
-
 // ---------------------------------------------------------------------------
 // AgentStatus
 // ---------------------------------------------------------------------------
@@ -429,8 +423,6 @@ pub enum Notification {
     NudgeDelivered(NudgeDeliveredPayload),
     #[serde(rename = "thread:system-message")]
     SystemMessage(SystemMessagePayload),
-    #[serde(rename = "swarm:topology-changed")]
-    TopologyChanged(TopologyChangedPayload),
     #[serde(rename = "terminal:output")]
     TerminalOutput(TerminalOutputPayload),
     #[serde(rename = "terminal:exited")]
@@ -469,7 +461,6 @@ impl Notification {
             Notification::Error(_) => "thread:error",
             Notification::NudgeDelivered(_) => "thread:nudge-delivered",
             Notification::SystemMessage(_) => "thread:system-message",
-            Notification::TopologyChanged(_) => "swarm:topology-changed",
             Notification::TerminalOutput(_) => "terminal:output",
             Notification::TerminalExited(_) => "terminal:exited",
             Notification::AgentCreated(_) => "agent:definition-created",
@@ -496,7 +487,6 @@ impl Notification {
             Notification::Error(p) => Some(&p.thread_id),
             Notification::NudgeDelivered(p) => Some(&p.thread_id),
             Notification::SystemMessage(p) => Some(&p.thread_id),
-            Notification::TopologyChanged(_) => None, // not thread-specific
             Notification::TerminalOutput(_) => None,
             Notification::TerminalExited(_) => None,
             Notification::AgentCreated(_) => None,

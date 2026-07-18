@@ -1,6 +1,6 @@
 # Task Graph & Swarm Coordination
 
-How Emergent delegates work between agents. Two subsystems share the "swarm" name, and only one actually coordinates: the **task graph** (`task/`) is the real delegation path; the **topology** graph (`swarm/topology.rs`) is UI/bookkeeping that gates nothing.
+How Emergent delegates work between agents. There is exactly one coordination mechanism: the **task graph** (`task/`). Agents delegate by creating tasks for one another over MCP; `TaskManager` spawns the threads, orders them by dependency, and routes progress back.
 
 > Context correction: Emergent runs each agent as a **local host process** (isolated `$HOME`, not a container). There is no Docker, no `docker exec`, no separate daemon — the backend is embedded in the Tauri app. Code comments and legacy docs that say "container" mean "the agent's host process/workspace". See [System Overview](./system-overview.md).
 
@@ -8,16 +8,13 @@ Related docs: [Agent Lifecycle & ACP](./agent-lifecycle-and-acp.md) · [MCP Serv
 
 ---
 
-## 1. Two subsystems, one confusable name
+## 1. What "swarm" does and doesn't mean
 
-Conflating these two is the biggest trap in this area of the codebase:
+The `swarm/` module is **not** a coordination subsystem. It is exactly `mod.rs` + `system_prompt.rs` — a single pure function that injects a system block into a prompt (§6). All delegation and coordination lives in `task/`.
 
-| Subsystem      | Lives in            | What it actually does                                                                                                                                                                                   |
-| -------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Task graph** | `task/`             | The _real_ delegation + coordination mechanism. Agents create/update/complete tasks over MCP; `TaskManager` spawns agent threads, orders them by dependency, and routes progress back to whoever asked. |
-| **Topology**   | `swarm/topology.rs` | An in-memory undirected graph of "which threads are linked", drawn in the UI. **It gates nothing.**                                                                                                     |
+**Invariant (the load-bearing one):** there is no message bus, no mailbox, and no agent-to-agent connection graph. If you want two agents to collaborate, one must create a _task_ for the other via the MCP task tools — `create_task`, `list_tasks`, `list_agents`, `update_task`, `complete_task`.
 
-**Invariant (the load-bearing one):** a topology edge grants an agent _no_ extra context, _no_ extra tool access, and _no_ message routing. If you want two agents to collaborate, one must create a _task_ for the other. §6 exists to make this unambiguous.
+**Doc-drift warning:** older notes mention a `swarm/mailbox.rs` message queue or a `swarm/topology.rs` connection graph. Neither exists. (`list_peers` in the integration tests is a bogus tool name used only in auth-failure cases, never a real handler.)
 
 ---
 
@@ -147,25 +144,9 @@ A single spawned loop subscribes to the app-wide broadcast bus and _is_ the stat
 
 ---
 
-## 6. Swarm topology — UI/bookkeeping only (the critical clarification)
+## 6. System-prompt injection (`swarm/system_prompt.rs`)
 
-`Topology` is an undirected in-memory graph of thread ids (`edges: HashSet<(String, String)>`), stored in canonical order so `(a,b)` and `(b,a)` collapse to one edge; `connect` is idempotent and rejects self-loops. `AgentManager` owns it and cleans edges on thread teardown. **It has no persistence** — it is rebuilt empty on every app start. `connect_agents` validates that both threads exist and share a workspace (rejecting cross-workspace links); `disconnect_agents` skips validation because removal is harmless. Changes are bridged to a `swarm:topology-changed` webview event.
-
-Trace where a peer list goes: `get_connections` → Tauri command → frontend visualization. **That is the entire consumer.** The peer list never re-enters agent context. Concretely:
-
-- `build_system_block` (§7) takes **no topology argument**.
-- The MCP `list_agents` tool returns _every_ agent definition in the workspace, regardless of edges.
-- `create_task` addresses its target by **agent-definition id**, not by topology peer — no edge is required.
-
-So an edge is currently decorative: it draws a line in the UI and nothing else. **The MCP task tools — `create_task`, `list_tasks`, `list_agents`, `update_task`, `complete_task` — are the actual inter-agent coordination path.** Whether topology should _ever_ gate context or routing is an open design question (see [Known Limitations](./known-limitations.md)).
-
-**Doc-drift warning:** older notes mention a `swarm/mailbox.rs` message queue. There is none — `swarm/` is exactly `mod.rs` + `topology.rs` + `system_prompt.rs`, and there is no message queue. (`list_peers` in the integration tests is a bogus tool name used only in auth-failure cases, never a real handler.)
-
----
-
-## 7. System-prompt injection (`swarm/system_prompt.rs`)
-
-`build_system_block` is a **pure** function — no topology, no state — that assembles the `<emergent-system>…</emergent-system>` block prepended to a prompt, or nothing if there's nothing to inject. It has two triggers:
+`build_system_block` is a **pure** function — no state — that assembles the `<emergent-system>…</emergent-system>` block prepended to a prompt, or nothing if there's nothing to inject. It has two triggers:
 
 - **First turn only:** the swarm-awareness guide, a note that `<emergent-system>`-tagged text is Emergent instruction rather than user input, and — _only for task sessions_ — the guide documenting `update_task`/`complete_task`.
 - **Any turn where management permissions changed:** a one-line grant/revoke message.

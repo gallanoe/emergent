@@ -12,8 +12,8 @@ Related: [Runtime Lifecycle](./runtime-lifecycle.md) (boot/recovery/shutdown tha
 
 ```
 AgentManager  (agent/mod.rs)     — coordinator; the public surface
-   owns: AgentRegistry, ThreadManager, Topology, SharedWorkspaceState, event bus
-   does: agent-definition CRUD, workspace validation, topology edges;
+   owns: AgentRegistry, ThreadManager, SharedWorkspaceState, event bus
+   does: agent-definition CRUD, workspace validation;
          delegates all running-process work downward
         │
         ▼
@@ -27,9 +27,7 @@ ThreadManager (agent/thread_manager.rs) — owns running + dormant thread state
 ThreadHandle (agent/mod.rs)      — the Send-safe bridge to one agent
 ```
 
-**Why this split.** `AgentManager` is the single async-safe entry point for both the Tauri command layer and the embedded MCP handler. Keeping definition CRUD + topology on the coordinator and all _running-process_ state in `ThreadManager` concentrates the concurrency-heavy map-of-locks logic in one place and keeps the coordinator a thin, mostly-delegating facade.
-
-> **Invariant — topology cleanup is the coordinator's job.** `ThreadManager`'s teardown methods deliberately do **not** touch the swarm graph; `AgentManager::kill_thread`/`shutdown_thread` call `topology.remove_node` _after_ teardown returns. The coordinator owns the `Topology`; don't push its removal down into `ThreadManager`.
+**Why this split.** `AgentManager` is the single async-safe entry point for both the Tauri command layer and the embedded MCP handler. Keeping definition CRUD on the coordinator and all _running-process_ state in `ThreadManager` concentrates the concurrency-heavy map-of-locks logic in one place and keeps the coordinator a thin, mostly-delegating facade.
 
 ### ThreadHandle — purpose, not fields
 

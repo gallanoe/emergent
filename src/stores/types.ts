@@ -129,11 +129,6 @@ export interface NudgeDeliveredPayload {
   count: number;
 }
 
-export interface TopologyChangedPayload {
-  thread_id_a: string;
-  thread_id_b: string;
-}
-
 export type ThreadProcessStatus = "initializing" | "idle" | "working" | "cancelling" | "error";
 
 export type ThreadSummaryStatus = ThreadProcessStatus | "dead";

@@ -22,7 +22,7 @@ Two channels connect the app and each agent:
 
 ACP is the app driving the agent. MCP is the agent driving the app. This doc is about the second arrow.
 
-**Why a callback server at all?** The task tools are the _real_ inter-agent coordination mechanism in Emergent — not the swarm topology graph, which is UI/bookkeeping only (see [Task & Swarm Coordination](task-and-swarm-coordination.md)). An agent spawns dependent work and reports progress by calling MCP tools; those calls flow straight into the shared `TaskManager` and `AgentManager` with no intermediate process.
+**Why a callback server at all?** The task tools are the inter-agent coordination mechanism in Emergent (see [Task & Swarm Coordination](task-and-swarm-coordination.md)). An agent spawns dependent work and reports progress by calling MCP tools; those calls flow straight into the shared `TaskManager` and `AgentManager` with no intermediate process.
 
 Source lives in `crates/emergent-core/src/mcp/`: `http_server.rs` (bind + serve), `handler.rs` (`McpHandler`: the tools and their gating), and `token_registry.rs` (`TokenRegistry`: mint/resolve/revoke bearer tokens).
 
@@ -80,7 +80,7 @@ All tools live in one `#[tool_router] impl McpHandler` block. Each reads the bea
 
 > **Gotcha:** `list_tasks` rejects an unknown `status` string with an `invalid_params` error, distinct from the generic `internal_error` used elsewhere. Valid values: `pending` / `working` / `completed` / `failed`.
 
-> **Gotcha:** `list_agents` returns _all_ agent definitions in the workspace. It is **not** filtered by swarm topology — topology edges do not gate who an agent can see or delegate to. Treat topology as decorative for coordination.
+> **Gotcha:** `list_agents` returns _all_ agent definitions in the workspace. There is no visibility filter — every agent in the workspace is a valid delegation target.
 
 > **Invariant:** `update_task` and `complete_task` require the task to be in `Working` state; both surface a JSON-RPC error on a non-working or unknown task.
 

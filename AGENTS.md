@@ -90,7 +90,6 @@ crates/
 │   │   │   └── subscribe.rs  # SubscribeMode enum (notification tiers)
 │   │   ├── swarm/            # Inter-agent coordination
 │   │   │   ├── mod.rs        # Re-exports
-│   │   │   ├── topology.rs   # Connection graph (UI/bookkeeping)
 │   │   │   └── system_prompt.rs # System block injection
 │   │   ├── config.rs         # ACP config conversion
 │   │   └── detect.rs         # Agent binary detection

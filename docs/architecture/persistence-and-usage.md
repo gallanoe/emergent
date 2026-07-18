@@ -153,11 +153,10 @@ evolution rides on serde defaults plus the v0/v1 array-vs-object discriminator.
 Some runtime state is deliberately in-memory only and reconstructed after a restart
 rather than read from disk:
 
-| State                                                 | How it comes back after boot                                                                                                                    |
-| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Swarm topology** (agent-to-agent edges)             | Not restored — starts empty. It is UI/bookkeeping-only and gates nothing (see [task-and-swarm-coordination](./task-and-swarm-coordination.md)). |
-| **Notification history** (per-thread event log)       | Not restored — starts empty. The frontend re-seeds only currently-running threads via `get_history` replay.                                     |
-| **Per-session usage snapshots** (the delta baselines) | Start empty; re-established lazily by the first post-boot usage report per session (Section 7).                                                 |
+| State                                                 | How it comes back after boot                                                                                |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| **Notification history** (per-thread event log)       | Not restored — starts empty. The frontend re-seeds only currently-running threads via `get_history` replay. |
+| **Per-session usage snapshots** (the delta baselines) | Start empty; re-established lazily by the first post-boot usage report per session (Section 7).             |
 
 What **is** persisted, by contrast, is the _aggregate_ usage totals — they live in
 `threads.json` and are seeded back on boot. The distinction is deliberate: the

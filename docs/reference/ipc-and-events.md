@@ -33,13 +33,11 @@ Commands group by the manager they dispatch into. Each category is a thin pass-t
 
 - **Agent-definition CRUD** (`AgentManager`) — create/read/update/delete/list `AgentDefinition`s. A definition is a _template_ for spawning threads, not a running process. Also lists an agent's threads and its persisted `ThreadMapping` records (thread id ↔ definition ↔ ACP session), which are what make a dormant thread resumable — a mapping without an `acp_session_id` is not.
 - **Thread lifecycle** (`AgentManager`) — spawn a fresh local agent process/session, resume a dormant one onto its prior ACP session, send/cancel a prompt turn, kill (hard) or shutdown (graceful, used on exit) the process, delete the thread and its mapping, and get/set the ACP session config. `get_history` and `send_prompt` carry design weight — see below.
-- **Swarm / coordination** (`AgentManager`) — add/remove edges in the swarm topology and query a thread's connections; toggle a thread's management permissions. See [task-and-swarm-coordination](../architecture/task-and-swarm-coordination.md) for the topology/mailbox model.
+- **Swarm / coordination** (`AgentManager`) — toggle a thread's management permissions. Actual inter-agent coordination happens through the MCP task tools, not through this IPC surface; see [task-and-swarm-coordination](../architecture/task-and-swarm-coordination.md).
 - **Workspace** (`WorkspaceManager`) — create/rename/get/list/delete workspaces. `list_workspaces` also reaches into `AgentManager` to fold live thread counts into each summary; `delete_workspace` cascades across managers (see below).
 - **Terminal** (`WorkspaceManager`) — open a host PTY rooted at the workspace path, write keystrokes, resize, close. Terminal _output_ never returns as a command result — it arrives out-of-band on `terminal:*` events (see below). See [workspaces-and-terminals](../architecture/workspaces-and-terminals.md).
 - **Usage** (`AgentManager`) — aggregated token/cost totals for the dashboard; live deltas arrive via `thread:turn-usage` / `thread:token-usage`. See [persistence-and-usage](../architecture/persistence-and-usage.md).
 - **Tasks** (`TaskManager`) — create a task, list per-workspace or per-agent, get one. Tauri-initiated tasks pass `None` for `creator_thread_id` and `subscribe` — those fields exist for _agent_-initiated tasks created through the MCP tools (`create_task` / `list_tasks` / `list_agents` / `update_task` / `complete_task`), a separate agent-facing surface that shares names with these IPC commands but is not the same code path. See [task-and-swarm-coordination](../architecture/task-and-swarm-coordination.md).
-
-**Gotcha (thread ids, not definition ids):** despite the `agent_id_a` / `agent_id_b` parameter names, `connect_agents` / `disconnect_agents` operate on **running-thread ids** — the emitted `swarm:topology-changed` payload even names them `thread_id_a` / `thread_id_b`. Passing a definition id yields `Thread '{id}' not found`.
 
 ---
 
@@ -71,7 +69,6 @@ Most handlers are thin, but a few encode **invariants that span managers** — t
 Push events are `Notification` variants on the `broadcast(1024)` channel; the bridge in `lib.rs` emits `(event_name, &payload)`. **The channel name is the discriminator** — the enum `type` tag is stripped, so listeners receive a bare payload struct. Channels are namespaced by concern:
 
 - **`thread:*`** — the bulk of the traffic: streamed message/thinking chunks, tool-call updates, prompt completion, status changes, config updates, echoed user messages, errors, swarm nudges, system messages, session-ready (carries the `acp_session_id` that enables resume), and the two usage streams. Each carries a `thread_id`.
-- **`swarm:*`** — topology changes (`swarm:topology-changed`); names both endpoints, so it is _not_ thread-scoped.
 - **`agent:*`** — definition created/deleted (dashboard/list refresh); not thread-scoped.
 - **`task:*`** — task created/updated (`{task: Task}`), plus `task:status-notification`, which is routed to the _creating_ thread via `creator_thread_id`.
 - **`terminal:*`** — PTY output/exit; delivered out-of-band (see below), not thread-scoped.

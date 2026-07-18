@@ -33,7 +33,6 @@ Two structural properties are load-bearing:
   | ------------ | ------------------------------------------------------------------------------------------------------------- |
   | `thread:*`   | per-thread conversational activity — message chunks, tool calls, status, config, usage, errors, session-ready |
   | `task:*`     | task lifecycle (created/updated) and per-thread task-status notifications                                     |
-  | `swarm:*`    | inter-thread topology changes                                                                                 |
   | `agent:*`    | agent-definition create/delete                                                                                |
   | `terminal:*` | PTY output and exit (delivered out-of-band — see §4)                                                          |
 
@@ -45,7 +44,7 @@ Two structural properties are load-bearing:
 
 > **Gotcha — two hand-kept lists.** The `#[serde(rename)]` attributes and the `event_name()` match arms are independent copies of the same channel strings; no macro ties them together. A mismatch would silently route events to the wrong channel. Edit both when you add or rename a variant.
 
-`thread_id()` is **not** uniform: thread-scoped conversational events return `Some`, while cross-cutting events (topology, task create/update, agent-definition, terminal) return `None`.
+`thread_id()` is **not** uniform: thread-scoped conversational events return `Some`, while cross-cutting events (task create/update, agent-definition, terminal) return `None`.
 
 > **Gotcha:** `TaskStatusNotification` returns `Some`, but the id is its `creator_thread_id` — the thread that _created_ the task, not the one running it. That is the routing you want (the notification is shown to whoever asked for the task), but do not assume `thread_id()` always points at the thread the event is _about_.
 
@@ -135,13 +134,13 @@ The bridge tolerates a slow webview: on `RecvError::Lagged(n)` it logs and keeps
 
 ## 6. How the frontend subscribes and replays
 
-Live events are folded into reactive `$state` by a small set of rune stores in `src/stores/`, split by concern: the bulk of thread activity (message chunks, tool calls, status, config, errors, session-ready, token usage, and task-status notifications) lands in the agents store, where streaming text is coalesced per animation frame and tool-call updates accumulate into a single tool-group message; cross-cutting UI state (topology, task created/updated) lands in the app-state store; and per-turn token accounting lands in the usage store. See [Frontend Architecture](../frontend/frontend-architecture.md). Note that the `agent:definition-*` channels are emitted by the bridge but have no frontend listener — agent-definition changes reach the UI through IPC return values and optimistic store updates instead.
+Live events are folded into reactive `$state` by a small set of rune stores in `src/stores/`, split by concern: the bulk of thread activity (message chunks, tool calls, status, config, errors, session-ready, token usage, and task-status notifications) lands in the agents store, where streaming text is coalesced per animation frame and tool-call updates accumulate into a single tool-group message; cross-cutting UI state (task created/updated) lands in the app-state store; and per-turn token accounting lands in the usage store. See [Frontend Architecture](../frontend/frontend-architecture.md). Note that the `agent:definition-*` channels are emitted by the bridge but have no frontend listener — agent-definition changes reach the UI through IPC return values and optimistic store updates instead.
 
 ### 6.1 The replay path
 
 When a chat view is (re)opened, the frontend calls `get_history(thread_id)` and feeds the result to `replayNotifications()` in the agents store. That function is typed against a `DaemonNotification` tagged union — the **only** place the `"type"`-tagged form is consumed.
 
-> **Gotcha:** the replay union covers only the thread-scoped _conversational_ variants, a subset of the enum. The recorder task (in `emergent-core`'s `thread_manager`) appends into per-thread history only where `Notification::thread_id()` returns `Some`, so history _can_ contain non-conversational thread-scoped entries (e.g. `thread:token-usage`, or `task:status-notification` routed by `creator_thread_id`), but `replayNotifications()` simply ignores anything outside the union. Cross-cutting events whose `thread_id()` is `None` (`swarm:*`, `task:created`/`task:updated`, `agent:*`, `terminal:*`) are never stored, so they can never appear in replay at all. Replay reconstructs the _conversation_; usage, task, and topology state are rebuilt from other sources on boot. See [Persistence & Usage](./persistence-and-usage.md).
+> **Gotcha:** the replay union covers only the thread-scoped _conversational_ variants, a subset of the enum. The recorder task (in `emergent-core`'s `thread_manager`) appends into per-thread history only where `Notification::thread_id()` returns `Some`, so history _can_ contain non-conversational thread-scoped entries (e.g. `thread:token-usage`, or `task:status-notification` routed by `creator_thread_id`), but `replayNotifications()` simply ignores anything outside the union. Cross-cutting events whose `thread_id()` is `None` (`task:created`/`task:updated`, `agent:*`, `terminal:*`) are never stored, so they can never appear in replay at all. Replay reconstructs the _conversation_; usage and task state are rebuilt from other sources on boot. See [Persistence & Usage](./persistence-and-usage.md).
 
 ---
 
@@ -164,6 +163,6 @@ When a chat view is (re)opened, the frontend calls `get_history(thread_id)` and 
 - [IPC & Events Reference](../reference/ipc-and-events.md) — the command (`invoke`) side and a companion channel table.
 - [Agent Lifecycle & ACP](./agent-lifecycle-and-acp.md) — where ACP `SessionUpdate`s are mapped into `Notification`s.
 - [Workspaces & Terminals](./workspaces-and-terminals.md) — the `TerminalEventSink` out-of-band path in full.
-- [Task & Swarm Coordination](./task-and-swarm-coordination.md) — how `task:*` / `swarm:*` events are produced and how the `TaskManager` subscriber handles `Lagged`.
+- [Task & Swarm Coordination](./task-and-swarm-coordination.md) — how `task:*` events are produced and how the `TaskManager` subscriber handles `Lagged`.
 - [Persistence & Usage](./persistence-and-usage.md) — history recording and the token/cost usage pipeline behind `thread:token-usage` / `thread:turn-usage`.
 - [System Overview](./system-overview.md) · [Docs index](../README.md)

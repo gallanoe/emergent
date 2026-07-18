@@ -232,9 +232,6 @@ pub fn run() {
                                 Notification::SystemMessage(p) => {
                                     let _ = bridge_handle.emit(event_name, p);
                                 }
-                                Notification::TopologyChanged(p) => {
-                                    let _ = bridge_handle.emit(event_name, p);
-                                }
                                 // Terminal output/exit are delivered directly to
                                 // the webview via TerminalEventSink and never flow
                                 // through this broadcast. These arms are no-ops to
@@ -315,10 +312,7 @@ pub fn run() {
             commands::get_history,
             commands::get_thread_config,
             commands::set_thread_config,
-            commands::connect_agents,
-            commands::disconnect_agents,
             commands::set_thread_permissions,
-            commands::get_thread_connections,
             commands::create_workspace,
             commands::delete_workspace,
             commands::list_workspaces,

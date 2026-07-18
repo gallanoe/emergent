@@ -243,27 +243,6 @@ pub async fn set_thread_config(
     manager.set_config(&thread_id, config_id, value).await
 }
 
-// ── Swarm management commands ──────────────────────────────
-
-#[tauri::command]
-pub async fn connect_agents(
-    manager: State<'_, Arc<AgentManager>>,
-    agent_id_a: String,
-    agent_id_b: String,
-) -> Result<(), String> {
-    manager.connect_agents(&agent_id_a, &agent_id_b).await
-}
-
-#[tauri::command]
-pub async fn disconnect_agents(
-    manager: State<'_, Arc<AgentManager>>,
-    agent_id_a: String,
-    agent_id_b: String,
-) -> Result<(), String> {
-    manager.disconnect_agents(&agent_id_a, &agent_id_b).await;
-    Ok(())
-}
-
 #[tauri::command]
 pub async fn set_thread_permissions(
     manager: State<'_, Arc<AgentManager>>,
@@ -274,14 +253,6 @@ pub async fn set_thread_permissions(
         .set_management_permissions(&thread_id, enabled)
         .await
         .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-pub async fn get_thread_connections(
-    manager: State<'_, Arc<AgentManager>>,
-    thread_id: String,
-) -> Result<Vec<String>, String> {
-    Ok(manager.get_connections(&thread_id).await)
 }
 
 // ── Workspace commands ─────────────────────────────────────
