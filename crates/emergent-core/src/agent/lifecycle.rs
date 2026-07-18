@@ -3,9 +3,10 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use agent_client_protocol as acp;
-use agent_client_protocol::schema::{
+use agent_client_protocol::schema::ProtocolVersion;
+use agent_client_protocol::schema::v1::{
     HttpHeader, Implementation, LoadSessionRequest, LoadSessionResponse, McpServer, McpServerHttp,
-    NewSessionRequest, ProtocolVersion, SessionId,
+    NewSessionRequest, SessionId,
 };
 use emergent_protocol::{
     AgentStatus, ConfigOption, ConfigUpdatePayload, Notification, SessionReadyPayload,
@@ -253,7 +254,7 @@ pub(crate) async fn initialize_agent(
                         {
                             let agent_id = agent_id.clone();
                             let event_tx = event_tx_clone.clone();
-                            async move |notification: acp::schema::SessionNotification,
+                            async move |notification: acp::schema::v1::SessionNotification,
                                         _cx: acp::ConnectionTo<acp::Agent>| {
                                 log::trace!(
                                     "Agent {} received ACP session update: {:?}",
@@ -273,9 +274,9 @@ pub(crate) async fn initialize_agent(
                         acp::on_receive_notification!(),
                     )
                     .on_receive_request(
-                        async move |args: acp::schema::RequestPermissionRequest,
+                        async move |args: acp::schema::v1::RequestPermissionRequest,
                                     responder: acp::Responder<
-                            acp::schema::RequestPermissionResponse,
+                            acp::schema::v1::RequestPermissionResponse,
                         >,
                                     _connection: acp::ConnectionTo<acp::Agent>| {
                             let response = build_permission_response(&args);
@@ -292,7 +293,7 @@ pub(crate) async fn initialize_agent(
 
                             // Initialize
                             conn.send_request(
-                                acp::schema::InitializeRequest::new(ProtocolVersion::V1)
+                                acp::schema::v1::InitializeRequest::new(ProtocolVersion::V1)
                                     .client_info(
                                         Implementation::new("emergent", "0.1.0")
                                             .title("Emergent"),
@@ -301,7 +302,7 @@ pub(crate) async fn initialize_agent(
                             .block_task()
                             .await
                             .map_err(|e| {
-                                acp::schema::Error::internal_error()
+                                acp::schema::v1::Error::internal_error()
                                     .data(format!("ACP initialize failed: {}", e))
                             })?;
 
@@ -587,7 +588,7 @@ pub(crate) async fn await_handshake(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use agent_client_protocol::schema::{
+    use agent_client_protocol::schema::v1::{
         SessionConfigOption, SessionConfigOptionCategory, SessionConfigSelectOption,
     };
 

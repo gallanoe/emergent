@@ -2,7 +2,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use agent_client_protocol as acp;
-use agent_client_protocol::schema::{
+use agent_client_protocol::schema::v1::{
     CancelNotification, ConfigOptionUpdate, ContentBlock, PromptRequest,
     RequestPermissionOutcome, RequestPermissionRequest, RequestPermissionResponse,
     SelectedPermissionOutcome, SessionUpdate, SetSessionConfigOptionRequest, ToolCallContent,
@@ -21,7 +21,7 @@ use super::AgentCommand;
 // Helper methods for extracting payload fields from schema types
 // ---------------------------------------------------------------------------
 
-pub(crate) fn tool_call_status_str(status: &acp::schema::ToolCallStatus) -> String {
+pub(crate) fn tool_call_status_str(status: &acp::schema::v1::ToolCallStatus) -> String {
     serde_json::to_value(status)
         .ok()
         .and_then(|v| v.as_str().map(String::from))
@@ -245,7 +245,7 @@ pub(crate) fn build_permission_response(
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn agent_command_loop(
     conn: acp::ConnectionTo<acp::Agent>,
-    session_id: acp::schema::SessionId,
+    session_id: acp::schema::v1::SessionId,
     mut command_rx: mpsc::UnboundedReceiver<AgentCommand>,
     agent_id: String,
     event_tx: broadcast::Sender<Notification>,
@@ -268,8 +268,8 @@ pub(crate) async fn agent_command_loop(
 
                 let prompt_req = PromptRequest::new(
                     session_id.clone(),
-                    vec![acp::schema::ContentBlock::Text(
-                        acp::schema::TextContent::new(text),
+                    vec![acp::schema::v1::ContentBlock::Text(
+                        acp::schema::v1::TextContent::new(text),
                     )],
                 );
 
@@ -433,7 +433,7 @@ pub(crate) async fn agent_command_loop(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use agent_client_protocol::schema::UsageUpdate;
+    use agent_client_protocol::schema::v1::UsageUpdate;
     use tokio::sync::broadcast;
 
     #[test]
@@ -467,7 +467,7 @@ mod tests {
 
         // First chunk — should be tagged is_echo=true and flag cleared.
         let first_chunk = SessionUpdate::UserMessageChunk(
-            agent_client_protocol::schema::ContentChunk::new("hello".into()),
+            agent_client_protocol::schema::v1::ContentChunk::new("hello".into()),
         );
         handle_session_update("t1", first_chunk, &tx, &config, &expect_echo);
         let n = rx.try_recv().expect("first notification sent");
@@ -485,7 +485,7 @@ mod tests {
 
         // Second chunk of the same turn — is_echo must be false.
         let second_chunk = SessionUpdate::UserMessageChunk(
-            agent_client_protocol::schema::ContentChunk::new(" world".into()),
+            agent_client_protocol::schema::v1::ContentChunk::new(" world".into()),
         );
         handle_session_update("t1", second_chunk, &tx, &config, &expect_echo);
         let n2 = rx.try_recv().expect("second notification sent");
@@ -523,7 +523,7 @@ mod tests {
 
         // First chunk of turn N+1 — must be tagged is_echo=true.
         let first = SessionUpdate::UserMessageChunk(
-            agent_client_protocol::schema::ContentChunk::new("turn n+1 msg".into()),
+            agent_client_protocol::schema::v1::ContentChunk::new("turn n+1 msg".into()),
         );
         handle_session_update("t-zero", first, &tx, &config, &expect_echo);
         let n = rx.try_recv().expect("first chunk emitted");
@@ -543,7 +543,7 @@ mod tests {
             "flag must be cleared after first chunk of turn N+1"
         );
         let second = SessionUpdate::UserMessageChunk(
-            agent_client_protocol::schema::ContentChunk::new("continuation".into()),
+            agent_client_protocol::schema::v1::ContentChunk::new("continuation".into()),
         );
         handle_session_update("t-zero", second, &tx, &config, &expect_echo);
         let n2 = rx.try_recv().expect("second chunk emitted");
@@ -567,7 +567,7 @@ mod tests {
         let expect_echo = Arc::new(AtomicBool::new(false));
 
         let chunk = SessionUpdate::UserMessageChunk(
-            agent_client_protocol::schema::ContentChunk::new("spontaneous".into()),
+            agent_client_protocol::schema::v1::ContentChunk::new("spontaneous".into()),
         );
         handle_session_update("t2", chunk, &tx, &config, &expect_echo);
         let n = rx.try_recv().expect("notification sent");

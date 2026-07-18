@@ -12,7 +12,7 @@
 use std::sync::{Arc, Mutex};
 
 use agent_client_protocol as acp;
-use agent_client_protocol::schema::{
+use agent_client_protocol::schema::v1::{
     AgentCapabilities, ContentBlock, ContentChunk, InitializeRequest, InitializeResponse,
     Implementation, NewSessionRequest, NewSessionResponse, PromptRequest, PromptResponse,
     SessionConfigOption, SessionConfigOptionCategory,
@@ -79,16 +79,16 @@ fn send_session_update(
     cx: &acp::ConnectionTo<acp::Client>,
     session_id: &SessionId,
     update: SessionUpdate,
-) -> acp::schema::Result<()> {
+) -> acp::schema::v1::Result<()> {
     cx.send_notification(SessionNotification::new(session_id.clone(), update))
-        .map_err(|e| acp::schema::Error::internal_error().data(e.to_string()))
+        .map_err(|e| acp::schema::v1::Error::internal_error().data(e.to_string()))
 }
 
 fn send_message_chunk(
     cx: &acp::ConnectionTo<acp::Client>,
     session_id: &SessionId,
     text: &str,
-) -> acp::schema::Result<()> {
+) -> acp::schema::v1::Result<()> {
     send_session_update(
         cx,
         session_id,
@@ -100,7 +100,7 @@ fn send_thinking_chunk(
     cx: &acp::ConnectionTo<acp::Client>,
     session_id: &SessionId,
     text: &str,
-) -> acp::schema::Result<()> {
+) -> acp::schema::v1::Result<()> {
     send_session_update(
         cx,
         session_id,
@@ -128,7 +128,7 @@ fn config_value_to_string(value: &SessionConfigOptionValue) -> String {
 // ---------------------------------------------------------------------------
 
 #[tokio::main(flavor = "current_thread")]
-async fn main() -> acp::schema::Result<()> {
+async fn main() -> acp::schema::v1::Result<()> {
     env_logger::init();
 
     let outgoing = tokio::io::stdout().compat_write();
@@ -192,7 +192,7 @@ async fn main() -> acp::schema::Result<()> {
                             st.thinking = value_str;
                             Ok(st.build_config_options())
                         }
-                        _ => Err(acp::schema::Error::invalid_params()),
+                        _ => Err(acp::schema::v1::Error::invalid_params()),
                     }
                 };
                 match result {
@@ -228,7 +228,7 @@ async fn main() -> acp::schema::Result<()> {
                 let text_lower = text.to_lowercase();
 
                 if text_lower.contains("error") {
-                    let _ = responder.respond_with_error(acp::schema::Error::internal_error());
+                    let _ = responder.respond_with_error(acp::schema::v1::Error::internal_error());
                     return Ok(());
                 }
 
@@ -305,7 +305,7 @@ async fn main() -> acp::schema::Result<()> {
             async move |message: acp::Dispatch, cx: acp::ConnectionTo<acp::Client>| {
                 // Handle cancel notifications (fire-and-forget, no response needed).
                 // For any unrecognized requests, respond with method_not_found.
-                message.respond_with_error(acp::schema::Error::method_not_found(), cx)
+                message.respond_with_error(acp::schema::v1::Error::method_not_found(), cx)
             },
             acp::on_receive_dispatch!(),
         )
