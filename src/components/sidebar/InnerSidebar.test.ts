@@ -33,12 +33,8 @@ const baseProps = (overrides: Record<string, unknown> = {}) => ({
   workspaces: (overrides.workspaces as DisplayWorkspace[]) ?? [makeWorkspace()],
   selectedWorkspaceId: (overrides.selectedWorkspaceId as string | null) ?? "ws-1",
   activeView:
-    (overrides.activeView as
-      | "overview"
-      | "agent-threads"
-      | "tasks"
-      | "terminal"
-      | "app-settings") ?? "agent-threads",
+    (overrides.activeView as "overview" | "agent-threads" | "tasks" | "app-settings") ??
+    "agent-threads",
   selectedAgentId: (overrides.selectedAgentId as string | null) ?? "agent-1",
   demoMode: (overrides.demoMode as boolean) ?? false,
   activeTaskCount: (overrides.activeTaskCount as number) ?? 0,
@@ -48,7 +44,6 @@ const baseProps = (overrides: Record<string, unknown> = {}) => ({
   onCreateAgent: (overrides.onCreateAgent as () => void) ?? (() => {}),
   onNewThread: (overrides.onNewThread as () => void) ?? (() => {}),
   onOpenTasks: (overrides.onOpenTasks as () => void) ?? (() => {}),
-  onOpenTerminal: (overrides.onOpenTerminal as () => void) ?? (() => {}),
   onOpenAppSettings: (overrides.onOpenAppSettings as () => void) ?? (() => {}),
   onOpenWorkspaceSettings: (overrides.onOpenWorkspaceSettings as () => void) ?? (() => {}),
   onOpenOverview: (overrides.onOpenOverview as () => void) ?? (() => {}),
@@ -66,25 +61,21 @@ describe("InnerSidebar", () => {
     expect(screen.getByText("New thread")).toBeTruthy();
     expect(screen.getByText("Swarm")).toBeTruthy();
     expect(screen.getByText("Tasks")).toBeTruthy();
-    expect(screen.getByText("Terminal")).toBeTruthy();
     expect(screen.getByTitle("Application settings")).toBeTruthy();
     expect(screen.getByText("Research Swarm")).toBeTruthy();
   });
 
-  it("fires primary action callbacks for New thread, Swarm, Tasks, and Terminal", async () => {
+  it("fires primary action callbacks for New thread, Swarm, and Tasks", async () => {
     const onNewThread = vi.fn();
     const onOpenOverview = vi.fn();
     const onOpenTasks = vi.fn();
-    const onOpenTerminal = vi.fn();
-    renderSidebar({ onNewThread, onOpenOverview, onOpenTasks, onOpenTerminal });
+    renderSidebar({ onNewThread, onOpenOverview, onOpenTasks });
     await fireEvent.click(screen.getByText("New thread"));
     expect(onNewThread).toHaveBeenCalled();
     await fireEvent.click(screen.getByText("Swarm"));
     expect(onOpenOverview).toHaveBeenCalled();
     await fireEvent.click(screen.getByText("Tasks"));
     expect(onOpenTasks).toHaveBeenCalled();
-    await fireEvent.click(screen.getByText("Terminal"));
-    expect(onOpenTerminal).toHaveBeenCalled();
   });
 
   it("calls onSelectAgent when an agent row is clicked", async () => {

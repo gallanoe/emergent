@@ -1,12 +1,5 @@
 <script lang="ts">
-  import {
-    Cog,
-    ListChecks,
-    Orbit,
-    Plus,
-    Search,
-    SquareTerminal,
-  } from "@lucide/svelte";
+  import { Cog, ListChecks, Orbit, Plus, Search } from "@lucide/svelte";
   import type { ActiveView, DisplayWorkspace } from "../../stores/types";
   import { AgentAvatar, Kbd, SLabel } from "../../lib/primitives";
   import WorkspaceSwitcher from "./WorkspaceSwitcher.svelte";
@@ -27,7 +20,6 @@
     /** Opens the overview: used by both the nav entry and the workspace-name zone. */
     onOpenOverview: () => void;
     onOpenTasks: () => void;
-    onOpenTerminal: () => void;
     onOpenAppSettings: () => void;
     onOpenWorkspaceSettings: () => void;
     onOpenSearch: () => void;
@@ -49,7 +41,6 @@
     onNewThread,
     onOpenOverview,
     onOpenTasks,
-    onOpenTerminal,
     onOpenAppSettings,
     onOpenWorkspaceSettings,
     onOpenSearch,
@@ -147,21 +138,6 @@
           data-testid="task-count-badge">{activeTaskCount}</span
         >
       {/if}
-    </button>
-    <button
-      type="button"
-      class="flex h-7 w-full items-center gap-2.5 rounded-[6px] px-2.5 py-1.5 text-left text-[12.5px] transition-colors
-        {activeView === 'terminal'
-        ? 'bg-bg-selected text-fg-heading hover:brightness-[0.99]'
-        : 'text-fg-default hover:bg-bg-hover'}"
-      onclick={onOpenTerminal}
-    >
-      <span
-        class="inline-flex w-[18px] justify-center {activeView === 'terminal'
-          ? 'text-fg-heading'
-          : 'text-fg-muted'}"><SquareTerminal size={13} /></span
-      >
-      <span class="flex-1">Terminal</span>
     </button>
   </div>
 

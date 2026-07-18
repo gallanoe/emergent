@@ -2,7 +2,6 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { agentStore } from "./agents.svelte";
 import { usageStore } from "./usage.svelte";
-import { dispose as disposeTerminal } from "../components/terminal/terminal-instances";
 import { normalizeThreadSummaryStatus } from "./types";
 import { partitionPendingQueue } from "../lib/chat-utils";
 import type {
@@ -54,7 +53,6 @@ function createAppState() {
   let knownAgents = $state<KnownAgent[]>([]);
   let selectedWorkspaceId = $state<string | null>(null);
   let activeView = $state<ActiveView>("overview");
-  let terminalSessionIds = $state<Record<string, string>>({});
   let tasks = $state<Record<string, DisplayTask>>({});
   let selectedTaskId = $state<string | null>(null);
   let taskSidebarMode = $state<"detail" | "create" | null>(null);
@@ -301,8 +299,6 @@ function createAppState() {
 
   async function deleteWorkspace(workspaceId: string) {
     await invoke("delete_workspace", { workspaceId });
-    disposeTerminal(workspaceId);
-    delete terminalSessionIds[workspaceId];
     const idx = workspaces.findIndex((w) => w.id === workspaceId);
     if (idx !== -1) workspaces.splice(idx, 1);
     if (selectedWorkspaceId === workspaceId) {
@@ -747,16 +743,6 @@ function createAppState() {
     showAppSettings,
     showWorkspaceSettings,
     createTask,
-    get terminalSessionIds() {
-      return terminalSessionIds;
-    },
-    setTerminalSessionId(workspaceId: string, sessionId: string | null) {
-      if (sessionId) {
-        terminalSessionIds[workspaceId] = sessionId;
-      } else {
-        delete terminalSessionIds[workspaceId];
-      }
-    },
   };
 }
 

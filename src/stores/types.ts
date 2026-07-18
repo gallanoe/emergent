@@ -242,7 +242,6 @@ export type ActiveView =
   | "create-agent"
   | "settings"
   | "app-settings"
-  | "terminal"
   | "tasks";
 
 export interface WorkspaceSummary {

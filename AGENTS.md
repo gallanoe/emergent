@@ -36,7 +36,6 @@ src/                          # Frontend (Svelte 5 + TypeScript)
 │   ├── settings/             # AppSettingsView, WorkspaceSettingsView, ConfigRow, ThemeSelect
 │   ├── sidebar/              # InnerSidebar, WorkspaceSwitcher, ContextMenu
 │   ├── tasks/                # TaskTableView, TaskDetailSidebar, CreateTaskSidebar
-│   ├── terminal/             # TerminalView (xterm.js)
 │   └── *.svelte              # Shared dialogs like CreateWorkspaceDialog, SearchCommand
 ├── stores/                   # Rune-based state (.svelte.ts files)
 │   ├── app-state.svelte.ts   # Central app state (workspaces, agents, views)

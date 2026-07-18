@@ -6,7 +6,6 @@
   import ChatTaskBanner from "./components/chat/ChatTaskBanner.svelte";
   import WorkspaceSettingsView from "./components/settings/WorkspaceSettingsView.svelte";
   import AppSettingsView from "./components/settings/AppSettingsView.svelte";
-  import TerminalView from "./components/terminal/TerminalView.svelte";
   import ThreadListView from "./components/agent/ThreadListView.svelte";
   import AgentCreatorView from "./components/agent/AgentCreatorView.svelte";
   import OverviewView from "./components/overview/OverviewView.svelte";
@@ -177,9 +176,6 @@
     onOpenOverview={() => appState.showOverview()}
     overviewActive={appState.activeView === "overview"}
     onOpenTasks={() => appState.showTasks()}
-    onOpenTerminal={() => {
-      appState.activeView = "terminal";
-    }}
     onOpenAppSettings={() => appState.showAppSettings()}
     onOpenWorkspaceSettings={() => appState.showWorkspaceSettings()}
     onOpenSearch={() => (searchOpen = true)}
@@ -240,16 +236,6 @@
           appState.activeView = "overview";
           void appState.deleteWorkspace(id);
         }}
-      />
-    {:else if appState.activeView === "terminal" && appState.selectedWorkspaceId}
-      <TerminalView
-        workspaceId={appState.selectedWorkspaceId}
-        sessionId={appState.terminalSessionIds[appState.selectedWorkspaceId] ??
-          null}
-        onSessionCreated={(sid) =>
-          appState.setTerminalSessionId(appState.selectedWorkspaceId!, sid)}
-        onSessionEnded={() =>
-          appState.setTerminalSessionId(appState.selectedWorkspaceId!, null)}
       />
     {:else if appState.activeView === "create-agent" && appState.selectedWorkspaceId}
       <AgentCreatorView
