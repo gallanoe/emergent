@@ -59,9 +59,6 @@
     }
   }
 
-  // Fallback label per ACP `kind` (the design's icon categories). Used only
-  // when the agent's title doesn't carry a canonical tool name. `fetch` reads
-  // as "WebFetch" to match the canonical ACP set (em-tool-calls.jsx:4,625).
   const kindVerb: Record<ToolKind, string> = {
     read: "Read",
     edit: "Edit",
@@ -147,8 +144,6 @@
     return toolCall.name.replace(/^(Read|Write|Edit|Bash|Search)\s*/i, "");
   });
 
-  // Allow `statusLabel` on any status — design shows `exit 0`, `cached`,
-  // `streaming…` on success too (em-tool-calls.jsx:252-257).
   let statusLabel = $derived.by(() => {
     if (toolCall.status === "failed") {
       const termContent = toolCall.content.find((c) => c.type === "terminal");

@@ -23,9 +23,6 @@ const ALERT_TITLE: Record<string, string> = {
   important: "Important",
 };
 
-// Single-character glyphs for the filled-circle badge, per
-// docs/design/v2/project/em-markdown.jsx:170-173. `important` is folded
-// into `note` by cssKind mapping below, so it does not need a key here.
 const CALLOUT_GLYPH: Record<string, string> = {
   note: "i",
   tip: "✓",
@@ -53,10 +50,6 @@ const md = new Marked({ gfm: true, breaks: false, async: false });
 
 md.use(markedFootnote());
 
-// Math via KaTeX. `output: "html"` matches the design spec's KaTeX serif
-// look (em-markdown.jsx:296-310); the KaTeX stylesheet is imported in
-// src/main.ts and paints the glyphs. `nonStandard` stays off so prose like
-// "$5 and $10" is left untouched.
 md.use(markedKatex({ throwOnError: false, output: "html" }));
 
 // marked-katex-extension only handles $…$ / $$…$$. LLM output also commonly
@@ -131,12 +124,8 @@ md.use({
       const body = match[2]!.trim();
       const innerHtml = md.parse(body) as string;
       const glyph = CALLOUT_GLYPH[cssKind] ?? CALLOUT_GLYPH.note;
-      // Layout per em-markdown.jsx:176-191: icon column on the left, then a
-      // flex:1 column containing title (block) above body.
       return `<div class="callout callout-${cssKind}"><span class="callout-icon">${glyph}</span><div class="callout-body"><div class="callout-title">${escapeHtml(title)}</div>${innerHtml}</div></div>`;
     },
-    // Wrap tables in a rounded bordered scroll-wrap so the radius survives
-    // border-collapse (em-markdown.jsx:101-132, 265-270).
     table(token: Tokens.Table): string | false {
       const header = token.header
         .map((cell, i) => {
@@ -161,9 +150,6 @@ md.use({
         .join("");
       return `<div class="md-table-wrap"><table><thead><tr>${header}</tr></thead><tbody>${body}</tbody></table></div>`;
     },
-    // Replace the default GFM task-list checkbox with a styled <span> so we
-    // can render a proper SVG tick (em-markdown.jsx:195-207). Non-task-list
-    // items fall through to marked's default renderer via `return false`.
     listitem(token: Tokens.ListItem): string | false {
       if (!token.task) return false;
       // Render the inner tokens ourselves so we can swap the default GFM

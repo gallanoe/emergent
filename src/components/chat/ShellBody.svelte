@@ -33,8 +33,6 @@
 
   let resolvedCommand = $derived(resolveCommand(command, rawInput));
 
-  // exit 0 uses fg-disabled to match em-tool-calls.jsx:333–334 — a zero
-  // exit is silent, not celebratory. fg-muted would be too prominent.
   let exitColor = $derived(
     exitCode == null
       ? "var(--color-fg-disabled)"

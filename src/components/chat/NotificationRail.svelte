@@ -1,9 +1,4 @@
 <script lang="ts">
-  // Read-only left-rail block for a notification (task status ping or
-  // cross-thread message) surfaced inline in the transcript. `state` tracks
-  // whether the notification is still sitting in the queue ("pending" —
-  // dashed rail, dimmed) or has actually landed in the agent's context
-  // ("submitted" — solid rail, full opacity). See task-8-brief.md.
   interface Props {
     state: "pending" | "submitted";
     source: "task" | "thread";

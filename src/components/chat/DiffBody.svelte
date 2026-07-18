@@ -8,10 +8,6 @@
 
   type Row = { kind: "removed" | "added"; text: string; lineno: number };
 
-  // ACP provides oldText and newText as whole strings with no hunks, so
-  // this is a concatenated before/after view, not a traditional side-by-
-  // side diff. Line numbers restart at 1 for each side. Matches the flat
-  // list presentation in em-tool-calls.jsx:297-319.
   let rows = $derived.by<Row[]>(() => {
     const out: Row[] = [];
     if (oldText != null && oldText !== "") {
