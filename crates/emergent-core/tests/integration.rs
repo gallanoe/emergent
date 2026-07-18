@@ -1069,7 +1069,7 @@ async fn turn_dispatched_emitted_before_response_and_recorded() {
 
     let cli = format!("'{}'", mock_bin.display());
     let agent_id = manager
-        .create_agent(ws_id.clone(), "mock".into(), cli, Some("mock".into()))
+        .create_agent_with_command(ws_id.clone(), "mock".into(), Some("mock".into()), cli)
         .await
         .expect("create_agent");
 
@@ -1142,7 +1142,7 @@ async fn resume_falls_back_to_new_session_when_agent_lacks_load_capability() {
 
     let cli = format!("'{}'", mock_bin.display());
     let agent_id = manager
-        .create_agent(ws_id.clone(), "mock".into(), cli, Some("mock".into()))
+        .create_agent_with_command(ws_id.clone(), "mock".into(), Some("mock".into()), cli)
         .await
         .expect("create_agent");
 
@@ -1198,7 +1198,7 @@ async fn mock_agent_use_tools_streams_tool_call_and_message() {
     // the temp/target path contains spaces.
     let cli = format!("'{}'", mock_bin.display());
     let agent_id = manager
-        .create_agent(ws_id.clone(), "mock".into(), cli, Some("mock".into()))
+        .create_agent_with_command(ws_id.clone(), "mock".into(), Some("mock".into()), cli)
         .await
         .expect("create_agent");
 

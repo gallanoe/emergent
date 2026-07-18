@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/svelte";
-import { getLogoUrlForProvider, getLogoUrlForAgent } from "../agent-logos";
+import { getLogoUrlForProvider } from "../agent-logos";
 import AgentAvatar from "./AgentAvatar.svelte";
 
 describe("AgentAvatar", () => {
@@ -18,18 +18,15 @@ describe("AgentAvatar", () => {
     expect(screen.getByText("L")).toBeTruthy();
   });
 
-  it("renders img from cli when provider is missing but command is known", () => {
+  it("falls back to a monogram when provider is missing", () => {
     const { container } = render(AgentAvatar, {
       props: {
         provider: null,
-        cli: "bunx @agentclientprotocol/claude-agent-acp",
         name: "Reviewer",
       },
     });
-    const img = container.querySelector("img");
-    expect(img?.getAttribute("src")).toBe(
-      getLogoUrlForAgent(null, "bunx @agentclientprotocol/claude-agent-acp"),
-    );
+    expect(container.querySelector("img")).toBeNull();
+    expect(screen.getByText("R")).toBeTruthy();
   });
 
   it("forwards size to width and height on img", () => {

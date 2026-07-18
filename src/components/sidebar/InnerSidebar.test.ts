@@ -7,7 +7,6 @@ function makeAgentDef(overrides?: Partial<DisplayAgentDefinition>): DisplayAgent
   return {
     id: "agent-1",
     name: "Claude",
-    cli: "claude",
     provider: "claude",
     systemPrompt: "",
     threads: [],

@@ -11,7 +11,7 @@
 
   interface Props {
     knownAgents: KnownAgent[];
-    onCreate: (cli: string, name: string, provider: string) => void;
+    onCreate: (name: string, provider: string) => void;
     onCancel: () => void;
   }
 
@@ -37,7 +37,7 @@
 
   function handleCreate() {
     if (!canCreate || !selectedAgent) return;
-    onCreate(selectedCli, name.trim(), selectedAgent.provider);
+    onCreate(name.trim(), selectedAgent.provider);
   }
 
   function selectCli(agent: KnownAgent) {
@@ -81,7 +81,6 @@
             {#if selectedAgent}
               <AgentAvatar
                 provider={selectedAgent.provider}
-                cli={selectedAgent.command}
                 name={selectedAgent.name}
                 size={18}
                 class="flex-shrink-0"
@@ -129,7 +128,6 @@
                 >
                   <AgentAvatar
                     provider={agent.provider}
-                    cli={agent.command}
                     name={agent.name}
                     size={18}
                     class="flex-shrink-0"

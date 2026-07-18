@@ -1275,7 +1275,6 @@ const AGENT_DEF: AgentDefinition = {
   id: "agent-1",
   workspace_id: "ws-1",
   name: "Builder",
-  cli: "claude",
   provider: "anthropic",
 };
 
@@ -1298,7 +1297,6 @@ describe("thread registry", () => {
     const thread = agentStore.threads["thread-spawned"]!;
     expect(thread.status).toBe("initializing");
     expect(thread.workspaceId).toBe("ws-1");
-    expect(thread.cli).toBe("claude");
     expect(thread.provider).toBe("anthropic");
     expect(thread.agentName).toMatch(/^Thread \d+$/);
   });
@@ -1325,7 +1323,6 @@ describe("thread registry", () => {
       id: "a",
       workspace_id: "ws",
       name: "n",
-      cli: "codex",
     };
     agentStore.registerPersistedThread("t-null", "agent-x", noProvider, null);
     flushSync();

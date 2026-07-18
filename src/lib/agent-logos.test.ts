@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getLogoUrlForProvider, inferProviderIdFromCli, getLogoUrlForAgent } from "./agent-logos";
+import { getLogoUrlForProvider, getFriendlyNameForAgent } from "./agent-logos";
 import claudeLogo from "../assets/claude.svg";
 
 describe("agent-logos", () => {
@@ -14,17 +14,13 @@ describe("agent-logos", () => {
     expect(getLogoUrlForProvider("some-random-cli")).toBeNull();
   });
 
-  it("infers provider id from known spawn commands", () => {
-    expect(inferProviderIdFromCli("bunx @agentclientprotocol/claude-agent-acp")).toBe("claude");
-    expect(inferProviderIdFromCli("bunx @agentclientprotocol/codex-acp")).toBe("codex");
-    expect(inferProviderIdFromCli("gemini --experimental-acp")).toBe("gemini");
-    expect(inferProviderIdFromCli("kiro-cli acp")).toBe("kiro");
-    expect(inferProviderIdFromCli("opencode acp")).toBe("opencode");
+  it("resolves friendly names from provider ids", () => {
+    expect(getFriendlyNameForAgent("claude")).toBe("Claude Code");
+    expect(getFriendlyNameForAgent("codex")).toBe("Codex");
   });
 
-  it("getLogoUrlForAgent prefers provider then cli", () => {
-    expect(getLogoUrlForAgent("claude", "nope")).toBe(claudeLogo);
-    expect(getLogoUrlForAgent(null, "bunx @agentclientprotocol/claude-agent-acp")).toBe(claudeLogo);
-    expect(getLogoUrlForAgent(null, "unknown-bin")).toBeNull();
+  it("returns an empty friendly name for missing or unknown provider", () => {
+    expect(getFriendlyNameForAgent(null)).toBe("");
+    expect(getFriendlyNameForAgent("not-an-agent")).toBe("");
   });
 });

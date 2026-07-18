@@ -6,7 +6,7 @@
     name: string;
     agentId: string;
     agentName: string;
-    agentProvider: string;
+    agentProvider: string | null;
     status:
       | "idle"
       | "working"

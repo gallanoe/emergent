@@ -321,7 +321,6 @@ function createAppState() {
         agentDefinitions: w.agentDefinitions.map((ad) => ({
           id: ad.id,
           name: ad.name,
-          cli: ad.cli,
           provider: ad.provider ?? null,
           systemPrompt: agentSystemPrompts[ad.id] ?? ad.systemPrompt ?? "",
           threads: ad.threads,
@@ -341,7 +340,6 @@ function createAppState() {
           return {
             id: def.id,
             name: def.name,
-            cli: def.cli,
             provider: def.provider ?? null,
             systemPrompt: agentSystemPrompts[defId] ?? "",
             threads: displayThreads,
@@ -626,20 +624,17 @@ function createAppState() {
     async createAgentDefinition(
       workspaceId: string,
       name: string,
-      cli: string,
       provider: string,
     ): Promise<string> {
       const agentId = await invoke<string>("create_agent", {
         workspaceId,
         name,
-        cli,
         provider,
       });
       agentDefinitions[agentId] = {
         id: agentId,
         workspace_id: workspaceId,
         name,
-        cli,
         provider,
       };
       const ws = workspaces.find((w) => w.id === workspaceId);

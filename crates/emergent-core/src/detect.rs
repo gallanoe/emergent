@@ -48,6 +48,12 @@ pub(crate) fn enriched_path() -> &'static str {
 ///
 /// `requires` lists binaries that must be resolvable on the host `PATH`. If
 /// empty, the command binary itself is checked.
+///
+/// npm-delivered wrappers carry an explicit `@latest` tag. Without it `bunx`
+/// happily reuses whatever it already has cached — that is how an install can
+/// stay pinned to a long-superseded wrapper (and, transitively, to the older
+/// agent binary that wrapper vendors). The tag forces registry resolution on
+/// every spawn.
 type KnownAgentRow = (
     &'static str,
     &'static str,
@@ -59,14 +65,14 @@ const KNOWN_AGENTS: &[KnownAgentRow] = &[
     (
         "Claude Code",
         "bunx",
-        &["@agentclientprotocol/claude-agent-acp"],
+        &["@agentclientprotocol/claude-agent-acp@latest"],
         &["bunx"],
         "claude",
     ),
     (
         "Codex",
         "bunx",
-        &["@agentclientprotocol/codex-acp"],
+        &["@agentclientprotocol/codex-acp@latest"],
         &["bunx"],
         "codex",
     ),
@@ -91,6 +97,19 @@ fn build_command(binary: &str, args: &[&str]) -> String {
 fn is_available_on_host(binary: &str) -> bool {
     let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
     which::which_in(binary, Some(enriched_path()), cwd).is_ok()
+}
+
+/// Resolve the spawn command for a provider id from the catalog above.
+///
+/// Agent definitions persist only their `provider`, never a command string.
+/// Resolving at spawn time means a catalog change — a renamed npm package, an
+/// added flag — reaches every existing agent on the next spawn instead of
+/// applying to newly created ones alone.
+pub fn command_for_provider(provider: &str) -> Option<String> {
+    KNOWN_AGENTS
+        .iter()
+        .find(|&&(_, _, _, _, id)| id == provider)
+        .map(|&(_, binary, args, _, _)| build_command(binary, args))
 }
 
 /// Return all known agent types, checking availability on the host `PATH`.
@@ -124,8 +143,36 @@ mod tests {
         assert_eq!(agents[0].name, "Claude Code");
         assert_eq!(
             agents[0].command,
-            "bunx @agentclientprotocol/claude-agent-acp"
+            "bunx @agentclientprotocol/claude-agent-acp@latest"
         );
+    }
+
+    #[test]
+    fn command_for_provider_resolves_known_ids() {
+        assert_eq!(
+            command_for_provider("codex").as_deref(),
+            Some("bunx @agentclientprotocol/codex-acp@latest")
+        );
+        assert_eq!(
+            command_for_provider("gemini").as_deref(),
+            Some("gemini --experimental-acp")
+        );
+        assert!(command_for_provider("nope").is_none());
+    }
+
+    /// npm-delivered wrappers must stay tagged, or bunx serves a stale cache.
+    #[test]
+    fn bunx_delivered_agents_pin_latest() {
+        for &(name, binary, args, _, _) in KNOWN_AGENTS {
+            if binary != "bunx" {
+                continue;
+            }
+            assert!(
+                args.iter().any(|a| a.ends_with("@latest")),
+                "{} is delivered via bunx but does not request @latest",
+                name
+            );
+        }
     }
 
     #[test]

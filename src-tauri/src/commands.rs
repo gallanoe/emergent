@@ -22,11 +22,10 @@ pub async fn create_agent(
     manager: State<'_, Arc<AgentManager>>,
     workspace_id: String,
     name: String,
-    cli: String,
     provider: Option<String>,
 ) -> Result<String, String> {
     let ws_id = emergent_protocol::WorkspaceId::from(workspace_id.as_str());
-    manager.create_agent(ws_id, name, cli, provider).await
+    manager.create_agent(ws_id, name, provider).await
 }
 
 #[tauri::command]

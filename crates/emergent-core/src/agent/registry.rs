@@ -28,16 +28,38 @@ impl AgentRegistry {
         &mut self,
         workspace_id: WorkspaceId,
         name: String,
-        cli: String,
         provider: Option<String>,
+    ) -> String {
+        self.create_agent_inner(workspace_id, name, provider, None)
+    }
+
+    /// Register an agent that spawns an explicit command instead of resolving one
+    /// from its provider. Test-only; see [`AgentDefinition::command_override`].
+    #[cfg(feature = "test-support")]
+    pub fn create_agent_with_command(
+        &mut self,
+        workspace_id: WorkspaceId,
+        name: String,
+        provider: Option<String>,
+        command: String,
+    ) -> String {
+        self.create_agent_inner(workspace_id, name, provider, Some(command))
+    }
+
+    fn create_agent_inner(
+        &mut self,
+        workspace_id: WorkspaceId,
+        name: String,
+        provider: Option<String>,
+        command_override: Option<String>,
     ) -> String {
         let id = generate_id();
         let definition = AgentDefinition {
             id: id.clone(),
             workspace_id,
             name,
-            cli,
             provider,
+            command_override,
         };
         self.agents.insert(id.clone(), definition);
         id
@@ -134,27 +156,16 @@ mod tests {
     #[test]
     fn test_create_and_get_agent() {
         let mut reg = AgentRegistry::new();
-        let id = reg.create_agent(
-            ws_id(),
-            "Reviewer".into(),
-            "claude --acp".into(),
-            Some("claude".into()),
-        );
+        let id = reg.create_agent(ws_id(), "Reviewer".into(), Some("claude".into()));
         let def = reg.get_agent(&id).unwrap();
         assert_eq!(def.name, "Reviewer");
-        assert_eq!(def.cli, "claude --acp");
         assert_eq!(def.provider, Some("claude".into()));
     }
 
     #[test]
     fn test_update_agent() {
         let mut reg = AgentRegistry::new();
-        let id = reg.create_agent(
-            ws_id(),
-            "Old".into(),
-            "claude".into(),
-            Some("claude".into()),
-        );
+        let id = reg.create_agent(ws_id(), "Old".into(), Some("claude".into()));
         reg.update_agent(&id, Some("New".into()), None).unwrap();
         assert_eq!(reg.get_agent(&id).unwrap().name, "New");
     }
@@ -162,7 +173,7 @@ mod tests {
     #[test]
     fn test_delete_agent() {
         let mut reg = AgentRegistry::new();
-        let id = reg.create_agent(ws_id(), "A".into(), "c".into(), None);
+        let id = reg.create_agent(ws_id(), "A".into(), None);
         reg.delete_agent(&id).unwrap();
         assert!(reg.get_agent(&id).is_none());
     }
@@ -176,15 +187,50 @@ mod tests {
     #[test]
     fn test_list_definitions_filters_by_workspace() {
         let mut reg = AgentRegistry::new();
-        reg.create_agent(ws_id(), "A".into(), "c".into(), None);
-        reg.create_agent(
-            WorkspaceId::from("other"),
-            "B".into(),
-            "c".into(),
-            None,
-        );
+        reg.create_agent(ws_id(), "A".into(), None);
+        reg.create_agent(WorkspaceId::from("other"), "B".into(), None);
         let list = reg.list_definitions(&ws_id());
         assert_eq!(list.len(), 1);
         assert_eq!(list[0].name, "A");
+    }
+
+    /// Definitions written before this change carry a `cli` key naming a package
+    /// that may no longer exist. Loading must ignore it and keep the provider.
+    #[tokio::test]
+    async fn load_ignores_legacy_cli_field() {
+        let dir = tempfile::tempdir().unwrap();
+        tokio::fs::write(
+            dir.path().join("agents.json"),
+            r#"[{"id":"a1","workspace_id":"ws","name":"Reviewer",
+                 "cli":"bunx @zed-industries/codex-acp","provider":"codex"}]"#,
+        )
+        .await
+        .unwrap();
+
+        let mut reg = AgentRegistry::new();
+        reg.load_from_dir(dir.path()).await.unwrap();
+
+        let def = reg.get_agent("a1").unwrap();
+        assert_eq!(def.provider, Some("codex".into()));
+        assert_eq!(
+            crate::detect::command_for_provider(def.provider.as_ref().unwrap()).as_deref(),
+            Some("bunx @agentclientprotocol/codex-acp@latest"),
+            "legacy definition must resolve to the current package, not its persisted one"
+        );
+    }
+
+    /// Re-saving a legacy definition must not carry the dead `cli` key forward.
+    #[tokio::test]
+    async fn save_drops_legacy_cli_field() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut reg = AgentRegistry::new();
+        let id = reg.create_agent(ws_id(), "Reviewer".into(), Some("codex".into()));
+        reg.save_to_dir(&ws_id(), dir.path()).await.unwrap();
+
+        let raw = tokio::fs::read_to_string(dir.path().join("agents.json"))
+            .await
+            .unwrap();
+        assert!(!raw.contains("\"cli\""), "persisted a command string: {}", raw);
+        assert!(raw.contains(&id));
     }
 }

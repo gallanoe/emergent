@@ -9,7 +9,6 @@ function makeThread(overrides?: Partial<DisplayThread>): DisplayThread {
     id: "t1",
     agentId: "d1",
     workspaceId: "w1",
-    cli: "claude-agent-acp",
     provider: "claude",
     name: "Alpha",
     processStatus: "idle",

@@ -66,7 +66,7 @@
     name: string;
     agentId: string;
     agentName: string;
-    agentProvider: string;
+    agentProvider: string | null;
     status:
       | "idle"
       | "working"
@@ -85,7 +85,7 @@
         name: t.name,
         agentId: def.id,
         agentName: def.name,
-        agentProvider: def.provider ?? def.cli,
+        agentProvider: def.provider,
         status: t.processStatus,
       })),
     );
@@ -239,11 +239,10 @@
     {:else if appState.activeView === "create-agent" && appState.selectedWorkspaceId}
       <AgentCreatorView
         knownAgents={appState.knownAgents}
-        onCreate={async (cli, name, provider) => {
+        onCreate={async (name, provider) => {
           const agentId = await appState.createAgentDefinition(
             appState.selectedWorkspaceId!,
             name,
-            cli,
             provider,
           );
           appState.selectAgent(agentId);

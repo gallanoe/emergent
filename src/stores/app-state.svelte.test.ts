@@ -90,7 +90,6 @@ function defineAgent(agentId: string, workspaceId: string, over: Record<string, 
     id: agentId,
     workspace_id: workspaceId,
     name: agentId,
-    cli: "claude-agent-acp",
     provider: "claude",
     ...over,
   };
@@ -169,7 +168,6 @@ describe("appState.updateAgentSystemPrompt", () => {
       id: agentId,
       workspace_id: "ws-vitest",
       name: "Vitest agent",
-      cli: "claude-agent-acp",
       provider: "claude",
     };
     appState.selectedAgentId = agentId;
@@ -200,7 +198,6 @@ describe("appState.initialize", () => {
                 id: "ag-1",
                 workspace_id: "ws-a",
                 name: "Claude",
-                cli: "claude",
                 provider: "claude",
               },
             ]
@@ -328,7 +325,6 @@ describe("appState.initialize", () => {
           id: "ag-1",
           workspace_id: "ws-a",
           name: "A",
-          cli: "claude",
           provider: null,
         },
       ],
@@ -376,7 +372,6 @@ describe("appState live-thread sync", () => {
           id: "ag-1",
           workspace_id: "ws-a",
           name: "A",
-          cli: "claude",
           provider: "claude",
         },
       ],
@@ -469,7 +464,6 @@ describe("appState task listeners", () => {
           id: "ag-1",
           workspace_id: "ws-a",
           name: "A",
-          cli: "claude",
           provider: "claude",
         },
       ],
@@ -709,23 +703,21 @@ describe("appState agent definitions", () => {
   it("creates an agent definition and attaches it to the workspace", async () => {
     const ipc = installIPC({ create_agent: () => "ag-new" });
 
-    const id = await appState.createAgentDefinition("ws-1", "Sonnet", "claude", "claude");
+    const id = await appState.createAgentDefinition("ws-1", "Sonnet", "claude");
     flushSync();
 
     expect(id).toBe("ag-new");
     expect(ipc.argsFor("create_agent")).toEqual({
       workspaceId: "ws-1",
       name: "Sonnet",
-      cli: "claude",
       provider: "claude",
     });
     expect(appState.workspaces[0]!.agentDefinitions.map((d) => d.name)).toEqual(["Sonnet"]);
-    expect(appState.agentDefinitionsMap["ag-new"]?.cli).toBe("claude");
   });
 
   it("updates only the fields it is given", async () => {
     const ipc = installIPC({ create_agent: () => "ag-1" });
-    await appState.createAgentDefinition("ws-1", "Old", "claude", "claude");
+    await appState.createAgentDefinition("ws-1", "Old", "claude");
 
     await appState.updateAgentDefinition("ag-1", "Renamed");
     flushSync();
@@ -751,7 +743,7 @@ describe("appState agent definitions", () => {
 
   it("deletes an agent definition and clears it from the selection", async () => {
     const ipc = installIPC({ create_agent: () => "ag-1" });
-    await appState.createAgentDefinition("ws-1", "Doomed", "claude", "claude");
+    await appState.createAgentDefinition("ws-1", "Doomed", "claude");
     appState.selectAgent("ag-1");
     flushSync();
     expect(appState.activeView).toBe("agent-threads");
@@ -769,8 +761,8 @@ describe("appState agent definitions", () => {
   it("leaves the selection alone when a different agent is deleted", async () => {
     let n = 0;
     installIPC({ create_agent: () => `ag-${++n}` });
-    await appState.createAgentDefinition("ws-1", "Keep", "claude", "claude");
-    await appState.createAgentDefinition("ws-1", "Drop", "claude", "claude");
+    await appState.createAgentDefinition("ws-1", "Keep", "claude");
+    await appState.createAgentDefinition("ws-1", "Drop", "claude");
     appState.selectAgent("ag-1");
     appState.activeView = "agent-chat";
 
@@ -802,7 +794,7 @@ describe("appState agent definitions", () => {
 
   it("drops dangling agent definition ids from the display list", async () => {
     installIPC({ create_agent: () => "ag-1" });
-    await appState.createAgentDefinition("ws-1", "Ghost", "claude", "claude");
+    await appState.createAgentDefinition("ws-1", "Ghost", "claude");
     // Simulate a definition removed from the map without the workspace knowing.
     delete appState.agentDefinitionsMap["ag-1"];
     flushSync();
@@ -835,7 +827,7 @@ describe("appState selection and views", () => {
       create_agent: () => "ag-1",
     });
     await appState.createWorkspace("Alpha");
-    await appState.createAgentDefinition("ws-1", "A", "claude", "claude");
+    await appState.createAgentDefinition("ws-1", "A", "claude");
     appState.selectWorkspace("ws-other");
     flushSync();
 

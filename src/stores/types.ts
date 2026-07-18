@@ -154,8 +154,10 @@ export interface AgentDefinition {
   id: string;
   workspace_id: string;
   name: string;
-  cli: string;
-  /** Set at creation from `KnownAgent.provider`; used for logos only. */
+  /**
+   * Set at creation from `KnownAgent.provider`. The backend resolves the spawn
+   * command from this at spawn time; no command string is persisted.
+   */
   provider?: string | null;
 }
 
@@ -178,7 +180,6 @@ export interface DisplayThread {
   id: string;
   agentId: string;
   workspaceId: string;
-  cli: string;
   /** Same as the parent agent definition's `provider` when known. */
   provider: string | null;
   name: string;
@@ -198,8 +199,7 @@ export interface DisplayThread {
 export interface DisplayAgentDefinition {
   id: string;
   name: string;
-  cli: string;
-  /** Explicit logo id from agent creation; not derived from `cli`. */
+  /** Explicit logo id from agent creation. */
   provider: string | null;
   /** Client-only until backend exposes a persisted field. */
   systemPrompt: string;

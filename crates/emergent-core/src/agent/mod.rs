@@ -162,8 +162,32 @@ impl AgentManager {
         &self,
         workspace_id: WorkspaceId,
         name: String,
-        cli: String,
         provider: Option<String>,
+    ) -> Result<String, String> {
+        self.create_agent_inner(workspace_id, name, provider, None)
+            .await
+    }
+
+    /// Create an agent that spawns an explicit command rather than resolving one
+    /// from its provider. Test-only; see [`AgentDefinition::command_override`].
+    #[cfg(feature = "test-support")]
+    pub async fn create_agent_with_command(
+        &self,
+        workspace_id: WorkspaceId,
+        name: String,
+        provider: Option<String>,
+        command: String,
+    ) -> Result<String, String> {
+        self.create_agent_inner(workspace_id, name, provider, Some(command))
+            .await
+    }
+
+    async fn create_agent_inner(
+        &self,
+        workspace_id: WorkspaceId,
+        name: String,
+        provider: Option<String>,
+        command_override: Option<String>,
     ) -> Result<String, String> {
         // Validate the workspace exists before registering the agent, so a bad
         // workspace_id can't create a half-orphaned agent definition.
@@ -174,7 +198,15 @@ impl AgentManager {
 
         let id = {
             let mut reg = self.registry.write().await;
-            reg.create_agent(workspace_id.clone(), name, cli, provider)
+            match command_override {
+                #[cfg(feature = "test-support")]
+                Some(command) => {
+                    reg.create_agent_with_command(workspace_id.clone(), name, provider, command)
+                }
+                #[cfg(not(feature = "test-support"))]
+                Some(_) => unreachable!("command_override is only set under test-support"),
+                None => reg.create_agent(workspace_id.clone(), name, provider),
+            }
         };
         self.persist_agents(&workspace_id).await;
 
@@ -276,14 +308,38 @@ impl AgentManager {
             }
         }
 
+        let cli = Self::resolve_cli(&definition)?;
+
         self.threads
-            .spawn_thread(
-                agent_id.to_string(),
-                definition.workspace_id,
-                definition.cli,
-                task_id,
-            )
+            .spawn_thread(agent_id.to_string(), definition.workspace_id, cli, task_id)
             .await
+    }
+
+    /// Resolve a definition's spawn command from its provider id.
+    ///
+    /// Definitions hold no command string, so this is the single point where an
+    /// agent becomes runnable — and the reason a catalog update reaches every
+    /// existing agent rather than only newly created ones.
+    fn resolve_cli(definition: &AgentDefinition) -> Result<String, String> {
+        if let Some(command) = &definition.command_override {
+            return Ok(command.clone());
+        }
+
+        let provider = definition.provider.as_deref().ok_or_else(|| {
+            format!(
+                "Agent '{}' has no provider, so its command cannot be resolved. \
+                 Recreate it from the agent catalog.",
+                definition.name
+            )
+        })?;
+
+        crate::detect::command_for_provider(provider).ok_or_else(|| {
+            format!(
+                "Agent '{}' names unknown provider '{}'; it may come from a newer \
+                 version of the app.",
+                definition.name, provider
+            )
+        })
     }
 
     /// Resume a persisted thread by loading its ACP session.
@@ -333,12 +389,14 @@ impl AgentManager {
             }
         };
 
+        let cli = Self::resolve_cli(&definition)?;
+
         self.threads
             .resume_thread(
                 thread_id.to_string(),
                 agent_id.to_string(),
                 definition.workspace_id,
-                definition.cli,
+                cli,
                 acp_session_id.to_string(),
                 task_id,
             )

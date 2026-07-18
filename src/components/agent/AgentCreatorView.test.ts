@@ -123,7 +123,7 @@ describe("AgentCreatorView", () => {
     expect(create.getAttribute("class")).toContain("bg-accent");
   });
 
-  it("creates with the trimmed name and the selected agent's cli and provider", async () => {
+  it("creates with the trimmed name and the selected agent's provider", async () => {
     const { container, getByRole, getByText, onCreate } = setup();
     await tick();
     await fireEvent.click(cliTrigger(container));
@@ -132,7 +132,7 @@ describe("AgentCreatorView", () => {
     await tick();
 
     await fireEvent.click(getByRole("button", { name: "Create" }));
-    expect(onCreate).toHaveBeenCalledWith("codex", "Reviewer", "openai");
+    expect(onCreate).toHaveBeenCalledWith("Reviewer", "openai");
   });
 
   it("does not create when no CLI is available", async () => {

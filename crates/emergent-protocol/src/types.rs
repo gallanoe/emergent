@@ -254,10 +254,23 @@ pub struct AgentDefinition {
     pub id: String,
     pub workspace_id: WorkspaceId,
     pub name: String,
-    pub cli: String,
-    /// Chosen at creation from `KnownAgent::provider`; used for branding only.
+    /// Chosen at creation from `KnownAgent::provider`. Identifies both the
+    /// branding and — via `detect::command_for_provider` — the spawn command.
+    ///
+    /// The command itself is deliberately not persisted: a definition written
+    /// before an upstream package rename would otherwise keep invoking the dead
+    /// name forever. Legacy `agents.json` files still carry a `cli` key; serde
+    /// ignores it on load, so they resolve through `provider` like any other.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub provider: Option<String>,
+    /// Explicit command, bypassing provider resolution.
+    ///
+    /// Exists for tests, which spawn a mock agent from a path only known at run
+    /// time and so cannot be expressed as a catalog entry. No production path
+    /// sets it — `AgentManager::create_agent` always leaves it `None`, which is
+    /// why definitions written by the app never pin a command.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub command_override: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

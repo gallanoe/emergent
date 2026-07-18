@@ -159,7 +159,6 @@ function mkThread(
   agentDefinitionId: string,
   name: string,
   processStatus: DisplayThread["processStatus"],
-  cli: string,
   messages: DisplayMessage[],
   extra?: Partial<DisplayThread>,
 ): DisplayThread {
@@ -174,7 +173,6 @@ function mkThread(
     id,
     agentId: agentDefinitionId,
     workspaceId: "ws1",
-    cli,
     provider: providerByAgent[agentDefinitionId] ?? null,
     name,
     processStatus,
@@ -269,31 +267,21 @@ const agentDefinitions: DisplayAgentDefinition[] = [
   {
     id: "a1",
     name: "claude-sonnet",
-    cli: "claude",
     provider: "claude",
     systemPrompt: "",
     threads: [
-      mkThread("t1", "a1", "refine quantization", "working", "claude", T1_MESSAGES, {
+      mkThread("t1", "a1", "refine quantization", "working", T1_MESSAGES, {
         updatedAt: "now",
         preview: "Refining quant…",
       }),
-      mkThread(
-        "t2",
-        "a1",
-        "color scheme API",
-        "idle",
-        "claude",
-        [mkMsg("assistant", "Idle.", "3m")],
-        {
-          updatedAt: "3m",
-        },
-      ),
+      mkThread("t2", "a1", "color scheme API", "idle", [mkMsg("assistant", "Idle.", "3m")], {
+        updatedAt: "3m",
+      }),
       mkThread(
         "t3",
         "a1",
         "session TSK-041",
         "idle",
-        "claude",
         [mkMsg("assistant", "Session idle.", "12m")],
         { updatedAt: "12m", taskId: "TSK-041" },
       ),
@@ -302,11 +290,10 @@ const agentDefinitions: DisplayAgentDefinition[] = [
   {
     id: "a2",
     name: "codex-validator",
-    cli: "codex",
     provider: "codex",
     systemPrompt: "",
     threads: [
-      mkThread("t4", "a2", "verify palette delta", "idle", "codex", T4_MESSAGES, {
+      mkThread("t4", "a2", "verify palette delta", "idle", T4_MESSAGES, {
         updatedAt: "30s",
       }),
       mkThread(
@@ -314,7 +301,6 @@ const agentDefinitions: DisplayAgentDefinition[] = [
         "a2",
         "session TSK-039",
         "idle",
-        "codex",
         [mkMsg("assistant", "Review queued.", "1h")],
         { updatedAt: "1h", taskId: "TSK-039" },
       ),
@@ -323,7 +309,6 @@ const agentDefinitions: DisplayAgentDefinition[] = [
   {
     id: "a3",
     name: "gemini-explorer",
-    cli: "gemini",
     provider: "gemini",
     systemPrompt: "",
     threads: [
@@ -332,7 +317,6 @@ const agentDefinitions: DisplayAgentDefinition[] = [
         "a3",
         "reading deps",
         "initializing",
-        "gemini",
         [mkMsg("assistant", "Starting up…", "just now")],
         { updatedAt: "just now" },
       ),
@@ -341,7 +325,6 @@ const agentDefinitions: DisplayAgentDefinition[] = [
   {
     id: "a4",
     name: "opencode-sweeper",
-    cli: "opencode",
     provider: "opencode",
     systemPrompt: "",
     threads: [
@@ -350,7 +333,6 @@ const agentDefinitions: DisplayAgentDefinition[] = [
         "a4",
         "session TSK-033",
         "dead",
-        "opencode",
         [mkMsg("assistant", "Thread ended.", "yesterday")],
         { updatedAt: "yesterday", taskId: "TSK-033" },
       ),
@@ -359,7 +341,6 @@ const agentDefinitions: DisplayAgentDefinition[] = [
   {
     id: "a5",
     name: "kiro-scout",
-    cli: "kiro",
     provider: "kiro",
     systemPrompt: "",
     threads: [],

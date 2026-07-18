@@ -9,7 +9,6 @@ function makeThread(overrides?: Partial<DisplayThread>): DisplayThread {
     id: "t1",
     agentId: "ad-1",
     workspaceId: "w1",
-    cli: "claude-agent-acp",
     provider: "claude",
     name: "Main thread",
     processStatus: "idle",
@@ -29,7 +28,6 @@ function makeAgentDef(overrides?: Partial<DisplayAgentDefinition>): DisplayAgent
   return {
     id: "ad-1",
     name: "Architect",
-    cli: "claude",
     provider: "claude",
     systemPrompt: "Be brief.",
     threads: [makeThread()],

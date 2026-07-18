@@ -103,7 +103,6 @@
       <div class="flex items-start gap-4">
         <AgentAvatar
           provider={agentDef.provider}
-          cli={agentDef.cli}
           name={agentDef.name}
           size={44}
         />
@@ -145,10 +144,7 @@
             {#snippet children()}
               {agentDef.threads.length} thread{agentDef.threads.length === 1
                 ? ""
-                : "s"} · {getFriendlyNameForAgent(
-                agentDef.provider,
-                agentDef.cli,
-              )}
+                : "s"} · {getFriendlyNameForAgent(agentDef.provider)}
             {/snippet}
           </Mono>
         </div>

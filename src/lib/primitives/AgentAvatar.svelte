@@ -1,12 +1,10 @@
 <script lang="ts">
-  import { getLogoUrlForAgent } from "../agent-logos";
+  import { getLogoUrlForProvider } from "../agent-logos";
   import StatusDot from "./StatusDot.svelte";
 
   interface Props {
     /** Persisted id from the catalog / agent definition (e.g. claude, codex). */
     provider: string | null;
-    /** Spawn command; used to pick a CLI logo when `provider` is missing. */
-    cli?: string | null;
     /** Shown as monogram when no logo exists for `provider`. */
     name: string;
     size?: number;
@@ -18,7 +16,6 @@
 
   let {
     provider,
-    cli = null,
     name,
     size = 28,
     class: className = "",
@@ -26,7 +23,7 @@
     status = "idle",
   }: Props = $props();
 
-  const logoUrl = $derived(getLogoUrlForAgent(provider, cli));
+  const logoUrl = $derived(getLogoUrlForProvider(provider));
   const monogram = $derived(
     name.trim() ? name.trim().charAt(0).toUpperCase() : "?",
   );

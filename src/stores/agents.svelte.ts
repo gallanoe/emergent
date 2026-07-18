@@ -23,7 +23,6 @@ interface ThreadState {
   id: string;
   agentDefinitionId: string;
   workspaceId: string;
-  cli: string;
   provider: string | null;
   agentName: string;
   status: "initializing" | "idle" | "working" | "cancelling" | "error" | "dead";
@@ -135,7 +134,6 @@ function toDisplayThread(conn: ThreadState): DisplayThread {
     id: conn.id,
     agentId: conn.agentDefinitionId,
     workspaceId: conn.workspaceId,
-    cli: conn.cli,
     provider: conn.provider,
     name: conn.agentName,
     processStatus: conn.status,
@@ -761,7 +759,6 @@ function createAgentStore() {
       id: threadId,
       agentDefinitionId,
       workspaceId: agentDefinition.workspace_id,
-      cli: agentDefinition.cli,
       provider: agentDefinition.provider ?? null,
       agentName: `Thread ${count}`,
       status: "dead",
@@ -791,7 +788,6 @@ function createAgentStore() {
       id: threadId,
       agentDefinitionId,
       workspaceId: agentDefinition.workspace_id,
-      cli: agentDefinition.cli,
       provider: agentDefinition.provider ?? null,
       agentName: `Thread ${count}`,
       status: "initializing",
@@ -1237,7 +1233,6 @@ function createAgentStore() {
             ) {
               threads[threadId] = {
                 workspaceId: "ws-test",
-                cli: "claude",
                 provider: null,
                 agentName: "Test Thread",
                 status: "idle",

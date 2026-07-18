@@ -188,7 +188,6 @@
                 <div class="flex min-w-0 items-center gap-2">
                   <AgentAvatar
                     provider={def.provider}
-                    cli={def.cli}
                     name={def.name}
                     size={14}
                   />
@@ -255,7 +254,6 @@
                 <div class="flex min-w-0 items-center gap-1.5">
                   <AgentAvatar
                     provider={def?.provider ?? null}
-                    cli={def?.cli ?? null}
                     name={def?.name ?? "—"}
                     size={14}
                   />
