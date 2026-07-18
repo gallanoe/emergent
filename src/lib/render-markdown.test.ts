@@ -127,6 +127,81 @@ describe("renderMarkdown", () => {
       expect(html).toMatch(/style="[^"]*em/);
     });
   });
+
+  describe("GFM task lists", () => {
+    it("replaces the default checkbox input with a styled md-check span", () => {
+      const html = renderMarkdown("- [ ] write the tests");
+      expect(html).toContain('<span class="md-check"');
+      expect(html).not.toContain("<input");
+      expect(html).toContain("write the tests");
+    });
+
+    it("marks a checked item with data-checked=true", () => {
+      const html = renderMarkdown("- [x] shipped");
+      expect(html).toContain('data-checked="true"');
+      expect(html).not.toContain('data-checked="false"');
+    });
+
+    it("marks an unchecked item with data-checked=false", () => {
+      const html = renderMarkdown("- [ ] not yet");
+      expect(html).toContain('data-checked="false"');
+      expect(html).not.toContain('data-checked="true"');
+    });
+
+    it("tags task items with the task-list-item class", () => {
+      const html = renderMarkdown("- [x] one\n- [ ] two");
+      expect(html.match(/<li class="task-list-item">/g)).toHaveLength(2);
+    });
+
+    it("leaves plain (non-task) list items to the default renderer", () => {
+      const html = renderMarkdown("- plain item\n- another");
+      expect(html).not.toContain("md-check");
+      expect(html).not.toContain("task-list-item");
+      expect(html).toContain("<li>plain item</li>");
+    });
+
+    it("renders a mixed list with only the task items decorated", () => {
+      const html = renderMarkdown("- [x] done\n- just text");
+      expect(html.match(/<li class="task-list-item">/g)).toHaveLength(1);
+      expect(html).toContain("<li>just text</li>");
+      expect(html).not.toContain("<input");
+    });
+
+    it("strips the synthetic checkbox token nested inside a loose item's paragraph", () => {
+      // A blank line between items makes the list "loose", so marked wraps each
+      // item's content in a paragraph and the synthetic checkbox token ends up
+      // nested rather than at the top level of the item.
+      const html = renderMarkdown("- [x] first item\n\n- [ ] second item");
+      expect(html).not.toContain("<input");
+      expect(html).toContain("<p>");
+      expect(html).toContain('data-checked="true"');
+      expect(html).toContain('data-checked="false"');
+      expect(html).toContain("first item");
+      expect(html).toContain("second item");
+    });
+
+    it("keeps inline formatting inside a task item", () => {
+      const html = renderMarkdown("- [x] ship **now** and `soon`");
+      expect(html).toContain("<strong>now</strong>");
+      expect(html).toContain("<code>soon</code>");
+      expect(html).not.toContain("<input");
+    });
+
+    it("renders a nested sub-list inside a task item without leaking checkboxes", () => {
+      const html = renderMarkdown("- [ ] parent\n  - [x] child\n");
+      expect(html).not.toContain("<input");
+      expect(html.match(/md-check/g)!.length).toBe(2);
+      expect(html).toContain("parent");
+      expect(html).toContain("child");
+    });
+
+    it("survives sanitization with the data-checked attribute intact", () => {
+      // DOMPurify drops unknown data-* attributes unless allow-listed, which
+      // would silently break the checked/unchecked visual state.
+      const html = renderMarkdown("- [x] persisted");
+      expect(html).toMatch(/<span class="md-check" data-checked="true">\s*<\/span>/);
+    });
+  });
 });
 
 describe("segmentStream", () => {
