@@ -46,18 +46,11 @@
   --font-ui: "Inter", -apple-system, system-ui, sans-serif;
   --font-content: "Source Serif 4", Georgia, serif;
 
-  /* Motion durations — see docs/design/v2/project/em-foundations.jsx:290–296.
-     quick: hover + small state flips. base: buttons, tabs, focus rings.
-     view: view fade-ins. reveal: popovers, context menus. */
   --duration-quick: 120ms;
   --duration-base: 150ms;
   --duration-view: 200ms;
   --duration-reveal: 280ms;
 
-  /* Spacing scale — see docs/design/v2/project/em-foundations.jsx:244–248.
-     Consumed via var() inline or arbitrary Tailwind values like
-     p-[var(--space-3)]. Not registered in @theme to avoid clashing with
-     Tailwind's built-in --spacing base. */
   --space-1: 2px;
   --space-1-5: 4px;
   --space-2: 6px;
@@ -69,7 +62,6 @@
   --space-6: 22px;
   --space-8: 32px;
 
-  /* Radius scale — see docs/design/v2/project/em-foundations.jsx:249. */
   --radius-3: 3px;
   --radius-4: 4px;
   --radius-5: 5px;
@@ -79,15 +71,7 @@
   --radius-14: 14px;
   --radius-full: 999px;
 
-  /* Accent focus ring — see docs/design/v2/project/em-primitives.jsx:205.
-     Unified focus-visible outline. Consumed via box-shadow typically. */
   --accent-ring: rgba(250, 250, 250, 0.28);
-
-  /* Typography scale — see docs/design/v2/project/em-foundations.jsx:219–231.
-     Every step exposes size, line-height, weight, and (when relevant)
-     letter-spacing as individual tokens. Consumers compose them; we do
-     not ship a single shorthand token because real call sites almost
-     always override one axis. */
 
   /* UI · Inter */
   --type-display-size: 36px;
@@ -339,9 +323,7 @@ svg.lucide {
   }
 }
 
-/* Applied to an SVG circle that is the "running" glyph for a tool call.
-   900ms matches docs/design/v2/project/em-tool-calls.jsx:50–55.
-   transform-origin is explicit because SVG transform-origin defaults
+/* transform-origin is explicit because SVG transform-origin defaults
    are inconsistent across engines — without it the spinner can orbit
    around 0,0 instead of rotating in place. */
 .em-tc-spin {
@@ -358,10 +340,6 @@ svg.lucide {
   }
 }
 
-/* Applied to a text node (typically a tool-call verb name) to make it
-   breathe while the call is in flight. 2.2s loop per
-   docs/design/v2/project/em-foundations.jsx:296. Uses background-clip:text
-   so the gradient paints only inside the glyphs. */
 .em-shimmer-text {
   background: linear-gradient(
     90deg,

@@ -2,16 +2,9 @@
   import { slide } from "svelte/transition";
   import type { QueueItem } from "../../stores/types";
 
-  // ── Props ──────────────────────────────────────────────────────────────────
   interface Props {
     items: QueueItem[];
     working?: boolean;
-    /**
-     * When true, the panel docks to the top of the composer as one connected
-     * unit: rounded top only, flat bottom, no own border-bottom or shadow (the
-     * composer wrapper carries the shadow for the whole stack). When false it's
-     * a self-contained floating card. See em-app-mock.jsx:471,818.
-     */
     attached?: boolean;
     onRemove: (id: string) => void;
     onEdit: (id: string, content: string) => void;

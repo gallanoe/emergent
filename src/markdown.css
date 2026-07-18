@@ -83,14 +83,10 @@
   margin: 3px 0;
 }
 
-/* Ordered-list marker uses tabular-nums mono for clean multi-digit alignment
-   (em-markdown.jsx:58-60). tabular-nums is already on the <ol> itself. */
 .markdown ol::marker {
   font-family: var(--font-mono);
 }
 
-/* Nested unordered markers step down in emphasis: L2 = en-dash, L3 = middle-dot
-   (em-markdown.jsx:44-51). L1 keeps the default disc. */
 .markdown ul ul > li::marker {
   content: "– ";
 }
@@ -112,10 +108,6 @@
   align-items: flex-start;
   gap: 8px;
 }
-/* Custom checkbox, emitted by the renderer as <span class="md-check"
-   data-checked="true|false">. Matches em-markdown.jsx:195-207. The SVG tick
-   is painted via a mask-image so it picks up `currentColor` (white on the
-   filled --success background). */
 .markdown .md-check {
   width: 14px;
   height: 14px;
@@ -263,9 +255,6 @@
   margin: 22px 0;
 }
 
-/* callouts (GFM alerts — note/tip/warning/caution). Layout: icon column on
-   the left, title + body stacked in a column on the right. Mirrors
-   em-markdown.jsx:176-191. */
 .markdown .callout {
   display: flex;
   align-items: flex-start;
@@ -317,8 +306,6 @@
   color: var(--color-error);
 }
 
-/* Filled-circle badge — 16×16, kind-specific fill color, page-background
-   glyph. Values per docs/design/v2/project/em-markdown.jsx:181-186. */
 .markdown .callout-icon {
   display: inline-flex;
   align-items: center;
@@ -352,11 +339,6 @@
   background: var(--color-error);
 }
 
-/* Math — rendered by KaTeX (see src/lib/render-markdown.ts). The KaTeX
-   stylesheet, imported in src/main.ts, paints the glyphs via the KaTeX_*
-   web fonts and lays out inline math (.katex) in the text baseline. Here we
-   only style the block-math container (.katex-display) as an elevated card,
-   per em-markdown.jsx:301-310. */
 .markdown .katex-display {
   margin: 0 0 14px;
   padding: 14px 16px;

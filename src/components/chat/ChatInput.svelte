@@ -8,16 +8,6 @@
     thread: DisplayThread | undefined;
     demoMode: boolean;
     pendingQueue?: QueueItem[];
-    /**
-     * Push-to-composer channel. The parent increments `seq` each time it
-     * wants to inject text into the textarea. The $effect below fires
-     * whenever `seq` changes and updates the textarea value.
-     *
-     * Symmetric to the `externalContent`/`pushToInput` pattern that was
-     * removed in P0-A. The new Edit button is its consumer: the parent
-     * removes the item from the queue (removeQueueItem) and simultaneously
-     * bumps this prop so the composer receives the item's text.
-     */
     pushToComposer?: { text: string; seq: number };
     onSend: (text: string) => void;
     onInterrupt?: () => void;
@@ -78,21 +68,14 @@
   });
 
   // ── Push-to-composer channel ───────────────────────────────────────────────
-  // Fires whenever the parent increments pushToComposer.seq (e.g. after an
-  // Edit-queue action). Reads seq synchronously so it's tracked as a dep.
-  //
-  // `lastAppliedSeq` starts at -1 so the first real seq (0 or higher) only
-  // triggers an update when it is strictly different — preventing mount-time
-  // clobber when switching threads where seq was already applied.
   let lastAppliedSeq = $state(-1);
 
   $effect(() => {
     if (!pushToComposer) return;
-    const { seq, text } = pushToComposer; // read both synchronously to track deps
+    const { seq, text } = pushToComposer;
     if (seq === lastAppliedSeq) return;
     lastAppliedSeq = seq;
     message = text;
-    // Focus the textarea so the user can immediately edit or send.
     textareaEl?.focus();
   });
 
@@ -115,26 +98,6 @@
   }
 </script>
 
-<!--
-  Composer floats absolutely at the bottom of its relative parent so the
-  chat transcript scrolls UNDERNEATH it (iMessage-style). Keep this in sync
-  with ChatArea's bottom padding (~160px) so messages aren't hidden when
-  scrolled to the end.
-
-  - Outermost wrapper: `pointer-events-none` so clicks in the px-10 gutters
-    pass through to the transcript.
-  - Inner stack: `pointer-events-auto` to restore interactivity. The stack is
-    a single flex column carrying the shadow + 18px rounding for the whole
-    unit. The queue docks at its top (rounded top, no bottom border/shadow of
-    its own) and the composer squares off its top corners when a queue is
-    present, so the two read as one connected surface (em-app-mock.jsx:818).
-    When the queue is empty the {#if} leaves no DOM node and the composer
-    keeps full 18px rounding.
-  - `bg-bg-elevated` (opaque) rather than the design spec's `bg-bg-bubble`
-    (4% white overlay) so scrolled-under content is cleanly occluded. The
-    bubble token blends with the near-black main pane and reads as a
-    dark rim, not a floating surface.
--->
 <div
   class="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex flex-col items-center px-10 pb-[22px] pt-[10px]"
 >

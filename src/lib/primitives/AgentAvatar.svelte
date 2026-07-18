@@ -30,7 +30,6 @@
   const monogram = $derived(
     name.trim() ? name.trim().charAt(0).toUpperCase() : "?",
   );
-  // Proportional sizing per docs/design/v2/project/em-primitives.jsx:109,117.
   const radius = $derived(Math.max(5, size * 0.22));
   const monoFontSize = $derived(Math.max(9, size * 0.44));
   const dotSize = $derived(Math.max(6, Math.round(size * 0.26)));

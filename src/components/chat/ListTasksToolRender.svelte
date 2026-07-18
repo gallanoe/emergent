@@ -8,7 +8,6 @@
 
   let { tasks }: Props = $props();
 
-  // Minimal status glyphs per em-tool-calls.jsx:376-383.
   function statusGlyph(status: DisplayTask["status"]): string {
     switch (status) {
       case "completed":
