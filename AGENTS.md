@@ -133,6 +133,7 @@ Agents run as local host processes, so no Docker is required. Install at least o
 - Use Svelte 5 runes (`$state`, `$derived`, `$effect`) — not legacy reactive syntax.
 - Frontend stores use `.svelte.ts` extension for rune support.
 - Rust code must pass `clippy -- -D warnings` (warnings treated as errors).
+- Keep code comments sparse. Add one only when, in your judgment, the code's intent or behavior is non-obvious and is not already explained in the project documentation.
 - Always use `bun` to run scripts, never `npm`.
 - Stage specific files with git — never use `git add -A` or `git add .`.
 
