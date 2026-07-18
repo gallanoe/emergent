@@ -246,8 +246,7 @@ subtracts to recover per-turn deltas:
 `agent_definition_id`** inside the workspace's `WorkspaceUsageStore`. So usage
 accumulates _per agent definition per workspace_, folding together every
 thread/session that definition ever ran — not per thread. `apply_turn_delta` also
-pushes a per-turn record into a bounded `recent_turns` ring buffer (oldest evicted
-when full) and stamps a `last_turn_at` recency field.
+stamps a `last_turn_at` recency field.
 
 ### 6d. Persistence cadence & boot seeding
 
@@ -285,12 +284,7 @@ live `thread:turn-usage` events in via `applyDelta`. The real consumer is
   when `loadForWorkspace` re-reads the disk snapshot. Token counts stream live;
   cost lags until a workspace switch/reload.
 
-- **`recent_turns` is written but unused on the frontend.** The ring buffer is
-  serialized into `threads.json` and returned by `get_workspace_usage`, but the
-  frontend payload interface only declares `agents` — the ring buffer is currently
-  dead weight on the wire, reserved for a possible future per-turn UI. (The
-  `last_turn_at` recency stamp is parsed and held by the store but not yet
-  rendered.)
+- **`last_turn_at` is parsed and held by the store but not yet rendered.**
 
 - **Snapshots start empty on boot** (Section 5) — only the totals are persisted, so
   correct deltas depend on the agent reporting usage fresh for a reloaded session.

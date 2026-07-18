@@ -535,7 +535,6 @@ async fn turn_usage_recorder_updates_store_and_persists() {
         assert_eq!(snap.agents.len(), 1);
         assert_eq!(snap.agents[0].turn_count, 1);
         assert_eq!(snap.agents[0].total_tokens, 1480);
-        assert_eq!(snap.recent_turns.len(), 1);
     }
 
     // Persist to disk

@@ -1421,7 +1421,7 @@ impl ThreadManager {
     pub async fn seed_usage_from_dir(&self, workspace_id: &WorkspaceId, workspace_dir: &Path) {
         match Self::load_full_state_from_dir(workspace_dir).await {
             Ok(state) => {
-                if !state.usage.agents.is_empty() || !state.usage.recent_turns.is_empty() {
+                if !state.usage.agents.is_empty() {
                     let mut stores = self.usage_stores.write().await;
                     stores.insert(workspace_id.clone(), state.usage);
                 }

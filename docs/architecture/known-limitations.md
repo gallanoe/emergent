@@ -73,21 +73,7 @@ Cost therefore only enters the UI through the persisted snapshot: `get_workspace
 
 ---
 
-## 4. The `recent_turns` ring buffer is persisted and returned but never consumed
-
-**Current behavior.** `agent/usage_store.rs` maintains a per-workspace `recent_turns` ring buffer, capped at `RECENT_TURNS_CAP` (oldest evicted when full). It is serialized into `threads.json` and returned as part of `WorkspaceUsageStore` from `get_workspace_usage`.
-
-The frontend never reads it. `WorkspaceUsageStorePayload` (`stores/usage.svelte.ts`) declares only an `agents` array — no `recent_turns` field — so the data is deserialized-away and ignored.
-
-**Impact.** Every workspace's `threads.json` carries a capped buffer of turn records that nothing displays — extra write volume and disk footprint for no current benefit.
-
-> **Trade-off:** keeping the buffer now means a future "usage timeline / per-turn history" UI would already have data to render; deleting it would shrink `threads.json` immediately.
-
-**Possible direction.** Decide the intent: build the timeline UI that consumes `recent_turns`, or trim the field from the persisted schema and the `get_workspace_usage` result. If trimmed, bump the persistence schema version (see [Persistence & Usage](persistence-and-usage.md)).
-
----
-
-## 5. Per-agent system prompts are frontend-only / in-memory
+## 4. Per-agent system prompts are frontend-only / in-memory
 
 **Current behavior.** The UI lets you edit a per-agent system prompt, but it lives entirely in the frontend. `stores/app-state.svelte.ts` holds an `agentSystemPrompts` map, and `updateAgentSystemPrompt` only writes to it — its own comment: _"Display-only until `AgentDefinition` / `update_agent` gain a persisted system-prompt field."_
 
@@ -101,7 +87,7 @@ The backend `AgentDefinition` (`emergent-protocol`) has **no system-prompt field
 
 ---
 
-## 6. The task registry is a single global map keyed by short hex ids
+## 5. The task registry is a single global map keyed by short hex ids
 
 **Current behavior.** `task/registry.rs` stores every task, across every workspace, in one `HashMap`. Ids come from `generate_id()` — 4 random bytes rendered as 8 hex chars (32 bits of entropy). Workspace isolation is achieved purely by _filtering_: `list_tasks`, `find_unblocked_tasks`, and `delete_tasks_for_workspace` all match on `workspace_id`.
 
@@ -113,7 +99,7 @@ The backend `AgentDefinition` (`emergent-protocol`) has **no system-prompt field
 
 ---
 
-## 7. A failed blocker permanently stalls its dependents
+## 6. A failed blocker permanently stalls its dependents
 
 **Current behavior.** Task dependencies are enforced by `find_unblocked_tasks` (`task/registry.rs`), which returns a pending task only when **every** blocker is `is_completed()`:
 
@@ -137,8 +123,8 @@ The backend `AgentDefinition` (`emergent-protocol`) has **no system-prompt field
 ## See also
 
 - [Documentation Index](../README.md) — full docs map and reading order.
-- [Task & Swarm Coordination](task-and-swarm-coordination.md) — the task lifecycle, blocker semantics, and the MCP task tools as the coordination channel (items #6, #7).
-- [Persistence & Usage](persistence-and-usage.md) — what is and isn't persisted, id lengths, and the usage-recorder pipeline (items #3, #4, #6).
+- [Task & Swarm Coordination](task-and-swarm-coordination.md) — the task lifecycle, blocker semantics, and the MCP task tools as the coordination channel (items #5, #6).
+- [Persistence & Usage](persistence-and-usage.md) — what is and isn't persisted, id lengths, and the usage-recorder pipeline (items #3, #5).
 - [MCP Server & Auth](mcp-server-and-auth.md) — the loopback + bearer-token model whose safety depends on the local-process design (items #1, #2).
 - [Agent Lifecycle & ACP](agent-lifecycle-and-acp.md) — `LocalProcessSpawner`, `$HOME` isolation, credential symlinks, and the permission callback (items #1, #2).
 - [IPC & Events Reference](../reference/ipc-and-events.md) — the command/event catalog.

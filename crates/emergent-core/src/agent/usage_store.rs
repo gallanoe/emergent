@@ -1,12 +1,6 @@
 use serde::{Deserialize, Serialize};
 
 // ---------------------------------------------------------------------------
-// Public constants
-// ---------------------------------------------------------------------------
-
-pub const RECENT_TURNS_CAP: usize = 1000;
-
-// ---------------------------------------------------------------------------
 // Persisted workspace envelope (threads.json v1)
 // ---------------------------------------------------------------------------
 
@@ -49,33 +43,12 @@ pub struct AgentUsageTotals {
 }
 
 // ---------------------------------------------------------------------------
-// Individual turn event (ring buffer entry)
-// ---------------------------------------------------------------------------
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct TurnEvent {
-    pub agent_definition_id: String,
-    pub at: String,
-    pub input_tokens: u64,
-    pub output_tokens: u64,
-    #[serde(default)]
-    pub cached_read_tokens: u64,
-    #[serde(default)]
-    pub cached_write_tokens: u64,
-    #[serde(default)]
-    pub thought_tokens: u64,
-    pub total_tokens: u64,
-}
-
-// ---------------------------------------------------------------------------
 // Workspace-level store
 // ---------------------------------------------------------------------------
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct WorkspaceUsageStore {
     pub agents: Vec<AgentUsageTotals>,
-    /// Ring buffer capped at RECENT_TURNS_CAP. Oldest entry evicted when full.
-    pub recent_turns: Vec<TurnEvent>,
 }
 
 // ---------------------------------------------------------------------------
@@ -156,19 +129,4 @@ pub fn apply_turn_delta(
     entry.total_tokens += delta.total_tokens;
     entry.turn_count += 1;
     entry.last_turn_at = Some(at.to_string());
-
-    // Ring buffer: evict oldest when at cap
-    if store.recent_turns.len() >= RECENT_TURNS_CAP {
-        store.recent_turns.remove(0);
-    }
-    store.recent_turns.push(TurnEvent {
-        agent_definition_id: agent_id.to_string(),
-        at: at.to_string(),
-        input_tokens: delta.input_tokens,
-        output_tokens: delta.output_tokens,
-        cached_read_tokens: delta.cached_read_tokens,
-        cached_write_tokens: delta.cached_write_tokens,
-        thought_tokens: delta.thought_tokens,
-        total_tokens: delta.total_tokens,
-    });
 }

@@ -1,5 +1,5 @@
 use emergent_core::agent::usage_store::{
-    apply_turn_delta, PersistedWorkspaceState, TurnDelta, WorkspaceUsageStore, RECENT_TURNS_CAP,
+    apply_turn_delta, PersistedWorkspaceState, TurnDelta, WorkspaceUsageStore,
 };
 use emergent_core::agent::thread_manager::ThreadMapping;
 
@@ -50,26 +50,6 @@ fn multiple_agents_tracked_independently() {
 }
 
 #[test]
-fn ring_buffer_evicts_oldest_at_cap() {
-    let mut store = WorkspaceUsageStore::default();
-
-    // Fill buffer to cap
-    for i in 0..RECENT_TURNS_CAP {
-        let ts = format!("2026-04-25T00:{:02}:00Z", i % 60);
-        apply_turn_delta(&mut store, "agent-a", &delta(1, 1, 2), &ts);
-    }
-    assert_eq!(store.recent_turns.len(), RECENT_TURNS_CAP);
-
-    // One more should evict the oldest (index 0)
-    apply_turn_delta(&mut store, "agent-a", &delta(999, 1, 1000), "2026-04-25T99:00:00Z");
-    assert_eq!(store.recent_turns.len(), RECENT_TURNS_CAP);
-
-    // The last entry should be the one we just pushed
-    let last = store.recent_turns.last().unwrap();
-    assert_eq!(last.input_tokens, 999);
-}
-
-#[test]
 fn json_roundtrip_workspace_usage_store() {
     let mut store = WorkspaceUsageStore::default();
     apply_turn_delta(&mut store, "agent-a", &delta(1200, 280, 1480), "2026-04-25T10:34:00Z");
@@ -83,7 +63,6 @@ fn json_roundtrip_workspace_usage_store() {
     assert_eq!(entry.input_tokens, 1200);
     assert_eq!(entry.output_tokens, 280);
     assert_eq!(entry.total_tokens, 1480);
-    assert_eq!(restored.recent_turns.len(), 1);
 }
 
 #[test]
@@ -124,6 +103,8 @@ fn v1_envelope_parses_correctly() {
                 "turn_count": 1,
                 "last_turn_at": "2026-04-25T10:34:00Z"
             }],
+            // Written by an older build. The field no longer exists on
+            // WorkspaceUsageStore; serde must ignore it rather than fail.
             "recent_turns": []
         }
     })
@@ -134,4 +115,41 @@ fn v1_envelope_parses_correctly() {
     assert_eq!(state.threads.len(), 1);
     assert_eq!(state.usage.agents.len(), 1);
     assert_eq!(state.usage.agents[0].input_tokens, 1200);
+}
+
+/// Upgrade guard: a `threads.json` written by a build that still had the
+/// `recent_turns` ring buffer must keep parsing as a v1 envelope with its usage
+/// totals intact. If `recent_turns` ever caused a parse failure, the two-attempt
+/// loader would fall through to the v0 bare-array branch and silently discard
+/// every user's accumulated tokens and cost.
+#[test]
+fn old_file_with_populated_recent_turns_preserves_usage() {
+    let raw = r#"{
+      "schema_version": 1,
+      "threads": [{"thread_id":"t1","agent_definition_id":"a1","acp_session_id":"s1","task_id":null}],
+      "usage": {
+        "agents": [{
+          "agent_definition_id": "a1",
+          "input_tokens": 1200, "output_tokens": 280, "total_tokens": 1480,
+          "turn_count": 7, "last_turn_at": "2026-04-25T10:34:00Z",
+          "cost_amount": 1.25, "cost_currency": "USD"
+        }],
+        "recent_turns": [
+          {"agent_definition_id":"a1","at":"2026-04-25T10:34:00Z",
+           "input_tokens":1200,"output_tokens":280,"total_tokens":1480}
+        ]
+      }
+    }"#;
+
+    let state: PersistedWorkspaceState = serde_json::from_str(raw).unwrap();
+
+    // v1, not the v0 fallback.
+    assert_eq!(state.schema_version, 1);
+    assert_eq!(state.threads.len(), 1);
+
+    assert_eq!(state.usage.agents.len(), 1);
+    let agent = &state.usage.agents[0];
+    assert_eq!(agent.turn_count, 7);
+    assert_eq!(agent.total_tokens, 1480);
+    assert_eq!(agent.cost_amount, 1.25);
 }
