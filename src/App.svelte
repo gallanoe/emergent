@@ -125,6 +125,11 @@
 
     return () => {
       window.removeEventListener("keydown", onGlobalKeydown);
+      // Detaches the Tauri listeners owned by appState, agentStore, and
+      // usageStore. A no-op for the app's real lifetime (App unmounts only on
+      // shutdown), but it keeps an HMR reload or a remount from stacking a
+      // second set of listeners on the same events.
+      appState.teardown();
     };
   });
 

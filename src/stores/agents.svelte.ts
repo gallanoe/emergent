@@ -188,6 +188,8 @@ function createAgentStore() {
   let threads: Record<string, ThreadState> = $state({});
   let listenerCleanup: UnlistenFn[] = [];
   let listenersReady = false;
+  /** Bumped by teardown so an in-flight setupListeners knows to abandon. */
+  let setupEpoch = 0;
 
   function getThread(threadId: string): ThreadState | undefined {
     return threads[threadId];
@@ -199,6 +201,7 @@ function createAgentStore() {
 
   const chunkBuffers: Record<string, ChunkBuffer> = {};
   let flushScheduled = false;
+  let flushHandle: number | null = null;
 
   function flushChunkBuffers() {
     for (const threadId of Object.keys(chunkBuffers)) {
@@ -235,6 +238,16 @@ function createAgentStore() {
       delete chunkBuffers[key];
     }
     flushScheduled = false;
+    // This runs both as the rAF callback and as a direct synchronous flush. In
+    // the synchronous case a frame is still queued, and simply nulling the
+    // handle would strand it: the stale callback would later clear whatever
+    // handle had been scheduled in the meantime, so teardown would have nothing
+    // left to cancel. Cancelling first keeps "flushHandle is the only live
+    // frame" true. Cancelling the frame we are currently running is a no-op.
+    if (flushHandle !== null) {
+      cancelAnimationFrame(flushHandle);
+      flushHandle = null;
+    }
   }
 
   // ── Message assembly ──────────────────────────────────────────
@@ -286,7 +299,7 @@ function createAgentStore() {
 
     if (!flushScheduled) {
       flushScheduled = true;
-      requestAnimationFrame(flushChunkBuffers);
+      flushHandle = requestAnimationFrame(flushChunkBuffers);
     }
   }
 
@@ -631,68 +644,101 @@ function createAgentStore() {
   async function setupListeners() {
     if (listenersReady) return;
 
-    listenerCleanup.push(
+    // Collect into a local array and commit only at the end. `listen()` is
+    // async, so a teardown can land mid-setup; without the epoch check below
+    // the remaining listeners would still register and the store would be left
+    // with a *partial* subscription that `listenersReady` then hides.
+    const myEpoch = setupEpoch;
+    const pending: UnlistenFn[] = [];
+
+    pending.push(
       await listen<MessageChunkPayload>("thread:message-chunk", (e) =>
         handleMessageChunk(e.payload),
       ),
     );
-    listenerCleanup.push(
+    pending.push(
       await listen<ToolCallEventPayload>("thread:tool-call-update", (e) =>
         handleToolCallUpdate(e.payload),
       ),
     );
-    listenerCleanup.push(
+    pending.push(
       await listen<PromptCompletePayload>("thread:prompt-complete", (e) =>
         handlePromptComplete(e.payload),
       ),
     );
-    listenerCleanup.push(
-      await listen<ThreadErrorPayload>("thread:error", (e) => handleError(e.payload)),
-    );
-    listenerCleanup.push(
+    pending.push(await listen<ThreadErrorPayload>("thread:error", (e) => handleError(e.payload)));
+    pending.push(
       await listen<StatusChangePayload>("thread:status-change", (e) =>
         handleStatusChange(e.payload),
       ),
     );
-    listenerCleanup.push(
+    pending.push(
       await listen<SessionReadyPayload>("thread:session-ready", (e) =>
         handleSessionReady(e.payload),
       ),
     );
-    listenerCleanup.push(
+    pending.push(
       await listen<UserMessagePayload>("thread:user-message", (e) => handleUserMessage(e.payload)),
     );
-    listenerCleanup.push(
+    pending.push(
       await listen<ConfigUpdatePayload>("thread:config-update", (e) =>
         handleConfigUpdate(e.payload),
       ),
     );
-    listenerCleanup.push(
+    pending.push(
       await listen<NudgeDeliveredPayload>("thread:nudge-delivered", (e) =>
         handleNudgeDelivered(e.payload),
       ),
     );
-    listenerCleanup.push(
+    pending.push(
       await listen<SystemMessagePayload>("thread:system-message", (e) =>
         handleSystemMessage(e.payload),
       ),
     );
-    listenerCleanup.push(
+    pending.push(
       await listen<ThreadTokenUsagePayload>("thread:token-usage", (e) =>
         handleTokenUsage(e.payload),
       ),
     );
-    listenerCleanup.push(
+    pending.push(
       await listen<QueueChangedPayload>("thread:queue-changed", (e) =>
         handleQueueChanged(e.payload),
       ),
     );
-    listenerCleanup.push(
+    pending.push(
       await listen<TurnDispatchedPayload>("thread:turn-dispatched", (e) =>
         handleTurnDispatched(e.payload),
       ),
     );
+    if (myEpoch !== setupEpoch) {
+      // Torn down while we were awaiting — drop what we registered.
+      for (const unlisten of pending) unlisten();
+      return;
+    }
+
+    listenerCleanup = pending;
     listenersReady = true;
+  }
+
+  /**
+   * Detach every Tauri listener and cancel any pending chunk flush.
+   *
+   * Resets `listenersReady` so a later `setupListeners()` re-subscribes — without
+   * this, an HMR reload or a remounting test would stack a second set of
+   * listeners on the same events and double-apply every notification.
+   */
+  function teardown() {
+    setupEpoch += 1;
+    for (const unlisten of listenerCleanup) unlisten();
+    listenerCleanup = [];
+    listenersReady = false;
+
+    if (flushHandle !== null) {
+      cancelAnimationFrame(flushHandle);
+      flushHandle = null;
+    }
+    flushScheduled = false;
+    for (const key of Object.keys(chunkBuffers)) delete chunkBuffers[key];
   }
 
   // ── Public API ────────────────────────────────────────────────
@@ -1147,6 +1193,7 @@ function createAgentStore() {
     toDisplayThread,
     getThreadsForAgent,
     setupListeners,
+    teardown,
     registerPersistedThread,
     spawnThread,
     sendPrompt,

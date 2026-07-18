@@ -63,6 +63,8 @@ function createAppState() {
   let initializePromise: Promise<void> | null = null;
   let listenerCleanup: UnlistenFn[] = [];
   let listenersReady = false;
+  /** Bumped by teardown so an in-flight setupListeners knows to abandon. */
+  let setupEpoch = 0;
 
   // ── Initialization ────────────────────────────────────────────
 
@@ -210,13 +212,18 @@ function createAppState() {
   async function setupListeners() {
     if (listenersReady) return;
 
-    listenerCleanup.push(
+    // See the matching note in agents.svelte.ts: `listen()` is async, so commit
+    // the collected unlisteners only if no teardown landed while we awaited.
+    const myEpoch = setupEpoch;
+    const pending: UnlistenFn[] = [];
+
+    pending.push(
       await listen<TaskCreatedPayload>("task:created", (e) => {
         tasks[e.payload.task.id] = e.payload.task;
       }),
     );
 
-    listenerCleanup.push(
+    pending.push(
       await listen<TaskUpdatedPayload>("task:updated", (e) => {
         const task = e.payload.task;
         tasks[task.id] = task;
@@ -230,7 +237,32 @@ function createAppState() {
       }),
     );
 
+    if (myEpoch !== setupEpoch) {
+      for (const unlisten of pending) unlisten();
+      return;
+    }
+
+    listenerCleanup = pending;
     listenersReady = true;
+  }
+
+  /**
+   * Tear down every listener this store owns, then the two stores whose
+   * listeners `initialize()` sets up — so teardown mirrors setup from one
+   * entry point.
+   *
+   * Also resets `initializePromise` so a later `initialize()` re-runs rather
+   * than resolving instantly against the previous run's promise.
+   */
+  function teardown() {
+    setupEpoch += 1;
+    for (const unlisten of listenerCleanup) unlisten();
+    listenerCleanup = [];
+    listenersReady = false;
+    initializePromise = null;
+
+    agentStore.teardown();
+    usageStore.teardown();
   }
 
   async function refreshKnownAgents() {
@@ -516,6 +548,7 @@ function createAppState() {
       return getSelectedWorkspace();
     },
     initialize,
+    teardown,
     createWorkspace,
     toggleWorkspaceCollapsed,
     updateWorkspace,
