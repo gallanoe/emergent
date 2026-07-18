@@ -22,6 +22,22 @@
   let showCreateWorkspace = $state(false);
   let searchOpen = $state(false);
 
+  // Task-sidebar layout is shared by the tasks, thread-list, and chat views:
+  // a single content column, plus a 320px sidebar column when a sidebar is open.
+  let taskGridColumns = $derived(
+    appState.taskSidebarMode ? "1fr 320px" : "1fr",
+  );
+
+  // id -> display name, for the task views that render assignees.
+  let agentNames = $derived(
+    Object.fromEntries(
+      Object.values(appState.agentDefinitionsMap ?? {}).map((d) => [
+        d.id,
+        d.name,
+      ]),
+    ),
+  );
+
   // Push-to-composer channel for the Edit-queue action.
   // Incrementing seq triggers the $effect in ChatInput, which sets the
   // textarea value to `text` and focuses it. The item is also removed from
@@ -120,6 +136,24 @@
     }
   }
 </script>
+
+<!-- The detail sidebar is identical across the tasks, thread-list, and chat
+     views, so all three render this snippet rather than repeating the props. -->
+{#snippet taskDetailSidebar()}
+  {#if appState.taskSidebarMode === "detail" && appState.selectedTaskId}
+    {@const task = appState.tasks[appState.selectedTaskId]}
+    {#if task}
+      <TaskDetailSidebar
+        {task}
+        allTasks={appState.tasks}
+        {agentNames}
+        onClose={() => appState.closeTaskSidebar()}
+        onSelectTask={(id) => appState.selectTask(id)}
+        onNavigateToSession={(threadId) => appState.selectThread(threadId)}
+      />
+    {/if}
+  {/if}
+{/snippet}
 
 <div class="grid h-screen grid-cols-[240px_1fr]">
   <InnerSidebar
@@ -234,42 +268,17 @@
     {:else if appState.activeView === "tasks" && appState.selectedSwarmId}
       <div
         class="grid min-h-0 flex-1 min-w-0"
-        style="grid-template-columns: {appState.taskSidebarMode
-          ? '1fr 320px'
-          : '1fr'};"
+        style="grid-template-columns: {taskGridColumns};"
       >
         <TaskTableView
           tasks={appState.workspaceTasks}
           selectedTaskId={appState.selectedTaskId}
-          agentNames={Object.fromEntries(
-            Object.values(appState.agentDefinitionsMap ?? {}).map((d) => [
-              d.id,
-              d.name,
-            ]),
-          )}
+          {agentNames}
           onSelectTask={(id) => appState.selectTask(id)}
           onNavigateToSession={(threadId) => appState.selectThread(threadId)}
           onCreateTask={() => appState.openCreateTask()}
         />
-        {#if appState.taskSidebarMode === "detail" && appState.selectedTaskId}
-          {@const task = appState.tasks[appState.selectedTaskId]}
-          {#if task}
-            <TaskDetailSidebar
-              {task}
-              allTasks={appState.tasks}
-              agentNames={Object.fromEntries(
-                Object.values(appState.agentDefinitionsMap ?? {}).map((d) => [
-                  d.id,
-                  d.name,
-                ]),
-              )}
-              onClose={() => appState.closeTaskSidebar()}
-              onSelectTask={(id) => appState.selectTask(id)}
-              onNavigateToSession={(threadId) =>
-                appState.selectThread(threadId)}
-            />
-          {/if}
-        {:else if appState.taskSidebarMode === "create"}
+        {#if appState.taskSidebarMode === "create"}
           <CreateTaskSidebar
             agentDefinitions={Object.values(appState.agentDefinitionsMap ?? {})}
             existingTasks={appState.workspaceTasks}
@@ -285,15 +294,15 @@
               appState.closeTaskSidebar();
             }}
           />
+        {:else}
+          {@render taskDetailSidebar()}
         {/if}
       </div>
     {:else if appState.activeView === "agent-threads" && appState.selectedAgentDef}
       {@const def = appState.selectedAgentDef}
       <div
         class="grid min-h-0 flex-1"
-        style="grid-template-columns: {appState.taskSidebarMode
-          ? '1fr 320px'
-          : '1fr'};"
+        style="grid-template-columns: {taskGridColumns};"
       >
         <ThreadListView
           agentDefinition={def}
@@ -311,25 +320,7 @@
           onDeleteThread={(id) => appState.deleteThread(id)}
           onDeleteAgent={() => appState.deleteAgentDefinition(def.id)}
         />
-        {#if appState.taskSidebarMode === "detail" && appState.selectedTaskId}
-          {@const task = appState.tasks[appState.selectedTaskId]}
-          {#if task}
-            <TaskDetailSidebar
-              {task}
-              allTasks={appState.tasks}
-              agentNames={Object.fromEntries(
-                Object.values(appState.agentDefinitionsMap ?? {}).map((d) => [
-                  d.id,
-                  d.name,
-                ]),
-              )}
-              onClose={() => appState.closeTaskSidebar()}
-              onSelectTask={(id) => appState.selectTask(id)}
-              onNavigateToSession={(threadId) =>
-                appState.selectThread(threadId)}
-            />
-          {/if}
-        {/if}
+        {@render taskDetailSidebar()}
       </div>
     {:else if appState.activeView === "agent-chat" && appState.selectedThread}
       {@const thread = appState.selectedThread}
@@ -337,10 +328,8 @@
         ? (appState.tasks[thread.taskId] ?? null)
         : null}
       <div
-        class="flex min-h-0 flex-1 min-w-0"
-        style="display:grid; grid-template-columns: {appState.taskSidebarMode
-          ? '1fr 320px'
-          : '1fr'};"
+        class="grid min-h-0 flex-1 min-w-0"
+        style="grid-template-columns: {taskGridColumns};"
       >
         <div class="relative flex min-h-0 min-w-0 flex-col">
           {#if task}
@@ -380,25 +369,7 @@
             }}
           />
         </div>
-        {#if appState.taskSidebarMode === "detail" && appState.selectedTaskId}
-          {@const task = appState.tasks[appState.selectedTaskId]}
-          {#if task}
-            <TaskDetailSidebar
-              {task}
-              allTasks={appState.tasks}
-              agentNames={Object.fromEntries(
-                Object.values(appState.agentDefinitionsMap ?? {}).map((d) => [
-                  d.id,
-                  d.name,
-                ]),
-              )}
-              onClose={() => appState.closeTaskSidebar()}
-              onSelectTask={(id) => appState.selectTask(id)}
-              onNavigateToSession={(threadId) =>
-                appState.selectThread(threadId)}
-            />
-          {/if}
-        {/if}
+        {@render taskDetailSidebar()}
       </div>
     {:else}
       <div class="relative flex min-h-0 min-w-0 flex-1 flex-col">
