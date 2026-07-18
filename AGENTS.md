@@ -136,6 +136,36 @@ Agents run as local host processes, so no Docker is required. Install at least o
 - Always use `bun` to run scripts, never `npm`.
 - Stage specific files with git — never use `git add -A` or `git add .`.
 
+### Commit Messages
+
+This repo follows [Conventional Commits](https://www.conventionalcommits.org/). Match the existing history — `git log --oneline -30` is the fastest reference.
+
+```
+type(scope): imperative subject under ~72 chars
+
+Body explaining why the change was made and what it affects, wrapped
+at 72 columns. Roughly 90% of commits here have one — include it
+unless the subject is genuinely self-explanatory.
+
+Co-Authored-By: Name <email>
+```
+
+**Types** — use the ones already in the history: `feat`, `fix`, `refactor`, `chore`, `docs`, `test`, `style`, `ci`. Don't invent new ones (past strays like `ui:` and `deps:` should have been `feat(ui):` and `chore(deps):`).
+
+**Scopes** are optional but common. Prefer an established one over a new coinage: `frontend`, `chat`, `agent`, `acp`, `core`, `stores`, `workspace`, `task`, `queue`, `usage`, `tauri`, `sidebar`, `e2e`. Use the subsystem, not the file name.
+
+**Subjects** — imperative mood, lowercase after the colon, no trailing period. Say what changed _and_ why it matters, not just the file touched. The best subjects in this history carry a contrast or an outcome:
+
+- `fix(stores): tear down event listeners instead of accumulating them`
+- `refactor(usage): remove the unconsumed recent_turns ring buffer`
+- `fix(demo): populate the task record so by-id lookups resolve`
+
+Compare to a weak version of the same change — `fix(stores): update listener code` — which says nothing a diff wouldn't.
+
+**Bodies** should explain reasoning a reader can't recover from the diff: why this approach, what was deliberately left alone, and any non-obvious side effects. Note load-bearing constraints you discovered, so the next person doesn't re-derive them.
+
+**Trailers** — add `Co-Authored-By:` for agent-assisted commits. No commit in this history has used a `!` breaking-change marker; if you need one, flag it in the body too.
+
 ## Pre-Commit Checks
 
 Run all of the following before committing:
