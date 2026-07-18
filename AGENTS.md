@@ -44,7 +44,6 @@ src/                          # Frontend (Svelte 5 + TypeScript)
 │   ├── usage.svelte.ts       # Per-workspace token/cost usage
 │   ├── theme.svelte.ts       # Theme persistence
 │   ├── mock-data.svelte.ts   # Demo/test data helpers
-│   ├── mock-token-metrics.svelte.ts # Demo/test token-usage fixtures
 │   └── types.ts              # Shared display types
 ├── lib/                      # Utility functions (render-markdown, highlight, tool-call parsing, ...)
 │   └── primitives/           # Shared UI primitives (Button, Input, Chip, ConfirmDialog, StatusDot, TaskStatusPill, ...)

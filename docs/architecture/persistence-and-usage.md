@@ -274,8 +274,7 @@ guards matter: an `activeLoad` guard discards superseded loads on rapid switchin
 and an `eventBuffer` holds live events arriving during the async invoke and replays
 them on top so a stale read can't overwrite live data. A separate listener folds
 live `thread:turn-usage` events in via `applyDelta`. The real consumer is
-`OverviewView.svelte`; `mock-token-metrics.svelte.ts` is demo-only and not part of
-this pipeline.
+`OverviewView.svelte`.
 
 ---
 

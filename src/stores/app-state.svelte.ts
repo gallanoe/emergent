@@ -190,7 +190,6 @@ function createAppState() {
 
   async function initialize() {
     if (demoMode) {
-      mockState.seedDemoMockMetrics();
       const firstWs = (mockState.swarms as unknown as DisplayWorkspace[])[0];
       if (firstWs && !selectedWorkspaceId) {
         selectedWorkspaceId = firstWs.id;
