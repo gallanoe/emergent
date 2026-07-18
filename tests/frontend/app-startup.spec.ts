@@ -18,7 +18,6 @@ const emptyStateMock = `
       if (cmd.startsWith("plugin:event|")) return Promise.resolve(args && args.handler);
 
       const responses = {
-        get_daemon_status: "connected",
         detect_agents: [],
         detect_docker: { docker_available: true, docker_version: "27.0.0" },
         known_agents: [

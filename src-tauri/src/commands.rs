@@ -11,11 +11,9 @@ use emergent_protocol::{
     WorkspaceInfo, WorkspaceSummary,
 };
 
+/// Agent availability is host-wide — it does not vary by workspace.
 #[tauri::command]
-pub async fn known_agents(workspace_id: String) -> Result<Vec<KnownAgent>, String> {
-    // Agent availability is host-wide now; workspace_id is kept for the existing
-    // IPC contract (the frontend invokes with `workspaceId`) but is unused.
-    let _ = workspace_id;
+pub async fn known_agents() -> Result<Vec<KnownAgent>, String> {
     Ok(detect::known_agents_on_host())
 }
 
@@ -210,11 +208,6 @@ pub async fn shutdown_thread(
     thread_id: String,
 ) -> Result<(), String> {
     manager.shutdown_thread(&thread_id).await
-}
-
-#[tauri::command]
-pub async fn get_daemon_status() -> Result<String, String> {
-    Ok("connected".into())
 }
 
 #[tauri::command]

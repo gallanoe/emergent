@@ -205,7 +205,7 @@ An isolated `$HOME` breaks credential lookups that key off `$HOME`. Two best-eff
 
 `known_agents_on_host()` returns a fixed table of known agent CLIs (Claude Code, Codex, Gemini, Kiro, OpenCode) with per-agent availability computed by `which_in` against the _enriched_ PATH — so detection sees the same dirs the spawned agents will. Claude Code and Codex run via `bunx` and require both `bunx` and their provider binary on PATH; the rest are self-contained. See the `KNOWN_AGENTS` table for the exact commands and provider ids.
 
-> **Gotcha — the `known_agents` Tauri command ignores its `workspace_id` argument.** The set is host-global; the arg is a vestige of an earlier design. This table is a _suggested_ command surface for the UI — an `AgentDefinition.cli` can be any command string, not just these rows.
+> **Gotcha — the `known_agents` Tauri command is host-global,** not workspace-scoped. This table is a _suggested_ command surface for the UI — an `AgentDefinition.cli` can be any command string, not just these rows.
 
 ---
 

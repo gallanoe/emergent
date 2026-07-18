@@ -169,7 +169,6 @@
     onSelectAgent={(id) => appState.selectAgent(id)}
     onCreateAgent={() => appState.startCreatingAgent()}
     onNewThread={handleNewThread}
-    onOpenSwarm={() => appState.showOverview()}
     onOpenOverview={() => appState.showOverview()}
     overviewActive={appState.activeView === "overview"}
     onOpenTasks={() => appState.showTasks()}

@@ -135,7 +135,7 @@ function createAppState() {
 
       // Agent availability is detected on the host PATH (workspace-independent),
       // so refresh once at startup regardless of whether any workspace exists.
-      await refreshKnownAgents(workspaces[0]?.id ?? "");
+      await refreshKnownAgents();
     } catch {
       // No workspaces yet
     }
@@ -233,9 +233,9 @@ function createAppState() {
     listenersReady = true;
   }
 
-  async function refreshKnownAgents(workspaceId: string) {
+  async function refreshKnownAgents() {
     try {
-      knownAgents = await invoke<KnownAgent[]>("known_agents", { workspaceId });
+      knownAgents = await invoke<KnownAgent[]>("known_agents");
     } catch {
       knownAgents = [];
     }
@@ -256,7 +256,7 @@ function createAppState() {
 
     // Re-detect available agent CLIs (host-wide) so the agent creator is
     // populated even on a fresh launch where no workspace existed at startup.
-    await refreshKnownAgents(id);
+    await refreshKnownAgents();
 
     return id;
   }

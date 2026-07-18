@@ -93,15 +93,6 @@ Live events are tag-stripped payloads. `get_history` returns `Vec<Notification>`
 
 ---
 
-## Legacy stubs
-
-Vestiges of an earlier **separate-daemon / per-workspace** architecture that no longer exists.
-
-- **`get_daemon_status`** — always returns the hardcoded `"connected"`. There is no daemon to query; there is no production frontend caller (it appears only in Playwright mock tables). Fully dead.
-- **`known_agents(workspace_id)`** — ignores `workspace_id` and returns host-wide availability (`detect::known_agents_on_host()`). Agent availability is host-wide under the local-process model; the param survives only for the frontend's existing `{ workspaceId }` call shape.
-
-**Gotcha:** build nothing new on either. A "connected" daemon status is meaningless, and passing a real `workspace_id` to `known_agents` changes nothing.
-
 ---
 
 ## Where the full lists live

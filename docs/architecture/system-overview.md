@@ -11,7 +11,7 @@ Emergent is a Tauri 2 desktop app that runs multiple LLM coding agents in parall
 Two claims in the repo's top-level `CLAUDE.md` and `README.md` are **stale**, and are corrected here as canonical:
 
 1. **There are no containers.** Despite prose describing "per-workspace Docker containers driven over `docker exec`", the shipping code uses no Docker anywhere — no `bollard` dependency, no `docker exec`, no container module under `workspace/`. Each agent is a **local host process**; terminals are host PTYs.
-2. **There is no separate daemon.** The entire backend is embedded in the Tauri app. Any "daemon" wording in the code (the `get_daemon_status` IPC command, "daemon-to-client" doc comments) is a **legacy stub** from an earlier architecture, not a running process.
+2. **There is no separate daemon.** The entire backend is embedded in the Tauri app. Any residual "daemon" wording in the code (e.g. "daemon-to-client" doc comments) is vestigial phrasing from an earlier architecture, not a running process.
 
 Docker is mentioned in these docs only to say it is **not** used. If you arrived from the README expecting containers, stop reasoning about them — the `$HOME`-isolation story below replaces them entirely.
 

@@ -113,22 +113,7 @@ The backend `AgentDefinition` (`emergent-protocol`) has **no system-prompt field
 
 ---
 
-## 7. Legacy "daemon" IPC stubs remain (embedded model is canonical)
-
-**Current behavior.** Emergent has no separate daemon — the backend is embedded directly in the Tauri app ([System Overview](system-overview.md)). Two IPC handlers survive from an earlier separate-process design and are now stubs:
-
-- `get_daemon_status` unconditionally returns `"connected"`. It reflects nothing about the system.
-- `known_agents(workspace_id)` ignores its argument. Agent availability is host-wide (`detect::known_agents_on_host()`); the parameter is kept only to satisfy the IPC contract the frontend calls with.
-
-**Impact.** These are honeypots for confusion: a reader might infer there is a daemon to health-check, or that `known_agents` is workspace-scoped. Neither is true.
-
-> **Why:** they preserve the frontend's existing `invoke` call sites without a coordinated frontend change. Removing them would require touching the callers.
-
-**Possible direction.** Treat the embedded-in-Tauri model as canonical (this doc set does). Either delete `get_daemon_status` and drop the unused `workspace_id` param from `known_agents` (coordinated with the frontend), or leave them as documented legacy stubs. See the legacy-stub notes in the [IPC & Events Reference](../reference/ipc-and-events.md).
-
----
-
-## 8. A failed blocker permanently stalls its dependents
+## 7. A failed blocker permanently stalls its dependents
 
 **Current behavior.** Task dependencies are enforced by `find_unblocked_tasks` (`task/registry.rs`), which returns a pending task only when **every** blocker is `is_completed()`:
 
@@ -152,10 +137,10 @@ The backend `AgentDefinition` (`emergent-protocol`) has **no system-prompt field
 ## See also
 
 - [Documentation Index](../README.md) — full docs map and reading order.
-- [Task & Swarm Coordination](task-and-swarm-coordination.md) — the task lifecycle, blocker semantics, and the MCP task tools as the coordination channel (items #6, #8).
+- [Task & Swarm Coordination](task-and-swarm-coordination.md) — the task lifecycle, blocker semantics, and the MCP task tools as the coordination channel (items #6, #7).
 - [Persistence & Usage](persistence-and-usage.md) — what is and isn't persisted, id lengths, and the usage-recorder pipeline (items #3, #4, #6).
 - [MCP Server & Auth](mcp-server-and-auth.md) — the loopback + bearer-token model whose safety depends on the local-process design (items #1, #2).
 - [Agent Lifecycle & ACP](agent-lifecycle-and-acp.md) — `LocalProcessSpawner`, `$HOME` isolation, credential symlinks, and the permission callback (items #1, #2).
-- [IPC & Events Reference](../reference/ipc-and-events.md) — the command/event catalog, including the legacy stubs (item #7).
+- [IPC & Events Reference](../reference/ipc-and-events.md) — the command/event catalog.
   </content>
   </invoke>

@@ -74,7 +74,6 @@ const mockScript = `
       }
 
       const responses = {
-        get_daemon_status: "connected",
         detect_agents: [],
         list_workspaces: [
           {

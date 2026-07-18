@@ -9,7 +9,7 @@ Emergent is a Tauri 2 desktop app that runs multiple LLM coding agents in parall
 **The shipping architecture runs each agent as a local host process. There is no Docker, no containers, no `bollard`, and no `docker exec` anywhere in the codebase.**
 
 - **What isolation actually is:** each agent gets its own `$HOME` (a directory under `~/.emergent/<workspace-id>/agents/<agent>/`), with the real macOS **Keychain** and `~/.codex/auth.json` **symlinked in** so OAuth/credential flows still work. Isolation is per-agent `$HOME`, not per-workspace container.
-- **The backend is embedded in the Tauri app** — there is no separate daemon. Any "daemon" references in code (e.g. `get_daemon_status` hardcoding `"connected"`) are legacy IPC-contract stubs; treat the embedded-in-Tauri model as canonical.
+- **The backend is embedded in the Tauri app** — there is no separate daemon. Treat the embedded-in-Tauri model as canonical.
 
 > **Gotcha — historical drift.** Earlier `CLAUDE.md`, `AGENTS.md`, and the top-level `README.md` described per-workspace Docker containers, a `bollard` dependency, `container.rs`, and `docker exec`. Wherever that container-era vocabulary survives, **treat it as stale** — the docs in _this_ directory are authoritative, and Docker is a **non-goal**, not a hidden dependency. Verified against source: agents are spawned by `LocalProcessSpawner` (`agent/spawner.rs`); terminals are host PTYs via `portable_pty` (`workspace/terminal.rs`); no `bollard`, `docker exec`, or `container.rs` exist.
 

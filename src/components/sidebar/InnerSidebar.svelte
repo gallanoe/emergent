@@ -24,7 +24,7 @@
     onSelectAgent: (id: string) => void;
     onCreateAgent: () => void;
     onNewThread: () => void;
-    onOpenSwarm: () => void;
+    /** Opens the overview: used by both the nav entry and the workspace-name zone. */
     onOpenOverview: () => void;
     onOpenTasks: () => void;
     onOpenTerminal: () => void;
@@ -47,7 +47,6 @@
     onSelectAgent,
     onCreateAgent,
     onNewThread,
-    onOpenSwarm,
     onOpenOverview,
     onOpenTasks,
     onOpenTerminal,
@@ -119,7 +118,7 @@
         {activeView === 'overview'
         ? 'bg-bg-selected text-fg-heading hover:brightness-[0.99]'
         : 'text-fg-default hover:bg-bg-hover'}"
-      onclick={onOpenSwarm}
+      onclick={onOpenOverview}
     >
       <span
         class="inline-flex w-[18px] justify-center {activeView === 'overview'

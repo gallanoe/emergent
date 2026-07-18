@@ -47,7 +47,6 @@ const baseProps = (overrides: Record<string, unknown> = {}) => ({
   onSelectAgent: (overrides.onSelectAgent as (id: string) => void) ?? (() => {}),
   onCreateAgent: (overrides.onCreateAgent as () => void) ?? (() => {}),
   onNewThread: (overrides.onNewThread as () => void) ?? (() => {}),
-  onOpenSwarm: (overrides.onOpenSwarm as () => void) ?? (() => {}),
   onOpenTasks: (overrides.onOpenTasks as () => void) ?? (() => {}),
   onOpenTerminal: (overrides.onOpenTerminal as () => void) ?? (() => {}),
   onOpenAppSettings: (overrides.onOpenAppSettings as () => void) ?? (() => {}),
@@ -74,14 +73,14 @@ describe("InnerSidebar", () => {
 
   it("fires primary action callbacks for New thread, Swarm, Tasks, and Terminal", async () => {
     const onNewThread = vi.fn();
-    const onOpenSwarm = vi.fn();
+    const onOpenOverview = vi.fn();
     const onOpenTasks = vi.fn();
     const onOpenTerminal = vi.fn();
-    renderSidebar({ onNewThread, onOpenSwarm, onOpenTasks, onOpenTerminal });
+    renderSidebar({ onNewThread, onOpenOverview, onOpenTasks, onOpenTerminal });
     await fireEvent.click(screen.getByText("New thread"));
     expect(onNewThread).toHaveBeenCalled();
     await fireEvent.click(screen.getByText("Swarm"));
-    expect(onOpenSwarm).toHaveBeenCalled();
+    expect(onOpenOverview).toHaveBeenCalled();
     await fireEvent.click(screen.getByText("Tasks"));
     expect(onOpenTasks).toHaveBeenCalled();
     await fireEvent.click(screen.getByText("Terminal"));

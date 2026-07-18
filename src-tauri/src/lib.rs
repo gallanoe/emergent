@@ -307,7 +307,6 @@ pub fn run() {
             commands::clear_queue,
             commands::kill_thread,
             commands::shutdown_thread,
-            commands::get_daemon_status,
             commands::get_history,
             commands::get_thread_config,
             commands::set_thread_config,

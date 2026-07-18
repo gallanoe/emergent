@@ -221,9 +221,8 @@ resume, matching the backend's dormant map. Listeners are wired _after_ the
 initial pull so the store has a base state to fold live events into (guarded to
 register exactly once).
 
-> **Gotcha:** `known_agents(workspace_id)` **ignores** its argument — CLI
-> availability is resolved host-wide against `PATH`. The parameter is kept only
-> for IPC-contract compatibility, which is why the refresh runs even with zero
+> **Gotcha:** `known_agents()` resolves CLI availability host-wide against
+> `PATH`, independent of any workspace — which is why the refresh runs even with zero
 > workspaces.
 
 **Why replay history at all?** The backend recorder keeps an in-memory
