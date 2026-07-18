@@ -7,7 +7,8 @@ use emergent_core::detect;
 use emergent_core::task::TaskManager;
 use emergent_core::workspace::WorkspaceManager;
 use emergent_protocol::{
-    AgentDefinition, ConfigOption, KnownAgent, Notification, QueuedMessageView, ThreadSummary,
+    AgentDefinition, AgentProvider, ConfigOption, KnownAgent, Notification, QueuedMessageView,
+    ThreadSummary,
     WorkspaceInfo, WorkspaceSummary,
 };
 
@@ -22,7 +23,7 @@ pub async fn create_agent(
     manager: State<'_, Arc<AgentManager>>,
     workspace_id: String,
     name: String,
-    provider: Option<String>,
+    provider: AgentProvider,
 ) -> Result<String, String> {
     let ws_id = emergent_protocol::WorkspaceId::from(workspace_id.as_str());
     manager.create_agent(ws_id, name, provider).await
@@ -33,7 +34,7 @@ pub async fn update_agent(
     manager: State<'_, Arc<AgentManager>>,
     agent_id: String,
     name: Option<String>,
-    provider: Option<String>,
+    provider: Option<AgentProvider>,
 ) -> Result<(), String> {
     manager.update_agent(&agent_id, name, provider).await
 }

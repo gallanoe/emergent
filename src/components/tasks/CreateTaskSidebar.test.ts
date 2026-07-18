@@ -21,8 +21,8 @@ function task(overrides: Partial<DisplayTask> = {}): DisplayTask {
 }
 
 const agentDefinitions: AgentDefinition[] = [
-  { id: "agent-1", workspace_id: "ws-1", name: "Agent One" },
-  { id: "agent-2", workspace_id: "ws-1", name: "Agent Two" },
+  { id: "agent-1", workspace_id: "ws-1", name: "Agent One", provider: "claude" },
+  { id: "agent-2", workspace_id: "ws-1", name: "Agent Two", provider: "codex" },
 ];
 
 const existingTasks: DisplayTask[] = [

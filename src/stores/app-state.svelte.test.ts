@@ -728,10 +728,11 @@ describe("appState agent definitions", () => {
     expect(appState.agentDefinitionsMap["ag-1"]!.name).toBe("Renamed");
     expect(appState.agentDefinitionsMap["ag-1"]!.provider).toBe("claude");
 
-    await appState.updateAgentDefinition("ag-1", undefined, "");
+    // Switching harness is explicit; it can never be cleared, since a
+    // definition without one could not spawn.
+    await appState.updateAgentDefinition("ag-1", undefined, "codex");
     flushSync();
-    // An empty provider normalizes to null so no logo is rendered.
-    expect(appState.agentDefinitionsMap["ag-1"]!.provider).toBeNull();
+    expect(appState.agentDefinitionsMap["ag-1"]!.provider).toBe("codex");
     expect(appState.agentDefinitionsMap["ag-1"]!.name).toBe("Renamed");
   });
 
@@ -780,7 +781,7 @@ describe("appState agent definitions", () => {
     flushSync();
     expect(appState.selectedAgentDef).toBeUndefined();
 
-    defineAgent("ag-1", "ws-1", { provider: undefined });
+    defineAgent("ag-1", "ws-1", { provider: "gemini" });
     agentStore._test.injectThread("th-1", {
       id: "th-1",
       agentDefinitionId: "ag-1",
@@ -788,7 +789,7 @@ describe("appState agent definitions", () => {
     appState.selectedAgentId = "ag-1";
     flushSync();
 
-    expect(appState.selectedAgentDef?.provider).toBeNull();
+    expect(appState.selectedAgentDef?.provider).toBe("gemini");
     expect(appState.selectedAgentDef?.threads.map((t) => t.id)).toEqual(["th-1"]);
   });
 

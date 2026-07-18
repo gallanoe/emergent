@@ -16,7 +16,7 @@ edition = "2021"
 # fails `cargo build`, which is what CI and releases run, so the boundary
 # holds where it matters — but don't read a green `cargo test` as proof that
 # production code is seam-free.
-test-support = []
+test-support = ["emergent-protocol/test-support"]
 
 [dependencies]
 emergent-protocol = { path = "../emergent-protocol" }

@@ -1,6 +1,7 @@
 // src/stores/mock-data.svelte.ts
 
 import type {
+  AgentProvider,
   DisplayAgentDefinition,
   DisplayMessage,
   DisplayTask,
@@ -162,7 +163,7 @@ function mkThread(
   messages: DisplayMessage[],
   extra?: Partial<DisplayThread>,
 ): DisplayThread {
-  const providerByAgent: Record<string, string> = {
+  const providerByAgent: Record<string, AgentProvider> = {
     a1: "claude",
     a2: "codex",
     a3: "gemini",
@@ -173,7 +174,7 @@ function mkThread(
     id,
     agentId: agentDefinitionId,
     workspaceId: "ws1",
-    provider: providerByAgent[agentDefinitionId] ?? null,
+    provider: providerByAgent[agentDefinitionId] ?? "claude",
     name,
     processStatus,
     preview: "",

@@ -1275,7 +1275,7 @@ const AGENT_DEF: AgentDefinition = {
   id: "agent-1",
   workspace_id: "ws-1",
   name: "Builder",
-  provider: "anthropic",
+  provider: "claude",
 };
 
 describe("thread registry", () => {
@@ -1297,7 +1297,7 @@ describe("thread registry", () => {
     const thread = agentStore.threads["thread-spawned"]!;
     expect(thread.status).toBe("initializing");
     expect(thread.workspaceId).toBe("ws-1");
-    expect(thread.provider).toBe("anthropic");
+    expect(thread.provider).toBe("claude");
     expect(thread.agentName).toMatch(/^Thread \d+$/);
   });
 
@@ -1318,16 +1318,17 @@ describe("thread registry", () => {
     expect(agentStore.threads["t-persisted"]!.acpSessionId).toBe("acp-7");
   });
 
-  it("registerPersistedThread defaults a missing provider and task id to null", () => {
-    const noProvider: AgentDefinition = {
+  it("registerPersistedThread carries the definition's harness and defaults task id to null", () => {
+    const definition: AgentDefinition = {
       id: "a",
       workspace_id: "ws",
       name: "n",
+      provider: "gemini",
     };
-    agentStore.registerPersistedThread("t-null", "agent-x", noProvider, null);
+    agentStore.registerPersistedThread("t-null", "agent-x", definition, null);
     flushSync();
 
-    expect(agentStore.threads["t-null"]!.provider).toBeNull();
+    expect(agentStore.threads["t-null"]!.provider).toBe("gemini");
     expect(agentStore.threads["t-null"]!.taskId).toBeNull();
   });
 

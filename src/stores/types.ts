@@ -150,15 +150,22 @@ export function normalizeThreadSummaryStatus(raw: string): ThreadSummaryStatus {
 
 // ── Agent/Thread remodel types ─────────────────────────────
 
+/**
+ * Agent harness id. Mirrors the `AgentProvider` enum in
+ * `crates/emergent-protocol/src/types.rs` — the backend rejects any value
+ * outside this set when parsing IPC payloads and `agents.json`.
+ */
+export type AgentProvider = "claude" | "codex" | "gemini" | "kiro" | "opencode";
+
 export interface AgentDefinition {
   id: string;
   workspace_id: string;
   name: string;
   /**
-   * Set at creation from `KnownAgent.provider`. The backend resolves the spawn
-   * command from this at spawn time; no command string is persisted.
+   * The harness this agent runs. Required — the backend resolves the spawn
+   * command from it, so no command string is persisted.
    */
-  provider?: string | null;
+  provider: AgentProvider;
 }
 
 export interface ThreadSummary {
@@ -180,8 +187,8 @@ export interface DisplayThread {
   id: string;
   agentId: string;
   workspaceId: string;
-  /** Same as the parent agent definition's `provider` when known. */
-  provider: string | null;
+  /** Always the parent agent definition's harness. */
+  provider: AgentProvider;
   name: string;
   processStatus: ThreadProcessStatus | "dead";
   preview: string;
@@ -199,8 +206,7 @@ export interface DisplayThread {
 export interface DisplayAgentDefinition {
   id: string;
   name: string;
-  /** Explicit logo id from agent creation. */
-  provider: string | null;
+  provider: AgentProvider;
   /** Client-only until backend exposes a persisted field. */
   systemPrompt: string;
   threads: DisplayThread[];

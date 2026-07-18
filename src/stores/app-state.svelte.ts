@@ -7,6 +7,7 @@ import { partitionPendingQueue } from "../lib/chat-utils";
 import type {
   ActiveView,
   AgentDefinition,
+  AgentProvider,
   ConfigOption,
   DisplayAgentDefinition,
   DisplayTask,
@@ -26,7 +27,7 @@ interface KnownAgent {
   name: string;
   command: string;
   available: boolean;
-  provider: string;
+  provider: AgentProvider;
 }
 
 interface HistoryNotification {
@@ -321,7 +322,7 @@ function createAppState() {
         agentDefinitions: w.agentDefinitions.map((ad) => ({
           id: ad.id,
           name: ad.name,
-          provider: ad.provider ?? null,
+          provider: ad.provider,
           systemPrompt: agentSystemPrompts[ad.id] ?? ad.systemPrompt ?? "",
           threads: ad.threads,
         })),
@@ -340,7 +341,7 @@ function createAppState() {
           return {
             id: def.id,
             name: def.name,
-            provider: def.provider ?? null,
+            provider: def.provider,
             systemPrompt: agentSystemPrompts[defId] ?? "",
             threads: displayThreads,
           };
@@ -613,7 +614,7 @@ function createAppState() {
       const threads = agentStore.getThreadsForAgent(selectedAgentId);
       return {
         ...def,
-        provider: def.provider ?? null,
+        provider: def.provider,
         systemPrompt: agentSystemPrompts[selectedAgentId] ?? "",
         threads: threads.map((t) => agentStore.toDisplayThread(t)),
       };
@@ -624,7 +625,7 @@ function createAppState() {
     async createAgentDefinition(
       workspaceId: string,
       name: string,
-      provider: string,
+      provider: AgentProvider,
     ): Promise<string> {
       const agentId = await invoke<string>("create_agent", {
         workspaceId,
@@ -641,7 +642,11 @@ function createAppState() {
       if (ws) ws.agentDefinitionIds.push(agentId);
       return agentId;
     },
-    async updateAgentDefinition(agentId: string, name?: string, provider?: string): Promise<void> {
+    async updateAgentDefinition(
+      agentId: string,
+      name?: string,
+      provider?: AgentProvider,
+    ): Promise<void> {
       const payload: Record<string, unknown> = { agentId };
       if (name !== undefined) payload.name = name;
       if (provider !== undefined) payload.provider = provider;
@@ -649,7 +654,7 @@ function createAppState() {
       const def = agentDefinitions[agentId];
       if (def) {
         if (name !== undefined) def.name = name;
-        if (provider !== undefined) def.provider = provider || null;
+        if (provider !== undefined) def.provider = provider;
       }
     },
     updateAgentSystemPrompt(agentId: string, next: string) {

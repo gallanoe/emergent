@@ -16,6 +16,7 @@
   import SearchCommand from "./components/SearchCommand.svelte";
   import { Plus } from "@lucide/svelte";
   import { isEditableTarget } from "./lib/editable-guard";
+  import type { AgentProvider } from "./stores/types";
   import { onMount } from "svelte";
 
   let showCreateWorkspace = $state(false);
@@ -66,7 +67,7 @@
     name: string;
     agentId: string;
     agentName: string;
-    agentProvider: string | null;
+    agentProvider: AgentProvider | null;
     status:
       | "idle"
       | "working"

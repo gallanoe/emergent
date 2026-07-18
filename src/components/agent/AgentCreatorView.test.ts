@@ -2,18 +2,19 @@ import { describe, it, expect, vi } from "vitest";
 import { tick } from "svelte";
 import { render, fireEvent } from "@testing-library/svelte";
 import AgentCreatorView from "./AgentCreatorView.svelte";
+import type { AgentProvider } from "../../stores/types";
 
 interface KnownAgent {
   name: string;
   command: string;
   available: boolean;
-  provider: string;
+  provider: AgentProvider;
 }
 
 const knownAgents: KnownAgent[] = [
-  { name: "Claude Code", command: "claude", available: true, provider: "anthropic" },
-  { name: "Codex", command: "codex", available: true, provider: "openai" },
-  { name: "Gemini", command: "gemini", available: false, provider: "google" },
+  { name: "Claude Code", command: "claude", available: true, provider: "claude" },
+  { name: "Codex", command: "codex", available: true, provider: "codex" },
+  { name: "Gemini", command: "gemini", available: false, provider: "gemini" },
 ];
 
 function setup(agents: KnownAgent[] = knownAgents) {
@@ -41,8 +42,8 @@ describe("AgentCreatorView", () => {
 
   it("skips unavailable agents when picking the default", async () => {
     const { container } = setup([
-      { name: "Gemini", command: "gemini", available: false, provider: "google" },
-      { name: "Codex", command: "codex", available: true, provider: "openai" },
+      { name: "Gemini", command: "gemini", available: false, provider: "gemini" },
+      { name: "Codex", command: "codex", available: true, provider: "codex" },
     ]);
     await tick();
     expect(cliTrigger(container).textContent).toContain("Codex");
@@ -50,7 +51,7 @@ describe("AgentCreatorView", () => {
 
   it("shows a placeholder when no CLI is available", async () => {
     const { container, getByText } = setup([
-      { name: "Gemini", command: "gemini", available: false, provider: "google" },
+      { name: "Gemini", command: "gemini", available: false, provider: "gemini" },
     ]);
     await tick();
     expect(getByText("No CLI available")).toBeTruthy();
@@ -132,12 +133,12 @@ describe("AgentCreatorView", () => {
     await tick();
 
     await fireEvent.click(getByRole("button", { name: "Create" }));
-    expect(onCreate).toHaveBeenCalledWith("Reviewer", "openai");
+    expect(onCreate).toHaveBeenCalledWith("Reviewer", "codex");
   });
 
   it("does not create when no CLI is available", async () => {
     const { container, getByRole, onCreate } = setup([
-      { name: "Gemini", command: "gemini", available: false, provider: "google" },
+      { name: "Gemini", command: "gemini", available: false, provider: "gemini" },
     ]);
     await tick();
     await fireEvent.input(nameInput(container), { target: { value: "Reviewer" } });

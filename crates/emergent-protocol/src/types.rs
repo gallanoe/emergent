@@ -239,14 +239,50 @@ pub struct AgentInfo {
     pub path: String,
 }
 
+/// Identifies an agent harness.
+///
+/// This is the load-bearing key of an agent definition: it selects the spawn
+/// command, the logo, and the display name. Modelling it as an enum rather than
+/// a string means an unknown value is rejected when `agents.json` is parsed,
+/// rather than persisting cleanly and failing later at spawn — and it makes
+/// `detect::command_for_provider` total, so there is no "unresolvable provider"
+/// state to handle.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AgentProvider {
+    Claude,
+    Codex,
+    Gemini,
+    Kiro,
+    Opencode,
+    /// Test harness spawned from a path only known at run time. Never written by
+    /// the app; see [`AgentDefinition::command_override`].
+    #[cfg(feature = "test-support")]
+    Mock,
+}
+
+impl AgentProvider {
+    /// Every variant, for listing the catalog. Kept in step with the enum by
+    /// `detect::tests::all_providers_is_exhaustive`, which fails if a variant is
+    /// added without being listed here.
+    pub const ALL: &'static [Self] = &[
+        Self::Claude,
+        Self::Codex,
+        Self::Gemini,
+        Self::Kiro,
+        Self::Opencode,
+        #[cfg(feature = "test-support")]
+        Self::Mock,
+    ];
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct KnownAgent {
     pub name: String,
     /// The full command string used to spawn the agent (e.g. "gemini --experimental-acp").
     pub command: String,
     pub available: bool,
-    /// Stable id for UI assets (e.g. logos), not inferred from the command string.
-    pub provider: String,
+    pub provider: AgentProvider,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -254,15 +290,14 @@ pub struct AgentDefinition {
     pub id: String,
     pub workspace_id: WorkspaceId,
     pub name: String,
-    /// Chosen at creation from `KnownAgent::provider`. Identifies both the
-    /// branding and — via `detect::command_for_provider` — the spawn command.
+    /// The harness this agent runs. Required — it is what makes the definition
+    /// runnable at all.
     ///
-    /// The command itself is deliberately not persisted: a definition written
-    /// before an upstream package rename would otherwise keep invoking the dead
-    /// name forever. Legacy `agents.json` files still carry a `cli` key; serde
-    /// ignores it on load, so they resolve through `provider` like any other.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub provider: Option<String>,
+    /// The spawn command is deliberately not persisted alongside it: a
+    /// definition written before an upstream package rename would otherwise keep
+    /// invoking the dead name forever. It is resolved from this field on every
+    /// spawn instead.
+    pub provider: AgentProvider,
     /// Explicit command, bypassing provider resolution.
     ///
     /// Exists for tests, which spawn a mock agent from a path only known at run

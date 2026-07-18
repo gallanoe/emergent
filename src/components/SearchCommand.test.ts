@@ -1,13 +1,14 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/svelte";
 import SearchCommand from "./SearchCommand.svelte";
+import type { AgentProvider } from "../stores/types";
 
 type ThreadHit = {
   id: string;
   name: string;
   agentId: string;
   agentName: string;
-  agentProvider: string;
+  agentProvider: AgentProvider | null;
   status: "idle" | "working" | "initializing" | "cancelling" | "error" | "dead";
 };
 

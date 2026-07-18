@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::fmt::Write;
 use std::path::Path;
 
-use emergent_protocol::{AgentDefinition, WorkspaceId};
+use emergent_protocol::{AgentDefinition, AgentProvider, WorkspaceId};
 
 fn generate_id() -> String {
     let mut buf = [0u8; 4];
@@ -28,7 +28,7 @@ impl AgentRegistry {
         &mut self,
         workspace_id: WorkspaceId,
         name: String,
-        provider: Option<String>,
+        provider: AgentProvider,
     ) -> String {
         self.create_agent_inner(workspace_id, name, provider, None)
     }
@@ -40,7 +40,7 @@ impl AgentRegistry {
         &mut self,
         workspace_id: WorkspaceId,
         name: String,
-        provider: Option<String>,
+        provider: AgentProvider,
         command: String,
     ) -> String {
         self.create_agent_inner(workspace_id, name, provider, Some(command))
@@ -50,7 +50,7 @@ impl AgentRegistry {
         &mut self,
         workspace_id: WorkspaceId,
         name: String,
-        provider: Option<String>,
+        provider: AgentProvider,
         command_override: Option<String>,
     ) -> String {
         let id = generate_id();
@@ -73,7 +73,7 @@ impl AgentRegistry {
         &mut self,
         agent_id: &str,
         name: Option<String>,
-        provider: Option<String>,
+        provider: Option<AgentProvider>,
     ) -> Result<(), String> {
         let def = self
             .agents
@@ -83,7 +83,7 @@ impl AgentRegistry {
             def.name = n;
         }
         if let Some(p) = provider {
-            def.provider = if p.is_empty() { None } else { Some(p) };
+            def.provider = p;
         }
         Ok(())
     }
@@ -156,24 +156,38 @@ mod tests {
     #[test]
     fn test_create_and_get_agent() {
         let mut reg = AgentRegistry::new();
-        let id = reg.create_agent(ws_id(), "Reviewer".into(), Some("claude".into()));
+        let id = reg.create_agent(ws_id(), "Reviewer".into(), AgentProvider::Claude);
         let def = reg.get_agent(&id).unwrap();
         assert_eq!(def.name, "Reviewer");
-        assert_eq!(def.provider, Some("claude".into()));
+        assert_eq!(def.provider, AgentProvider::Claude);
     }
 
     #[test]
     fn test_update_agent() {
         let mut reg = AgentRegistry::new();
-        let id = reg.create_agent(ws_id(), "Old".into(), Some("claude".into()));
+        let id = reg.create_agent(ws_id(), "Old".into(), AgentProvider::Claude);
         reg.update_agent(&id, Some("New".into()), None).unwrap();
         assert_eq!(reg.get_agent(&id).unwrap().name, "New");
+    }
+
+    /// A rename must not disturb the harness — `provider` decides whether the
+    /// agent can spawn at all, so it may only change when explicitly given.
+    #[test]
+    fn update_without_provider_leaves_the_harness_alone() {
+        let mut reg = AgentRegistry::new();
+        let id = reg.create_agent(ws_id(), "Old".into(), AgentProvider::Codex);
+        reg.update_agent(&id, Some("New".into()), None).unwrap();
+        assert_eq!(reg.get_agent(&id).unwrap().provider, AgentProvider::Codex);
+
+        reg.update_agent(&id, None, Some(AgentProvider::Gemini))
+            .unwrap();
+        assert_eq!(reg.get_agent(&id).unwrap().provider, AgentProvider::Gemini);
     }
 
     #[test]
     fn test_delete_agent() {
         let mut reg = AgentRegistry::new();
-        let id = reg.create_agent(ws_id(), "A".into(), None);
+        let id = reg.create_agent(ws_id(), "A".into(), AgentProvider::Claude);
         reg.delete_agent(&id).unwrap();
         assert!(reg.get_agent(&id).is_none());
     }
@@ -187,22 +201,25 @@ mod tests {
     #[test]
     fn test_list_definitions_filters_by_workspace() {
         let mut reg = AgentRegistry::new();
-        reg.create_agent(ws_id(), "A".into(), None);
-        reg.create_agent(WorkspaceId::from("other"), "B".into(), None);
+        reg.create_agent(ws_id(), "A".into(), AgentProvider::Claude);
+        reg.create_agent(
+            WorkspaceId::from("other"),
+            "B".into(),
+            AgentProvider::Claude,
+        );
         let list = reg.list_definitions(&ws_id());
         assert_eq!(list.len(), 1);
         assert_eq!(list[0].name, "A");
     }
 
-    /// Definitions written before this change carry a `cli` key naming a package
-    /// that may no longer exist. Loading must ignore it and keep the provider.
+    /// A definition names a harness, not a command, so it resolves to whatever
+    /// the catalog currently says — not to any string captured at creation.
     #[tokio::test]
-    async fn load_ignores_legacy_cli_field() {
+    async fn definitions_resolve_through_the_catalog() {
         let dir = tempfile::tempdir().unwrap();
         tokio::fs::write(
             dir.path().join("agents.json"),
-            r#"[{"id":"a1","workspace_id":"ws","name":"Reviewer",
-                 "cli":"bunx @zed-industries/codex-acp","provider":"codex"}]"#,
+            r#"[{"id":"a1","workspace_id":"ws","name":"Reviewer","provider":"codex"}]"#,
         )
         .await
         .unwrap();
@@ -211,26 +228,47 @@ mod tests {
         reg.load_from_dir(dir.path()).await.unwrap();
 
         let def = reg.get_agent("a1").unwrap();
-        assert_eq!(def.provider, Some("codex".into()));
+        assert_eq!(def.provider, AgentProvider::Codex);
         assert_eq!(
-            crate::detect::command_for_provider(def.provider.as_ref().unwrap()).as_deref(),
-            Some("bunx @agentclientprotocol/codex-acp@latest"),
-            "legacy definition must resolve to the current package, not its persisted one"
+            crate::detect::command_for_provider(def.provider),
+            "bunx @agentclientprotocol/codex-acp@latest"
         );
     }
 
-    /// Re-saving a legacy definition must not carry the dead `cli` key forward.
+    /// An unknown harness must fail the load loudly rather than persisting as a
+    /// definition that cannot spawn.
     #[tokio::test]
-    async fn save_drops_legacy_cli_field() {
+    async fn load_rejects_unknown_provider() {
+        let dir = tempfile::tempdir().unwrap();
+        tokio::fs::write(
+            dir.path().join("agents.json"),
+            r#"[{"id":"a1","workspace_id":"ws","name":"Reviewer","provider":"kodex"}]"#,
+        )
+        .await
+        .unwrap();
+
+        let mut reg = AgentRegistry::new();
+        assert!(reg.load_from_dir(dir.path()).await.is_err());
+    }
+
+    /// Saving records the harness, never a command string — the whole point of
+    /// resolving at spawn time.
+    #[tokio::test]
+    async fn save_persists_the_harness_not_a_command() {
         let dir = tempfile::tempdir().unwrap();
         let mut reg = AgentRegistry::new();
-        let id = reg.create_agent(ws_id(), "Reviewer".into(), Some("codex".into()));
+        let id = reg.create_agent(ws_id(), "Reviewer".into(), AgentProvider::Codex);
         reg.save_to_dir(&ws_id(), dir.path()).await.unwrap();
 
         let raw = tokio::fs::read_to_string(dir.path().join("agents.json"))
             .await
             .unwrap();
-        assert!(!raw.contains("\"cli\""), "persisted a command string: {}", raw);
+        assert!(
+            !raw.contains("bunx") && !raw.contains("\"cli\""),
+            "persisted a command string: {}",
+            raw
+        );
+        assert!(raw.contains("\"provider\": \"codex\""));
         assert!(raw.contains(&id));
     }
 }

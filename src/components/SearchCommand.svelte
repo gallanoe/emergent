@@ -1,12 +1,13 @@
 <script lang="ts">
   import { AgentAvatar, StatusDot, Kbd } from "../lib/primitives";
+  import type { AgentProvider } from "../stores/types";
 
   export type ThreadHit = {
     id: string;
     name: string;
     agentId: string;
     agentName: string;
-    agentProvider: string | null;
+    agentProvider: AgentProvider | null;
     status:
       | "idle"
       | "working"

@@ -3,6 +3,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import {
   normalizeThreadSummaryStatus,
   type AgentDefinition,
+  type AgentProvider,
   type ConfigOption,
   type DisplayMessage,
   type DisplayThread,
@@ -23,7 +24,7 @@ interface ThreadState {
   id: string;
   agentDefinitionId: string;
   workspaceId: string;
-  provider: string | null;
+  provider: AgentProvider;
   agentName: string;
   status: "initializing" | "idle" | "working" | "cancelling" | "error" | "dead";
   messages: DisplayMessage[];
@@ -759,7 +760,7 @@ function createAgentStore() {
       id: threadId,
       agentDefinitionId,
       workspaceId: agentDefinition.workspace_id,
-      provider: agentDefinition.provider ?? null,
+      provider: agentDefinition.provider,
       agentName: `Thread ${count}`,
       status: "dead",
       messages: [],
@@ -788,7 +789,7 @@ function createAgentStore() {
       id: threadId,
       agentDefinitionId,
       workspaceId: agentDefinition.workspace_id,
-      provider: agentDefinition.provider ?? null,
+      provider: agentDefinition.provider,
       agentName: `Thread ${count}`,
       status: "initializing",
       messages: [],
@@ -1233,7 +1234,7 @@ function createAgentStore() {
             ) {
               threads[threadId] = {
                 workspaceId: "ws-test",
-                provider: null,
+                provider: "claude",
                 agentName: "Test Thread",
                 status: "idle",
                 messages: [],

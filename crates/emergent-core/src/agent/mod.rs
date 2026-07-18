@@ -28,7 +28,8 @@ pub struct ConversationSummary {
 use std::sync::Arc;
 
 use emergent_protocol::{
-    AgentCreatedPayload, AgentDefinition, AgentDeletedPayload, ConfigOption, Notification,
+    AgentCreatedPayload, AgentDefinition, AgentDeletedPayload, AgentProvider, ConfigOption,
+    Notification,
     ThreadSummary, WorkspaceId,
 };
 use tokio::sync::{broadcast, mpsc, oneshot, RwLock};
@@ -162,7 +163,7 @@ impl AgentManager {
         &self,
         workspace_id: WorkspaceId,
         name: String,
-        provider: Option<String>,
+        provider: AgentProvider,
     ) -> Result<String, String> {
         self.create_agent_inner(workspace_id, name, provider, None)
             .await
@@ -175,7 +176,7 @@ impl AgentManager {
         &self,
         workspace_id: WorkspaceId,
         name: String,
-        provider: Option<String>,
+        provider: AgentProvider,
         command: String,
     ) -> Result<String, String> {
         self.create_agent_inner(workspace_id, name, provider, Some(command))
@@ -186,7 +187,7 @@ impl AgentManager {
         &self,
         workspace_id: WorkspaceId,
         name: String,
-        provider: Option<String>,
+        provider: AgentProvider,
         command_override: Option<String>,
     ) -> Result<String, String> {
         // Validate the workspace exists before registering the agent, so a bad
@@ -230,7 +231,7 @@ impl AgentManager {
         &self,
         agent_id: &str,
         name: Option<String>,
-        provider: Option<String>,
+        provider: Option<AgentProvider>,
     ) -> Result<(), String> {
         let workspace_id = {
             let mut reg = self.registry.write().await;
@@ -308,38 +309,26 @@ impl AgentManager {
             }
         }
 
-        let cli = Self::resolve_cli(&definition)?;
+        let cli = Self::resolve_cli(&definition);
 
         self.threads
             .spawn_thread(agent_id.to_string(), definition.workspace_id, cli, task_id)
             .await
     }
 
-    /// Resolve a definition's spawn command from its provider id.
+    /// Resolve a definition's spawn command from its provider.
     ///
     /// Definitions hold no command string, so this is the single point where an
     /// agent becomes runnable — and the reason a catalog update reaches every
     /// existing agent rather than only newly created ones.
-    fn resolve_cli(definition: &AgentDefinition) -> Result<String, String> {
-        if let Some(command) = &definition.command_override {
-            return Ok(command.clone());
-        }
-
-        let provider = definition.provider.as_deref().ok_or_else(|| {
-            format!(
-                "Agent '{}' has no provider, so its command cannot be resolved. \
-                 Recreate it from the agent catalog.",
-                definition.name
-            )
-        })?;
-
-        crate::detect::command_for_provider(provider).ok_or_else(|| {
-            format!(
-                "Agent '{}' names unknown provider '{}'; it may come from a newer \
-                 version of the app.",
-                definition.name, provider
-            )
-        })
+    ///
+    /// Infallible: `provider` is a required enum, so every definition that
+    /// deserialized at all names a harness with a catalog entry.
+    fn resolve_cli(definition: &AgentDefinition) -> String {
+        definition
+            .command_override
+            .clone()
+            .unwrap_or_else(|| crate::detect::command_for_provider(definition.provider))
     }
 
     /// Resume a persisted thread by loading its ACP session.
@@ -389,7 +378,7 @@ impl AgentManager {
             }
         };
 
-        let cli = Self::resolve_cli(&definition)?;
+        let cli = Self::resolve_cli(&definition);
 
         self.threads
             .resume_thread(

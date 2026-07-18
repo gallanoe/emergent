@@ -3,6 +3,12 @@ name = "emergent-protocol"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+# Adds `AgentProvider::Mock`, the harness the integration tests spawn from a
+# path only known at run time. Off by default, so no shipped binary can
+# construct or deserialize it.
+test-support = []
+
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }

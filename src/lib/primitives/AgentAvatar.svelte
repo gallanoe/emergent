@@ -1,10 +1,11 @@
 <script lang="ts">
   import { getLogoUrlForProvider } from "../agent-logos";
+  import type { AgentProvider } from "../../stores/types";
   import StatusDot from "./StatusDot.svelte";
 
   interface Props {
-    /** Persisted id from the catalog / agent definition (e.g. claude, codex). */
-    provider: string | null;
+    /** The agent's harness. Null only when the definition could not be resolved. */
+    provider: AgentProvider | null;
     /** Shown as monogram when no logo exists for `provider`. */
     name: string;
     size?: number;

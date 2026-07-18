@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { AgentProvider } from "../../stores/types";
   import { AgentAvatar } from "../../lib/primitives";
   import { ChevronDown } from "@lucide/svelte";
 
@@ -6,12 +7,12 @@
     name: string;
     command: string;
     available: boolean;
-    provider: string;
+    provider: AgentProvider;
   }
 
   interface Props {
     knownAgents: KnownAgent[];
-    onCreate: (name: string, provider: string) => void;
+    onCreate: (name: string, provider: AgentProvider) => void;
     onCancel: () => void;
   }
 
