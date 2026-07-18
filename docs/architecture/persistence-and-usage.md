@@ -178,26 +178,22 @@ Goal: show tokens-used and cost per agent definition per workspace, surviving
 restarts. The core difficulty: **ACP reports usage cumulatively per session**, not
 per turn, so the pipeline must difference consecutive reports.
 
-```
- agent process (ACP)
-        │  resp.usage (per prompt)              SessionUpdate::UsageUpdate (cost)
-        ▼                                              ▼
-   Notification::TurnUsage  ───┐          ┌── Notification::TokenUsage
-   (cumulative tokens)         │          │   (cumulative cost_amount)
-                broadcast channel of Notification
-                          │
-                          ▼
-        ThreadManager recorder task (spawned in ThreadManager::new)
-          • append to history (any thread_id)
-          • TurnUsage: delta = saturating_sub(cumulative, snapshot); apply_turn_delta
-          • TokenUsage: cost_delta = cost − snapshot (drop ≤ 0); apply_cost_delta
-          • persist threads.json (usage folded in)  ← after every accounted turn/cost
-                          │
-                          ▼
-        usage_stores: HashMap<WorkspaceId, WorkspaceUsageStore>   (in-memory authoritative)
-                          │  get_workspace_usage (Tauri cmd)
-                          ▼
-        frontend usageStore  ── live thread:turn-usage deltas layered on top
+```mermaid
+graph TD
+    ACP["agent process (ACP)"]
+    TU["Notification::TurnUsage<br/>(cumulative tokens)"]
+    KU["Notification::TokenUsage<br/>(cumulative cost_amount)"]
+    BC["broadcast channel of Notification"]
+    REC["ThreadManager recorder task (spawned in ThreadManager::new)<br/>• append to history (any thread_id)<br/>• TurnUsage: delta = saturating_sub(cumulative, snapshot); apply_turn_delta<br/>• TokenUsage: cost_delta = cost − snapshot (drop ≤ 0); apply_cost_delta<br/>• persist threads.json (usage folded in) — after every accounted turn/cost"]
+    US["usage_stores: HashMap&lt;WorkspaceId, WorkspaceUsageStore&gt;<br/>(in-memory authoritative)"]
+    FE["frontend usageStore<br/>live thread:turn-usage deltas layered on top"]
+
+    ACP -->|"resp.usage (per prompt)"| TU
+    ACP -->|"SessionUpdate::UsageUpdate (cost)"| KU
+    TU --> BC
+    KU --> BC
+    BC --> REC --> US
+    US -->|"get_workspace_usage (Tauri cmd)"| FE
 ```
 
 ### 6a. Emission — two notifications, asymmetric payloads

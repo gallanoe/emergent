@@ -10,22 +10,16 @@ Back to the [documentation index](../README.md).
 
 ## 1. The three layers
 
-```
-┌──────────────────────────────────────────────────────────────────┐
-│  VIEW (src/components/**, src/App.svelte)                          │
-│    Thin, prop-driven Svelte components. No IPC, no business logic. │
-│    Read store getters; emit callbacks upward.                     │
-└───────────────▲───────────────────────────────┬──────────────────┘
-                │ getters (reactive reads)        │ callbacks → store methods
-┌───────────────┴───────────────────────────────▼──────────────────┐
-│  STORE (src/stores/*.svelte.ts)                                    │
-│    appState · agentStore · usageStore · themeStore                 │
-│    The boundary to Tauri. Owns all $state.                         │
-└───────────────▲───────────────────────────────┬──────────────────┘
-                │ listen<T>() folds events        │ invoke() commands
-┌───────────────┴───────────────────────────────▼──────────────────┐
-│  BACKEND (Tauri app + emergent-core)                              │
-└──────────────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    VIEW["VIEW (src/components/**, src/App.svelte)<br/>Thin, prop-driven Svelte components. No IPC, no business logic.<br/>Read store getters; emit callbacks upward."]
+    STORE["STORE (src/stores/*.svelte.ts)<br/>appState · agentStore · usageStore · themeStore<br/>The boundary to Tauri. Owns all $state."]
+    BACKEND["BACKEND (Tauri app + emergent-core)"]
+
+    VIEW -->|"callbacks → store methods"| STORE
+    STORE -->|"getters (reactive reads)"| VIEW
+    STORE -->|"invoke() commands"| BACKEND
+    BACKEND -->|"listen&lt;T&gt;() folds events"| STORE
 ```
 
 **Invariant:** components never call `invoke`/`listen` for _domain_ data — every domain IPC round-trip is funnelled through a store method, so optimistic-update logic and event-folding live in one testable place. The exceptions carry no domain state and prove the rule: the terminal surface does out-of-band PTY I/O (§5), and a couple of settings views read pure metadata directly (a workspace record, the app version string).
@@ -157,18 +151,44 @@ Terminal I/O is out-of-band from the main notification broadcast (base64 output 
 
 This is the most involved part of the frontend: it turns a chunked ACP stream (delivered as `thread:*` Tauri events) into a smooth, richly-formatted transcript without per-chunk reflow. The store side lives in `agents.svelte.ts`; the render side in `src/components/chat/`.
 
-```
-Tauri events (thread:*)                agentStore                     ChatArea (render)
-──────────────────────                 ──────────                     ─────────────────
-message-chunk ──► handleMessageChunk ─► chunkBuffers (non-$state)
-                                       └─rAF─► flushChunkBuffers ─► messages[] ─► StreamingMarkdown
-tool-call-update ─► handleToolCallUpdate ─► activeToolCalls{} ──(all done)──► tool-group ─► ToolCallRow
-user-message ────► handleUserMessage (is_echo → clear sending)  ──► messages[]
-prompt-complete ─► handlePromptComplete (flush, stopReason, drain-or-idle)
-status-change ───► handleStatusChange (cancelling guard, queue drain)
-token-usage ─────► handleTokenUsage ──► thread.tokenUsage ──► ChatInput ring
-config-update ───► handleConfigUpdate ──► configOptions (+ system msg on agent-initiated change)
-task:status-notif► handleTaskStatusNotification ──► pendingQueue (drain FSM)
+```mermaid
+graph LR
+    subgraph EVENTS["Tauri events (thread:*)"]
+        E1["message-chunk"]
+        E2["tool-call-update"]
+        E3["user-message"]
+        E4["prompt-complete"]
+        E5["status-change"]
+        E6["token-usage"]
+        E7["config-update"]
+        E8["task:status-notification"]
+    end
+
+    subgraph STORE["agentStore"]
+        H1["handleMessageChunk → chunkBuffers (non-$state)<br/>rAF → flushChunkBuffers → messages[]"]
+        H2["handleToolCallUpdate → activeToolCalls<br/>(all done) → tool-group"]
+        H3["handleUserMessage (is_echo → clear sending) → messages[]"]
+        H4["handlePromptComplete (flush, stopReason, drain-or-idle)"]
+        H5["handleStatusChange (cancelling guard, queue drain)"]
+        H6["handleTokenUsage → thread.tokenUsage"]
+        H7["handleConfigUpdate → configOptions<br/>(+ system msg on agent-initiated change)"]
+        H8["handleTaskStatusNotification → pendingQueue (drain FSM)"]
+    end
+
+    subgraph RENDER["ChatArea (render)"]
+        R1["StreamingMarkdown"]
+        R2["ToolCallRow"]
+        R3["ChatInput ring"]
+    end
+
+    E1 --> H1 --> R1
+    E2 --> H2 --> R2
+    E3 --> H3
+    E4 --> H4
+    E5 --> H5
+    E6 --> H6 --> R3
+    E7 --> H7
+    E8 --> H8
 ```
 
 The subsections below cover the four non-obvious mechanisms in this pipeline: the chunk buffer, block-by-block markdown, tool-call accumulation, and the queue-drain FSM.
@@ -221,11 +241,15 @@ Tool calls arrive as partial `tool-call-update` events. `handleToolCallUpdate` *
 
 When a user sends while the thread is `working`/`cancelling`, the message is appended to `pendingQueue` (rendered as a chip stack, not a transcript bubble). Draining is a small FSM built around **backend-confirmed idle**:
 
-```
-send while busy ──► pendingQueue.push(item)
-prompt-complete (queue non-empty) ──► drainQueueOnIdle = true   (do NOT drain here)
-status-change → idle && drainQueueOnIdle ──► drainQueueNow()    (drain here)
-error ──► drainQueueOnIdle = false, mark items failed           (never drain into an error)
+```mermaid
+stateDiagram-v2
+    [*] --> Queued: send while busy<br/>pendingQueue.push(item)
+    Queued --> ArmedForDrain: prompt-complete, queue non-empty<br/>drainQueueOnIdle = true — do NOT drain here
+    ArmedForDrain --> Drained: status-change → idle && drainQueueOnIdle<br/>drainQueueNow() — drain here
+    ArmedForDrain --> Failed: error<br/>drainQueueOnIdle = false, items marked failed
+    Queued --> Failed: error — never drain into an error
+    Drained --> [*]
+    Failed --> [*]
 ```
 
 **Why defer the drain to the `idle` event instead of firing it in `prompt-complete`:** `prompt-complete` arrives _before_ the backend has actually transitioned the thread to idle. Draining there would race the backend and could send a prompt into a thread that isn't ready. Deferring to the backend-confirmed `status-change → idle` eliminates the race.

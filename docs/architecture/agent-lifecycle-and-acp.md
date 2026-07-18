@@ -10,21 +10,14 @@ Related: [Runtime Lifecycle](./runtime-lifecycle.md) (boot/recovery/shutdown tha
 
 ## 1. The three layers and their boundaries
 
-```
-AgentManager  (agent/mod.rs)     — coordinator; the public surface
-   owns: AgentRegistry, ThreadManager, SharedWorkspaceState, event bus
-   does: agent-definition CRUD, workspace validation;
-         delegates all running-process work downward
-        │
-        ▼
-ThreadManager (agent/thread_manager.rs) — owns running + dormant thread state
-   owns: live map (thread_id → ThreadHandle), dormant map (persisted stubs),
-         history + usage stores, TokenRegistry ref, the recorder task
-   does: spawn/resume/queue/cancel/kill/shutdown, config, history,
-         threads.json persistence, dormant hydration
-        │
-        ▼ (per running thread)
-ThreadHandle (agent/mod.rs)      — the Send-safe bridge to one agent
+```mermaid
+graph TD
+    AM["AgentManager (agent/mod.rs) — coordinator; the public surface<br/>owns: AgentRegistry, ThreadManager, SharedWorkspaceState, event bus<br/>does: agent-definition CRUD, workspace validation;<br/>delegates all running-process work downward"]
+    TM["ThreadManager (agent/thread_manager.rs) — owns running + dormant thread state<br/>owns: live map (thread_id → ThreadHandle), dormant map (persisted stubs),<br/>history + usage stores, TokenRegistry ref, the recorder task<br/>does: spawn/resume/queue/cancel/kill/shutdown, config, history,<br/>threads.json persistence, dormant hydration"]
+    TH["ThreadHandle (agent/mod.rs) — the Send-safe bridge to one agent"]
+
+    AM --> TM
+    TM -->|per running thread| TH
 ```
 
 **Why this split.** `AgentManager` is the single async-safe entry point for both the Tauri command layer and the embedded MCP handler. Keeping definition CRUD on the coordinator and all _running-process_ state in `ThreadManager` concentrates the concurrency-heavy map-of-locks logic in one place and keeps the coordinator a thin, mostly-delegating facade.
@@ -43,26 +36,20 @@ ThreadHandle (agent/mod.rs)      — the Send-safe bridge to one agent
 
 Spawning is split into **`initialize_agent` (phase 1)** and **`await_handshake` (phase 2)** in `agent/lifecycle.rs`, glued by a `PendingHandshake`. `spawn_thread` awaits phase 1 synchronously, then runs phase 2 on a background `tokio::spawn` and returns the `thread_id` to the caller **immediately**.
 
-```
-spawn_thread(agent_def, task_id)
-  │  mint bearer token  (BEFORE the process exists — see gotcha)
-  ├─ await initialize_agent(...)            ── PHASE 1 (fast, synchronous) ──┐
-  │     parse argv (shell_words) · build isolated env · symlink creds        │
-  │     spawn process (own group, piped stdio)                               │
-  │     std::thread::spawn → current-thread rt → acp::Client handshake       │
-  │        (sends Initialize, then New/LoadSession; replies over a oneshot)  │
-  │     INSERT ThreadHandle{status: Initializing} into live map  ◄───────────┤
-  │     emit StatusChange(Initializing) · return PendingHandshake            │
-  │                                                                          │
-  └─ tokio::spawn(await_handshake(pending))  ── PHASE 2 (background) ────────┘
-        timeout(60s) on the handshake oneshot
-        Ok  → graduate handle in place to Idle (under map write lock),
-              store session id + config, spawn prompt_loop,
-              emit SessionReady + Idle (+ ConfigUpdate iff config non-empty)
-        Err → if we still own the entry: remove it, kill process, return Err
-              else: return Cancelled  (someone else already claimed it)
-  ▲
-  └── returns thread_id here, without waiting for the handshake
+```mermaid
+graph TD
+    START["spawn_thread(agent_def, task_id)<br/>mint bearer token — BEFORE the process exists (see gotcha)"]
+    P1["PHASE 1 — await initialize_agent(...) — fast, synchronous<br/>parse argv (shell_words) · build isolated env · symlink creds<br/>spawn process (own group, piped stdio)<br/>std::thread::spawn → current-thread rt → acp::Client handshake<br/>(sends Initialize, then New/LoadSession; replies over a oneshot)<br/>INSERT ThreadHandle with status Initializing into live map<br/>emit StatusChange(Initializing) · return PendingHandshake"]
+    RET["returns thread_id here,<br/>without waiting for the handshake"]
+    P2["PHASE 2 — tokio::spawn(await_handshake(pending)) — background<br/>timeout(60s) on the handshake oneshot"]
+    OK["Ok → graduate handle in place to Idle (under map write lock),<br/>store session id + config, spawn prompt_loop,<br/>emit SessionReady + Idle (+ ConfigUpdate iff config non-empty)"]
+    ERR["Err → if we still own the entry: remove it, kill process, return Err<br/>else: return Cancelled (someone else already claimed it)"]
+
+    START --> P1
+    P1 --> RET
+    P1 --> P2
+    P2 --> OK
+    P2 --> ERR
 ```
 
 **Why two phases.** This buys the single most important property in the subsystem:
@@ -95,18 +82,22 @@ spawn_thread(agent_def, task_id)
 
 Each agent gets its **own OS thread** running its **own current-thread Tokio runtime**, inside which `acp::Client` drives the connection over the child's piped stdio.
 
-```
- main tokio runtime                    dedicated OS thread (per agent)
- ┌──────────────────┐   AgentCommand   ┌───────────────────────────────┐
- │ prompt_loop /     │ ───(mpsc)──────► │ agent_command_loop            │
- │ ThreadManager     │ ◄──(oneshot)──── │   acp::ConnectionTo<Agent>    │
- │ (ThreadHandle)    │                  │   on_receive_notification →   │
- └──────────────────┘                  │     handle_session_update     │
-        ▲  broadcast Notification       │   on_receive_request →        │
-        └───────────────────────────────    build_permission_response   │
-                                        └───────────────────────────────┘
-                                              ▲ ACP over piped stdio ▼
-                                        agent CLI process (local host)
+```mermaid
+graph LR
+    subgraph MAIN["main tokio runtime"]
+        PL["prompt_loop / ThreadManager<br/>(ThreadHandle)"]
+    end
+
+    subgraph OSTHREAD["dedicated OS thread (per agent)"]
+        LOOP["agent_command_loop<br/>acp::ConnectionTo&lt;Agent&gt;<br/>on_receive_notification → handle_session_update<br/>on_receive_request → build_permission_response"]
+    end
+
+    CLI["agent CLI process (local host)"]
+
+    PL -->|"AgentCommand (mpsc)"| LOOP
+    LOOP -->|"oneshot reply"| PL
+    LOOP -->|"broadcast Notification"| PL
+    LOOP <-->|"ACP over piped stdio"| CLI
 ```
 
 **Why a dedicated OS thread + its own runtime.** It fully isolates each agent's blocking ACP I/O from the shared main runtime and from sibling agents — a wedged connection can't stall other threads. The main runtime never touches the `Client` directly; it communicates only through the `AgentCommand` mpsc channel and `oneshot` replies, with `ThreadHandle` as the sole `Send`-safe bridge.

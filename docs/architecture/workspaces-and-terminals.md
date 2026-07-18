@@ -90,14 +90,20 @@ update_workspace:  write metadata.json  ─▶  rename in state
 
 Deleting a workspace must tear down more than the directory: the agent threads running inside it and the tasks scoped to it. **That cascade lives at the command layer, not inside `WorkspaceManager`.**
 
-```text
-IPC delete_workspace
-   ├─ AgentManager::kill_threads_in_workspace   (SIGTERM→SIGKILL agent process groups, purge threads)
-   ├─ TaskManager::delete_tasks_for_workspace   (drop the task graph for this workspace)
-   └─ WorkspaceManager::delete_workspace
-        ├─ close_sessions_for_workspace          (kill each shell's process group)
-        ├─ remove_dir_all(<workspace dir>)
-        └─ remove from state
+```mermaid
+graph TD
+    IPC["IPC delete_workspace"]
+    A["AgentManager::kill_threads_in_workspace<br/>(SIGTERM→SIGKILL agent process groups, purge threads)"]
+    B["TaskManager::delete_tasks_for_workspace<br/>(drop the task graph for this workspace)"]
+    C["WorkspaceManager::delete_workspace"]
+    C1["close_sessions_for_workspace<br/>(kill each shell's process group)"]
+    C2["remove_dir_all(workspace dir)"]
+    C3["remove from state"]
+
+    IPC -->|1| A
+    IPC -->|2| B
+    IPC -->|3| C
+    C --> C1 --> C2 --> C3
 ```
 
 > **Why at the command layer?** `WorkspaceManager` intentionally holds no reference to `AgentManager` or `TaskManager`. Keeping it dependency-free avoids a reference cycle (those managers already hold a clone of `SharedWorkspaceState`) and keeps the workspace crate independently testable. The IPC handler is the composition root that already has all three managers via Tauri `State`, so orchestrating the multi-manager teardown there is the natural seam.
@@ -176,34 +182,50 @@ The bypass fixes eviction but trades it for the opposite failure mode:
 
 Identifiers here follow the project-wide convention of short random hex, not UUIDs (workspace ids are 8 hex; terminal session ids 16). Uniqueness relies on the small population and the random space rather than UUID guarantees — see [System Overview](./system-overview.md).
 
-```text
-STARTUP (lib.rs)
-  new_shared_state()  ──▶  WorkspaceManager::new(state, TauriTerminalSink)
-                               └─ load_workspaces()  ── scan ~/.emergent/*/metadata.json
-                                                        (per-entry fault isolation)
+```mermaid
+graph TD
+    subgraph STARTUP["STARTUP (lib.rs)"]
+        SU1["new_shared_state()"]
+        SU2["WorkspaceManager::new(state, TauriTerminalSink)"]
+        SU3["load_workspaces() — scan ~/.emergent/*/metadata.json<br/>(per-entry fault isolation)"]
+        SU1 --> SU2 --> SU3
+    end
 
-CREATE (IPC create_workspace)
-  generate id ─▶ mkdir <id>/agents/ ─▶ write metadata.json ─▶ insert into state
-                                       └─ disk before memory (write-ahead)
+    subgraph CREATE["CREATE (IPC create_workspace)"]
+        CR1["generate id"]
+        CR2["mkdir id/agents/"]
+        CR3["write metadata.json"]
+        CR4["insert into state<br/>(disk before memory — write-ahead)"]
+        CR1 --> CR2 --> CR3 --> CR4
+    end
 
-RENAME (IPC update_workspace)
-  read+parse metadata.json ─▶ write metadata.json ─▶ rename in state
-                                                      └─ disk before memory
+    subgraph RENAME["RENAME (IPC update_workspace)"]
+        RN1["read + parse metadata.json"]
+        RN2["write metadata.json"]
+        RN3["rename in state<br/>(disk before memory)"]
+        RN1 --> RN2 --> RN3
+    end
 
-DELETE (IPC delete_workspace) — cross-manager cascade
-  AgentManager.kill_threads_in_workspace ─▶ TaskManager.delete_tasks_for_workspace
-     ─▶ WorkspaceManager.delete_workspace (close terminals ─▶ remove_dir_all ─▶ remove from state)
+    subgraph DELETE["DELETE (IPC delete_workspace) — cross-manager cascade"]
+        DE1["AgentManager.kill_threads_in_workspace"]
+        DE2["TaskManager.delete_tasks_for_workspace"]
+        DE3["WorkspaceManager.delete_workspace<br/>close terminals → remove_dir_all → remove from state"]
+        DE1 --> DE2 --> DE3
+    end
 
-TERMINAL (IPC create/write/resize/close_terminal_session)
-  resolve workspace path as cwd ─▶ terminal::create_session
-     ─▶ spawn_blocking: open PTY, spawn $SHELL (enriched PATH), drop slave
-     ─▶ insert TerminalSession ─▶ spawn "term-<id>" reader thread
-          loop read() ─▶ sink.output() … until EOF ─▶ sink.exited()
-          (ReaderCleanup reaps child + removes entry, even on unwind)
-     output/exit ──▶ TauriTerminalSink.emit("terminal:output"/"terminal:exited") ──▶ webview
+    subgraph TERMINAL["TERMINAL (IPC create/write/resize/close_terminal_session)"]
+        TE1["resolve workspace path as cwd"]
+        TE2["terminal::create_session"]
+        TE3["spawn_blocking: open PTY, spawn $SHELL (enriched PATH), drop slave"]
+        TE4["insert TerminalSession"]
+        TE5["spawn 'term-id' reader thread<br/>loop read() → sink.output() … until EOF → sink.exited()<br/>(ReaderCleanup reaps child + removes entry, even on unwind)"]
+        TE6["TauriTerminalSink.emit('terminal:output' / 'terminal:exited') → webview"]
+        TE1 --> TE2 --> TE3 --> TE4 --> TE5 -->|output / exit| TE6
+    end
 
-SHUTDOWN
-  WorkspaceManager::close_all_terminal_sessions() ─▶ killpg SIGTERM→SIGKILL each shell group
+    subgraph SHUTDOWN["SHUTDOWN"]
+        SD1["WorkspaceManager::close_all_terminal_sessions()<br/>killpg SIGTERM→SIGKILL each shell group"]
+    end
 ```
 
 ---

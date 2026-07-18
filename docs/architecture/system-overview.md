@@ -35,61 +35,55 @@ Four Rust crates plus a Svelte frontend, all in one Cargo workspace (`default-me
 
 ## Top-level component diagram
 
-```
-┌──────────────────────────────────────────────────────────────────────────────┐
-│ FRONTEND  (Svelte 5, src/)                                                     │
-│   App.svelte ─ activeView switch ─► InnerSidebar · ChatArea/StreamingMarkdown  │
-│                                     · ToolCallRow · TerminalView               │
-│   Rune stores (.svelte.ts):                                                    │
-│     appState ─► agentStore (ThreadState, chunk buffer + rAF flush, queue FSM)  │
-│              └► usageStore      themeStore                                      │
-└──────────▲───────────────────────────────────────────────────────┬───────────┘
-   listen() │ events: thread:* task:* agent:* terminal:*      invoke │ IPC commands
-           │                                                         ▼
-┌──────────┴──────────────────────────────────────────────────────────────────┐
-│ TAURI SHELL  (src-tauri/)  — the one backend process, no daemon               │
-│   lib.rs run(): bootstrap · recovery · shutdown (watchdog)     tray.rs         │
-│   commands.rs: #[tauri::command] handlers                                      │
-│   TauriTerminalSink ══(terminal:output / terminal:exited, OUT-OF-BAND)══► web  │
-│                                                                                │
-│   Notification bridge  ◄════ broadcast::channel<Notification> ◄════════════╗   │
-│        emit(event_name, inner_payload)                                     ║   │
-└──────────┬────────────────────────────── app.manage() (Arc managers) ═════╬───┘
-           │                                                          publish ║
-┌──────────┴──────────────────────────────────────────────────────────────╨───┐
-│ CORE  (crates/emergent-core/)                                                 │
-│  ┌───────────────┐  owns  ┌────────────────────┐  spawns ┌───────────────┐   │
-│  │ AgentManager  ├───────►│ ThreadManager      ├────────►│ recorder task │   │
-│  │  registry     │        │ live / dormant maps│broadcast│ history+usage │   │
-│  │               │        │ usage stores       │         └───────────────┘   │
-│  └──┬────────────┘        │ TokenRegistry ref  │                             │
-│     │  per-thread ThreadHandle ══ mpsc AgentCommand ══► [ dedicated OS thread]│
-│     │                          ◄══ oneshot reply ══         acp::Client       │
-│     ▼                                                            ▲ ACP over   │
-│  swarm::build_system_block (system-prompt injection)             ║ piped stdio│
-│  ┌──────────────┐  subscribe  ┌────────────────────────┐        ║            │
-│  │ TaskManager  │◄────────────┤ MCP HTTP server (Axum) │        ║            │
-│  │ TaskRegistry │  create/    │ 127.0.0.1:{port}/mcp   │        ║            │
-│  └──────────────┘  complete   │ McpHandler · MCP tools │        ║            │
-│  ┌──────────────┐  ─► spawn   │ TokenRegistry (bearer) │        ║            │
-│  │ WorkspaceMgr │   _thread   └───────────▲────────────┘        ║            │
-│  │ metadata.json│                         │ HTTP + Bearer        ║            │
-│  │ host PTYs    │                         │ (loopback)           ║            │
-│  └──────────────┘                         │                      ║            │
-└───────────────────────────────────────────┼──────────────────────╨──────────┘
-                                             │ agent → app          app → agent
-                          ┌──────────────────┴──────────────────────────────┐
-                          │ AGENT CLI PROCESSES (local host, NO Docker)      │
-                          │ Claude Code · Codex · Gemini · Kiro · OpenCode   │
-                          │ own process group · isolated $HOME · auth links  │
-                          └──────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph FRONTEND["FRONTEND (Svelte 5, src/)"]
+        APPSV["App.svelte — activeView switch"]
+        VIEWS["InnerSidebar · ChatArea / StreamingMarkdown<br/>ToolCallRow · TerminalView"]
+        STORES["Rune stores (.svelte.ts)<br/>appState → agentStore<br/>(ThreadState, chunk buffer + rAF flush, queue FSM)<br/>usageStore · themeStore"]
+        APPSV --> VIEWS
+        APPSV --> STORES
+    end
 
-PERSISTENCE (host FS)  ~/.emergent/<workspace-id>/ :
-   metadata.json · agents.json · threads.json (+usage) · tasks.json
-   (in-memory authoritative; atomic temp-file + rename)
+    subgraph SHELL["TAURI SHELL (src-tauri/) — the one backend process, no daemon"]
+        RUN["lib.rs run(): bootstrap · recovery · shutdown (watchdog)<br/>tray.rs"]
+        CMDS["commands.rs — tauri command handlers"]
+        BRIDGE["Notification bridge<br/>emit(event_name, inner_payload)"]
+        SINK["TauriTerminalSink"]
+    end
 
-SHARED WIRE TYPES  emergent-protocol : Notification enum + payload structs  (all layers)
+    subgraph CORE["CORE (crates/emergent-core/)"]
+        AM["AgentManager<br/>registry"]
+        TM["ThreadManager<br/>live / dormant maps<br/>usage stores · TokenRegistry ref"]
+        REC["recorder task<br/>history + usage"]
+        SWARM["swarm::build_system_block<br/>(system-prompt injection)"]
+        TASKM["TaskManager<br/>TaskRegistry"]
+        MCP["MCP HTTP server (Axum)<br/>127.0.0.1:{port}/mcp<br/>McpHandler · MCP tools<br/>TokenRegistry (bearer)"]
+        WSM["WorkspaceManager<br/>metadata.json · host PTYs"]
+
+        AM -->|owns| TM
+        TM -->|"spawns (broadcast)"| REC
+        AM --> SWARM
+        MCP -->|"subscribe · create / complete"| TASKM
+        MCP -->|spawn_thread| WSM
+    end
+
+    AGENTS["AGENT CLI PROCESSES (local host, NO Docker)<br/>Claude Code · Codex · Gemini · Kiro · OpenCode<br/>own process group · isolated $HOME · auth links"]
+
+    PERSIST["PERSISTENCE (host FS)<br/>~/.emergent/workspace-id/<br/>metadata.json · agents.json · threads.json (+usage) · tasks.json<br/>(in-memory authoritative; atomic temp-file + rename)"]
+
+    STORES -->|"invoke — IPC commands"| CMDS
+    BRIDGE -->|"listen() — thread:* task:* agent:* terminal:*"| STORES
+    SINK -->|"terminal:output / terminal:exited (OUT-OF-BAND)"| STORES
+    CMDS -->|"app.manage() — Arc managers"| CORE
+    CORE -.->|"publish — broadcast::channel&lt;Notification&gt;"| BRIDGE
+    TM -->|"per-thread ThreadHandle<br/>mpsc AgentCommand / oneshot reply<br/>dedicated OS thread · acp::Client"| AGENTS
+    AGENTS -->|"ACP over piped stdio (app → agent)"| TM
+    AGENTS -->|"HTTP + Bearer, loopback (agent → app)"| MCP
+    CORE -.->|persist| PERSIST
 ```
+
+> **Shared wire types:** `emergent-protocol` carries the `Notification` enum plus its payload structs, and is depended on by every layer above.
 
 The two channels crossing the agent boundary are the heart of the design: **ACP flows app→agent over piped stdio**, and **MCP flows agent→app over loopback HTTP**. They are described next.
 
@@ -99,13 +93,12 @@ The two channels crossing the agent boundary are the heart of the design: **ACP 
 
 Each agent talks to the app over two independent channels, deliberately kept separate:
 
-```
-                app  ──── ACP (JSON-RPC over piped stdio) ────►  agent
-   "prompt / initialize / cancel / config"      drives the turn
-
-                app  ◄──── MCP (HTTP + bearer, loopback) ─────  agent
-   "create_task / update_task / complete_task"   agent calls back in
-   "list_tasks / list_agents"
+```mermaid
+graph LR
+    APP["app"]
+    AGENT["agent"]
+    APP -->|"ACP — JSON-RPC over piped stdio<br/>prompt / initialize / cancel / config<br/><i>drives the turn</i>"| AGENT
+    AGENT -->|"MCP — HTTP + bearer, loopback<br/>create_task / update_task / complete_task<br/>list_tasks / list_agents<br/><i>agent calls back in</i>"| APP
 ```
 
 ### ACP — the control channel (app → agent)

@@ -54,17 +54,22 @@ Two structural properties are load-bearing:
 
 There is one notification channel in the whole app, created once at startup in `src-tauri/src/lib.rs` as a bounded `broadcast::channel` (1024 slots). `emergent-core` producers publish onto it; several consumers subscribe — the notification **bridge** (the one that reaches the UI), the `TaskManager` event loop, and a usage/history **recorder**.
 
-```
- emergent-core                     src-tauri (bridge task)                webview (Svelte)
- ────────────                      ───────────────────────                ────────────────
- build Notification  ──publish──▶  broadcast::channel(1024)
-                                          │  bridge_rx.recv()
-                                          ▼
-                                   match &notification {
-                                     MessageChunk(p) =>
-                                       emit(event_name, p)   ──emit──▶     listen<MessageChunkPayload>(
-                                     …                                        "thread:message-chunk", …)
-                                   }
+```mermaid
+graph LR
+    subgraph CORE["emergent-core"]
+        BUILD["build Notification"]
+    end
+
+    subgraph BRIDGE["src-tauri (bridge task)"]
+        CH["broadcast::channel(1024)"]
+        MATCH["bridge_rx.recv()<br/>match on the notification variant:<br/>MessageChunk(p) → emit(event_name, p)<br/>…"]
+    end
+
+    subgraph WEB["webview (Svelte)"]
+        LISTEN["listen&lt;MessageChunkPayload&gt;(<br/>'thread:message-chunk', …)"]
+    end
+
+    BUILD -->|publish| CH --> MATCH -->|emit| LISTEN
 ```
 
 The bridge does something subtle: for each variant it emits **only the inner payload `p`**, keyed by `event_name()`. The `Notification` enum itself is never serialized on the live path.

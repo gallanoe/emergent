@@ -122,6 +122,10 @@ Agents run as local host processes, so no Docker is required. Install at least o
 
 ## Best Practices
 
+### Documentation
+
+- Use Mermaid for diagrams in Markdown files rather than ASCII-art diagrams.
+
 ### Code Style
 
 - Use Svelte 5 runes (`$state`, `$derived`, `$effect`) — not legacy reactive syntax.

@@ -26,19 +26,15 @@ A `Task` (`emergent-protocol`) is a unit of work assigned to an **agent definiti
 
 The four states follow a strict lifecycle:
 
-```
-                blockers all Completed / none
-   ┌─────────┐ (start_task: spawn thread) ┌──────────┐   complete_task    ┌───────────┐
-   │ Pending │ ──────────────────────────►│ Working  │ ──(agent-driven)──►│ Completed │
-   └─────────┘                            └──────────┘                    └───────────┘
-        │                                       │
-        │ start/spawn failure                   │ thread died / init error / lag reconcile
-        │                                       │
-        └───────────────┐            ┌──────────┘
-                        ▼            ▼
-                    ┌──────────────────┐
-                    │      Failed      │
-                    └──────────────────┘
+```mermaid
+stateDiagram-v2
+    [*] --> Pending: create_task
+    Pending --> Working: blockers all Completed / none<br/>start_task spawns the thread
+    Working --> Completed: complete_task (agent-driven)
+    Pending --> Failed: start / spawn failure
+    Working --> Failed: thread died · init error · lag reconcile
+    Completed --> [*]
+    Failed --> [*]
 ```
 
 `Completed` and `Failed` are terminal in the normal, agent-driven lifecycle — nothing un-fails or un-completes a task. The one escape hatch is `fail_task`, which has **no state guard**: it forces a task to `Failed` from _any_ state (preserving whatever thread_id was there). In practice it is only ever called on `Pending`/`Working` tasks.
@@ -91,13 +87,23 @@ While `Working`, the agent's MCP `update_task` calls route through `post_update`
 
 The agent's MCP `complete_task` call transitions `Working → Completed` (storing the summary), blocks further prompts to that thread (`mark_thread_completing`), enqueues the thread for teardown, notifies subscribers `"completed"`, persists, and kicks `start_unblocked_tasks`. Notably it does **not** kill the thread. Teardown happens later, when the completion turn finishes and the ACP layer emits `PromptComplete`:
 
-```
-complete_task turn                     next PromptComplete
-──────────────────                     ───────────────────
-Working → Completed                    remove thread from pending_teardown
-block further prompts                     → shutdown_thread(thread)
-enqueue pending_teardown
-notify "completed"
+```mermaid
+graph LR
+    subgraph PHASE1["complete_task turn"]
+        A["Working → Completed"]
+        B["block further prompts"]
+        C["enqueue pending_teardown"]
+        D["notify 'completed'"]
+        A --> B --> C --> D
+    end
+
+    subgraph PHASE2["next PromptComplete"]
+        E["remove thread from pending_teardown"]
+        F["shutdown_thread(thread)"]
+        E --> F
+    end
+
+    D --> E
 ```
 
 **Why two phases?** The agent calls `complete_task` _mid-turn_. Killing it immediately would cut off the same turn's final wrap-up message — the one the prompt explicitly asked for. Splitting completion (state + notify, now) from teardown (kill, on next `PromptComplete`) gives the agent exactly one final turn to speak, then reaps it.

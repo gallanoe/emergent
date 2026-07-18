@@ -12,12 +12,12 @@ Emergent runs each agent as a **local host process** — a CLI (Claude Code, Cod
 
 Two channels connect the app and each agent:
 
-```
-        ACP over piped stdio  (app  -> agent : prompts, session updates)
-  app  ─────────────────────────────────────────────────────────►  agent process
-        MCP over loopback HTTP (agent -> app  : create/update/complete task, list agents)
-       ◄─────────────────────────────────────────────────────────
-                    http://127.0.0.1:{port}/mcp   +   Authorization: Bearer <token>
+```mermaid
+graph LR
+    APP["app"]
+    AGENT["agent process"]
+    APP -->|"ACP over piped stdio<br/>prompts, session updates"| AGENT
+    AGENT -->|"MCP over loopback HTTP<br/>create/update/complete task, list agents<br/>http://127.0.0.1:{port}/mcp<br/>Authorization: Bearer token"| APP
 ```
 
 ACP is the app driving the agent. MCP is the agent driving the app. This doc is about the second arrow.
@@ -98,11 +98,17 @@ The credential in this path is a per-thread bearer token — no passwords, API k
 
 **Why bake in `task_id` rather than look it up live?** During the ACP handshake the agent calls `list_tools` (see gating below) _before_ the `ThreadHandle` has been inserted into `ThreadManager`'s live thread map. A live-map lookup would race and usually find nothing. Because the `task_id` is recorded at mint time, `resolve_task_id` can answer "is this a task session?" from the registry alone, independent of the async handle insertion.
 
-```
-register(thread_id, task_id)      // token + task_id recorded NOW (pre-spawn, synchronous)
-   └─► spawn agent process
-          └─► ACP handshake: list_tools  ── needs task_id ──►  resolve_task_id(token)  ✔ already present
-                 └─► ThreadHandle inserted into live map  (happens later)
+```mermaid
+sequenceDiagram
+    participant TM as ThreadManager
+    participant TR as TokenRegistry
+    participant AG as Agent process
+
+    TM->>TR: register(thread_id, task_id)<br/>token + task_id recorded NOW (pre-spawn, synchronous)
+    TM->>AG: spawn agent process
+    AG->>TR: ACP handshake — list_tools needs task_id<br/>resolve_task_id(token)
+    TR-->>AG: task_id already present ✔
+    TM->>TM: ThreadHandle inserted into live map (happens later)
 ```
 
 ### Resolve on every request

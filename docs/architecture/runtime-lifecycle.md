@@ -29,20 +29,22 @@ See also: [Documentation index](../README.md) ·
 `.setup` closure Tauri runs once before its event loop. The order below is
 **load-bearing** — the invariants in §6 are what enforce it.
 
-```
-main() ──► run()  .setup closure  (runs on the Tokio runtime via _rt_guard)
-   1. broadcast::channel::<Notification>(1024)     → event_tx
-   2. new_shared_state()                           → workspace_state
-   3. TauriTerminalSink over AppHandle             → terminal_sink
-   4. WorkspaceManager::new + load_workspaces()    (fault-isolated per entry)
-   5. TokenRegistry::new()
-   6. AgentManager::new           (spawns the recorder task → subscribes)
-   7. TaskManager::new + start_event_loop(subscribe())
-   8. mcp::http_server::start ──► set_mcp_port(port)   ⚠ BEFORE task resume
-   9. RECOVERY: per-workspace load → recover_stale_tasks → resume_workspace_tasks
-  10. app.manage(managers) · tray::setup_tray · notification-bridge task
-             │
-             ▼  app.run(RunEvent loop)  ── see §5 (shutdown)
+```mermaid
+graph TD
+    M["main() → run() · .setup closure<br/>(runs on the Tokio runtime via _rt_guard)"]
+    S1["1. broadcast::channel::&lt;Notification&gt;(1024) → event_tx"]
+    S2["2. new_shared_state() → workspace_state"]
+    S3["3. TauriTerminalSink over AppHandle → terminal_sink"]
+    S4["4. WorkspaceManager::new + load_workspaces()<br/>(fault-isolated per entry)"]
+    S5["5. TokenRegistry::new()"]
+    S6["6. AgentManager::new<br/>(spawns the recorder task → subscribes)"]
+    S7["7. TaskManager::new + start_event_loop(subscribe())"]
+    S8["8. mcp::http_server::start → set_mcp_port(port)<br/>⚠ BEFORE task resume"]
+    S9["9. RECOVERY: per-workspace load → recover_stale_tasks → resume_workspace_tasks"]
+    S10["10. app.manage(managers) · tray::setup_tray · notification-bridge task"]
+    RUNEV["app.run(RunEvent loop) — see §5 (shutdown)"]
+
+    M --> S1 --> S2 --> S3 --> S4 --> S5 --> S6 --> S7 --> S8 --> S9 --> S10 --> RUNEV
 ```
 
 **Why the runtime guard is held.** The setup closure is synchronous but every
@@ -203,16 +205,17 @@ The backend is already up when the webview loads, so `initialize()` (from
 `App.svelte`'s `onMount`) only has to _pull_ recovered state and _subscribe_ to
 live events.
 
-```
-initialize()  [demo mode short-circuits to seeded mock data]
-   │  memoized via initializePromise (idempotent; nulled on failure to retry)
-   ▼
-setupAfterConnect()
-  1. list_workspaces / list_agent_definitions / list_tasks     → base state
-  2. list_thread_mappings   → registerPersistedThread(...)      dormant "dead" stubs
-  3. known_agents           → host-detected CLIs (workspace-independent)
-  4. setupListeners() (agent + usage + task)  ── AFTER the initial pull
-  5. syncLiveThreads()      → replay get_history + config per thread
+```mermaid
+graph TD
+    INIT["initialize() — demo mode short-circuits to seeded mock data<br/>memoized via initializePromise<br/>(idempotent; nulled on failure to retry)"]
+    SAC["setupAfterConnect()"]
+    A1["1. list_workspaces / list_agent_definitions / list_tasks → base state"]
+    A2["2. list_thread_mappings → registerPersistedThread(...)<br/>dormant 'dead' stubs"]
+    A3["3. known_agents → host-detected CLIs (workspace-independent)"]
+    A4["4. setupListeners() (agent + usage + task) — AFTER the initial pull"]
+    A5["5. syncLiveThreads() → replay get_history + config per thread"]
+
+    INIT --> SAC --> A1 --> A2 --> A3 --> A4 --> A5
 ```
 
 Steps 1–2 mirror the Rust recovery, reading back the exact state the backend

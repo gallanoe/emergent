@@ -10,13 +10,21 @@ See also: [system-overview](../architecture/system-overview.md) · [notification
 
 ## How the two directions work
 
-```
-Frontend                         Tauri app (src-tauri)                 Core managers
-────────                         ─────────────────────                 ─────────────
-invoke("send_prompt", {...})  ─▶ #[tauri::command] send_prompt(..)  ─▶ AgentManager::queue_prompt
-        (Promise resolves) ◀────  Result<T,String> serialized      ◀── (oneshot reply)
+```mermaid
+sequenceDiagram
+    participant FE as Frontend
+    participant TA as Tauri app (src-tauri)
+    participant CM as Core managers
 
-listen("thread:message-chunk") ◀─ bridge_handle.emit(name, payload) ◀── Notification broadcast(1024)
+    Note over FE,CM: Upstream — commands (request/response)
+    FE->>TA: invoke("send_prompt", ...)
+    TA->>CM: send_prompt command handler
+    CM-->>TA: oneshot reply
+    TA-->>FE: serialized Result — Ok payload or Err string → Promise resolves
+
+    Note over FE,CM: Downstream — events (fire-and-forget)
+    CM-)TA: Notification broadcast(1024)
+    TA-)FE: bridge_handle.emit(name, payload)<br/>→ listen("thread:message-chunk")
 ```
 
 - **Commands** are `async fn`s tagged `#[tauri::command]`, registered in the `generate_handler!` block in `lib.rs`. Managers are injected via `State<'_, Arc<...>>`; the frontend never passes them.
