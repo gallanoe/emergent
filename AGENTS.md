@@ -122,12 +122,6 @@ Agents run as local host processes, so no Docker is required. Install at least o
 
 ## Best Practices
 
-### Skills
-
-- **Load the `svelte-5` skill** when working on frontend code (`src/`).
-- **Load the `rust` skill** when working on backend code (`src-tauri/` or `crates/`).
-- **Load the `desktop-utility-design` skill** when working on UI/UX patterns.
-
 ### Code Style
 
 - Use Svelte 5 runes (`$state`, `$derived`, `$effect`) — not legacy reactive syntax.
