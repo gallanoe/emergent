@@ -406,18 +406,6 @@ describe("handleQueueChanged", () => {
   });
 });
 
-// ── Store interface: removed legacy exports ────────────────────────────────────
-
-describe("removed legacy exports", () => {
-  it("editQueue is not exported from agentStore", () => {
-    expect((agentStore as Record<string, unknown>)["editQueue"]).toBeUndefined();
-  });
-
-  it("registerQueueDumpHandler is not exported from agentStore", () => {
-    expect((agentStore as Record<string, unknown>)["registerQueueDumpHandler"]).toBeUndefined();
-  });
-});
-
 // ── Per-item queue operations ─────────────────────────────────────────────────
 
 describe("removeQueueItem", () => {

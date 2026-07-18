@@ -77,28 +77,6 @@
     <div class="flex-1"></div>
     <button
       type="button"
-      title="Hide sidebar (coming soon)"
-      class="inline-flex h-[26px] w-[26px] items-center justify-center rounded-[6px] text-fg-muted transition-colors hover:bg-bg-hover"
-      data-tauri-drag-region="false"
-    >
-      <svg
-        class="h-[13px] w-[13px]"
-        viewBox="0 0 16 16"
-        fill="none"
-        aria-hidden="true"
-        ><rect
-          x="1.5"
-          y="2.5"
-          width="13"
-          height="11"
-          rx="1.5"
-          stroke="currentColor"
-          stroke-width="1.3"
-        /><path d="M5.5 2.5v11" stroke="currentColor" stroke-width="1.3" />
-      </svg>
-    </button>
-    <button
-      type="button"
       title="Search · ⌘K"
       class="inline-flex h-[26px] w-[26px] items-center justify-center rounded-[6px] text-fg-muted transition-colors hover:bg-bg-hover"
       data-tauri-drag-region="false"

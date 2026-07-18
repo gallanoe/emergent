@@ -42,7 +42,7 @@ let outcome = if let Some(first) = args.options.first() {
 
 This handler is wired into the ACP client's `on_receive_request` callback in `lifecycle.rs`, and it responds immediately — there is no prompt to the user, no queue, no policy check.
 
-The frontend has a **forward-looking, currently-unused** `"permission"` glyph state in `ToolStatusGlyph.svelte` (a warning-colored indicator). The glyph bolts a synthetic `"permission"` member onto the tool-call status union locally; its comment says _"The backend doesn't emit permission yet; the glyph is ready so the UI can wire it up the moment the state lands."_ The underlying `DisplayToolCall["status"]` union in `stores/types.ts` has no real `permission` member, and the thread-level `ThreadProcessStatus` union omits it too.
+There is no frontend surface for permission requests either: the `DisplayToolCall["status"]` union in `stores/types.ts` has no `permission` member, and the thread-level `ThreadProcessStatus` union omits it too.
 
 **Impact.** Agents run effectively unattended: any tool the agent's CLI would gate behind a permission prompt is silently approved.
 

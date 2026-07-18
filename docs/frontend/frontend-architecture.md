@@ -85,10 +85,7 @@ Tasks are **not** init-only: live `task:created`/`task:updated` listeners keep t
 
 ### 2.6 Vestigial surfaces
 
-Several surfaces are wired but dead, and are candidates for deletion:
-
 - **Legacy "swarm" naming** — the sidebar's "swarm" button just shows the overview, and the internal selection ids are still named `selectedSwarm`/`selectedSwarmId` — a _workspace_ is the "swarm" in old naming. The naming is stale, not the behavior.
-- **Forward-looking / orphan pieces** — `ToolStatusGlyph`'s `permission` state (ACP permission requests are auto-approved today, §6.7), `chat-utils.ts`'s tested-but-unimported `isNewTurn`, the `MiniMetric` overview component, and the inert hide-sidebar button. Each is implemented and often unit-tested, but rendered by nothing.
 
 ---
 
