@@ -18,10 +18,6 @@ use tokio::sync::{broadcast, mpsc};
 
 use super::AgentCommand;
 
-// ---------------------------------------------------------------------------
-// Helper methods for extracting payload fields from schema types
-// ---------------------------------------------------------------------------
-
 pub(crate) fn tool_call_status_str(status: &acp::schema::v1::ToolCallStatus) -> String {
     serde_json::to_value(status)
         .ok()
@@ -271,10 +267,6 @@ pub(crate) fn build_permission_response(
     RequestPermissionResponse::new(outcome)
 }
 
-// ---------------------------------------------------------------------------
-// ACP command loop — runs on the dedicated ACP thread
-// ---------------------------------------------------------------------------
-
 /// Process commands from the main thread on the ACP thread.
 /// Handles prompt/cancel/config/shutdown while supporting concurrent
 /// cancel and config changes during an in-flight prompt.
@@ -384,7 +376,6 @@ pub(crate) async fn agent_command_loop(
                             stop_reason
                         );
 
-                        // Emit per-turn usage if the agent reported it.
                         // No cfg gate needed: "unstable" feature is always active
                         // at workspace level and emergent-core has no features table.
                         if let Some(usage) = resp.usage {
@@ -461,10 +452,6 @@ pub(crate) async fn agent_command_loop(
         }
     }
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

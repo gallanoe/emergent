@@ -64,10 +64,7 @@ function createAppState() {
   /** Bumped by teardown so an in-flight setupListeners knows to abandon. */
   let setupEpoch = 0;
 
-  // ── Initialization ────────────────────────────────────────────
-
   async function setupAfterConnect() {
-    // Load existing workspaces
     try {
       const wsList = await invoke<WorkspaceSummary[]>("list_workspaces");
       for (const ws of wsList) {
@@ -81,7 +78,6 @@ function createAppState() {
       if (workspaces.length > 0 && !selectedWorkspaceId) {
         selectedWorkspaceId = workspaces[0]!.id;
       }
-      // Load agent definitions for each workspace
       for (const ws of workspaces) {
         try {
           const defs = await invoke<AgentDefinition[]>("list_agent_definitions", {
@@ -96,7 +92,6 @@ function createAppState() {
         }
       }
 
-      // Load persisted thread mappings for each workspace
       for (const ws of workspaces) {
         try {
           const mappings = await invoke<ThreadMapping[]>("list_thread_mappings", {
@@ -119,7 +114,6 @@ function createAppState() {
         }
       }
 
-      // Load tasks for each workspace
       for (const ws of workspaces) {
         try {
           const taskList = await invoke<DisplayTask[]>("list_tasks", {
@@ -692,7 +686,6 @@ function createAppState() {
       if (!workspaceId) return;
       // Kill on backend and remove persisted mapping
       await invoke("delete_thread", { threadId, workspaceId });
-      // Remove from frontend store
       agentStore.deleteThread(threadId);
       // If we're viewing this thread, go back to thread list
       if (selectedThreadId === threadId) {

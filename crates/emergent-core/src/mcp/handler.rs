@@ -12,10 +12,6 @@ use super::token_registry::TokenRegistry;
 use crate::agent::AgentManager;
 use crate::task::{SubscribeMode, TaskManager};
 
-// ---------------------------------------------------------------------------
-// MCP Handler — serves MCP tools, calls AgentManager directly
-// ---------------------------------------------------------------------------
-
 /// MCP server handler that calls AgentManager directly (no socket proxy).
 /// Each tool reads the agent_id from the bearer token in the HTTP request parts.
 #[derive(Clone)]
@@ -25,8 +21,6 @@ pub struct McpHandler {
     task_manager: Arc<TaskManager>,
     tool_router: rmcp::handler::server::router::tool::ToolRouter<Self>,
 }
-
-// -- Parameter structs for MCP tools --
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct CreateTaskParams {

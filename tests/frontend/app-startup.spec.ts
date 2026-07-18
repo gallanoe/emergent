@@ -1,4 +1,3 @@
-// tests/frontend/app-startup.spec.ts
 import { test, expect } from "@playwright/test";
 
 /**
@@ -7,14 +6,12 @@ import { test, expect } from "@playwright/test";
  */
 const emptyStateMock = `
 (function() {
-  // Real app uses: import.meta.env.VITE_DEMO_MODE === "true" || __EMERGENT_DEMO_MODE__ === true
   window.__EMERGENT_DEMO_MODE__ = false;
   let callbackId = 0;
   const callbacks = {};
 
   window.__TAURI_INTERNALS__ = {
     invoke: function(cmd, args) {
-      // Handle Tauri event plugin commands (listen, unlisten, emit)
       if (cmd.startsWith("plugin:event|")) return Promise.resolve(args && args.handler);
 
       const responses = {
@@ -56,7 +53,6 @@ test.describe("app startup", () => {
     await page.addInitScript(emptyStateMock);
     await page.goto("/");
 
-    // App renders directly with no loading state
     await expect(page.locator("text=Starting…")).not.toBeVisible();
 
     await expect(page.getByTestId("frontend-create-workspace")).toBeVisible();

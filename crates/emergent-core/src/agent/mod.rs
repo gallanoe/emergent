@@ -212,10 +212,8 @@ impl AgentManager {
     }
 
     pub async fn delete_agent(&self, agent_id: &str) -> Result<(), String> {
-        // Kill all threads for this agent first
         self.threads.kill_threads_for_agent(agent_id).await?;
 
-        // Remove from registry and get workspace_id for persistence
         let workspace_id = {
             let mut reg = self.registry.write().await;
             let def = reg.delete_agent(agent_id)?;
@@ -223,7 +221,6 @@ impl AgentManager {
         };
         self.persist_agents(&workspace_id).await;
 
-        // Remove the agent's host-side directory
         if let Some(ws_path) = self.workspace_path(&workspace_id).await {
             let agent_dir =
                 crate::workspace::paths::WorkspacePaths::from_dir(ws_path).agent_dir(agent_id);
@@ -255,10 +252,6 @@ impl AgentManager {
             .collect()
     }
 
-    // -----------------------------------------------------------------------
-    // Thread lifecycle (coordinator → thread manager)
-    // -----------------------------------------------------------------------
-
     /// Spawn a new thread under an agent definition.
     /// Reads CLI and workspace from the definition, validates the container,
     /// then delegates to ThreadManager.
@@ -267,7 +260,6 @@ impl AgentManager {
         agent_id: &str,
         task_id: Option<String>,
     ) -> Result<String, String> {
-        // Read agent definition
         let definition = {
             let reg = self.registry.read().await;
             reg.get_agent(agent_id)
@@ -301,7 +293,6 @@ impl AgentManager {
         agent_id: &str,
         acp_session_id: &str,
     ) -> Result<(), String> {
-        // Read agent definition
         let definition = {
             let reg = self.registry.read().await;
             reg.get_agent(agent_id)
@@ -601,4 +592,3 @@ impl AgentManager {
             .map(|(ws, _)| ws)
     }
 }
-

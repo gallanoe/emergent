@@ -55,7 +55,6 @@
 <aside
   class="flex h-full w-[240px] min-h-0 shrink-0 flex-col border-r border-border-default bg-bg-sidebar"
 >
-  <!-- 1. Window chrome strip -->
   <div
     class="flex h-[34px] items-center gap-[6px] pr-[10px]"
     class:pl-[72px]={isMacOS}
@@ -74,7 +73,6 @@
     </button>
   </div>
 
-  <!-- 2. Workspace switcher -->
   <div class="px-[8px] pt-[2px] pb-[10px]">
     <WorkspaceSwitcher
       {workspaces}
@@ -87,7 +85,6 @@
     />
   </div>
 
-  <!-- 3. Primary actions -->
   <div class="flex flex-col gap-px px-[8px] pb-[6px]">
     <button
       type="button"
@@ -128,7 +125,6 @@
     </button>
   </div>
 
-  <!-- 4. Agents list -->
   <div class="flex min-h-0 flex-1 flex-col">
     <div class="flex items-center gap-1.5 px-3 pt-3 pb-1.5 pl-[12px]">
       <SLabel>AGENTS</SLabel>
@@ -175,7 +171,6 @@
     </div>
   </div>
 
-  <!-- 5. Footer -->
   <div
     class="flex gap-1 border-t border-border-default px-[10px] py-2 [gap:4px] [padding-top:8px] [padding-bottom:8px]"
   >

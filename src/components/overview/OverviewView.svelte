@@ -25,7 +25,6 @@
 
   let { workspace, tasks, onSelectThread, onOpenTasks }: Props = $props();
 
-  // Load persisted usage for the current workspace whenever it changes.
   $effect(() => {
     usageStore.loadForWorkspace(workspace.id);
   });
@@ -115,7 +114,6 @@
 <div class="flex min-h-0 min-w-0 flex-1 flex-col">
   <div class="min-h-0 flex-1 overflow-y-auto">
     <div class="mx-auto flex max-w-[1040px] flex-col gap-6 px-8 pb-10 pt-7">
-      <!-- Hero -->
       <div class="flex items-start gap-4">
         <span
           class="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] bg-fg-heading text-[20px] font-bold leading-none tracking-[-0.02em] text-bg-base"
@@ -141,7 +139,6 @@
         </Button>
       </div>
 
-      <!-- Stat tiles -->
       <div class="grid grid-cols-4 gap-3">
         <StatTile
           label="Active agents"
@@ -165,7 +162,6 @@
         />
       </div>
 
-      <!-- Tokens -->
       <div>
         <section
           class="overflow-hidden rounded-[10px] border border-border-default bg-bg-elevated"
@@ -227,7 +223,6 @@
         </section>
       </div>
 
-      <!-- Live sessions + pipeline -->
       <div class="grid grid-cols-[1.4fr_1fr] gap-3">
         <section
           class="overflow-hidden rounded-[10px] border border-border-default bg-bg-base"

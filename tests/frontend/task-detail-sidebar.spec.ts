@@ -25,11 +25,8 @@ test("task detail sidebar resolves the task, its parent, and its blockers", asyn
   const sidebar = page.getByTestId("task-detail-sidebar");
   await expect(sidebar).toBeVisible();
 
-  // The task itself.
   await expect(sidebar.getByText("Document the quantization tradeoff in README")).toBeVisible();
-  // Its parent, resolved by id out of the global task record.
   await expect(sidebar.getByText(/Drop CHROMA_WEIGHT/)).toBeVisible();
-  // Its blocker, likewise resolved by id.
   await expect(sidebar.getByText(/Verify palette delta/)).toBeVisible();
 });
 

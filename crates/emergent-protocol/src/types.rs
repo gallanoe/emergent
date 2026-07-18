@@ -1,9 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-// ---------------------------------------------------------------------------
-// Event payload structs (emitted as notifications to clients)
-// ---------------------------------------------------------------------------
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MessageChunkPayload {
     pub thread_id: String,
@@ -94,10 +90,6 @@ pub struct NudgeDeliveredPayload {
     pub count: usize,
 }
 
-// ---------------------------------------------------------------------------
-// AgentStatus
-// ---------------------------------------------------------------------------
-
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum AgentStatus {
     Initializing,
@@ -118,10 +110,6 @@ impl std::fmt::Display for AgentStatus {
         }
     }
 }
-
-// ---------------------------------------------------------------------------
-// Workspace types
-// ---------------------------------------------------------------------------
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct WorkspaceId(pub String);
@@ -244,10 +232,6 @@ mod base64_bytes {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Agent detection types
-// ---------------------------------------------------------------------------
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AgentInfo {
     pub name: String,
@@ -265,10 +249,6 @@ pub struct KnownAgent {
     pub provider: String,
 }
 
-// ---------------------------------------------------------------------------
-// Agent definition (template for creating threads)
-// ---------------------------------------------------------------------------
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AgentDefinition {
     pub id: String,
@@ -280,10 +260,6 @@ pub struct AgentDefinition {
     pub provider: Option<String>,
 }
 
-// ---------------------------------------------------------------------------
-// Thread summary (for list_threads response)
-// ---------------------------------------------------------------------------
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ThreadSummary {
     pub id: String,
@@ -293,10 +269,6 @@ pub struct ThreadSummary {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub acp_session_id: Option<String>,
 }
-
-// ---------------------------------------------------------------------------
-// Config option types (ACP session config → daemon-to-client)
-// ---------------------------------------------------------------------------
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ConfigSelectOption {
@@ -344,10 +316,6 @@ pub struct ConfigUpdatePayload {
     pub changes: Vec<ConfigChangeEntry>,
 }
 
-// ---------------------------------------------------------------------------
-// Turn-usage payload (per-PromptResponse token accounting)
-// ---------------------------------------------------------------------------
-
 pub fn is_zero_u64(v: &u64) -> bool {
     *v == 0
 }
@@ -369,10 +337,6 @@ pub struct TurnUsagePayload {
     pub at: String,
 }
 
-// ---------------------------------------------------------------------------
-// Token-usage payload
-// ---------------------------------------------------------------------------
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ThreadTokenUsagePayload {
     pub thread_id: String,
@@ -384,10 +348,6 @@ pub struct ThreadTokenUsagePayload {
     pub cost_currency: Option<String>,
 }
 
-// ---------------------------------------------------------------------------
-// Agent definition notification payloads
-// ---------------------------------------------------------------------------
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AgentCreatedPayload {
     pub definition_id: String,
@@ -397,10 +357,6 @@ pub struct AgentCreatedPayload {
 pub struct AgentDeletedPayload {
     pub definition_id: String,
 }
-
-// ---------------------------------------------------------------------------
-// Notification enum (wraps all daemon-to-client events)
-// ---------------------------------------------------------------------------
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -502,10 +458,6 @@ impl Notification {
         }
     }
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

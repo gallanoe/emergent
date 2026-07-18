@@ -22,10 +22,6 @@ use agent_client_protocol::schema::v1::{
 };
 use tokio_util::compat::{TokioAsyncReadCompatExt as _, TokioAsyncWriteCompatExt as _};
 
-// ---------------------------------------------------------------------------
-// Shared mock state
-// ---------------------------------------------------------------------------
-
 struct MockState {
     next_session_id: u64,
     model: String,
@@ -70,10 +66,6 @@ impl MockState {
         ]
     }
 }
-
-// ---------------------------------------------------------------------------
-// Notification helpers
-// ---------------------------------------------------------------------------
 
 fn send_session_update(
     cx: &acp::ConnectionTo<acp::Client>,
@@ -122,10 +114,6 @@ fn config_value_to_string(value: &SessionConfigOptionValue) -> String {
         }
     }
 }
-
-// ---------------------------------------------------------------------------
-// Main
-// ---------------------------------------------------------------------------
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> acp::schema::v1::Result<()> {
@@ -214,7 +202,6 @@ async fn main() -> acp::schema::v1::Result<()> {
                         cx: acp::ConnectionTo<acp::Client>| {
                 let session_id = args.session_id.clone();
 
-                // Extract prompt text
                 let text = args
                     .prompt
                     .iter()
@@ -233,12 +220,10 @@ async fn main() -> acp::schema::v1::Result<()> {
                 }
 
                 if text_lower.contains("think first") {
-                    // Emit thinking chunks, then message
                     send_thinking_chunk(&cx, &session_id, "Let me think about this...")?;
                     send_thinking_chunk(&cx, &session_id, " I need to consider the options.")?;
                     send_message_chunk(&cx, &session_id, "After thinking, here is my response.")?;
                 } else if text_lower.contains("use tools") {
-                    // Emit a tool call, then a message
                     let tool_call_id = ToolCallId::new("tc-001");
                     send_session_update(
                         &cx,
@@ -258,7 +243,6 @@ async fn main() -> acp::schema::v1::Result<()> {
 
                     send_message_chunk(&cx, &session_id, "I read the file successfully.")?;
                 } else if text_lower.contains("slow response") {
-                    // Chunks with delay
                     for chunk in ["Slow ", "response ", "coming ", "through."] {
                         send_message_chunk(&cx, &session_id, chunk)?;
                         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
@@ -278,7 +262,6 @@ async fn main() -> acp::schema::v1::Result<()> {
                     );
                     return Ok(());
                 } else if text_lower.contains("long response") {
-                    // Many chunks
                     for i in 0..20 {
                         send_message_chunk(
                             &cx,
@@ -287,7 +270,6 @@ async fn main() -> acp::schema::v1::Result<()> {
                         )?;
                     }
                 } else {
-                    // Default: echo back in chunks
                     let response = format!("Echo: {}", text);
                     let chunk_size = (response.len() / 3).max(1);
                     for chunk in response.as_bytes().chunks(chunk_size) {

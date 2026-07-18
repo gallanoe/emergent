@@ -95,7 +95,6 @@ function makeTask(overrides?: Partial<DisplayTask>): DisplayTask {
 describe("OverviewView", () => {
   beforeEach(() => {
     clearMocks();
-    // Default mock for get_workspace_usage called by usageStore $effect
     mockIPC((cmd) => {
       if (cmd === "get_workspace_usage") return { agents: [] };
     });

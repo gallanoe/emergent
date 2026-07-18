@@ -60,17 +60,14 @@
 <svelte:window onkeydown={handleKeydown} />
 
 <div class="flex flex-col min-h-0 flex-1">
-  <!-- Top bar -->
   <div
     class="flex items-center h-[38px] px-5 border-b border-border-default flex-shrink-0 relative z-[60]"
   >
     <span class="text-[13px] font-semibold text-fg-heading">New Agent</span>
   </div>
 
-  <!-- Centered form -->
   <div class="flex-1 flex items-center justify-center overflow-y-auto p-8">
     <div class="w-full max-w-[420px] flex flex-col gap-5">
-      <!-- CLI dropdown -->
       <div class="flex flex-col gap-1.5">
         <label class="text-[11px] font-medium text-fg-muted" for="agent-cli"
           >CLI</label
@@ -110,7 +107,6 @@
           </button>
 
           {#if dropdownOpen}
-            <!-- Backdrop -->
             <!-- svelte-ignore a11y_no_static_element_interactions -->
             <div
               class="fixed inset-0 z-40"
@@ -158,7 +154,6 @@
         </div>
       </div>
 
-      <!-- Name -->
       <div class="flex flex-col gap-1.5">
         <label class="text-[11px] font-medium text-fg-muted" for="agent-name"
           >Name</label
@@ -174,7 +169,6 @@
     </div>
   </div>
 
-  <!-- Footer -->
   <div
     class="border-t border-border-default px-5 py-3 flex justify-end gap-2 flex-shrink-0"
   >

@@ -1,4 +1,3 @@
-<!-- src/components/chat/ThinkingBlock.svelte -->
 <script lang="ts">
   import { ChevronRight, ChevronDown } from "@lucide/svelte";
   import { slide } from "svelte/transition";
@@ -58,7 +57,6 @@
   class:border-border-default={isExpanded}
   class:border-transparent={!isExpanded}
 >
-  <!-- Header: icon + label + peek + duration + chevron. Whole row toggles. -->
   <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
   <div
     class="interactive flex items-center gap-[9px] px-2.5 py-[5px] min-h-[26px]"
@@ -92,7 +90,6 @@
       {isStreaming ? "Thinking" : "Thought"}
     </span>
 
-    <!-- Peek: collapsed-only italic serif preview of the body. -->
     {#if !isExpanded && peek}
       <span
         class="min-w-0 flex-1 truncate italic text-fg-muted text-[12px]"

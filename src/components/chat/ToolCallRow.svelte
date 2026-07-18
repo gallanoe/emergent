@@ -1,4 +1,3 @@
-<!-- src/components/ToolCallRow.svelte -->
 <script lang="ts">
   import { ChevronRight, ChevronDown } from "@lucide/svelte";
   import { slide } from "svelte/transition";
