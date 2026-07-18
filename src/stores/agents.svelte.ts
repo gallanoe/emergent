@@ -414,7 +414,6 @@ function createAgentStore() {
       }
     }
 
-    // Mark every queued item as failed — items remain in the chip stack with error styling.
     for (const item of thread.pendingQueue) {
       item.failed = true;
     }

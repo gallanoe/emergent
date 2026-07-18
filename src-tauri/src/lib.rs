@@ -58,10 +58,8 @@ pub fn run() {
         .setup(|app| {
             let _rt_guard = tauri::async_runtime::handle().inner().enter();
 
-            // Create shared notification channel
             let (event_tx, _) = broadcast::channel::<Notification>(1024);
 
-            // Create shared workspace state
             let workspace_state = emergent_core::workspace::new_shared_state();
 
             // Terminal output is delivered through this sink (straight to the
@@ -72,7 +70,6 @@ pub fn run() {
                     handle: app.handle().clone(),
                 });
 
-            // Create workspace manager (async — use block_on)
             let workspace_manager = tauri::async_runtime::block_on(async {
                 let wm = WorkspaceManager::new(workspace_state.clone(), terminal_sink).await;
                 if let Err(e) = wm.load_workspaces().await {
@@ -81,17 +78,14 @@ pub fn run() {
                 Arc::new(wm)
             });
 
-            // Create shared token registry
             let token_registry = Arc::new(TokenRegistry::new());
 
-            // Create the agent manager (new API: workspace_state, event_tx, token_registry)
             let manager = Arc::new(AgentManager::new(
                 workspace_state.clone(),
                 event_tx.clone(),
                 token_registry.clone(),
             ));
 
-            // Create task manager
             let task_manager = Arc::new(TaskManager::new(manager.clone(), event_tx.clone()));
             let event_rx = event_tx.subscribe();
             task_manager.start_event_loop(event_rx);
@@ -120,7 +114,6 @@ pub fn run() {
                 }
             }
 
-            // Load persisted agent definitions, thread mappings, and tasks for all workspaces
             tauri::async_runtime::block_on(async {
                 // Build the set of "recoverable" thread IDs — threads that either
                 // are currently live or have a persisted mapping that the frontend
@@ -152,7 +145,6 @@ pub fn run() {
                         )
                         .await
                     {
-                        // Record thread_ids for stale-task recovery.
                         for m in &mappings {
                             recoverable_thread_ids.insert(m.thread_id.clone());
                         }
@@ -165,8 +157,6 @@ pub fn run() {
                             .await;
                     }
 
-                    // Seed in-memory usage totals from the persisted threads.json
-                    // so the OverviewView dashboard shows correct values after restart.
                     manager
                         .thread_manager()
                         .seed_usage_from_dir(ws_id, workspace_path)
@@ -180,8 +170,6 @@ pub fn run() {
                     .recover_stale_tasks(&recoverable_thread_ids)
                     .await;
 
-                // Resume every workspace's tasks: working threads, and any
-                // pending tasks whose blockers are all completed.
                 for ws_id in all_workspaces {
                     task_manager.resume_workspace_tasks(&ws_id).await;
                 }
@@ -191,10 +179,8 @@ pub fn run() {
             app.manage(task_manager.clone());
             app.manage(workspace_manager);
 
-            // Set up system tray icon
             tray::setup_tray(app).expect("failed to build system tray");
 
-            // Bridge notifications to Tauri events
             let bridge_handle = app.handle().clone();
             let mut bridge_rx = event_tx.subscribe();
             tauri::async_runtime::spawn(async move {

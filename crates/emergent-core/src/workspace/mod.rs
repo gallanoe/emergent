@@ -144,7 +144,6 @@ impl WorkspaceManager {
             .await
             .map_err(|e| format!("Failed to create workspace dir: {}", e))?;
 
-        // Write metadata.json
         let metadata = WorkspaceMetadata {
             id: id.clone(),
             name: name.clone(),

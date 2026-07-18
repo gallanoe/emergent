@@ -38,10 +38,6 @@ pub trait ProcessSpawner: Send + Sync {
     ) -> Result<Self::Process, String>;
 }
 
-// ---------------------------------------------------------------------------
-// LocalProcessSpawner — runs the agent CLI directly via tokio::process::Command
-// ---------------------------------------------------------------------------
-
 pub struct LocalProcess {
     child: tokio::process::Child,
     stdin: Option<tokio::process::ChildStdin>,

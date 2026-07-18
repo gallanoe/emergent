@@ -12,7 +12,7 @@ pub fn convert_config_options(acp_options: &[SessionConfigOption]) -> Vec<Config
 
 fn convert_one(opt: &SessionConfigOption) -> Option<ConfigOption> {
     let SessionConfigKind::Select(select) = &opt.kind else {
-        return None; // Only select options supported
+        return None;
     };
 
     let category = opt.category.as_ref().map(|c| match c {
@@ -48,7 +48,7 @@ fn convert_one(opt: &SessionConfigOption) -> Option<ConfigOption> {
                 })
                 .collect(),
         ),
-        _ => return None, // Unknown options variant
+        _ => return None,
     };
 
     Some(ConfigOption {
@@ -68,7 +68,7 @@ pub fn diff_config(old: &[ConfigOption], new: &[ConfigOption]) -> Vec<ConfigChan
         let old_opt = old.iter().find(|o| o.id == new_opt.id);
         let changed = match old_opt {
             Some(o) => o.current_value != new_opt.current_value,
-            None => true, // new option appeared
+            None => true,
         };
         if changed {
             let value_name = find_value_name(&new_opt.options, &new_opt.current_value)

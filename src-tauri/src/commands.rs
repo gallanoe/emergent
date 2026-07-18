@@ -17,8 +17,6 @@ pub async fn known_agents() -> Result<Vec<KnownAgent>, String> {
     Ok(detect::known_agents_on_host())
 }
 
-// ── Agent definition CRUD ─────────────────────────────────
-
 #[tauri::command]
 pub async fn create_agent(
     manager: State<'_, Arc<AgentManager>>,
@@ -90,8 +88,6 @@ pub async fn list_thread_mappings(
     manager.load_thread_mappings(&ws_id).await
 }
 
-// ── Thread lifecycle ──────────────────────────────────────
-
 #[tauri::command]
 pub async fn spawn_thread(
     manager: State<'_, Arc<AgentManager>>,
@@ -146,8 +142,6 @@ pub async fn cancel_prompt(
 ) -> Result<(), String> {
     manager.cancel_prompt(&thread_id).await
 }
-
-// ── Backend message queue (view/edit/reorder/remove) ───────────
 
 #[tauri::command]
 pub async fn list_queue(
@@ -247,8 +241,6 @@ pub async fn set_thread_permissions(
         .await
         .map_err(|e| e.to_string())
 }
-
-// ── Workspace commands ─────────────────────────────────────
 
 #[tauri::command]
 pub async fn create_workspace(
@@ -350,8 +342,6 @@ pub async fn close_terminal_session(
     workspace_manager.close_terminal_session(&session_id).await
 }
 
-// ── Usage commands ────────────────────────────────────────
-
 #[tauri::command]
 pub async fn get_workspace_usage(
     manager: State<'_, Arc<AgentManager>>,
@@ -360,8 +350,6 @@ pub async fn get_workspace_usage(
     let ws_id = emergent_protocol::WorkspaceId::from(workspace_id.as_str());
     Ok(manager.thread_manager().get_workspace_usage(&ws_id).await)
 }
-
-// ── Task commands ─────────────────────────────────────────
 
 #[tauri::command]
 pub async fn create_task(
@@ -381,8 +369,8 @@ pub async fn create_task(
             agent_id,
             blocker_ids,
             parent_id,
-            None, // no creator_thread_id for Tauri-initiated tasks
-            None, // no subscribe for Tauri-initiated tasks
+            None,
+            None,
         )
         .await
 }

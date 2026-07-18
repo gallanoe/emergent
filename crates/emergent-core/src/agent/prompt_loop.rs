@@ -70,7 +70,6 @@ pub(crate) async fn prompt_loop(
         let system_block =
             build_system_block(is_first_turn, is_task_session, permission_change.as_deref());
 
-        // Emit permission change system message to frontend
         if let Some(ref perm_msg) = permission_change {
             let _ = event_tx.send(Notification::SystemMessage(SystemMessagePayload {
                 thread_id: agent_id.clone(),
@@ -91,7 +90,6 @@ pub(crate) async fn prompt_loop(
             continue;
         }
 
-        // Update state flags
         {
             let mut handle = handle_arc.lock().await;
             if !handle.has_prompted {

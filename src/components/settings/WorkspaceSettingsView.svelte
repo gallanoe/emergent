@@ -34,7 +34,6 @@
 <div class="flex min-w-0 flex-1 flex-col">
   <div class="min-h-0 flex-1 overflow-y-auto">
     <div class="mx-auto flex max-w-[720px] flex-col gap-7 px-8 pb-10 pt-7">
-      <!-- Hero -->
       <div class="flex items-start gap-4">
         <span
           class="inline-flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-[10px] bg-fg-heading text-[20px] font-bold tracking-[-0.02em] text-bg-base"
@@ -56,7 +55,6 @@
         </div>
       </div>
 
-      <!-- Workspace -->
       <section class="flex flex-col gap-[10px]">
         <SLabel>Workspace</SLabel>
         <div class="rounded-[10px] border border-border-default bg-bg-elevated">
@@ -104,7 +102,6 @@
         </div>
       </section>
 
-      <!-- Danger zone -->
       <section class="flex flex-col gap-[10px]">
         <SLabel color="var(--color-error)">Danger zone</SLabel>
         <div

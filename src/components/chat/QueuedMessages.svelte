@@ -97,7 +97,6 @@
       <!-- Header strip: toggle region · spacer · clear all. The divider below
            lives on the collapsible body so it slides away with it. -->
       <div class="flex items-center gap-2 px-3 py-2">
-        <!-- Left toggle region: status dot · count · hint · caret -->
         <div
           role="button"
           tabindex="0"
@@ -107,7 +106,6 @@
           onclick={toggleExpanded}
           onkeydown={handleToggleKey}
         >
-          <!-- Status dot: warning amber when working, muted otherwise -->
           <span
             class="h-[6px] w-[6px] shrink-0 rounded-full {working
               ? 'bg-warning'
@@ -155,12 +153,10 @@
       </div>
 
       {#if expanded}
-        <!-- Collapsible body — divider + rows slide together on toggle. -->
         <div
           transition:slide={{ duration: 150 }}
           class="border-t border-border-default"
         >
-          <!-- Scrollable row list, capped at ~170px (~3 visible rows) -->
           <ul
             id="queued-messages-list"
             class="m-0 list-none overflow-y-auto p-0"
@@ -174,7 +170,6 @@
                   ? 'border-l-2 border-l-error/50'
                   : ''}"
               >
-                <!-- Each row is a grid: 28px index / 1fr preview / auto gutter -->
                 <div
                   role="button"
                   tabindex="0"
@@ -189,7 +184,6 @@
                   onclick={() => toggleRow(item.id)}
                   onkeydown={(e) => handleRowKey(e, item.id)}
                 >
-                  <!-- Index badge -->
                   <span
                     class="font-[family-name:var(--font-mono)] text-[10.5px] font-medium leading-none tracking-[0.02em] {isFailed
                       ? 'text-error'
@@ -200,7 +194,6 @@
                     {String(i + 1).padStart(2, "0")}
                   </span>
 
-                  <!-- Preview text: truncated when collapsed, full when expanded -->
                   <span
                     class="min-w-0 text-[12.5px] leading-[1.5] {isSelected
                       ? 'break-words whitespace-normal text-fg-heading'
@@ -211,13 +204,11 @@
                     {item.content}
                   </span>
 
-                  <!-- Action gutter: edit + remove -->
                   <div
                     class="flex items-center gap-[2px] self-start"
                     onclick={(e) => e.stopPropagation()}
                     role="presentation"
                   >
-                    <!-- Edit — pulls item back into the composer -->
                     <button
                       type="button"
                       title="Edit — pull back into composer"
@@ -241,7 +232,6 @@
                       </svg>
                     </button>
 
-                    <!-- Remove -->
                     <button
                       type="button"
                       title="Remove from queue"
@@ -270,7 +260,6 @@
             {/each}
           </ul>
 
-          <!-- Soft bottom fade when more than 3 items overflow the card -->
           {#if items.length > 3}
             <div
               class="pointer-events-none absolute inset-x-0 bottom-0 h-[24px]"

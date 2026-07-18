@@ -230,7 +230,6 @@ pub(crate) async fn initialize_agent(
     let expect_echo_for_notif = expect_echo.clone();
     let expect_echo_for_loop = expect_echo.clone();
 
-    // Build the byte-stream transport for the ACP connection.
     let outgoing = child_stdin.compat_write();
     let incoming = child_stdout.compat();
     let transport = acp::ByteStreams::new(outgoing, incoming);
@@ -291,7 +290,6 @@ pub(crate) async fn initialize_agent(
                         async move |conn: acp::ConnectionTo<acp::Agent>| {
                             log::debug!("Agent {} starting ACP handshake", agent_id);
 
-                            // Initialize
                             let init_resp = conn
                                 .send_request(
                                     acp::schema::v1::InitializeRequest::new(ProtocolVersion::V1)
@@ -327,7 +325,6 @@ pub(crate) async fn initialize_agent(
                             let load_session_supported =
                                 init_resp.agent_capabilities.load_session;
 
-                            // Build MCP server config for swarm communication (HTTP)
                             let mcp_config = McpServer::Http(
                                 McpServerHttp::new(
                                     "emergent-swarm",
@@ -503,7 +500,6 @@ pub(crate) async fn initialize_agent(
     };
     let handle_arc = Arc::new(Mutex::new(handle));
 
-    // Initialize history and publish the handle before awaiting the handshake.
     history.write().await.entry(agent_id.clone()).or_default();
     agents
         .write()

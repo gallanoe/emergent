@@ -3,10 +3,6 @@ use emergent_core::agent::usage_store::{
 };
 use emergent_core::agent::thread_manager::ThreadMapping;
 
-// ---------------------------------------------------------------------------
-// Helper
-// ---------------------------------------------------------------------------
-
 fn delta(input: u64, output: u64, total: u64) -> TurnDelta {
     TurnDelta {
         input_tokens: input,
@@ -15,10 +11,6 @@ fn delta(input: u64, output: u64, total: u64) -> TurnDelta {
         ..Default::default()
     }
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 #[test]
 fn accumulates_delta_across_two_sessions() {
