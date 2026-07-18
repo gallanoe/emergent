@@ -938,8 +938,18 @@ fn mock_agent_bin() -> std::path::PathBuf {
 fn ensure_mock_agent() -> std::path::PathBuf {
     let bin = mock_agent_bin();
     if !bin.exists() {
+        // Build into the target dir this test was itself built into, rather than
+        // the workspace default. Under `cargo llvm-cov` the two differ (it
+        // redirects to `target/llvm-cov-target`), so a bare build would land the
+        // artifact somewhere `mock_agent_bin` never looks.
+        let target_dir = bin
+            .parent()
+            .and_then(|profile| profile.parent())
+            .expect("mock-agent path has target/<profile>/ ancestors");
         let status = std::process::Command::new(env!("CARGO"))
             .args(["build", "-p", "mock-agent"])
+            .arg("--target-dir")
+            .arg(target_dir)
             .status()
             .expect("run `cargo build -p mock-agent`");
         assert!(status.success(), "`cargo build -p mock-agent` failed");

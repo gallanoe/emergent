@@ -16,4 +16,5 @@ sample.logs
 graphify-out/
 tests/frontend/results/
 test-results/
+coverage/
 src-tauri/binaries/

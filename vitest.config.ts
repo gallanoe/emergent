@@ -11,5 +11,17 @@ export default defineConfig({
     environment: "jsdom",
     setupFiles: ["./src/test-setup.ts"],
     exclude: ["tests/frontend/**", "scripts/**", "node_modules/**", ".claude/**"],
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "html", "lcov"],
+      reportsDirectory: "./coverage/frontend",
+      include: ["src/**/*.{ts,svelte}"],
+      exclude: [
+        "src/**/*.test.ts",
+        "src/test-setup.ts",
+        "src/main.ts",
+        "src/stores/mock-data.svelte.ts",
+      ],
+    },
   },
 });
