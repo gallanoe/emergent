@@ -42,7 +42,6 @@ const baseProps = (overrides: Record<string, unknown> = {}) => ({
   onCreateWorkspace: (overrides.onCreateWorkspace as () => void) ?? (() => {}),
   onSelectAgent: (overrides.onSelectAgent as (id: string) => void) ?? (() => {}),
   onCreateAgent: (overrides.onCreateAgent as () => void) ?? (() => {}),
-  onNewThread: (overrides.onNewThread as () => void) ?? (() => {}),
   onOpenTasks: (overrides.onOpenTasks as () => void) ?? (() => {}),
   onOpenAppSettings: (overrides.onOpenAppSettings as () => void) ?? (() => {}),
   onOpenWorkspaceSettings: (overrides.onOpenWorkspaceSettings as () => void) ?? (() => {}),
@@ -58,20 +57,16 @@ describe("InnerSidebar", () => {
   it("renders the five shell regions when a workspace is present", () => {
     renderSidebar();
     expect(screen.getByText("AGENTS")).toBeTruthy();
-    expect(screen.getByText("New thread")).toBeTruthy();
     expect(screen.getByText("Swarm")).toBeTruthy();
     expect(screen.getByText("Tasks")).toBeTruthy();
     expect(screen.getByTitle("Application settings")).toBeTruthy();
     expect(screen.getByText("Research Swarm")).toBeTruthy();
   });
 
-  it("fires primary action callbacks for New thread, Swarm, and Tasks", async () => {
-    const onNewThread = vi.fn();
+  it("fires primary action callbacks for Swarm and Tasks", async () => {
     const onOpenOverview = vi.fn();
     const onOpenTasks = vi.fn();
-    renderSidebar({ onNewThread, onOpenOverview, onOpenTasks });
-    await fireEvent.click(screen.getByText("New thread"));
-    expect(onNewThread).toHaveBeenCalled();
+    renderSidebar({ onOpenOverview, onOpenTasks });
     await fireEvent.click(screen.getByText("Swarm"));
     expect(onOpenOverview).toHaveBeenCalled();
     await fireEvent.click(screen.getByText("Tasks"));

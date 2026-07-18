@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Cog, ListChecks, Orbit, Plus, Search } from "@lucide/svelte";
   import type { ActiveView, DisplayWorkspace } from "../../stores/types";
-  import { AgentAvatar, Kbd, SLabel } from "../../lib/primitives";
+  import { AgentAvatar, SLabel } from "../../lib/primitives";
   import WorkspaceSwitcher from "./WorkspaceSwitcher.svelte";
 
   interface Props {
@@ -16,7 +16,6 @@
     onCreateWorkspace: () => void;
     onSelectAgent: (id: string) => void;
     onCreateAgent: () => void;
-    onNewThread: () => void;
     /** Opens the overview: used by both the nav entry and the workspace-name zone. */
     onOpenOverview: () => void;
     onOpenTasks: () => void;
@@ -38,7 +37,6 @@
     onCreateWorkspace,
     onSelectAgent,
     onCreateAgent,
-    onNewThread,
     onOpenOverview,
     onOpenTasks,
     onOpenAppSettings,
@@ -91,17 +89,6 @@
 
   <!-- 3. Primary actions -->
   <div class="flex flex-col gap-px px-[8px] pb-[6px]">
-    <button
-      type="button"
-      class="flex h-7 w-full items-center gap-2.5 rounded-[6px] px-2.5 py-1.5 text-left text-[12.5px] font-medium text-fg-heading transition-colors hover:bg-bg-hover"
-      onclick={onNewThread}
-    >
-      <span class="inline-flex w-[18px] justify-center text-fg-heading"
-        ><Plus size={14} /></span
-      >
-      <span class="flex-1">New thread</span>
-      <Kbd keys={["⌘", "N"]} />
-    </button>
     <button
       type="button"
       title="Swarm dashboard"

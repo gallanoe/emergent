@@ -172,7 +172,6 @@
     onCreateWorkspace={() => (showCreateWorkspace = true)}
     onSelectAgent={(id) => appState.selectAgent(id)}
     onCreateAgent={() => appState.startCreatingAgent()}
-    onNewThread={handleNewThread}
     onOpenOverview={() => appState.showOverview()}
     overviewActive={appState.activeView === "overview"}
     onOpenTasks={() => appState.showTasks()}
