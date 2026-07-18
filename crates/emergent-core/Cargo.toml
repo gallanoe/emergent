@@ -3,6 +3,21 @@ name = "emergent-core"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+# Exposes the `agent::test_support` seams (fake threads, direct usage-store
+# injection) to the out-of-crate integration tests in `tests/`, which cannot
+# reach `#[cfg(test)]` internals. Off by default: `cargo build` / `tauri build`
+# — every path that produces a shipped binary — compile without it, so the
+# seams are absent from released code.
+#
+# Caveat: under `cargo test --workspace`, Cargo's feature unification turns
+# this on for the single `emergent-core` rlib that `src-tauri` also links, so
+# a stray production call to a seam would compile *during tests*. It still
+# fails `cargo build`, which is what CI and releases run, so the boundary
+# holds where it matters — but don't read a green `cargo test` as proof that
+# production code is seam-free.
+test-support = []
+
 [dependencies]
 emergent-protocol = { path = "../emergent-protocol" }
 serde = { workspace = true }
@@ -25,5 +40,8 @@ libc = "0.2"
 shell-words = "1"
 
 [dev-dependencies]
+# Self-reference so `cargo test` compiles tests/ against a build with
+# `test-support` on, without any extra --features flag at the call site.
+emergent-core = { path = ".", features = ["test-support"] }
 tempfile = "3"
 reqwest = { version = "0.12", features = ["json"] }

@@ -4,6 +4,8 @@ mod prompt_loop;
 pub mod queue;
 pub mod registry;
 pub mod spawner;
+#[cfg(feature = "test-support")]
+mod test_support;
 pub mod thread_manager;
 pub mod usage_store;
 

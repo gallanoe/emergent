@@ -152,6 +152,37 @@ function toDisplayThread(conn: ThreadState): DisplayThread {
   };
 }
 
+/** The replayable subset of thread-scoped notifications. */
+type DaemonNotification =
+  | ({ type: "thread:message-chunk" } & MessageChunkPayload)
+  | ({ type: "thread:tool-call-update" } & ToolCallEventPayload)
+  | ({ type: "thread:prompt-complete" } & PromptCompletePayload)
+  | ({ type: "thread:status-change" } & StatusChangePayload)
+  | ({ type: "thread:config-update" } & ConfigUpdatePayload)
+  | ({ type: "thread:user-message" } & UserMessagePayload)
+  | ({ type: "thread:turn-dispatched" } & TurnDispatchedPayload)
+  | ({ type: "thread:error" } & ThreadErrorPayload)
+  | ({ type: "thread:nudge-delivered" } & NudgeDeliveredPayload)
+  | ({ type: "thread:system-message" } & SystemMessagePayload)
+  | ({ type: "thread:session-ready" } & SessionReadyPayload);
+
+/** Shape of the unit-test-only seam on `agentStore`. See `_test` below. */
+interface AgentStoreTestApi {
+  handlePromptComplete: (payload: PromptCompletePayload) => void;
+  handleStatusChange: (payload: StatusChangePayload) => void;
+  handleError: (payload: ThreadErrorPayload) => void;
+  handleUserMessage: (payload: UserMessagePayload) => void;
+  handleQueueChanged: (payload: QueueChangedPayload) => void;
+  handleTurnDispatched: (payload: TurnDispatchedPayload) => void;
+  replayNotifications: (notifications: DaemonNotification[]) => void;
+  readonly chunkBuffers: Record<string, ChunkBuffer>;
+  injectThread: (
+    threadId: string,
+    partial: Partial<ThreadState> & { id: string; agentDefinitionId: string },
+  ) => void;
+  removeThread: (threadId: string) => void;
+}
+
 function createAgentStore() {
   // Plain object instead of Map — Svelte 5 reliably deep-proxies plain objects
   let threads: Record<string, ThreadState> = $state({});
@@ -918,19 +949,6 @@ function createAgentStore() {
     return Object.values(threads).filter((t) => t.agentDefinitionId === agentDefinitionId);
   }
 
-  type DaemonNotification =
-    | ({ type: "thread:message-chunk" } & MessageChunkPayload)
-    | ({ type: "thread:tool-call-update" } & ToolCallEventPayload)
-    | ({ type: "thread:prompt-complete" } & PromptCompletePayload)
-    | ({ type: "thread:status-change" } & StatusChangePayload)
-    | ({ type: "thread:config-update" } & ConfigUpdatePayload)
-    | ({ type: "thread:user-message" } & UserMessagePayload)
-    | ({ type: "thread:turn-dispatched" } & TurnDispatchedPayload)
-    | ({ type: "thread:error" } & ThreadErrorPayload)
-    | ({ type: "thread:nudge-delivered" } & NudgeDeliveredPayload)
-    | ({ type: "thread:system-message" } & SystemMessagePayload)
-    | ({ type: "thread:session-ready" } & SessionReadyPayload);
-
   function replayNotifications(notifications: DaemonNotification[]) {
     // Local tool call accumulator — keeps live activeToolCalls clean
     const replayToolCalls: Record<string, Record<string, DisplayToolCall>> = {};
@@ -1143,41 +1161,54 @@ function createAgentStore() {
     refreshQueue,
     replayNotifications,
     syncThreadSnapshot,
-    // Exposed for testing only — do not call from production components
-    _test: {
-      handlePromptComplete,
-      handleStatusChange,
-      handleError,
-      handleUserMessage,
-      handleQueueChanged,
-      handleTurnDispatched,
-      replayNotifications,
-      get chunkBuffers() {
-        return chunkBuffers;
-      },
-      injectThread(
-        threadId: string,
-        partial: Partial<ThreadState> & { id: string; agentDefinitionId: string },
-      ) {
-        threads[threadId] = {
-          workspaceId: "ws-test",
-          cli: "claude",
-          provider: null,
-          agentName: "Test Thread",
-          status: "idle",
-          messages: [],
-          activeToolCalls: {},
-          stopReason: null,
-          pendingQueue: [],
-          configOptions: [],
-          drainQueueOnIdle: false,
-          ...partial,
-        } as ThreadState;
-      },
-      removeThread(threadId: string) {
-        delete threads[threadId];
-      },
-    },
+    // Internal seams for unit tests: the notification handlers and direct
+    // thread-map manipulation. These are closures over `threads`/`chunkBuffers`
+    // and so cannot live outside this factory.
+    //
+    // Vite inlines `import.meta.env.MODE` as a string literal at build time, so
+    // in dev and production this folds to `false` and the object literal below
+    // is dropped by dead-code elimination — the seam exists only under Vitest.
+    // The cast keeps the property's type non-optional so tests need no `!`.
+    _test:
+      import.meta.env.MODE === "test"
+        ? {
+            handlePromptComplete,
+            handleStatusChange,
+            handleError,
+            handleUserMessage,
+            handleQueueChanged,
+            handleTurnDispatched,
+            replayNotifications,
+            get chunkBuffers() {
+              return chunkBuffers;
+            },
+            injectThread(
+              threadId: string,
+              partial: Partial<ThreadState> & {
+                id: string;
+                agentDefinitionId: string;
+              },
+            ) {
+              threads[threadId] = {
+                workspaceId: "ws-test",
+                cli: "claude",
+                provider: null,
+                agentName: "Test Thread",
+                status: "idle",
+                messages: [],
+                activeToolCalls: {},
+                stopReason: null,
+                pendingQueue: [],
+                configOptions: [],
+                drainQueueOnIdle: false,
+                ...partial,
+              } as ThreadState;
+            },
+            removeThread(threadId: string) {
+              delete threads[threadId];
+            },
+          }
+        : (undefined as unknown as AgentStoreTestApi),
   };
 }
 

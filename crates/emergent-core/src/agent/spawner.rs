@@ -56,6 +56,7 @@ pub struct LocalProcess {
 impl LocalProcess {
     /// Construct a minimal stub for integration tests. The child is a real
     /// process (e.g. `true`) so `Child` is valid; stdin/stdout are not piped.
+    #[cfg(feature = "test-support")]
     pub fn new_for_test(child: tokio::process::Child) -> Self {
         Self {
             child,
