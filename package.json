@@ -17,8 +17,8 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:rust": "cargo test --workspace",
-    "test:rust:coverage": "cargo llvm-cov --workspace --ignore-filename-regex 'crates/mock-agent/' --html --output-dir coverage/rust",
-    "test:rust:coverage:lcov": "cargo llvm-cov --workspace --ignore-filename-regex 'crates/mock-agent/' --lcov --output-path coverage/rust/lcov.info",
+    "test:rust:coverage": "cargo llvm-cov --workspace --ignore-filename-regex 'crates/mock-agent/' --fail-under-lines 52 --html --output-dir coverage/rust",
+    "test:rust:coverage:lcov": "cargo llvm-cov --workspace --ignore-filename-regex 'crates/mock-agent/' --fail-under-lines 52 --lcov --output-path coverage/rust/lcov.info",
     "test:frontend": "bunx playwright test",
     "screenshot": "bun scripts/screenshot.ts",
     "prepare": "husky"

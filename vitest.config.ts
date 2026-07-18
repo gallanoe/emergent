@@ -22,6 +22,15 @@ export default defineConfig({
         "src/main.ts",
         "src/stores/mock-data.svelte.ts",
       ],
+      // Ratchet, set a couple of points under the measured baseline so normal
+      // churn doesn't trip the build. Raise these as coverage improves — they
+      // are a floor against regression, not a target.
+      thresholds: {
+        statements: 58,
+        branches: 43,
+        functions: 59,
+        lines: 56,
+      },
     },
   },
 });

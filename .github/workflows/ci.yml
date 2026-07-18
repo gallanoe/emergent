@@ -59,8 +59,10 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
-      - name: Test
-        run: bun run test
+      # Runs the same suite as `bun run test`, with coverage on top. Fails if
+      # coverage drops below the thresholds in vitest.config.ts.
+      - name: Test (with coverage)
+        run: bun run test:coverage
 
       - name: Install Playwright browsers
         run: bunx playwright install --with-deps chromium
@@ -74,5 +76,20 @@ jobs:
       - name: Rust lint
         run: bun run lint:rust
 
-      - name: Rust test
-        run: bun run test:rust
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      # Supersedes a plain `cargo test --workspace` — same tests, instrumented.
+      # Fails if line coverage drops below --fail-under-lines.
+      - name: Rust test (with coverage)
+        run: bun run test:rust:coverage:lcov
+
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage
+          path: |
+            coverage/frontend/lcov.info
+            coverage/rust/lcov.info
+          if-no-files-found: warn
