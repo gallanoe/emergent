@@ -237,7 +237,7 @@ pub(crate) async fn initialize_agent(
     // Spawn a dedicated OS thread with its own tokio runtime for the ACP connection.
     // The 0.11.1 SDK requires Send futures, so LocalSet is no longer needed.
     let thread_handle = std::thread::Builder::new()
-        .name(format!("acp-agent-{}", &agent_id))
+        .name(format!("acp-agent-{}", agent_id))
         .spawn(move || {
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
@@ -257,7 +257,7 @@ pub(crate) async fn initialize_agent(
                                         _cx: acp::ConnectionTo<acp::Agent>| {
                                 log::trace!(
                                     "Agent {} received ACP session update: {:?}",
-                                    &agent_id,
+                                    agent_id,
                                     std::mem::discriminant(&notification.update)
                                 );
                                 handle_session_update(
@@ -288,7 +288,7 @@ pub(crate) async fn initialize_agent(
                         let agent_id = agent_id.clone();
                         let event_tx_clone = event_tx_clone.clone();
                         async move |conn: acp::ConnectionTo<acp::Agent>| {
-                            log::debug!("Agent {} starting ACP handshake", &agent_id);
+                            log::debug!("Agent {} starting ACP handshake", agent_id);
 
                             // Initialize
                             conn.send_request(
@@ -346,8 +346,8 @@ pub(crate) async fn initialize_agent(
                                         SessionInit::Load { acp_session_id } => {
                                             log::info!(
                                                 "Agent {} loading existing session {}",
-                                                &agent_id,
-                                                &acp_session_id,
+                                                agent_id,
+                                                acp_session_id,
                                             );
                                             let session_id = SessionId::new(acp_session_id);
 
@@ -385,7 +385,7 @@ pub(crate) async fn initialize_agent(
                                 Ok((sid, config)) => {
                                     log::debug!(
                                         "Agent {} ACP session established: {:?}",
-                                        &agent_id,
+                                        agent_id,
                                         sid
                                     );
                                     // The main side emits SessionReady once it has
@@ -397,7 +397,7 @@ pub(crate) async fn initialize_agent(
                                 Err(e) => {
                                     log::error!(
                                         "Agent {} ACP handshake failed: {}",
-                                        &agent_id,
+                                        agent_id,
                                         e
                                     );
                                     let _ = init_tx.send(Err(e));

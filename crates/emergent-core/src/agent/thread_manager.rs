@@ -310,8 +310,8 @@ impl ThreadManager {
 
         log::info!(
             "Spawning thread {} (agent: {}, cli: {}, workspace: {})",
-            &thread_id,
-            &agent_definition_id,
+            thread_id,
+            agent_definition_id,
             agent_binary,
             workspace_id,
         );
@@ -374,7 +374,7 @@ impl ThreadManager {
         {
             Ok(p) => p,
             Err(e) => {
-                log::error!("Thread {} failed to start: {}", &id, e);
+                log::error!("Thread {} failed to start: {}", id, e);
                 self.token_registry.revoke_agent(&id);
                 return Err(e);
             }
@@ -385,7 +385,7 @@ impl ThreadManager {
         tokio::spawn(async move {
             match lifecycle::await_handshake(pending).await {
                 Ok(InitOutcome::Ready) => {
-                    log::info!("Thread {} spawned successfully", &id);
+                    log::info!("Thread {} spawned successfully", id);
                     // Persist thread mappings + usage after successful init
                     let workspace_dir = {
                         let state = ws_state.read().await;
@@ -409,10 +409,10 @@ impl ThreadManager {
                 Ok(InitOutcome::Cancelled) => {
                     // Stopped/killed during the handshake; the canceller already
                     // tore down the process and revoked the token. Nothing to do.
-                    log::info!("Thread {} cancelled during initialization", &id);
+                    log::info!("Thread {} cancelled during initialization", id);
                 }
                 Err(e) => {
-                    log::error!("Thread {} failed to initialize: {}", &id, e);
+                    log::error!("Thread {} failed to initialize: {}", id, e);
                     // Revoke the bearer token registered before spawn. Otherwise
                     // the token remains valid in the registry for a thread that
                     // does not exist.
@@ -452,10 +452,10 @@ impl ThreadManager {
 
         log::info!(
             "Resuming thread {} (agent: {}, session: {}, workspace: {})",
-            &thread_id,
-            &agent_definition_id,
-            &acp_session_id,
-            &workspace_id,
+            thread_id,
+            agent_definition_id,
+            acp_session_id,
+            workspace_id,
         );
 
         // Resolve and ensure the agent's home/working directory.
@@ -512,7 +512,7 @@ impl ThreadManager {
         {
             Ok(p) => p,
             Err(e) => {
-                log::error!("Thread {} failed to start resume: {}", &id, e);
+                log::error!("Thread {} failed to start resume: {}", id, e);
                 // Leave the dormant entry intact so the user can retry.
                 self.token_registry.revoke_agent(&id);
                 return Err(e);
@@ -523,7 +523,7 @@ impl ThreadManager {
         tokio::spawn(async move {
             match lifecycle::await_handshake(pending).await {
                 Ok(InitOutcome::Ready) => {
-                    log::info!("Thread {} resumed successfully", &id);
+                    log::info!("Thread {} resumed successfully", id);
                     // Promote: the live entry is now registered in `threads`
                     // by initialize_agent, so remove the dormant stub.
                     let mut dormant_guard = dormant.write().await;
@@ -535,10 +535,10 @@ impl ThreadManager {
                     // Stopped/killed during the handshake. The canceller decided
                     // the dormant fate (stop keeps the resumable stub, delete
                     // purges it) and revoked the token; leave it untouched.
-                    log::info!("Thread {} cancelled during resume", &id);
+                    log::info!("Thread {} cancelled during resume", id);
                 }
                 Err(e) => {
-                    log::error!("Thread {} failed to resume: {}", &id, e);
+                    log::error!("Thread {} failed to resume: {}", id, e);
                     // Leave the dormant entry intact so the user can retry.
                     token_registry_for_cleanup.revoke_agent(&id);
                     let _ = event_tx.send(Notification::Error(ThreadErrorPayload {

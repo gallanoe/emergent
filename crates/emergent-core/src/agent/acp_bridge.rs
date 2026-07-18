@@ -258,7 +258,7 @@ pub(crate) async fn agent_command_loop(
             AgentCommand::Prompt { text, reply } => {
                 log::debug!(
                     "Agent {} prompt: {}",
-                    &agent_id,
+                    agent_id,
                     if text.len() > 100 {
                         &text[..100]
                     } else {
@@ -293,7 +293,7 @@ pub(crate) async fn agent_command_loop(
                         cmd = command_rx.recv() => {
                             match cmd {
                                 Some(AgentCommand::Cancel { reply: cancel_reply }) => {
-                                    log::debug!("Agent {} cancel requested (during prompt)", &agent_id);
+                                    log::debug!("Agent {} cancel requested (during prompt)", agent_id);
                                     let cancel = CancelNotification::new(session_id.clone());
                                     match conn.send_notification(cancel) {
                                         Ok(()) => { let _ = cancel_reply.send(Ok(())); }
@@ -302,7 +302,7 @@ pub(crate) async fn agent_command_loop(
                                     // Continue waiting for prompt to finish after cancel
                                 }
                                 Some(AgentCommand::Shutdown) => {
-                                    log::debug!("Agent {} shutdown during prompt", &agent_id);
+                                    log::debug!("Agent {} shutdown during prompt", agent_id);
                                     let _ = reply.send(Err("Agent shut down".to_string()));
                                     return;
                                 }
@@ -310,7 +310,7 @@ pub(crate) async fn agent_command_loop(
                                     let _ = dup_reply.send(Err("Agent is already working".to_string()));
                                 }
                                 Some(AgentCommand::SetConfig { config_id, value, reply: cfg_reply }) => {
-                                    log::debug!("Agent {} set_config during prompt: {} = {}", &agent_id, config_id, value);
+                                    log::debug!("Agent {} set_config during prompt: {} = {}", agent_id, config_id, value);
                                     let req = SetSessionConfigOptionRequest::new(
                                         session_id.clone(),
                                         config_id,
@@ -344,7 +344,7 @@ pub(crate) async fn agent_command_loop(
                         let stop_reason = format!("{:?}", resp.stop_reason);
                         log::debug!(
                             "Agent {} prompt complete (stop_reason: {})",
-                            &agent_id,
+                            agent_id,
                             stop_reason
                         );
 
@@ -374,7 +374,7 @@ pub(crate) async fn agent_command_loop(
                         let _ = reply.send(Ok(()));
                     }
                     Err(e) => {
-                        log::error!("Agent {} prompt failed: {}", &agent_id, e);
+                        log::error!("Agent {} prompt failed: {}", agent_id, e);
                         let msg = format!("Prompt failed: {}", e);
                         let _ = event_tx.send(Notification::Error(ThreadErrorPayload {
                             thread_id: agent_id.clone(),
@@ -385,7 +385,7 @@ pub(crate) async fn agent_command_loop(
                 }
             }
             AgentCommand::Cancel { reply } => {
-                log::debug!("Agent {} cancel requested", &agent_id);
+                log::debug!("Agent {} cancel requested", agent_id);
                 let cancel = CancelNotification::new(session_id.clone());
                 match conn.send_notification(cancel) {
                     Ok(()) => {
@@ -401,7 +401,7 @@ pub(crate) async fn agent_command_loop(
                 value,
                 reply,
             } => {
-                log::debug!("Agent {} set_config: {} = {}", &agent_id, config_id, value);
+                log::debug!("Agent {} set_config: {} = {}", agent_id, config_id, value);
                 let req = SetSessionConfigOptionRequest::new(
                     session_id.clone(),
                     config_id,
@@ -419,7 +419,7 @@ pub(crate) async fn agent_command_loop(
                 }
             }
             AgentCommand::Shutdown => {
-                log::debug!("Agent {} shutting down", &agent_id);
+                log::debug!("Agent {} shutting down", agent_id);
                 break;
             }
         }
